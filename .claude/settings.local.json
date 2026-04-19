@@ -1,0 +1,31 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:api.anthropic.com)",
+      "Bash(gunzip -c \"/Users/jackylin/.claude/projects/-Users-jackylin-Documents-Project-PodcastRAG/a5f2b82c-43c9-4b1d-bd2e-44fd4651f8fc/tool-results/webfetch-1776609238894-9uh6f7.bin\")",
+      "Bash(tar -x -C /tmp/podcastrag_design)",
+      "Bash(spectra list *)",
+      "Bash(spectra --help)",
+      "Bash(spectra new *)",
+      "Bash(spectra instructions *)",
+      "Bash(spectra validate *)",
+      "Bash(spectra analyze *)",
+      "Bash(spectra status *)",
+      "Bash(git config *)",
+      "Bash(git init *)",
+      "Bash(gh --version)",
+      "Bash(brew install *)",
+      "Bash(mkdir -p /Users/jackylin/.config/gh)",
+      "Bash(gh auth *)",
+      "Read(//Users/jackylin/.config/**)",
+      "Read(//Users/jackylin/**)",
+      "Bash(kill %1)",
+      "Bash(gh repo *)",
+      "Bash(git remote *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git branch *)",
+      "Bash(git push *)"
+    ]
+  }
+}

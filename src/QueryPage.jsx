@@ -1,0 +1,333 @@
+// Query Page — Layer 2: Search/Chat + Resizable/Collapsible Episode Panel
+const MOCK_EPISODES = [
+  { id: 'ep142', num: 142, title: '輝達 CUDA 護城河與台積電先進封裝的共生關係', titleEn: 'NVIDIA\'s CUDA Moat and TSMC Advanced Packaging Symbiosis', date: '2026-04-18', duration: '58:24', summary: '本集深度解析輝達 CUDA 生態系統如何形成技術護城河，以及台積電 CoWoS 先進封裝技術在 AI 晶片供應鏈中的不可替代性。專訪台積電前研發副總裁，揭露 2nm 製程量產挑戰。', summaryEn: 'Deep analysis of how NVIDIA\'s CUDA ecosystem forms a technological moat, and the indispensability of TSMC\'s CoWoS advanced packaging in the AI chip supply chain.', transcribed: true },
+  { id: 'ep141', num: 141, title: '英特爾重組後的殘局：晶圓代工業務存活機率評估', titleEn: 'Intel Post-Restructuring: Assessing Foundry Survival Odds', date: '2026-04-11', duration: '64:10', summary: '英特爾宣布將晶圓代工業務分拆為獨立子公司後，業界對其存活率看法分歧。本集邀請三位半導體分析師進行辯論，並提出關鍵觀察指標。', summaryEn: 'Intel announced the spin-off of its foundry business. Three semiconductor analysts debate its survival odds.', transcribed: true },
+  { id: 'ep140', num: 140, title: '日本半導體復興計畫：熊本廠之後的下一步', titleEn: 'Japan\'s Semiconductor Revival: What Comes After Kumamoto', date: '2026-04-04', duration: '51:33', summary: '熊本廠量產後，日本政府持續推動半導體自主化。本集分析 Rapidus 2nm 計畫的可行性，以及日本吸引 TSMC 第三廠的籌碼。', summaryEn: 'After the Kumamoto plant, Japan continues its semiconductor independence push.', transcribed: true },
+  { id: 'ep139', num: 139, title: '亞利桑那廠良率困境與美國供應鏈在地化的現實', titleEn: 'Arizona Yield Struggles and the Reality of US Supply Chain Localization', date: '2026-03-28', duration: '55:48', summary: '台積電亞利桑那廠量產後良率低於台灣廠的問題持續受關注。本集訪談在地工程師，分析人才、文化與製程轉移的多重挑戰。', summaryEn: 'TSMC Arizona yield rates remain below Taiwan fabs post-production ramp.', transcribed: true },
+  { id: 'ep138', num: 138, title: '中國半導體自主化進展：突破與限制的真實現況', titleEn: 'China Chip Autonomy Progress: Reality Behind the Breakthroughs', date: '2026-03-21', duration: '61:07', summary: '中國 7nm 晶片量產消息持續發酵，但與世界先進水準的差距究竟有多大？本集拆解各方說法，提供有數據支撐的客觀評估。', summaryEn: 'China\'s 7nm chip production news continues to stir debate.', transcribed: true },
+  { id: 'ep137', num: 137, title: '量子電腦商業化時間表：Google Willow 之後的賽局', titleEn: 'Quantum Computing Timeline: The Race After Google Willow', date: '2026-03-14', duration: '49:22', summary: 'Google Willow 晶片突破後，各大科技公司紛紛加速量子路線圖。', summaryEn: 'After Google Willow\'s breakthrough, major tech companies accelerate quantum roadmaps.', transcribed: false },
+];
+
+const MOCK_CHAT = [
+  { role: 'user', text: '台積電 CoWoS 技術和輝達的關係是什麼？' },
+  { role: 'assistant', text: 'CoWoS（Chip on Wafer on Substrate）是台積電的先進封裝技術，對輝達至關重要：\n\n• 輝達 H100、H200 系列 GPU 全數採用台積電 CoWoS 封裝\n• HBM 記憶體必須透過 CoWoS 與 GPU Die 整合\n• 台積電目前是唯一能大規模量產此技術的廠商\n\n來源集數：EP142、EP139', sources: ['ep142', 'ep139'] },
+];
+
+// ── Resizable Episode Panel ──
+const ResizableLayout = ({ lang, leftContent, rightHeader, rightContent, epCount, epTotal }) => {
+  const t = lang === 'zh';
+  const containerRef = React.useRef(null);
+  const [panelWidth, setPanelWidth] = React.useState(340);
+  const [collapsed, setCollapsed] = React.useState(false);
+  const [dragging, setDragging] = React.useState(false);
+  const MIN_WIDTH = 200;
+  const MAX_RATIO = 0.45; // max 45% of container
+
+  const onDragStart = (e) => {
+    e.preventDefault();
+    setDragging(true);
+    const startX = e.clientX;
+    const startW = panelWidth;
+    const move = (ev) => {
+      if (!containerRef.current) return;
+      const maxW = containerRef.current.offsetWidth * MAX_RATIO;
+      const delta = startX - ev.clientX; // dragging handle leftward = wider panel
+      const newW = Math.min(maxW, Math.max(MIN_WIDTH, startW + delta));
+      setPanelWidth(newW);
+    };
+    const up = () => { setDragging(false); window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up); };
+    window.addEventListener('mousemove', move);
+    window.addEventListener('mouseup', up);
+  };
+
+  return (
+    <div ref={containerRef} style={{ flex: 1, display: 'flex', overflow: 'hidden', position: 'relative', cursor: dragging ? 'col-resize' : 'auto', userSelect: dragging ? 'none' : 'auto' }}>
+      {/* Left: Query panel */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
+        {leftContent}
+      </div>
+
+      {/* Drag handle */}
+      <div onMouseDown={onDragStart}
+        style={{ width: 5, flexShrink: 0, background: dragging ? TOKEN.accent : TOKEN.surfaceBorder, cursor: 'col-resize', transition: 'background 0.15s', position: 'relative', zIndex: 10 }}
+        onMouseEnter={e => { if (!dragging) e.currentTarget.style.background = TOKEN.accent + '88'; }}
+        onMouseLeave={e => { if (!dragging) e.currentTarget.style.background = TOKEN.surfaceBorder; }}>
+        {/* Dots on handle */}
+        <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', display: 'flex', flexDirection: 'column', gap: 3 }}>
+          {[0,1,2].map(i => <div key={i} style={{ width: 3, height: 3, borderRadius: '50%', background: TOKEN.textMuted }} />)}
+        </div>
+      </div>
+
+      {/* Right: Episode panel (collapsible) */}
+      <div style={{ width: collapsed ? 36 : panelWidth, flexShrink: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', borderLeft: `1px solid ${TOKEN.surfaceBorder}`, transition: collapsed ? 'width 0.2s' : 'none', background: TOKEN.surface }}>
+        {/* Panel header with collapse toggle */}
+        <div style={{ padding: '0 12px', height: 49, borderBottom: `1px solid ${TOKEN.surfaceBorder}`, display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, background: TOKEN.surface }}>
+          <button onClick={() => setCollapsed(v => !v)}
+            style={{ width: 26, height: 26, borderRadius: 6, background: TOKEN.surfaceRaised, border: `1px solid ${TOKEN.surfaceBorder}`, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}>
+            <Icon name={collapsed ? 'chevronLeft' : 'chevronRight'} size={14} color={TOKEN.textSecondary} />
+          </button>
+          {!collapsed && (
+            <>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ color: TOKEN.text, fontWeight: 600, fontSize: 14, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {t ? '已轉錄集數' : 'Transcribed Episodes'}
+                </div>
+                <div style={{ color: TOKEN.textMuted, fontSize: 11 }}>{epCount} / {epTotal} {t ? '集' : 'eps'}</div>
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Episode list (hidden when collapsed) */}
+        {!collapsed && (
+          <div style={{ flex: 1, overflowY: 'auto', padding: '10px 10px' }}>
+            {rightContent}
+          </div>
+        )}
+
+        {/* Collapsed: rotated label */}
+        {collapsed && (
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <span style={{ color: TOKEN.textMuted, fontSize: 11, writingMode: 'vertical-rl', transform: 'rotate(180deg)', letterSpacing: '0.05em' }}>
+              {t ? '集數列表' : 'Episodes'}
+            </span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// ── Main QueryPage ──
+const QueryPage = ({ lang, show, onBack, onOpenEpisode, queryMode }) => {
+  const t = lang === 'zh';
+  const [activeTab, setActiveTab] = React.useState('chat');
+  const [chatInput, setChatInput] = React.useState('');
+  const [messages, setMessages] = React.useState(MOCK_CHAT);
+  const [searchQ, setSearchQ] = React.useState('');
+  const [searching, setSearching] = React.useState(false);
+  const [searchResults, setSearchResults] = React.useState(null);
+  const [selectedEp, setSelectedEp] = React.useState(null);
+  const [sending, setSending] = React.useState(false);
+  const chatEndRef = React.useRef(null);
+
+  React.useEffect(() => {
+    if (chatEndRef.current) chatEndRef.current.scrollTop = chatEndRef.current.scrollHeight;
+  }, [messages]);
+
+  const handleSend = () => {
+    if (!chatInput.trim() || sending) return;
+    setMessages(m => [...m, { role: 'user', text: chatInput }]);
+    setChatInput('');
+    setSending(true);
+    setTimeout(() => {
+      setMessages(m => [...m, { role: 'assistant', text: t ? '根據已轉錄的集數分析，這個問題涉及多個面向。台積電在先進封裝領域的佈局...\n\n相關來源：EP142、EP140' : 'Based on transcribed episodes, this question has multiple dimensions. TSMC\'s advanced packaging strategy...\n\nSources: EP142, EP140', sources: ['ep142', 'ep140'] }]);
+      setSending(false);
+    }, 1400);
+  };
+
+  const handleSearch = () => {
+    if (!searchQ.trim()) return;
+    setSearching(true);
+    setSearchResults(null);
+    setTimeout(() => {
+      setSearchResults([
+        { epId: 'ep142', epNum: 142, epTitle: t ? MOCK_EPISODES[0].title : MOCK_EPISODES[0].titleEn, timestamp: '12:34', text: t ? '...台積電的 CoWoS 先進封裝技術在 AI 晶片供應鏈中已經形成了實質上的壟斷地位...' : '...TSMC\'s CoWoS advanced packaging has effectively formed a critical monopoly in the AI chip supply chain...' },
+        { epId: 'ep139', epNum: 139, epTitle: t ? MOCK_EPISODES[3].title : MOCK_EPISODES[3].titleEn, timestamp: '28:15', text: t ? '...亞利桑那廠的 CoWoS 產能仍無法達到台灣廠的水準，主要原因在於工程師的訓練...' : '...Arizona fab CoWoS capacity still cannot match Taiwan\'s levels, primarily due to engineer training...' },
+        { epId: 'ep141', epNum: 141, epTitle: t ? MOCK_EPISODES[1].title : MOCK_EPISODES[1].titleEn, timestamp: '44:02', text: t ? '...英特爾的 EMIB 與台積電 CoWoS 的技術差距大約在兩個世代以上...' : '...The gap between Intel\'s EMIB and TSMC\'s CoWoS is approximately two generations...' },
+      ]);
+      setSearching(false);
+    }, 900);
+  };
+
+  const showChat = queryMode !== 2;
+  const showSearch = queryMode !== 1;
+  const effectiveTabs = [showChat && 'chat', showSearch && 'search'].filter(Boolean);
+  const curTab = effectiveTabs.includes(activeTab) ? activeTab : effectiveTabs[0];
+  const showName = t ? show.name : show.nameEn;
+  const epCount = MOCK_EPISODES.filter(e => e.transcribed).length;
+
+  const leftContent = (
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      {/* Tab bar */}
+      {effectiveTabs.length > 1 && (
+        <div style={{ display: 'flex', gap: 0, borderBottom: `1px solid ${TOKEN.surfaceBorder}`, background: TOKEN.surface, flexShrink: 0 }}>
+          {effectiveTabs.map(tab => (
+            <button key={tab} onClick={() => setActiveTab(tab)}
+              style={{ padding: '13px 20px', background: 'none', border: 'none', borderBottom: `2px solid ${curTab === tab ? TOKEN.accent : 'transparent'}`, color: curTab === tab ? TOKEN.accent : TOKEN.textSecondary, cursor: 'pointer', fontSize: 14, fontWeight: curTab === tab ? 600 : 400, fontFamily: 'inherit', transition: 'all 0.12s' }}>
+              {tab === 'chat' ? (t ? '對話查詢' : 'Chat') : (t ? '語意搜尋' : 'Semantic Search')}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Chat */}
+      {curTab === 'chat' && (
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          <div ref={chatEndRef} style={{ flex: 1, overflowY: 'auto', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+            {messages.map((msg, i) => <ChatBubble key={i} msg={msg} lang={lang} episodes={MOCK_EPISODES} onOpenEpisode={onOpenEpisode} />)}
+            {sending && <TypingIndicator />}
+          </div>
+          <div style={{ padding: '14px 24px', borderTop: `1px solid ${TOKEN.surfaceBorder}`, background: TOKEN.surface, flexShrink: 0 }}>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <Input value={chatInput} onChange={e => setChatInput(e.target.value)}
+                placeholder={t ? '針對此節目內容提問...' : 'Ask anything about this show...'}
+                onKeyDown={e => e.key === 'Enter' && handleSend()} />
+              <Btn onClick={handleSend} disabled={sending || !chatInput.trim()} icon="send">{t ? '送出' : 'Send'}</Btn>
+            </div>
+            <p style={{ margin: '7px 0 0', fontSize: 12, color: TOKEN.textMuted }}>
+              {t ? `RAG 範圍：${show.transcribed} 集逐字稿` : `RAG scope: ${show.transcribed} transcripts`}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Search */}
+      {curTab === 'search' && (
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          <div style={{ padding: '16px 24px', borderBottom: `1px solid ${TOKEN.surfaceBorder}`, background: TOKEN.surface, flexShrink: 0 }}>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <Input value={searchQ} onChange={e => setSearchQ(e.target.value)}
+                placeholder={t ? '輸入關鍵字或語意搜尋...' : 'Keyword or semantic search...'}
+                icon="search" onKeyDown={e => e.key === 'Enter' && handleSearch()} />
+              <Btn onClick={handleSearch} disabled={searching || !searchQ.trim()}>{t ? '搜尋' : 'Search'}</Btn>
+            </div>
+          </div>
+          <div style={{ flex: 1, overflowY: 'auto', padding: '16px 24px' }}>
+            {searching && <div style={{ color: TOKEN.textMuted, textAlign: 'center', padding: '40px 0' }}>{t ? '搜尋中...' : 'Searching...'}</div>}
+            {searchResults && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <p style={{ color: TOKEN.textMuted, fontSize: 13, margin: '0 0 4px' }}>{t ? `找到 ${searchResults.length} 個相關片段` : `Found ${searchResults.length} segments`}</p>
+                {searchResults.map((r, i) => (
+                  <SearchResultCard key={i} result={r} lang={lang} query={searchQ}
+                    onClick={() => onOpenEpisode(MOCK_EPISODES.find(e => e.id === r.epId), searchQ)} />
+                ))}
+              </div>
+            )}
+            {!searching && !searchResults && (
+              <div style={{ color: TOKEN.textMuted, textAlign: 'center', padding: '60px 0' }}>
+                <Icon name="search" size={36} color={TOKEN.textMuted} />
+                <p style={{ marginTop: 12, fontSize: 14 }}>{t ? '輸入關鍵字開始搜尋' : 'Enter a keyword to search'}</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  const rightContent = MOCK_EPISODES.map(ep => (
+    <EpisodeCard key={ep.id} ep={ep} lang={lang} selected={selectedEp === ep.id}
+      onClick={() => ep.transcribed && (setSelectedEp(ep.id), onOpenEpisode(ep, ''))} />
+  ));
+
+  return (
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: TOKEN.bg }}>
+      {/* Top bar */}
+      <div style={{ padding: '0 24px', height: 52, borderBottom: `1px solid ${TOKEN.surfaceBorder}`, display: 'flex', alignItems: 'center', gap: 14, background: TOKEN.surface, flexShrink: 0 }}>
+        <Btn variant="ghost" size="sm" icon="arrowLeft" onClick={onBack}>{t ? '返回' : 'Back'}</Btn>
+        <div style={{ width: 1, height: 20, background: TOKEN.surfaceBorder }} />
+        <div style={{ width: 24, height: 24, borderRadius: 6, background: show.color + '22', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <Icon name="mic" size={13} color={show.color} />
+        </div>
+        <span style={{ color: TOKEN.text, fontWeight: 600, fontSize: 14 }}>{showName}</span>
+        <Badge variant="default">{show.transcribed} {t ? '集已轉錄' : 'transcribed'}</Badge>
+      </div>
+
+      <ResizableLayout lang={lang} leftContent={leftContent} rightContent={rightContent} epCount={epCount} epTotal={MOCK_EPISODES.length} />
+    </div>
+  );
+};
+
+// ── Sub-components ──
+const ChatBubble = ({ msg, lang, episodes, onOpenEpisode }) => {
+  const isUser = msg.role === 'user';
+  return (
+    <div style={{ display: 'flex', flexDirection: isUser ? 'row-reverse' : 'row', gap: 10, alignItems: 'flex-start' }}>
+      <div style={{ width: 28, height: 28, borderRadius: '50%', background: isUser ? TOKEN.accentDim : TOKEN.surfaceRaised, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 11, fontWeight: 700, color: isUser ? TOKEN.accent : TOKEN.textSecondary }}>
+        {isUser ? 'U' : 'AI'}
+      </div>
+      <div style={{ maxWidth: '80%', background: isUser ? TOKEN.accentDim : TOKEN.surfaceRaised, border: `1px solid ${isUser ? TOKEN.accent + '33' : TOKEN.surfaceBorder}`, borderRadius: isUser ? '14px 4px 14px 14px' : '4px 14px 14px 14px', padding: '10px 14px' }}>
+        <pre style={{ margin: 0, color: TOKEN.text, fontSize: 13, lineHeight: 1.7, fontFamily: 'inherit', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{msg.text}</pre>
+        {msg.sources && (
+          <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
+            {msg.sources.map(src => {
+              const ep = episodes.find(e => e.id === src);
+              return ep ? (
+                <button key={src} onClick={() => onOpenEpisode(ep, '')}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 8px', background: TOKEN.bg, border: `1px solid ${TOKEN.surfaceBorder}`, borderRadius: 6, color: TOKEN.accent, cursor: 'pointer', fontSize: 12, fontFamily: 'inherit' }}>
+                  <Icon name="fileText" size={11} color={TOKEN.accent} /> EP{ep.num}
+                </button>
+              ) : null;
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+const TypingIndicator = () => (
+  <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+    <div style={{ width: 28, height: 28, borderRadius: '50%', background: TOKEN.surfaceRaised, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: TOKEN.textSecondary }}>AI</div>
+    <div style={{ background: TOKEN.surfaceRaised, border: `1px solid ${TOKEN.surfaceBorder}`, borderRadius: '4px 14px 14px 14px', padding: '12px 16px', display: 'flex', gap: 5, alignItems: 'center' }}>
+      {[0,1,2].map(i => <span key={i} style={{ width: 6, height: 6, borderRadius: '50%', background: TOKEN.textMuted, animation: `bounce 1s ${i * 0.2}s infinite` }} />)}
+    </div>
+  </div>
+);
+
+const SearchResultCard = ({ result, lang, query, onClick }) => {
+  const hi = text => {
+    if (!query) return text;
+    const parts = text.split(new RegExp(`(${query})`, 'gi'));
+    return parts.map((p, i) => p.toLowerCase() === query.toLowerCase()
+      ? <mark key={i} style={{ background: TOKEN.accent + '44', color: TOKEN.accentHover, borderRadius: 2 }}>{p}</mark>
+      : p);
+  };
+  return (
+    <div onClick={onClick}
+      style={{ background: TOKEN.surface, border: `1px solid ${TOKEN.surfaceBorder}`, borderRadius: 10, padding: '14px 16px', cursor: 'pointer', transition: 'border-color 0.12s' }}
+      onMouseEnter={e => e.currentTarget.style.borderColor = TOKEN.accent + '66'}
+      onMouseLeave={e => e.currentTarget.style.borderColor = TOKEN.surfaceBorder}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
+        <Badge variant="default">EP{result.epNum}</Badge>
+        <span style={{ color: TOKEN.textSecondary, fontSize: 12, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{result.epTitle}</span>
+        <span style={{ color: TOKEN.textMuted, fontSize: 12, display: 'flex', alignItems: 'center', gap: 3, flexShrink: 0 }}>
+          <Icon name="clock" size={11} /> {result.timestamp}
+        </span>
+      </div>
+      <p style={{ margin: 0, color: TOKEN.text, fontSize: 13, lineHeight: 1.6 }}>{hi(result.text)}</p>
+    </div>
+  );
+};
+
+const EpisodeCard = ({ ep, lang, selected, onClick }) => {
+  const t = lang === 'zh';
+  const [hovered, setHovered] = React.useState(false);
+  return (
+    <div onClick={onClick} onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}
+      style={{ background: selected ? TOKEN.accentDim : hovered && ep.transcribed ? TOKEN.surfaceRaised : 'transparent', border: `1px solid ${selected ? TOKEN.accent + '55' : hovered && ep.transcribed ? TOKEN.surfaceBorder : 'transparent'}`, borderRadius: 10, padding: '10px 12px', cursor: ep.transcribed ? 'pointer' : 'default', opacity: ep.transcribed ? 1 : 0.45, transition: 'all 0.12s', marginBottom: 6 }}>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+        <div style={{ fontSize: 11, color: TOKEN.textMuted, fontWeight: 700, minWidth: 34, paddingTop: 2 }}>EP{ep.num}</div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <p style={{ margin: '0 0 4px', color: TOKEN.text, fontSize: 13, fontWeight: 500, lineHeight: 1.35 }}>
+            {t ? ep.title : ep.titleEn}
+          </p>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <span style={{ color: TOKEN.textMuted, fontSize: 11 }}>{ep.date}</span>
+            <span style={{ color: TOKEN.textMuted, fontSize: 11, display: 'flex', alignItems: 'center', gap: 2 }}><Icon name="clock" size={10} />{ep.duration}</span>
+            {ep.transcribed ? <Badge variant="success">{t ? '已轉錄' : 'Done'}</Badge> : <Badge variant="muted">{t ? '待轉錄' : 'Pending'}</Badge>}
+          </div>
+          {ep.transcribed && selected && (
+            <p style={{ margin: '6px 0 0', color: TOKEN.textSecondary, fontSize: 11, lineHeight: 1.5 }}>
+              {(t ? ep.summary : ep.summaryEn).slice(0, 90)}...
+            </p>
+          )}
+        </div>
+        {ep.transcribed && <Icon name="chevronRight" size={14} color={selected ? TOKEN.accent : TOKEN.textMuted} style={{ flexShrink: 0, marginTop: 3 }} />}
+      </div>
+    </div>
+  );
+};
+
+Object.assign(window, { QueryPage, MOCK_EPISODES });
