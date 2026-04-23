@@ -8,10 +8,15 @@ const MOCK_EPISODES = [
   { id: 'ep137', num: 137, title: '量子電腦商業化時間表：Google Willow 之後的賽局', titleEn: 'Quantum Computing Timeline: The Race After Google Willow', date: '2026-03-14', duration: '49:22', summary: 'Google Willow 晶片突破後，各大科技公司紛紛加速量子路線圖。', summaryEn: 'After Google Willow\'s breakthrough, major tech companies accelerate quantum roadmaps.', transcribed: false },
 ];
 
-const MOCK_CHAT = [
-  { role: 'user', text: '台積電 CoWoS 技術和輝達的關係是什麼？' },
-  { role: 'assistant', text: 'CoWoS（Chip on Wafer on Substrate）是台積電的先進封裝技術，對輝達至關重要：\n\n• 輝達 H100、H200 系列 GPU 全數採用台積電 CoWoS 封裝\n• HBM 記憶體必須透過 CoWoS 與 GPU Die 整合\n• 台積電目前是唯一能大規模量產此技術的廠商\n\n來源集數：EP142、EP139', sources: ['ep142', 'ep139'] },
-];
+const MOCK_CHAT = [];
+
+const formatTimestamp = (seconds) => {
+  if (seconds == null || Number.isNaN(seconds)) return '--:--';
+  const total = Math.floor(seconds);
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+};
 
 // ── Resizable Episode Panel ──
 const ResizableLayout = ({ lang, leftContent, rightHeader, rightContent, epCount, epTotal }) => {
@@ -115,29 +120,66 @@ const QueryPage = ({ lang, show, onBack, onOpenEpisode, queryMode }) => {
     if (chatEndRef.current) chatEndRef.current.scrollTop = chatEndRef.current.scrollHeight;
   }, [messages]);
 
-  const handleSend = () => {
-    if (!chatInput.trim() || sending) return;
-    setMessages(m => [...m, { role: 'user', text: chatInput }]);
+  const handleSend = async () => {
+    const question = chatInput.trim();
+    if (!question || sending) return;
+    const nextHistory = [...messages, { role: 'user', text: question }];
+    setMessages(nextHistory);
     setChatInput('');
     setSending(true);
-    setTimeout(() => {
-      setMessages(m => [...m, { role: 'assistant', text: t ? '根據已轉錄的集數分析，這個問題涉及多個面向。台積電在先進封裝領域的佈局...\n\n相關來源：EP142、EP140' : 'Based on transcribed episodes, this question has multiple dimensions. TSMC\'s advanced packaging strategy...\n\nSources: EP142, EP140', sources: ['ep142', 'ep140'] }]);
+    try {
+      const history = nextHistory
+        .slice(0, -1)
+        .slice(-10)
+        .map(m => ({ role: m.role, content: m.text }));
+      const res = await fetch(`${API_BASE}/shows/${show.id}/query`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode: 'chat', question, messages: history }),
+      });
+      if (!res.ok) {
+        const detail = await res.text();
+        throw new Error(detail || `HTTP ${res.status}`);
+      }
+      const data = await res.json();
+      setMessages(m => [...m, { role: 'assistant', text: data.answer, citations: data.citations || [] }]);
+    } catch (err) {
+      const msg = t ? `查詢失敗：${err.message}` : `Query failed: ${err.message}`;
+      setMessages(m => [...m, { role: 'assistant', text: msg, citations: [] }]);
+    } finally {
       setSending(false);
-    }, 1400);
+    }
   };
 
-  const handleSearch = () => {
-    if (!searchQ.trim()) return;
+  const handleSearch = async () => {
+    const question = searchQ.trim();
+    if (!question || searching) return;
     setSearching(true);
     setSearchResults(null);
-    setTimeout(() => {
-      setSearchResults([
-        { epId: 'ep142', epNum: 142, epTitle: t ? MOCK_EPISODES[0].title : MOCK_EPISODES[0].titleEn, timestamp: '12:34', text: t ? '...台積電的 CoWoS 先進封裝技術在 AI 晶片供應鏈中已經形成了實質上的壟斷地位...' : '...TSMC\'s CoWoS advanced packaging has effectively formed a critical monopoly in the AI chip supply chain...' },
-        { epId: 'ep139', epNum: 139, epTitle: t ? MOCK_EPISODES[3].title : MOCK_EPISODES[3].titleEn, timestamp: '28:15', text: t ? '...亞利桑那廠的 CoWoS 產能仍無法達到台灣廠的水準，主要原因在於工程師的訓練...' : '...Arizona fab CoWoS capacity still cannot match Taiwan\'s levels, primarily due to engineer training...' },
-        { epId: 'ep141', epNum: 141, epTitle: t ? MOCK_EPISODES[1].title : MOCK_EPISODES[1].titleEn, timestamp: '44:02', text: t ? '...英特爾的 EMIB 與台積電 CoWoS 的技術差距大約在兩個世代以上...' : '...The gap between Intel\'s EMIB and TSMC\'s CoWoS is approximately two generations...' },
-      ]);
+    try {
+      const res = await fetch(`${API_BASE}/shows/${show.id}/query`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode: 'search', question }),
+      });
+      if (!res.ok) {
+        const detail = await res.text();
+        throw new Error(detail || `HTTP ${res.status}`);
+      }
+      const data = await res.json();
+      const mapped = (data.results || []).map(r => ({
+        epId: r.episode_id,
+        epTitle: r.episode_title,
+        startTime: r.start_time,
+        timestamp: formatTimestamp(r.start_time),
+        text: r.text,
+      }));
+      setSearchResults(mapped);
+    } catch (err) {
+      setSearchResults({ error: err.message });
+    } finally {
       setSearching(false);
-    }, 900);
+    }
   };
 
   const showChat = queryMode !== 2;
@@ -165,7 +207,7 @@ const QueryPage = ({ lang, show, onBack, onOpenEpisode, queryMode }) => {
       {curTab === 'chat' && (
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
           <div ref={chatEndRef} style={{ flex: 1, overflowY: 'auto', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
-            {messages.map((msg, i) => <ChatBubble key={i} msg={msg} lang={lang} episodes={MOCK_EPISODES} onOpenEpisode={onOpenEpisode} />)}
+            {messages.map((msg, i) => <ChatBubble key={i} msg={msg} lang={lang} />)}
             {sending && <TypingIndicator />}
           </div>
           <div style={{ padding: '14px 24px', borderTop: `1px solid ${TOKEN.surfaceBorder}`, background: TOKEN.surface, flexShrink: 0 }}>
@@ -195,12 +237,16 @@ const QueryPage = ({ lang, show, onBack, onOpenEpisode, queryMode }) => {
           </div>
           <div style={{ flex: 1, overflowY: 'auto', padding: '16px 24px' }}>
             {searching && <div style={{ color: TOKEN.textMuted, textAlign: 'center', padding: '40px 0' }}>{t ? '搜尋中...' : 'Searching...'}</div>}
-            {searchResults && (
+            {searchResults && searchResults.error && (
+              <div style={{ color: TOKEN.danger, textAlign: 'center', padding: '24px 0', fontSize: 13 }}>
+                {t ? `搜尋失敗：${searchResults.error}` : `Search failed: ${searchResults.error}`}
+              </div>
+            )}
+            {Array.isArray(searchResults) && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                 <p style={{ color: TOKEN.textMuted, fontSize: 13, margin: '0 0 4px' }}>{t ? `找到 ${searchResults.length} 個相關片段` : `Found ${searchResults.length} segments`}</p>
                 {searchResults.map((r, i) => (
-                  <SearchResultCard key={i} result={r} lang={lang} query={searchQ}
-                    onClick={() => onOpenEpisode(MOCK_EPISODES.find(e => e.id === r.epId), searchQ)} />
+                  <SearchResultCard key={i} result={r} lang={lang} query={searchQ} />
                 ))}
               </div>
             )}
@@ -240,8 +286,9 @@ const QueryPage = ({ lang, show, onBack, onOpenEpisode, queryMode }) => {
 };
 
 // ── Sub-components ──
-const ChatBubble = ({ msg, lang, episodes, onOpenEpisode }) => {
+const ChatBubble = ({ msg, lang }) => {
   const isUser = msg.role === 'user';
+  const citations = msg.citations || [];
   return (
     <div style={{ display: 'flex', flexDirection: isUser ? 'row-reverse' : 'row', gap: 10, alignItems: 'flex-start' }}>
       <div style={{ width: 28, height: 28, borderRadius: '50%', background: isUser ? TOKEN.accentDim : TOKEN.surfaceRaised, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 11, fontWeight: 700, color: isUser ? TOKEN.accent : TOKEN.textSecondary }}>
@@ -249,17 +296,15 @@ const ChatBubble = ({ msg, lang, episodes, onOpenEpisode }) => {
       </div>
       <div style={{ maxWidth: '80%', background: isUser ? TOKEN.accentDim : TOKEN.surfaceRaised, border: `1px solid ${isUser ? TOKEN.accent + '33' : TOKEN.surfaceBorder}`, borderRadius: isUser ? '14px 4px 14px 14px' : '4px 14px 14px 14px', padding: '10px 14px' }}>
         <pre style={{ margin: 0, color: TOKEN.text, fontSize: 13, lineHeight: 1.7, fontFamily: 'inherit', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{msg.text}</pre>
-        {msg.sources && (
+        {citations.length > 0 && (
           <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
-            {msg.sources.map(src => {
-              const ep = episodes.find(e => e.id === src);
-              return ep ? (
-                <button key={src} onClick={() => onOpenEpisode(ep, '')}
-                  style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 8px', background: TOKEN.bg, border: `1px solid ${TOKEN.surfaceBorder}`, borderRadius: 6, color: TOKEN.accent, cursor: 'pointer', fontSize: 12, fontFamily: 'inherit' }}>
-                  <Icon name="fileText" size={11} color={TOKEN.accent} /> EP{ep.num}
-                </button>
-              ) : null;
-            })}
+            {citations.map((c, i) => (
+              <span key={i}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 8px', background: TOKEN.bg, border: `1px solid ${TOKEN.surfaceBorder}`, borderRadius: 6, color: TOKEN.accent, fontSize: 12, fontFamily: 'inherit' }}>
+                <Icon name="fileText" size={11} color={TOKEN.accent} />
+                {(c.episode_title || '').slice(0, 24) || (lang === 'zh' ? '片段' : 'Clip')} @ {formatTimestamp(c.start_time)}
+              </span>
+            ))}
           </div>
         )}
       </div>
@@ -276,7 +321,7 @@ const TypingIndicator = () => (
   </div>
 );
 
-const SearchResultCard = ({ result, lang, query, onClick }) => {
+const SearchResultCard = ({ result, lang, query }) => {
   const hi = text => {
     if (!query) return text;
     const parts = text.split(new RegExp(`(${query})`, 'gi'));
@@ -285,12 +330,8 @@ const SearchResultCard = ({ result, lang, query, onClick }) => {
       : p);
   };
   return (
-    <div onClick={onClick}
-      style={{ background: TOKEN.surface, border: `1px solid ${TOKEN.surfaceBorder}`, borderRadius: 10, padding: '14px 16px', cursor: 'pointer', transition: 'border-color 0.12s' }}
-      onMouseEnter={e => e.currentTarget.style.borderColor = TOKEN.accent + '66'}
-      onMouseLeave={e => e.currentTarget.style.borderColor = TOKEN.surfaceBorder}>
+    <div style={{ background: TOKEN.surface, border: `1px solid ${TOKEN.surfaceBorder}`, borderRadius: 10, padding: '14px 16px' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
-        <Badge variant="default">EP{result.epNum}</Badge>
         <span style={{ color: TOKEN.textSecondary, fontSize: 12, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{result.epTitle}</span>
         <span style={{ color: TOKEN.textMuted, fontSize: 12, display: 'flex', alignItems: 'center', gap: 3, flexShrink: 0 }}>
           <Icon name="clock" size={11} /> {result.timestamp}

@@ -25,3 +25,8 @@ build/
 *.log
 tmp/
 temp/
+.spectra/
+openspec/.vector-search.db*
+
+# Claude Code 個人 local 設定（允許清單等），不跨機器同步
+.claude/settings.local.json
