@@ -1,4 +1,6 @@
 // Shared components: tokens, icons, Nav, Layout
+const API_BASE = 'http://localhost:8000';
+
 const TOKEN = {
   bg: '#0b1120',
   surface: '#131c2e',
@@ -182,4 +184,4 @@ const TopNavItem = ({ icon, label, active, onClick, secondary }) => {
   );
 };
 
-Object.assign(window, { TOKEN, Icon, Badge, Btn, Input, TopNav });
+Object.assign(window, { API_BASE, TOKEN, Icon, Badge, Btn, Input, TopNav });

@@ -87,54 +87,153 @@ const ApiKeysTab = ({ lang }) => {
 };
 
 // ── LLM Tab ──
+const MASKED_KEY = '***';
+
 const LLMTab = ({ lang }) => {
   const t = lang === 'zh';
-  const [active, setActive] = React.useState('openai-gpt4o');
-  const [temp, setTemp] = React.useState(0.3);
-  const [maxTokens, setMaxTokens] = React.useState(2048);
+  const [form, setForm] = React.useState({
+    answer_base_url: '', answer_api_key: '', answer_model: '',
+    rewrite_base_url: '', rewrite_api_key: '', rewrite_model: '',
+  });
+  const [apiKeyTouched, setApiKeyTouched] = React.useState({ answer_api_key: false, rewrite_api_key: false });
+  const [loading, setLoading] = React.useState(true);
+  const [saving, setSaving] = React.useState(false);
+  const [message, setMessage] = React.useState(null);
 
-  const models = [
-    { id: 'openai-gpt4o', provider: 'OpenAI', name: 'GPT-4o', desc: t ? '適合複雜推理與長文摘要' : 'Best for complex reasoning and long summaries', ctx: '128K', status: 'available' },
-    { id: 'openai-gpt4o-mini', provider: 'OpenAI', name: 'GPT-4o mini', desc: t ? '速度快、成本低，適合即時查詢' : 'Fast and cost-efficient for real-time queries', ctx: '128K', status: 'available' },
-    { id: 'anthropic-claude', provider: 'Anthropic', name: 'Claude Opus 4.5', desc: t ? '長文本理解能力最強' : 'Best long-context comprehension', ctx: '200K', status: 'available' },
-    { id: 'anthropic-haiku', provider: 'Anthropic', name: 'Claude Haiku 4.5', desc: t ? '超低延遲，適合摘要生成' : 'Ultra-low latency for summary generation', ctx: '200K', status: 'available' },
-    { id: 'google-gemini', provider: 'Google', name: 'Gemini 2.5 Pro', desc: t ? '多模態支援，適合含影片的 Podcast' : 'Multimodal support for video podcasts', ctx: '1M', status: 'available' },
-    { id: 'aihub', provider: 'AI Hub', name: 'Zeabur LLM v2', desc: t ? '私有部署，資料不外流' : 'Private deployment, data stays local', ctx: '32K', status: 'available' },
-  ];
+  const loadConfig = React.useCallback(async () => {
+    setLoading(true);
+    setMessage(null);
+    try {
+      const res = await fetch(`${API_BASE}/admin/llm-config`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      setForm({
+        answer_base_url: data.answer_base_url || '',
+        answer_api_key: data.answer_api_key || '',
+        answer_model: data.answer_model || '',
+        rewrite_base_url: data.rewrite_base_url || '',
+        rewrite_api_key: data.rewrite_api_key || '',
+        rewrite_model: data.rewrite_model || '',
+      });
+      setApiKeyTouched({ answer_api_key: false, rewrite_api_key: false });
+    } catch (err) {
+      setMessage({ kind: 'error', text: (t ? '載入失敗：' : 'Load failed: ') + err.message });
+    } finally {
+      setLoading(false);
+    }
+  }, [t]);
 
-  const providerColors = { OpenAI: '#22c55e', Anthropic: '#f59e0b', Google: '#6366f1', 'AI Hub': '#22d3ee' };
+  React.useEffect(() => { loadConfig(); }, [loadConfig]);
+
+  const setField = (key) => (e) => {
+    const value = e.target.value;
+    setForm(f => ({ ...f, [key]: value }));
+    if (key === 'answer_api_key' || key === 'rewrite_api_key') {
+      setApiKeyTouched(s => ({ ...s, [key]: true }));
+    }
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    setMessage(null);
+    const payload = {
+      answer_base_url: form.answer_base_url,
+      answer_model: form.answer_model,
+      rewrite_base_url: form.rewrite_base_url,
+      rewrite_model: form.rewrite_model,
+    };
+    if (apiKeyTouched.answer_api_key && form.answer_api_key !== MASKED_KEY) {
+      payload.answer_api_key = form.answer_api_key;
+    }
+    if (apiKeyTouched.rewrite_api_key && form.rewrite_api_key !== MASKED_KEY) {
+      payload.rewrite_api_key = form.rewrite_api_key;
+    }
+    try {
+      const res = await fetch(`${API_BASE}/admin/llm-config`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        const detail = await res.text();
+        throw new Error(detail || `HTTP ${res.status}`);
+      }
+      const data = await res.json();
+      setForm({
+        answer_base_url: data.answer_base_url || '',
+        answer_api_key: data.answer_api_key || '',
+        answer_model: data.answer_model || '',
+        rewrite_base_url: data.rewrite_base_url || '',
+        rewrite_api_key: data.rewrite_api_key || '',
+        rewrite_model: data.rewrite_model || '',
+      });
+      setApiKeyTouched({ answer_api_key: false, rewrite_api_key: false });
+      setMessage({ kind: 'success', text: t ? '已儲存' : 'Saved' });
+    } catch (err) {
+      setMessage({ kind: 'error', text: (t ? '儲存失敗：' : 'Save failed: ') + err.message });
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <div style={{ maxWidth: 760 }}>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 28 }}>
-        {models.map(m => (
-          <div key={m.id} onClick={() => setActive(m.id)}
-            style={{ background: TOKEN.surface, border: `1px solid ${active === m.id ? TOKEN.accent + '88' : TOKEN.surfaceBorder}`, borderRadius: 12, padding: '16px 18px', cursor: 'pointer', transition: 'all 0.12s', boxShadow: active === m.id ? `0 0 0 1px ${TOKEN.accent}44` : 'none' }}>
-            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-              <div style={{ flex: 1 }}>
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 5 }}>
-                  <span style={{ fontSize: 12, fontWeight: 600, color: providerColors[m.provider] }}>{m.provider}</span>
-                  {active === m.id && <Badge variant="default">{t ? '使用中' : 'Active'}</Badge>}
-                </div>
-                <div style={{ color: TOKEN.text, fontWeight: 600, fontSize: 15, marginBottom: 5 }}>{m.name}</div>
-                <p style={{ margin: 0, color: TOKEN.textSecondary, fontSize: 12, lineHeight: 1.5 }}>{m.desc}</p>
-              </div>
-              <div style={{ width: 20, height: 20, borderRadius: '50%', border: `2px solid ${active === m.id ? TOKEN.accent : TOKEN.surfaceBorder}`, background: active === m.id ? TOKEN.accent : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2 }}>
-                {active === m.id && <Icon name="check" size={12} color="#fff" />}
-              </div>
-            </div>
-            <div style={{ marginTop: 12, fontSize: 11, color: TOKEN.textMuted }}>Context: {m.ctx}</div>
-          </div>
-        ))}
-      </div>
+      <p style={{ margin: '0 0 18px', color: TOKEN.textSecondary, fontSize: 14 }}>
+        {t ? '設定 Answer 與 Rewrite 兩個 LLM，後台儲存於 llm_config 單列資料表。' : 'Configure the Answer and Rewrite LLMs (stored in the singleton llm_config row).'}
+      </p>
 
-      {/* Params */}
-      <div style={{ background: TOKEN.surface, border: `1px solid ${TOKEN.surfaceBorder}`, borderRadius: 12, padding: '20px 24px' }}>
-        <p style={{ color: TOKEN.text, fontWeight: 600, fontSize: 14, margin: '0 0 18px' }}>{t ? '推論參數' : 'Inference Parameters'}</p>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
-          <SliderParam label={t ? '溫度 (Temperature)' : 'Temperature'} value={temp} min={0} max={1} step={0.05} onChange={setTemp} hint={t ? '越高越有創意，越低越精確' : 'Higher = more creative, lower = precise'} />
-          <SliderParam label={t ? '最大 Token 數' : 'Max Tokens'} value={maxTokens} min={256} max={8192} step={256} onChange={setMaxTokens} hint={`${maxTokens} tokens`} />
+      {loading ? (
+        <div style={{ color: TOKEN.textMuted, padding: '24px 0' }}>{t ? '載入中...' : 'Loading...'}</div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <LLMConfigSection title={t ? 'Answer 模型（回答）' : 'Answer Model'} lang={lang}
+            baseUrl={form.answer_base_url} onBaseUrl={setField('answer_base_url')}
+            apiKey={form.answer_api_key} onApiKey={setField('answer_api_key')}
+            model={form.answer_model} onModel={setField('answer_model')} />
+          <LLMConfigSection title={t ? 'Rewrite 模型（查詢改寫）' : 'Rewrite Model'} lang={lang}
+            baseUrl={form.rewrite_base_url} onBaseUrl={setField('rewrite_base_url')}
+            apiKey={form.rewrite_api_key} onApiKey={setField('rewrite_api_key')}
+            model={form.rewrite_model} onModel={setField('rewrite_model')} />
+
+          {message && (
+            <div style={{ padding: '9px 13px', borderRadius: 8, fontSize: 13,
+              background: message.kind === 'success' ? 'rgba(34,197,94,0.12)' : 'rgba(239,68,68,0.12)',
+              border: `1px solid ${message.kind === 'success' ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)'}`,
+              color: message.kind === 'success' ? '#4ade80' : '#f87171' }}>
+              {message.text}
+            </div>
+          )}
+
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+            <Btn variant="ghost" onClick={loadConfig} disabled={saving}>{t ? '重新載入' : 'Reload'}</Btn>
+            <Btn icon="check" onClick={handleSave} disabled={saving}>{saving ? (t ? '儲存中...' : 'Saving...') : (t ? '儲存設定' : 'Save Configuration')}</Btn>
+          </div>
         </div>
+      )}
+    </div>
+  );
+};
+
+const LLMConfigSection = ({ title, lang, baseUrl, onBaseUrl, apiKey, onApiKey, model, onModel }) => {
+  const t = lang === 'zh';
+  return (
+    <div style={{ background: TOKEN.surface, border: `1px solid ${TOKEN.surfaceBorder}`, borderRadius: 12, padding: '18px 22px' }}>
+      <p style={{ color: TOKEN.text, fontWeight: 600, fontSize: 14, margin: '0 0 14px' }}>{title}</p>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
+        <div>
+          <label style={{ display: 'block', color: TOKEN.textMuted, fontSize: 12, marginBottom: 6 }}>Base URL</label>
+          <Input value={baseUrl} onChange={onBaseUrl} placeholder="https://hnd1.aihub.zeabur.ai/v1" />
+        </div>
+        <div>
+          <label style={{ display: 'block', color: TOKEN.textMuted, fontSize: 12, marginBottom: 6 }}>Model</label>
+          <Input value={model} onChange={onModel} placeholder="gpt-4o" />
+        </div>
+      </div>
+      <div>
+        <label style={{ display: 'block', color: TOKEN.textMuted, fontSize: 12, marginBottom: 6 }}>
+          API Key <span style={{ color: TOKEN.textMuted }}>{t ? '（顯示 *** 時未修改則不送出）' : '(leave as *** to keep current)'}</span>
+        </label>
+        <Input value={apiKey} onChange={onApiKey} type="password" placeholder="sk-..." />
       </div>
     </div>
   );
