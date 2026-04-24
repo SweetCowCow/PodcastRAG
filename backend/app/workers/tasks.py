@@ -1,9 +1,12 @@
 import asyncio
 import logging
 import os
+import subprocess
 import uuid
 from datetime import datetime, timezone
 
+import httpx
+import openai
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.orm import selectinload
@@ -17,17 +20,80 @@ from app.models.transcript_segment import TranscriptSegment
 from app.services import storage
 from app.services.chunking import build_chunks
 from app.services.embedding import embed_texts
+from app.services.rss_parser import RssParseError
+from app.services.storage import StorageError
 from app.services.transcription import get_provider
 from app.workers.celery_app import celery_app
+from app.workers.throttle import (
+    acquire_global_slot,
+    acquire_show_lock,
+    release_global_slot,
+    release_show_lock,
+)
 
 logger = logging.getLogger(__name__)
 
 ERROR_MESSAGE_MAX_LEN = 2000
 
+TRANSIENT_ERRORS = (
+    httpx.HTTPError,
+    httpx.TimeoutException,
+    openai.RateLimitError,
+    openai.APIConnectionError,
+    openai.APITimeoutError,
+    asyncio.TimeoutError,
+    ConnectionError,
+)
 
-@celery_app.task(name="app.workers.tasks.transcribe_episode", bind=True)
+PERMANENT_ERRORS = (
+    RssParseError,
+    StorageError,
+    FileNotFoundError,
+    subprocess.CalledProcessError,
+    openai.AuthenticationError,
+    openai.BadRequestError,
+)
+
+
+@celery_app.task(
+    name="app.workers.tasks.transcribe_episode",
+    bind=True,
+    autoretry_for=TRANSIENT_ERRORS,
+    max_retries=3,
+    retry_backoff=True,
+    retry_backoff_max=300,
+    retry_jitter=True,
+)
 def transcribe_episode(self, episode_id: str) -> dict:
-    return asyncio.run(_run(episode_id))
+    show_id = asyncio.run(_lookup_show_id(episode_id))
+    if show_id is None:
+        logger.error("transcribe_episode: episode %s 不存在", episode_id)
+        return {"status": "not_found", "episode_id": episode_id}
+
+    max_c = settings.max_concurrent_transcriptions
+    if not acquire_global_slot(self.request.id, max_c):
+        raise self.retry(countdown=15, max_retries=None)
+
+    try:
+        if not acquire_show_lock(show_id):
+            raise self.retry(countdown=60, max_retries=None)
+        try:
+            return asyncio.run(_run(episode_id))
+        finally:
+            release_show_lock(show_id)
+    finally:
+        release_global_slot(self.request.id)
+
+
+async def _lookup_show_id(episode_id: str) -> str | None:
+    ep_uuid = uuid.UUID(episode_id)
+    engine = create_async_engine(settings.database_url, poolclass=NullPool)
+    try:
+        async with async_sessionmaker(engine, expire_on_commit=False)() as session:
+            episode = await session.get(Episode, ep_uuid)
+            return str(episode.show_id) if episode is not None else None
+    finally:
+        await engine.dispose()
 
 
 async def _run(episode_id: str) -> dict:
@@ -143,8 +209,10 @@ async def _run(episode_id: str) -> dict:
                 "chunks": len(chunk_drafts),
             }
 
-        except Exception as exc:
-            logger.exception("transcribe_episode 失敗 episode=%s", episode_id)
+        except PERMANENT_ERRORS as exc:
+            logger.exception(
+                "transcribe_episode permanent-failed episode=%s", episode_id
+            )
             message = str(exc)[:ERROR_MESSAGE_MAX_LEN]
             async with Session() as session:
                 await session.execute(

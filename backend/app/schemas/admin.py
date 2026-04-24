@@ -22,3 +22,10 @@ class LlmConfigUpdate(BaseModel):
     rewrite_base_url: str | None = None
     rewrite_api_key: str | None = None
     rewrite_model: str | None = None
+
+
+class QueueStatusResponse(BaseModel):
+    active: int
+    pending_in_queue: int
+    pending_in_db: int
+    max_concurrent: int

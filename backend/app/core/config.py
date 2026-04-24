@@ -10,6 +10,8 @@ class Settings(BaseSettings):
     celery_broker_url: str = "redis://redis:6379/0"
     celery_result_backend: str = "redis://redis:6379/1"
 
+    max_concurrent_transcriptions: int = 1
+
     transcription_provider: str = "openai"
     openai_api_key: str | None = None
     zeabur_api_key: str | None = None
