@@ -13,4 +13,3 @@ redis==5.2.1
 boto3==1.35.71
 openai==1.57.0
 faster-whisper==1.1.0
-pydub==0.25.1
