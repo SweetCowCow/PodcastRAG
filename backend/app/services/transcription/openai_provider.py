@@ -1,11 +1,12 @@
 import asyncio
+import json
 import math
 import os
 import shutil
+import subprocess
 import tempfile
 
 from openai import OpenAI
-from pydub import AudioSegment
 
 from app.core.config import settings
 from app.services.transcription.base import (
@@ -24,28 +25,61 @@ def _normalise_language(value: str | None) -> str | None:
     return value.split("-")[0].lower()
 
 
+def _probe_duration_seconds(audio_path: str) -> float:
+    """用 ffprobe 讀取音檔 duration（只讀 metadata，不 decode）。"""
+    result = subprocess.run(
+        [
+            "ffprobe", "-v", "error",
+            "-show_entries", "format=duration",
+            "-of", "json",
+            audio_path,
+        ],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"ffprobe failed ({result.returncode}): {result.stderr.strip()}"
+        )
+    data = json.loads(result.stdout)
+    return float(data["format"]["duration"])
+
+
 def _split_audio(
     audio_path: str, chunk_size_bytes: int, tempdir: str
 ) -> list[tuple[str, float]]:
     """把音訊按時間平分成數段 mp3，寫入 `tempdir`。
 
-    回傳 `[(chunk_path, start_offset_seconds), ...]`。呼叫端負責建立與清理 tempdir。
+    使用 ffmpeg stream copy（`-c copy`），不 decode 也不 re-encode，
+    記憶體使用常數（< 100 MB）不隨音檔長度增加。
+    切點對齊到最近的 MP3 frame，誤差 ±1~2 秒。
+
+    回傳 `[(chunk_path, start_offset_seconds), ...]`。start_offset 是
+    請求給 ffmpeg 的 `-ss` 值（非實際 keyframe 對齊後位置），以維持
+    segment offset merging 的時間軸連續性。呼叫端負責建立與清理 tempdir。
     """
     total_bytes = os.path.getsize(audio_path)
     chunk_count = math.ceil(total_bytes / chunk_size_bytes)
 
-    audio = AudioSegment.from_file(audio_path)
-    duration_ms = len(audio)
-    chunk_ms = math.ceil(duration_ms / chunk_count)
+    total_duration = _probe_duration_seconds(audio_path)
+    chunk_duration = total_duration / chunk_count
 
     chunks: list[tuple[str, float]] = []
     for i in range(chunk_count):
-        start_ms = i * chunk_ms
-        end_ms = min(start_ms + chunk_ms, duration_ms)
-        segment = audio[start_ms:end_ms]
+        start = i * chunk_duration
         chunk_path = os.path.join(tempdir, f"chunk_{i:03d}.mp3")
-        segment.export(chunk_path, format="mp3")
-        chunks.append((chunk_path, start_ms / 1000.0))
+        subprocess.run(
+            [
+                "ffmpeg", "-y", "-loglevel", "error",
+                "-ss", f"{start:.3f}",
+                "-t", f"{chunk_duration:.3f}",
+                "-i", audio_path,
+                "-c", "copy",
+                chunk_path,
+            ],
+            check=True,
+        )
+        chunks.append((chunk_path, start))
     return chunks
 
 
