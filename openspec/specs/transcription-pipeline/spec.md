@@ -449,7 +449,7 @@ code:
 ---
 ### Requirement: OpenAI provider handles oversized audio by chunking
 
-The `OpenAIWhisperProvider` SHALL compare the input audio file size against a configurable threshold `OPENAI_WHISPER_CHUNK_SIZE_MB` (default 24). When the file size exceeds the threshold, the provider SHALL split the audio into sequential time-based chunks, transcribe each chunk via the Whisper API, and merge the results into a single `TranscriptionResult`. When the file size is at or below the threshold, the provider SHALL upload the file in a single request as before.
+The `OpenAIWhisperProvider` SHALL compare the input audio file size against a configurable threshold `OPENAI_WHISPER_CHUNK_SIZE_MB` (default 24). When the file size exceeds the threshold, the provider SHALL split the audio into sequential time-based chunks, transcribe each chunk via the Whisper API, and merge the results into a single `TranscriptionResult`. When the file size is at or below the threshold, the provider SHALL upload the file in a single request as before. The splitting procedure SHALL NOT load the full decoded audio waveform into process memory; it SHALL operate via streaming tools (e.g. `ffmpeg` subprocess with stream copy) so that peak memory usage is bounded independent of audio duration.
 
 #### Scenario: Small audio uses single request
 
@@ -459,7 +459,7 @@ The `OpenAIWhisperProvider` SHALL compare the input audio file size against a co
 #### Scenario: Oversized audio split and merged
 
 - **WHEN** `OpenAIWhisperProvider.transcribe()` is called with an audio file whose size exceeds `OPENAI_WHISPER_CHUNK_SIZE_MB * 1024 * 1024` bytes
-- **THEN** the provider SHALL split the audio into `ceil(file_size_bytes / threshold_bytes)` sequential chunks of equal duration, SHALL call `audio.transcriptions.create` once per chunk, and SHALL return a single `TranscriptionResult` whose `text` is the concatenation of each chunk's text separated by single spaces, whose `language` equals the first non-null language returned by any chunk, and whose `segments` are the union of all chunk segments with `start` and `end` offset by the cumulative duration of preceding chunks so the timeline is continuous with the original audio
+- **THEN** the provider SHALL split the audio into `ceil(file_size_bytes / threshold_bytes)` sequential chunks of approximately equal duration (individual chunk boundaries MAY be aligned to the nearest audio frame or keyframe, with a tolerance of up to 2 seconds relative to a perfectly equal split), SHALL call `audio.transcriptions.create` once per chunk, and SHALL return a single `TranscriptionResult` whose `text` is the concatenation of each chunk's text separated by single spaces, whose `language` equals the first non-null language returned by any chunk, and whose `segments` are the union of all chunk segments with `start` and `end` offset by the cumulative start time of each chunk (as requested from the splitter) so the timeline is continuous with the original audio
 
 #### Scenario: Chunk upload failure surfaces as exception
 
@@ -471,52 +471,14 @@ The `OpenAIWhisperProvider` SHALL compare the input audio file size against a co
 - **WHEN** `OpenAIWhisperProvider.transcribe()` finishes for an oversized audio file, whether it succeeded or raised an exception
 - **THEN** all chunk files the provider wrote to disk SHALL be deleted before the method returns or re-raises
 
+#### Scenario: Splitting does not decode full waveform
+
+- **WHEN** `OpenAIWhisperProvider.transcribe()` splits an audio file that is N minutes long
+- **THEN** the peak additional resident memory used by the splitting step SHALL be bounded by a constant that does not scale with N (i.e. SHALL NOT load the entire uncompressed PCM waveform into memory)
+
 <!-- @trace
-source: openai-audio-chunking
-updated: 2026-04-22
+source: fix-split-audio-memory
+updated: 2026-04-24
 code:
-  - backend/app/api/health.py
-  - backend/app/models/transcript_segment.py
-  - backend/app/core/config.py
-  - backend/app/api/transcripts.py
-  - backend/alembic.ini
-  - backend/app/workers/__init__.py
-  - backend/alembic/versions/91e48beb1237_initial_schema.py
-  - backend/app/main.py
-  - backend/app/schemas/__init__.py
-  - backend/app/services/rss_parser.py
-  - backend/app/core/__init__.py
-  - backend/app/workers/celery_app.py
-  - .spectra/spectra.db
-  - backend/app/services/transcription/openai_provider.py
-  - backend/app/workers/dispatch.py
-  - backend/Dockerfile
-  - backend/app/services/__init__.py
-  - backend/app/models/episode.py
-  - backend/alembic/versions/a7b3c9d4e2f1_add_transcription_columns.py
-  - backend/app/models/transcript.py
-  - backend/app/services/transcription/base.py
-  - backend/alembic/env.py
-  - backend/app/schemas/sync.py
-  - backend/alembic/README
-  - backend/.dockerignore
-  - backend/alembic/script.py.mako
-  - backend/app/schemas/episode.py
-  - backend/app/services/transcription/factory.py
-  - backend/.env.example
-  - backend/app/api/episodes.py
-  - backend/requirements.txt
-  - backend/app/workers/tasks.py
-  - backend/app/__init__.py
-  - backend/docker-compose.yml
-  - backend/app/services/transcription/faster_whisper_provider.py
-  - backend/app/models/__init__.py
-  - backend/app/services/storage.py
-  - backend/app/api/__init__.py
-  - backend/app/api/shows.py
-  - backend/app/schemas/show.py
-  - backend/app/models/show.py
-  - backend/app/schemas/transcript.py
-  - backend/app/core/database.py
-  - backend/app/services/transcription/__init__.py
+  - CLAUDE.md
 -->

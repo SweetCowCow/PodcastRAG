@@ -18,10 +18,10 @@
 ## 4. 記憶體行為驗證（對應 Scenario: Splitting does not decode full waveform）
 
 - [x] 4.1 在本機用一個 ≥ 60 分鐘的 podcast MP3（約 60MB+），跑一次 `_split_audio` 並用 `resource.getrusage(RUSAGE_SELF).ru_maxrss` 前後比較，確認 peak RSS 增加量 < 200 MB（若本機無 60+ 分鐘樣本，改用多次切 10MB 檔案以驗證記憶體不隨總時長線性增長）
-- [ ] 4.2 在 Zeabur worker 上觸發一次真實轉錄任務，透過 `npx zeabur@latest service metric MEMORY --id 69eb1c620da29f05f49a4e2a` 觀察記憶體峰值 < 500 MB，且任務完成不再 OOM
+- [x] 4.2 在 Zeabur worker 上觸發一次真實轉錄任務，透過 `npx zeabur@latest service metric MEMORY --id 69eb1c620da29f05f49a4e2a` 觀察記憶體峰值 < 500 MB，且任務完成不再 OOM
 
 ## 5. 部署與回歸
 
-- [ ] 5.1 push 到 GitHub 觸發 Zeabur 自動 build；透過 `npx zeabur@latest deployment log --service-id 69eb1c620da29f05f49a4e2a -t build` 確認 build 成功
-- [ ] 5.2 部署後用一集歷史正常集數觸發轉錄，確認 `transcripts.status` 正常變為 `completed`、`transcript_segments` 數量與時間軸與舊實作相近（人工抽檢 3 組 `start`/`end` 與逐字稿對應音訊位置，誤差 ≤ 2 秒即通過）
-- [ ] 5.3 確認 worker 在 idle 狀態無 CrashLoopBackOff，`Pod ... - BackOff` 錯誤不再出現於 runtime log
+- [x] 5.1 push 到 GitHub 觸發 Zeabur 自動 build；透過 `npx zeabur@latest deployment log --service-id 69eb1c620da29f05f49a4e2a -t build` 確認 build 成功
+- [x] 5.2 部署後用一集歷史正常集數觸發轉錄，確認 `transcripts.status` 正常變為 `completed`、`transcript_segments` 數量與時間軸與舊實作相近（人工抽檢 3 組 `start`/`end` 與逐字稿對應音訊位置，誤差 ≤ 2 秒即通過）
+- [x] 5.3 確認 worker 在 idle 狀態無 CrashLoopBackOff，`Pod ... - BackOff` 錯誤不再出現於 runtime log
