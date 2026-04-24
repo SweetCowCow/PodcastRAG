@@ -1,5 +1,11 @@
 // Runtime config — loaded before all JSX scripts.
-// Local dev: defaults to http://localhost:8000.
-// Production (Zeabur): overwrite window.__API_BASE__ with the deployed backend URL
-// (no trailing slash), e.g. window.__API_BASE__ = 'https://api-xxx.zeabur.app';
-window.__API_BASE__ = 'http://localhost:8000';
+// Auto-detects environment based on hostname:
+//   localhost / 127.0.0.1 → local backend
+//   anywhere else (Zeabur, custom domain) → production backend
+(function () {
+  const host = window.location.hostname;
+  const isLocal = host === 'localhost' || host === '127.0.0.1' || host === '';
+  window.__API_BASE__ = isLocal
+    ? 'http://localhost:8000'
+    : 'https://podcastrag-api.zeabur.app';
+})();
