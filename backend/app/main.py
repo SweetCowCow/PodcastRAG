@@ -43,3 +43,8 @@ app.include_router(episodes_router)
 app.include_router(transcripts_router)
 app.include_router(query_router)
 app.include_router(admin_router)
+
+
+@app.get("/")
+async def root() -> dict:
+    return {"service": "PodcastRAG API", "status": "ok"}
