@@ -124,12 +124,22 @@ code:
 ---
 ### Requirement: List shows endpoint
 
-The backend SHALL expose `GET /shows` returning all registered shows ordered by `created_at` descending.
+The backend SHALL expose `GET /shows` returning all registered shows ordered by `created_at` descending. Each show record in the response SHALL include `id`, `title`, `description`, `rss_url`, `image_url`, `language`, `created_at`, `episode_count`, and `transcribed_count`. The `transcribed_count` SHALL equal the number of episodes belonging to the show whose `transcripts.status` is `'completed'`.
 
-#### Scenario: Shows listed
+#### Scenario: Shows listed with episode and transcript counts
+
+- **WHEN** `GET /shows` is called and a show has 10 episodes of which 3 have a linked `transcripts` row with `status = 'completed'`
+- **THEN** the response record for that show SHALL contain `episode_count = 10` and `transcribed_count = 3`
+
+#### Scenario: Show with no transcribed episodes
+
+- **WHEN** `GET /shows` is called and a show has 5 episodes but none has a `completed` transcript
+- **THEN** the response record for that show SHALL contain `transcribed_count = 0`
+
+#### Scenario: Shows listed ordered newest-first
 
 - **WHEN** `GET /shows` is called and 3 shows exist
-- **THEN** the response SHALL be HTTP 200 with a JSON array of 3 show records ordered newest-first
+- **THEN** the response SHALL be HTTP 200 with a JSON array of 3 show records ordered by `created_at` descending, each containing the full set of fields above
 
 #### Scenario: No shows yet
 
@@ -138,40 +148,13 @@ The backend SHALL expose `GET /shows` returning all registered shows ordered by 
 
 
 <!-- @trace
-source: rss-feed
-updated: 2026-04-21
+source: shows-list-backend
+updated: 2026-04-23
 code:
-  - backend/app/api/health.py
-  - backend/app/models/transcript.py
-  - backend/.dockerignore
-  - backend/app/models/show.py
-  - backend/alembic/versions/91e48beb1237_initial_schema.py
-  - backend/app/core/config.py
-  - backend/app/models/__init__.py
-  - backend/app/services/__init__.py
   - backend/app/api/shows.py
-  - backend/app/api/episodes.py
-  - backend/app/schemas/episode.py
-  - backend/alembic.ini
-  - backend/app/core/__init__.py
-  - backend/Dockerfile
-  - backend/app/models/transcript_segment.py
+  - src/PodcastSelect.jsx
   - backend/app/schemas/show.py
-  - backend/alembic/script.py.mako
-  - backend/app/api/__init__.py
-  - backend/app/schemas/__init__.py
-  - backend/.env.example
-  - backend/requirements.txt
-  - backend/app/__init__.py
-  - backend/app/services/rss_parser.py
-  - backend/alembic/README
-  - .spectra/spectra.db
-  - backend/app/core/database.py
-  - backend/app/schemas/sync.py
-  - backend/alembic/env.py
-  - backend/app/main.py
-  - backend/docker-compose.yml
-  - backend/app/models/episode.py
+  - src/QueryPage.jsx
 -->
 
 ---

@@ -17,9 +17,13 @@ REWRITE_SYSTEM_PROMPT = (
 
 ANSWER_SYSTEM_PROMPT_TEMPLATE = (
     "You are answering questions about a podcast show. Answer ONLY based on the "
-    "provided transcript chunks. Cite sources using [ep:<episode_id>@<start_time>] "
-    "after relevant claims. If the chunks don't contain the answer, say so. Reply "
-    "in the same language as the user's question.\n\n"
+    "provided transcript chunks. If the chunks don't contain the answer, say so. "
+    "Reply in the same language as the user's question.\n\n"
+    "You MUST respond with a JSON object in this exact format:\n"
+    '{{"answer": "<your answer here>", '
+    '"used_chunk_ids": ["ep:<episode_id>@<start_time>", ...]}}\n\n'
+    "In used_chunk_ids, list only the chunk keys you actually cited in your answer. "
+    "Each chunk key follows the pattern ep:<episode_id>@<start_time> as shown below.\n\n"
     "Transcript chunks:\n{chunks_block}"
 )
 
@@ -102,10 +106,12 @@ def answer_with_chunks(
     messages: list[dict],
     question: str,
     chunks: list[ChunkHit],
-) -> str:
+) -> tuple[str, list[str]]:
+    import json as _json
+
     history = messages[-HISTORY_WINDOW:]
     chunks_block = "\n\n".join(
-        f"[ep:{c.episode_id}@{c.start_time:.2f}] ({c.episode_title})\n{c.text}"
+        f"ep:{c.episode_id}@{c.start_time:.2f} ({c.episode_title})\n{c.text}"
         for c in chunks
     )
     system_prompt = ANSWER_SYSTEM_PROMPT_TEMPLATE.format(chunks_block=chunks_block)
@@ -114,5 +120,17 @@ def answer_with_chunks(
     chat_messages.extend({"role": m["role"], "content": m["content"]} for m in history)
     chat_messages.append({"role": "user", "content": question})
 
-    resp = client.chat.completions.create(model=model, messages=chat_messages)
-    return (resp.choices[0].message.content or "").strip()
+    resp = client.chat.completions.create(
+        model=model,
+        messages=chat_messages,
+        response_format={"type": "json_object"},
+    )
+    raw = (resp.choices[0].message.content or "").strip()
+
+    try:
+        parsed = _json.loads(raw)
+        answer = parsed["answer"]
+        used_ids = [str(k) for k in parsed.get("used_chunk_ids", [])]
+        return answer, used_ids
+    except (ValueError, KeyError):
+        return raw, []
