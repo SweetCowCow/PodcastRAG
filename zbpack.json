@@ -1,5 +1,0 @@
-{
-  "$schema": "https://schema.zeabur.app/zbpack.json",
-  "app_dir": "backend",
-  "plan_type": "docker"
-}
