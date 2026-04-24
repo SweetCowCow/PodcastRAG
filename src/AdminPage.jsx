@@ -329,7 +329,24 @@ const ScheduleTab = ({ lang }) => {
   const [syncing, setSyncing] = React.useState(false);
   const [syncingId, setSyncingId] = React.useState(null);
   const [confirmState, setConfirmState] = React.useState(null);
+  const [queueStatus, setQueueStatus] = React.useState(null);
   const setF = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  const fetchQueueStatus = React.useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/admin/queue-status`);
+      if (!res.ok) return;
+      setQueueStatus(await res.json());
+    } catch (_) {
+      // 靜默失敗，不影響主 UI
+    }
+  }, []);
+
+  React.useEffect(() => {
+    fetchQueueStatus();
+    const id = setInterval(fetchQueueStatus, 30000);
+    return () => clearInterval(id);
+  }, [fetchQueueStatus]);
 
   const loadSchedules = React.useCallback(async () => {
     setLoading(true);
@@ -520,6 +537,13 @@ const ScheduleTab = ({ lang }) => {
           <Btn icon="plus" size="sm" onClick={() => setShowForm(v => !v)}>{t ? '新增排程' : 'Add Schedule'}</Btn>
         </div>
       </div>
+
+      {queueStatus && (
+        <div style={{ marginBottom: 16, display: 'flex', gap: 16, fontSize: 13, color: TOKEN.textSecondary }}>
+          <span>🟢 {t ? '執行中' : 'Active'} {queueStatus.active}/{queueStatus.max_concurrent}</span>
+          <span>⏳ {t ? '佇列中' : 'Queued'} {queueStatus.pending_in_queue}</span>
+        </div>
+      )}
 
       {/* Add Schedule Form */}
       {showForm && (
