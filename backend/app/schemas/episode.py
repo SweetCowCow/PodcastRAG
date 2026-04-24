@@ -16,3 +16,4 @@ class EpisodeResponse(BaseModel):
     published_at: datetime | None
     guid: str
     created_at: datetime
+    transcript_status: str | None = None

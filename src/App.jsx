@@ -92,6 +92,7 @@ const App = () => {
   const [selectedShow, setSelectedShow] = React.useState(null);
   const [selectedEpisode, setSelectedEpisode] = React.useState(null);
   const [initSearch, setInitSearch] = React.useState('');
+  const [highlightTime, setHighlightTime] = React.useState(null);
   const [tweaksVisible, setTweaksVisible] = React.useState(false);
   const [tweaks, setTweaks] = React.useState(TWEAK_DEFAULTS);
   const [adminAuth, setAdminAuth] = React.useState(false);
@@ -159,14 +160,16 @@ const App = () => {
       {/* Main content */}
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
         {page === 'select' && <PodcastSelect lang={lang} onSelect={(show) => { setSelectedShow(show); setPage('query'); }} />}
-        {page === 'query' && selectedShow && (
-          <QueryPage lang={lang} show={selectedShow} queryMode={tweaks.queryMode}
-            onBack={() => setPage('select')}
-            onOpenEpisode={(ep, search) => { setSelectedEpisode(ep); setInitSearch(search || ''); setPage('transcript'); }} />
+        {selectedShow && (page === 'query' || page === 'transcript') && (
+          <div style={{ display: page === 'query' ? 'flex' : 'none', flex: 1, overflow: 'hidden' }}>
+            <QueryPage lang={lang} show={selectedShow} queryMode={tweaks.queryMode}
+              onBack={() => setPage('select')}
+              onOpenEpisode={(ep, ht) => { setSelectedEpisode(ep); setInitSearch(''); setHighlightTime(typeof ht === 'number' ? ht : null); setPage('transcript'); }} />
+          </div>
         )}
         {page === 'transcript' && selectedEpisode && selectedShow && (
           <TranscriptPage lang={lang} show={selectedShow} episode={selectedEpisode}
-            initSearch={initSearch} onBack={() => setPage('query')} />
+            initSearch={initSearch} highlightTime={highlightTime} onBack={() => setPage('query')} />
         )}
         {page.startsWith('admin') && <AdminPage lang={lang} activePage={page} />}
       </div>

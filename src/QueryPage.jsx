@@ -114,11 +114,30 @@ const QueryPage = ({ lang, show, onBack, onOpenEpisode, queryMode }) => {
   const [searchResults, setSearchResults] = React.useState(null);
   const [selectedEp, setSelectedEp] = React.useState(null);
   const [sending, setSending] = React.useState(false);
+  const [episodes, setEpisodes] = React.useState(null);
+  const [epError, setEpError] = React.useState(null);
   const chatEndRef = React.useRef(null);
 
   React.useEffect(() => {
     if (chatEndRef.current) chatEndRef.current.scrollTop = chatEndRef.current.scrollHeight;
   }, [messages]);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    setEpisodes(null);
+    setEpError(null);
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/shows/${show.id}/episodes?limit=200`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        if (!cancelled) setEpisodes(data);
+      } catch (err) {
+        if (!cancelled) setEpError(err.message);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [show.id]);
 
   const handleSend = async () => {
     const question = chatInput.trim();
@@ -186,8 +205,16 @@ const QueryPage = ({ lang, show, onBack, onOpenEpisode, queryMode }) => {
   const showSearch = queryMode !== 1;
   const effectiveTabs = [showChat && 'chat', showSearch && 'search'].filter(Boolean);
   const curTab = effectiveTabs.includes(activeTab) ? activeTab : effectiveTabs[0];
-  const showName = t ? show.name : show.nameEn;
-  const epCount = MOCK_EPISODES.filter(e => e.transcribed).length;
+  const showName = show.title;
+  const transcribedCount = show.transcribed_count || 0;
+  const showColor = deriveColor(show.id);
+  const epCount = episodes
+    ? episodes.filter(e => e.transcript_status === 'completed').length
+    : transcribedCount;
+
+  const onCitationClick = (citation) => {
+    onOpenEpisode({ id: citation.episode_id, title: citation.episode_title }, citation.start_time);
+  };
 
   const leftContent = (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
@@ -207,7 +234,7 @@ const QueryPage = ({ lang, show, onBack, onOpenEpisode, queryMode }) => {
       {curTab === 'chat' && (
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
           <div ref={chatEndRef} style={{ flex: 1, overflowY: 'auto', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
-            {messages.map((msg, i) => <ChatBubble key={i} msg={msg} lang={lang} />)}
+            {messages.map((msg, i) => <ChatBubble key={i} msg={msg} lang={lang} onCitationClick={onCitationClick} />)}
             {sending && <TypingIndicator />}
           </div>
           <div style={{ padding: '14px 24px', borderTop: `1px solid ${TOKEN.surfaceBorder}`, background: TOKEN.surface, flexShrink: 0 }}>
@@ -218,7 +245,7 @@ const QueryPage = ({ lang, show, onBack, onOpenEpisode, queryMode }) => {
               <Btn onClick={handleSend} disabled={sending || !chatInput.trim()} icon="send">{t ? '送出' : 'Send'}</Btn>
             </div>
             <p style={{ margin: '7px 0 0', fontSize: 12, color: TOKEN.textMuted }}>
-              {t ? `RAG 範圍：${show.transcribed} 集逐字稿` : `RAG scope: ${show.transcribed} transcripts`}
+              {t ? `RAG 範圍：${transcribedCount} 集逐字稿` : `RAG scope: ${transcribedCount} transcripts`}
             </p>
           </div>
         </div>
@@ -262,10 +289,22 @@ const QueryPage = ({ lang, show, onBack, onOpenEpisode, queryMode }) => {
     </div>
   );
 
-  const rightContent = MOCK_EPISODES.map(ep => (
-    <EpisodeCard key={ep.id} ep={ep} lang={lang} selected={selectedEp === ep.id}
-      onClick={() => ep.transcribed && (setSelectedEp(ep.id), onOpenEpisode(ep, ''))} />
-  ));
+  const rightContent = (() => {
+    if (epError) return (
+      <div style={{ color: TOKEN.danger, fontSize: 12, padding: '12px 4px' }}>
+        {lang === 'zh' ? `載入失敗：${epError}` : `Load error: ${epError}`}
+      </div>
+    );
+    if (episodes === null) return (
+      <div style={{ color: TOKEN.textMuted, fontSize: 12, padding: '12px 4px' }}>
+        {lang === 'zh' ? '載入中...' : 'Loading...'}
+      </div>
+    );
+    return episodes.map(ep => (
+      <EpisodeCard key={ep.id} ep={ep} lang={lang} selected={selectedEp === ep.id}
+        onClick={() => ep.transcript_status === 'completed' && (setSelectedEp(ep.id), onOpenEpisode(ep, null))} />
+    ));
+  })();
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: TOKEN.bg }}>
@@ -273,20 +312,20 @@ const QueryPage = ({ lang, show, onBack, onOpenEpisode, queryMode }) => {
       <div style={{ padding: '0 24px', height: 52, borderBottom: `1px solid ${TOKEN.surfaceBorder}`, display: 'flex', alignItems: 'center', gap: 14, background: TOKEN.surface, flexShrink: 0 }}>
         <Btn variant="ghost" size="sm" icon="arrowLeft" onClick={onBack}>{t ? '返回' : 'Back'}</Btn>
         <div style={{ width: 1, height: 20, background: TOKEN.surfaceBorder }} />
-        <div style={{ width: 24, height: 24, borderRadius: 6, background: show.color + '22', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <Icon name="mic" size={13} color={show.color} />
+        <div style={{ width: 24, height: 24, borderRadius: 6, background: showColor + '22', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <Icon name="mic" size={13} color={showColor} />
         </div>
         <span style={{ color: TOKEN.text, fontWeight: 600, fontSize: 14 }}>{showName}</span>
-        <Badge variant="default">{show.transcribed} {t ? '集已轉錄' : 'transcribed'}</Badge>
+        <Badge variant="default">{transcribedCount} {t ? '集已轉錄' : 'transcribed'}</Badge>
       </div>
 
-      <ResizableLayout lang={lang} leftContent={leftContent} rightContent={rightContent} epCount={epCount} epTotal={MOCK_EPISODES.length} />
+      <ResizableLayout lang={lang} leftContent={leftContent} rightContent={rightContent} epCount={epCount} epTotal={show.episode_count || 0} />
     </div>
   );
 };
 
 // ── Sub-components ──
-const ChatBubble = ({ msg, lang }) => {
+const ChatBubble = ({ msg, lang, onCitationClick }) => {
   const isUser = msg.role === 'user';
   const citations = msg.citations || [];
   return (
@@ -299,8 +338,10 @@ const ChatBubble = ({ msg, lang }) => {
         {citations.length > 0 && (
           <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
             {citations.map((c, i) => (
-              <span key={i}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 8px', background: TOKEN.bg, border: `1px solid ${TOKEN.surfaceBorder}`, borderRadius: 6, color: TOKEN.accent, fontSize: 12, fontFamily: 'inherit' }}>
+              <span key={i} onClick={() => onCitationClick && onCitationClick(c)}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 8px', background: TOKEN.bg, border: `1px solid ${TOKEN.surfaceBorder}`, borderRadius: 6, color: TOKEN.accent, fontSize: 12, fontFamily: 'inherit', cursor: onCitationClick ? 'pointer' : 'default', transition: 'border-color 0.15s' }}
+                onMouseEnter={e => onCitationClick && (e.currentTarget.style.borderColor = TOKEN.accent)}
+                onMouseLeave={e => onCitationClick && (e.currentTarget.style.borderColor = TOKEN.surfaceBorder)}>
                 <Icon name="fileText" size={11} color={TOKEN.accent} />
                 {(c.episode_title || '').slice(0, 24) || (lang === 'zh' ? '片段' : 'Clip')} @ {formatTimestamp(c.start_time)}
               </span>
@@ -345,27 +386,24 @@ const SearchResultCard = ({ result, lang, query }) => {
 const EpisodeCard = ({ ep, lang, selected, onClick }) => {
   const t = lang === 'zh';
   const [hovered, setHovered] = React.useState(false);
+  const done = ep.transcript_status === 'completed';
+  const dateStr = ep.published_at ? ep.published_at.slice(0, 10) : '';
+  const durStr = ep.duration_seconds != null ? formatTimestamp(ep.duration_seconds) : '--:--';
   return (
     <div onClick={onClick} onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}
-      style={{ background: selected ? TOKEN.accentDim : hovered && ep.transcribed ? TOKEN.surfaceRaised : 'transparent', border: `1px solid ${selected ? TOKEN.accent + '55' : hovered && ep.transcribed ? TOKEN.surfaceBorder : 'transparent'}`, borderRadius: 10, padding: '10px 12px', cursor: ep.transcribed ? 'pointer' : 'default', opacity: ep.transcribed ? 1 : 0.45, transition: 'all 0.12s', marginBottom: 6 }}>
+      style={{ background: selected ? TOKEN.accentDim : hovered && done ? TOKEN.surfaceRaised : 'transparent', border: `1px solid ${selected ? TOKEN.accent + '55' : hovered && done ? TOKEN.surfaceBorder : 'transparent'}`, borderRadius: 10, padding: '10px 12px', cursor: done ? 'pointer' : 'default', opacity: done ? 1 : 0.45, transition: 'all 0.12s', marginBottom: 6 }}>
       <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-        <div style={{ fontSize: 11, color: TOKEN.textMuted, fontWeight: 700, minWidth: 34, paddingTop: 2 }}>EP{ep.num}</div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <p style={{ margin: '0 0 4px', color: TOKEN.text, fontSize: 13, fontWeight: 500, lineHeight: 1.35 }}>
-            {t ? ep.title : ep.titleEn}
+            {ep.title}
           </p>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-            <span style={{ color: TOKEN.textMuted, fontSize: 11 }}>{ep.date}</span>
-            <span style={{ color: TOKEN.textMuted, fontSize: 11, display: 'flex', alignItems: 'center', gap: 2 }}><Icon name="clock" size={10} />{ep.duration}</span>
-            {ep.transcribed ? <Badge variant="success">{t ? '已轉錄' : 'Done'}</Badge> : <Badge variant="muted">{t ? '待轉錄' : 'Pending'}</Badge>}
+            <span style={{ color: TOKEN.textMuted, fontSize: 11 }}>{dateStr}</span>
+            <span style={{ color: TOKEN.textMuted, fontSize: 11, display: 'flex', alignItems: 'center', gap: 2 }}><Icon name="clock" size={10} />{durStr}</span>
+            {done ? <Badge variant="success">{t ? '已轉錄' : 'Done'}</Badge> : <Badge variant="muted">{t ? '待轉錄' : 'Pending'}</Badge>}
           </div>
-          {ep.transcribed && selected && (
-            <p style={{ margin: '6px 0 0', color: TOKEN.textSecondary, fontSize: 11, lineHeight: 1.5 }}>
-              {(t ? ep.summary : ep.summaryEn).slice(0, 90)}...
-            </p>
-          )}
         </div>
-        {ep.transcribed && <Icon name="chevronRight" size={14} color={selected ? TOKEN.accent : TOKEN.textMuted} style={{ flexShrink: 0, marginTop: 3 }} />}
+        {done && <Icon name="chevronRight" size={14} color={selected ? TOKEN.accent : TOKEN.textMuted} style={{ flexShrink: 0, marginTop: 3 }} />}
       </div>
     </div>
   );

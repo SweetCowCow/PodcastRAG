@@ -67,7 +67,7 @@ async def query_show(
     hits = await rag.retrieve(db, show_id, query_embedding[0])
 
     answer_client, answer_model = get_answer_client(cfg)
-    answer_text = await asyncio.to_thread(
+    answer_text, used_ids = await asyncio.to_thread(
         rag.answer_with_chunks,
         answer_client,
         answer_model,
@@ -76,9 +76,20 @@ async def query_show(
         hits,
     )
 
+    if used_ids:
+        used_set = set(used_ids)
+        cited_hits = [
+            h for h in hits
+            if f"ep:{h.episode_id}@{h.start_time:.2f}" in used_set
+        ]
+        if not cited_hits:
+            cited_hits = hits
+    else:
+        cited_hits = hits
+
     return ChatResponse(
         answer=answer_text,
-        citations=[_to_schema_hit(h) for h in hits],
+        citations=[_to_schema_hit(h) for h in cited_hits],
     )
 
 
