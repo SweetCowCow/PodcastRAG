@@ -318,45 +318,197 @@ const ToggleParam = ({ label, value, onChange, hint }) => (
 // ── Schedule Tab ──
 const ScheduleTab = ({ lang }) => {
   const t = lang === 'zh';
-  const [shows, setShows] = React.useState([
-    { id: 'tsmc-era', name: '台積電時代', nameEn: 'TSMC Era', rss: 'https://feeds.example.com/tsmc-era', enabled: true, freq: 'daily', time: '06:00', whisperModel: 'large-v3', maxEp: 0, lastRun: '2026-04-18 06:00', nextRun: '2026-04-19 06:00', status: 'success', progress: 100, pending: 4 },
-    { id: 'ai-frontiers', name: 'AI 前沿報告', nameEn: 'AI Frontiers', rss: 'https://feeds.example.com/ai-frontiers', enabled: true, freq: 'weekly', time: '08:00', whisperModel: 'large-v3', maxEp: 0, lastRun: '2026-04-17 08:00', nextRun: '2026-04-24 08:00', status: 'success', progress: 100, pending: 0 },
-    { id: 'startup-island', name: '創業島嶼', nameEn: 'Startup Island', rss: 'https://feeds.example.com/startup-island', enabled: true, freq: 'daily', time: '02:30', whisperModel: 'medium', maxEp: 5, lastRun: '2026-04-19 02:30', nextRun: '2026-04-20 02:30', status: 'running', progress: 67, pending: 15 },
-    { id: 'deep-science', name: '深科學', nameEn: 'Deep Science', rss: 'https://feeds.example.com/deep-science', enabled: false, freq: 'manual', time: '00:00', whisperModel: 'base', maxEp: 10, lastRun: '2026-04-10 14:00', nextRun: '—', status: 'paused', progress: 60, pending: 27 },
-  ]);
+  const [shows, setShows] = React.useState(null);
+  const [loading, setLoading] = React.useState(true);
+  const [fetchError, setFetchError] = React.useState(null);
   const [showForm, setShowForm] = React.useState(false);
-  const [form, setForm] = React.useState({ rss: '', name: '', freq: 'daily', time: '06:00', whisperModel: 'large-v3', maxEp: 0, lang: 'zh' });
+  const [form, setForm] = React.useState({ rss: '', name: '', freq: 'daily', time: '06:00', whisperModel: 'large-v3', maxEp: 0 });
   const [rssLoading, setRssLoading] = React.useState(false);
+  const [rssError, setRssError] = React.useState(null);
   const [rssPreview, setRssPreview] = React.useState(null);
+  const [syncing, setSyncing] = React.useState(false);
+  const [syncingId, setSyncingId] = React.useState(null);
+  const [confirmState, setConfirmState] = React.useState(null);
   const setF = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
-  const statusColor = { success: '#22c55e', running: TOKEN.accent, paused: TOKEN.textMuted, error: TOKEN.danger };
-  const statusLabel = { success: t ? '完成' : 'Done', running: t ? '轉錄中' : 'Running', paused: t ? '已暫停' : 'Paused', error: t ? '錯誤' : 'Error' };
+  const loadSchedules = React.useCallback(async () => {
+    setLoading(true);
+    setFetchError(null);
+    try {
+      const res = await fetch(`${API_BASE}/admin/schedules`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      setShows(data);
+    } catch (err) {
+      setFetchError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
-  const handleFetchRSS = () => {
-    if (!form.rss) return;
-    setRssLoading(true);
-    setRssPreview(null);
-    setTimeout(() => {
-      setRssPreview({ name: '科技島讀', episodes: 87, latestEp: '2026-04-18', desc: 'AI 時代的台灣科技觀察' });
-      setF('name', '科技島讀');
-      setRssLoading(false);
-    }, 1000);
+  React.useEffect(() => { loadSchedules(); }, [loadSchedules]);
+
+  const handleToggle = async (item) => {
+    const next = !(item.schedule?.enabled);
+    try {
+      const res = await fetch(`${API_BASE}/shows/${item.show_id}/schedule`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: next }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const updated = await res.json();
+      setShows(prev => prev.map(s => s.show_id === item.show_id ? { ...s, schedule: updated } : s));
+    } catch (err) {
+      alert((t ? '更新失敗：' : 'Update failed: ') + err.message);
+    }
   };
 
-  const handleAddSchedule = () => {
-    if (!form.rss || !form.name) return;
-    const id = 'new-' + Date.now();
-    setShows(ss => [...ss, {
-      id, name: form.name, nameEn: form.name, rss: form.rss,
-      enabled: true, freq: form.freq, time: form.time,
-      whisperModel: form.whisperModel, maxEp: form.maxEp,
-      lastRun: '—', nextRun: '2026-04-20 ' + form.time,
-      status: 'paused', progress: 0, pending: rssPreview?.episodes || 0,
-    }]);
-    setShowForm(false);
-    setForm({ rss: '', name: '', freq: 'daily', time: '06:00', whisperModel: 'large-v3', maxEp: 0 });
+  const handleSyncAll = async () => {
+    if (!shows) return;
+    const enabled = shows.filter(s => s.schedule?.enabled === true);
+    if (enabled.length === 0) {
+      alert(t ? '沒有啟用中的節目' : 'No enabled shows');
+      return;
+    }
+    setSyncing(true);
+    try {
+      await Promise.all(
+        enabled.map(s => fetch(`${API_BASE}/shows/${s.show_id}/transcribe-all`, { method: 'POST' }))
+      );
+      alert((t ? '已排入 ' : 'Queued ') + enabled.length + (t ? ' 個節目的轉錄任務' : ' shows for transcription'));
+    } catch (err) {
+      alert((t ? '同步失敗：' : 'Sync failed: ') + err.message);
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  const handleFetchRSS = async () => {
+    if (!form.rss) return;
+    setRssLoading(true);
+    setRssError(null);
     setRssPreview(null);
+    try {
+      const res = await fetch(`${API_BASE}/rss-preview?url=${encodeURIComponent(form.rss)}`);
+      if (!res.ok) {
+        const detail = await res.text();
+        throw new Error(detail || `HTTP ${res.status}`);
+      }
+      const data = await res.json();
+      setRssPreview(data);
+      setF('name', data.title);
+    } catch (err) {
+      setRssError(err.message);
+    } finally {
+      setRssLoading(false);
+    }
+  };
+
+  const handleAddSchedule = async () => {
+    if (!form.rss || !form.name) return;
+    try {
+      const createRes = await fetch(`${API_BASE}/shows`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rss_url: form.rss }),
+      });
+      if (!createRes.ok && createRes.status !== 409) {
+        const detail = await createRes.text();
+        throw new Error(detail || `HTTP ${createRes.status}`);
+      }
+      let show;
+      if (createRes.ok) {
+        show = await createRes.json();
+      } else {
+        const listRes = await fetch(`${API_BASE}/shows`);
+        const list = await listRes.json();
+        show = list.find(s => s.rss_url === form.rss);
+        if (!show) throw new Error(t ? '找不到對應節目' : 'Show not found');
+      }
+      await fetch(`${API_BASE}/shows/${show.id}/schedule`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          enabled: true,
+          frequency: form.freq,
+          run_time: form.time,
+          whisper_model: form.whisperModel,
+          max_episodes: form.maxEp,
+        }),
+      });
+      setShowForm(false);
+      setForm({ rss: '', name: '', freq: 'daily', time: '06:00', whisperModel: 'large-v3', maxEp: 0 });
+      setRssPreview(null);
+      await loadSchedules();
+    } catch (err) {
+      alert((t ? '建立失敗：' : 'Create failed: ') + err.message);
+    }
+  };
+
+  const handleSyncShow = async (item) => {
+    setSyncingId(item.show_id);
+    try {
+      const res = await fetch(`${API_BASE}/shows/${item.show_id}/sync`, { method: 'POST' });
+      if (!res.ok) {
+        const detail = await res.text();
+        throw new Error(detail || `HTTP ${res.status}`);
+      }
+      const data = await res.json();
+      alert(t
+        ? `已同步：新增 ${data.added} 集、更新 ${data.updated} 集（總計 ${data.total} 集）`
+        : `Synced: added ${data.added}, updated ${data.updated} (total ${data.total})`);
+      await loadSchedules();
+    } catch (err) {
+      alert((t ? '同步失敗：' : 'Sync failed: ') + err.message);
+    } finally {
+      setSyncingId(null);
+    }
+  };
+
+  const handleRemoveSchedule = async (item) => {
+    try {
+      const res = await fetch(`${API_BASE}/shows/${item.show_id}/schedule`, { method: 'DELETE' });
+      if (!res.ok && res.status !== 204) {
+        const detail = await res.text();
+        throw new Error(detail || `HTTP ${res.status}`);
+      }
+      await loadSchedules();
+    } catch (err) {
+      alert((t ? '移除排程失敗：' : 'Remove schedule failed: ') + err.message);
+    }
+  };
+
+  const handleDeleteShow = async (item) => {
+    try {
+      const res = await fetch(`${API_BASE}/shows/${item.show_id}`, { method: 'DELETE' });
+      if (!res.ok && res.status !== 204) {
+        const detail = await res.text();
+        throw new Error(detail || `HTTP ${res.status}`);
+      }
+      await loadSchedules();
+    } catch (err) {
+      alert((t ? '刪除節目失敗：' : 'Delete show failed: ') + err.message);
+    }
+  };
+
+  const confirmLabels = {
+    'delete-show': {
+      title: t ? '刪除節目' : 'Delete Show',
+      message: (item) => t
+        ? `即將刪除節目「${item.show_title}」及其所有集數、逐字稿、排程設定。此操作不可復原。`
+        : `About to delete show "${item.show_title}" and all its episodes, transcripts, and schedule. This cannot be undone.`,
+      confirmLabel: t ? '確認刪除' : 'Confirm Delete',
+      handler: handleDeleteShow,
+    },
+    'remove-schedule': {
+      title: t ? '移除排程' : 'Remove Schedule',
+      message: (item) => t
+        ? `即將移除節目「${item.show_title}」的轉錄排程設定。節目與已轉錄集數不受影響。`
+        : `About to remove the transcription schedule for "${item.show_title}". The show and transcribed episodes are not affected.`,
+      confirmLabel: t ? '確認移除' : 'Confirm Remove',
+      handler: handleRemoveSchedule,
+    },
   };
 
   return (
@@ -364,7 +516,7 @@ const ScheduleTab = ({ lang }) => {
       <div style={{ marginBottom: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <p style={{ margin: 0, color: TOKEN.textSecondary, fontSize: 14 }}>{t ? '設定各節目的自動轉錄排程與進度監控。' : 'Configure auto-transcription schedules and monitor progress.'}</p>
         <div style={{ display: 'flex', gap: 8 }}>
-          <Btn icon="refresh" variant="secondary" size="sm">{t ? '同步所有' : 'Sync All'}</Btn>
+          <Btn icon="refresh" variant="secondary" size="sm" onClick={handleSyncAll} disabled={syncing || loading}>{syncing ? (t ? '同步中...' : 'Syncing...') : (t ? '同步所有' : 'Sync All')}</Btn>
           <Btn icon="plus" size="sm" onClick={() => setShowForm(v => !v)}>{t ? '新增排程' : 'Add Schedule'}</Btn>
         </div>
       </div>
@@ -392,10 +544,13 @@ const ScheduleTab = ({ lang }) => {
               <div style={{ marginTop: 10, background: TOKEN.surfaceRaised, border: `1px solid #22c55e44`, borderRadius: 8, padding: '10px 14px', display: 'flex', gap: 12, alignItems: 'center' }}>
                 <Icon name="check" size={16} color="#22c55e" />
                 <div>
-                  <div style={{ color: TOKEN.text, fontWeight: 600, fontSize: 13 }}>{rssPreview.name}</div>
-                  <div style={{ color: TOKEN.textMuted, fontSize: 12 }}>{rssPreview.episodes} {t ? '集・最新' : 'eps · Latest'}: {rssPreview.latestEp} · {rssPreview.desc}</div>
+                  <div style={{ color: TOKEN.text, fontWeight: 600, fontSize: 13 }}>{rssPreview.title}</div>
+                  <div style={{ color: TOKEN.textMuted, fontSize: 12 }}>{rssPreview.episode_count} {t ? '集' : 'eps'}{rssPreview.latest_published_at ? ` · ${t ? '最新' : 'Latest'}: ${rssPreview.latest_published_at.slice(0, 10)}` : ''}</div>
                 </div>
               </div>
+            )}
+            {rssError && (
+              <div style={{ marginTop: 10, color: '#f87171', fontSize: 12 }}>{rssError}</div>
             )}
           </div>
 
@@ -457,51 +612,80 @@ const ScheduleTab = ({ lang }) => {
         </div>
       )}
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-        {shows.map(show => (
-          <div key={show.id} style={{ background: TOKEN.surface, border: `1px solid ${TOKEN.surfaceBorder}`, borderRadius: 12, padding: '18px 22px' }}>
-            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16, marginBottom: 14 }}>
-              <div onClick={() => setShows(ss => ss.map(s => s.id === show.id ? { ...s, enabled: !s.enabled, status: !s.enabled ? 'success' : 'paused' } : s))}
-                style={{ width: 36, height: 20, borderRadius: 99, background: show.enabled ? TOKEN.accent : TOKEN.surfaceBorder, cursor: 'pointer', position: 'relative', transition: 'background 0.15s', flexShrink: 0, marginTop: 3 }}>
-                <div style={{ width: 14, height: 14, borderRadius: '50%', background: '#fff', position: 'absolute', top: 3, left: show.enabled ? 19 : 3, transition: 'left 0.15s' }} />
-              </div>
-              <div style={{ flex: 1 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                  <span style={{ color: TOKEN.text, fontWeight: 600, fontSize: 15 }}>{t ? show.name : show.nameEn}</span>
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, color: statusColor[show.status] }}>
-                    <span style={{ width: 6, height: 6, borderRadius: '50%', background: statusColor[show.status], display: 'inline-block', animation: show.status === 'running' ? 'pulse 1.5s infinite' : 'none' }} />
-                    {statusLabel[show.status]}
-                  </span>
-                  {show.pending > 0 && <Badge variant="warning">{show.pending} {t ? '集待轉錄' : 'pending'}</Badge>}
+      {loading && (
+        <div style={{ color: TOKEN.textMuted, padding: '24px 0', textAlign: 'center' }}>{t ? '載入中...' : 'Loading...'}</div>
+      )}
+      {fetchError && (
+        <div style={{ padding: '14px 18px', borderRadius: 8, background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)', color: '#f87171', fontSize: 13 }}>
+          {(t ? '載入失敗：' : 'Load failed: ') + fetchError}
+        </div>
+      )}
+      {!loading && !fetchError && shows && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {shows.length === 0 && (
+            <div style={{ color: TOKEN.textMuted, padding: '24px 0', textAlign: 'center' }}>{t ? '目前沒有節目，請先新增。' : 'No shows yet.'}</div>
+          )}
+          {shows.map(item => {
+            const enabled = item.schedule?.enabled === true;
+            const sched = item.schedule;
+            const lastTx = item.last_transcribed_at ? item.last_transcribed_at.slice(0, 16).replace('T', ' ') : '—';
+            return (
+              <div key={item.show_id} style={{ background: TOKEN.surface, border: `1px solid ${TOKEN.surfaceBorder}`, borderRadius: 12, padding: '18px 22px' }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16 }}>
+                  <div onClick={() => handleToggle(item)}
+                    style={{ width: 36, height: 20, borderRadius: 99, background: enabled ? TOKEN.accent : TOKEN.surfaceBorder, cursor: 'pointer', position: 'relative', transition: 'background 0.15s', flexShrink: 0, marginTop: 3 }}>
+                    <div style={{ width: 14, height: 14, borderRadius: '50%', background: '#fff', position: 'absolute', top: 3, left: enabled ? 19 : 3, transition: 'left 0.15s' }} />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                      <span style={{ color: TOKEN.text, fontWeight: 600, fontSize: 15 }}>{item.show_title}</span>
+                      {item.pending_count > 0 && <Badge variant="warning">{item.pending_count} {t ? '集待轉錄' : 'pending'}</Badge>}
+                      {!sched && <Badge variant="muted">{t ? '未設定' : 'No schedule'}</Badge>}
+                    </div>
+                    <div style={{ display: 'flex', gap: 16, marginTop: 7, fontSize: 12, color: TOKEN.textMuted, flexWrap: 'wrap', alignItems: 'center' }}>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Icon name="rss" size={11} /><span style={{ fontFamily: 'monospace', maxWidth: 240, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.rss_url}</span></span>
+                      {sched && <span>{t ? '頻率' : 'Freq'}: {sched.frequency} · {sched.run_time}</span>}
+                      <span><Icon name="clock" size={11} style={{ marginRight: 3 }} />{t ? '最後轉錄' : 'Last'}: {lastTx}</span>
+                      {sched && <Badge variant="muted">{sched.whisper_model}</Badge>}
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                    <Btn size="sm" variant="secondary" icon="refresh"
+                      onClick={() => handleSyncShow(item)}
+                      disabled={syncingId === item.show_id}>
+                      {syncingId === item.show_id ? (t ? '同步中...' : 'Syncing...') : (t ? '同步集數' : 'Sync Episodes')}
+                    </Btn>
+                    {sched && (
+                      <Btn size="sm" variant="ghost" icon="trash"
+                        onClick={() => setConfirmState({ kind: 'remove-schedule', item })}>
+                        {t ? '移除排程' : 'Remove Schedule'}
+                      </Btn>
+                    )}
+                    <Btn size="sm" variant="danger" icon="trash"
+                      onClick={() => setConfirmState({ kind: 'delete-show', item })}>
+                      {t ? '刪除節目' : 'Delete Show'}
+                    </Btn>
+                  </div>
                 </div>
-                <div style={{ display: 'flex', gap: 16, marginTop: 7, fontSize: 12, color: TOKEN.textMuted, flexWrap: 'wrap', alignItems: 'center' }}>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Icon name="rss" size={11} /><span style={{ fontFamily: 'monospace', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{show.rss}</span></span>
-                  <span><select value={show.freq} onChange={e => setShows(ss => ss.map(s => s.id === show.id ? { ...s, freq: e.target.value } : s))}
-                    style={{ background: 'transparent', border: 'none', color: TOKEN.textSecondary, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', outline: 'none' }}>
-                    <option value="hourly">{t ? '每小時' : 'Hourly'}</option>
-                    <option value="daily">{t ? '每天' : 'Daily'}</option>
-                    <option value="weekly">{t ? '每週' : 'Weekly'}</option>
-                    <option value="manual">{t ? '手動' : 'Manual'}</option>
-                  </select></span>
-                  <span><Icon name="clock" size={11} style={{ marginRight: 3 }} />{t ? '上次' : 'Last'}: {show.lastRun}</span>
-                  <span>{t ? '下次' : 'Next'}: {show.nextRun}</span>
-                  <Badge variant="muted">{show.whisperModel || 'large-v3'}</Badge>
-                </div>
               </div>
-              <Btn size="sm" variant="secondary" icon="play" onClick={() => setShows(ss => ss.map(s => s.id === show.id ? { ...s, status: 'running', progress: 10 } : s))}>{t ? '執行' : 'Run'}</Btn>
-            </div>
-            <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: TOKEN.textMuted, marginBottom: 6 }}>
-                <span>{t ? '轉錄進度' : 'Progress'}</span>
-                <span style={{ color: show.progress === 100 ? '#22c55e' : TOKEN.textSecondary, fontWeight: 600 }}>{show.progress}%</span>
-              </div>
-              <div style={{ height: 6, background: TOKEN.surfaceBorder, borderRadius: 99, overflow: 'hidden' }}>
-                <div style={{ height: '100%', width: `${show.progress}%`, background: show.progress === 100 ? '#22c55e' : show.status === 'running' ? TOKEN.accent : TOKEN.textMuted, borderRadius: 99, transition: 'width 0.4s', animation: show.status === 'running' ? 'shimmer 1.5s infinite' : 'none' }} />
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
+            );
+          })}
+        </div>
+      )}
+      <ConfirmModal
+        open={confirmState !== null}
+        title={confirmState ? confirmLabels[confirmState.kind].title : ''}
+        message={confirmState ? confirmLabels[confirmState.kind].message(confirmState.item) : ''}
+        confirmLabel={confirmState ? confirmLabels[confirmState.kind].confirmLabel : ''}
+        cancelLabel={t ? '取消' : 'Cancel'}
+        danger={true}
+        onConfirm={() => {
+          const { kind, item } = confirmState;
+          setConfirmState(null);
+          confirmLabels[kind].handler(item);
+        }}
+        onCancel={() => setConfirmState(null)}
+      />
     </div>
   );
 };
