@@ -1,18 +1,61 @@
+import asyncio
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import delete, func, select
+import httpx
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import case, delete, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.models.episode import Episode
 from app.models.show import Show
-from app.schemas.show import ShowCreate, ShowListItem, ShowResponse
+from app.models.transcript import Transcript, TranscriptStatus
+from app.schemas.show import (
+    RssPreviewResponse,
+    ShowCreate,
+    ShowListItem,
+    ShowResponse,
+)
 from app.schemas.sync import SyncResponse
 from app.services.rss_parser import RssParseError, fetch_and_parse
 
 router = APIRouter(prefix="/shows", tags=["shows"])
+rss_preview_router = APIRouter(tags=["shows"])
+
+
+@rss_preview_router.get("/rss-preview", response_model=RssPreviewResponse)
+async def rss_preview(url: str = Query(..., description="RSS feed URL")):
+    try:
+        parsed = await asyncio.wait_for(fetch_and_parse(url), timeout=5.0)
+    except asyncio.TimeoutError:
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail="RSS Feed 逾時（5 秒）",
+        )
+    except httpx.TimeoutException:
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail="RSS Feed 逾時（5 秒）",
+        )
+    except RssParseError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+        )
+
+    latest_published_at = None
+    if parsed.episodes:
+        published_list = [
+            ep.published_at for ep in parsed.episodes if ep.published_at
+        ]
+        if published_list:
+            latest_published_at = max(published_list).isoformat()
+
+    return RssPreviewResponse(
+        title=parsed.show.title,
+        episode_count=len(parsed.episodes),
+        latest_published_at=latest_published_at,
+    )
 
 
 @router.post("", response_model=ShowResponse, status_code=status.HTTP_201_CREATED)
@@ -70,14 +113,25 @@ async def create_show(payload: ShowCreate, db: AsyncSession = Depends(get_db)):
 
 @router.get("", response_model=list[ShowListItem])
 async def list_shows(db: AsyncSession = Depends(get_db)):
+    transcribed_case = case(
+        (Transcript.status == TranscriptStatus.completed, 1), else_=None
+    )
     stmt = (
-        select(Show, func.count(Episode.id).label("episode_count"))
+        select(
+            Show,
+            func.count(Episode.id).label("episode_count"),
+            func.count(transcribed_case).label("transcribed_count"),
+        )
         .outerjoin(Episode, Episode.show_id == Show.id)
+        .outerjoin(Transcript, Transcript.episode_id == Episode.id)
         .group_by(Show.id)
         .order_by(Show.created_at.desc())
     )
     result = await db.execute(stmt)
-    return [_show_to_response(show, count) for show, count in result.all()]
+    return [
+        _show_to_response(show, episode_count, transcribed_count)
+        for show, episode_count, transcribed_count in result.all()
+    ]
 
 
 @router.get("/{show_id}", response_model=ShowResponse)
@@ -151,8 +205,10 @@ async def sync_show(show_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
     return SyncResponse(added=added, updated=updated, total=total or 0)
 
 
-def _show_to_response(show: Show, episode_count: int) -> dict:
-    return {
+def _show_to_response(
+    show: Show, episode_count: int, transcribed_count: int | None = None
+) -> dict:
+    data = {
         "id": show.id,
         "title": show.title,
         "description": show.description,
@@ -162,3 +218,6 @@ def _show_to_response(show: Show, episode_count: int) -> dict:
         "created_at": show.created_at,
         "episode_count": episode_count,
     }
+    if transcribed_count is not None:
+        data["transcribed_count"] = transcribed_count
+    return data
