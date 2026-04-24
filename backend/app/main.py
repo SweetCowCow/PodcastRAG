@@ -7,7 +7,9 @@ from app.api.admin import router as admin_router
 from app.api.episodes import router as episodes_router
 from app.api.health import router as health_router
 from app.api.query import router as query_router
+from app.api.schedules import router as schedules_router
 from app.api.shows import router as shows_router
+from app.api.shows import rss_preview_router
 from app.api.transcripts import router as transcripts_router
 from app.core.bootstrap import seed_llm_config_from_env
 from app.core.config import settings
@@ -35,6 +37,8 @@ app.add_middleware(
 
 app.include_router(health_router)
 app.include_router(shows_router)
+app.include_router(rss_preview_router)
+app.include_router(schedules_router)
 app.include_router(episodes_router)
 app.include_router(transcripts_router)
 app.include_router(query_router)

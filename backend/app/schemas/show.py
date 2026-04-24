@@ -26,3 +26,10 @@ class ShowResponse(ShowBase):
 
 class ShowListItem(ShowBase):
     episode_count: int
+    transcribed_count: int
+
+
+class RssPreviewResponse(BaseModel):
+    title: str
+    episode_count: int
+    latest_published_at: str | None
