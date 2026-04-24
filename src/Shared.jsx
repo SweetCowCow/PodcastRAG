@@ -1,5 +1,7 @@
 // Shared components: tokens, icons, Nav, Layout
-const API_BASE = 'http://localhost:8000';
+// API_BASE is sourced from config.js (window.__API_BASE__) so each environment
+// can point the frontend at its own backend without rebuilding the JSX.
+const API_BASE = (typeof window !== 'undefined' && window.__API_BASE__) || 'http://localhost:8000';
 
 const TOKEN = {
   bg: '#0b1120',
@@ -184,4 +186,23 @@ const TopNavItem = ({ icon, label, active, onClick, secondary }) => {
   );
 };
 
-Object.assign(window, { API_BASE, TOKEN, Icon, Badge, Btn, Input, TopNav });
+// --- Confirm Modal (for destructive actions) ---
+const ConfirmModal = ({ open, title, message, confirmLabel = 'Confirm', cancelLabel = 'Cancel', danger = false, onConfirm, onCancel }) => {
+  if (!open) return null;
+  return (
+    <div onClick={onCancel}
+      style={{ position: 'fixed', inset: 0, background: 'rgba(4,8,20,0.72)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+      <div onClick={e => e.stopPropagation()}
+        style={{ background: TOKEN.surface, border: `1px solid ${TOKEN.surfaceBorder}`, borderRadius: 14, padding: '22px 26px', minWidth: 380, maxWidth: 480, boxShadow: '0 20px 60px rgba(0,0,0,0.5)' }}>
+        <div style={{ color: TOKEN.text, fontWeight: 700, fontSize: 16, marginBottom: 10 }}>{title}</div>
+        <div style={{ color: TOKEN.textSecondary, fontSize: 14, lineHeight: 1.6, marginBottom: 20 }}>{message}</div>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+          <Btn variant="ghost" onClick={onCancel}>{cancelLabel}</Btn>
+          <Btn variant={danger ? 'danger' : 'primary'} onClick={onConfirm}>{confirmLabel}</Btn>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+Object.assign(window, { API_BASE, TOKEN, Icon, Badge, Btn, Input, TopNav, ConfirmModal });
