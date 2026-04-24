@@ -2,13 +2,19 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    ffmpeg \
-    && rm -rf /var/lib/apt/lists/*
+# Cache apt package downloads across builds (BuildKit cache mounts).
+# sharing=locked avoids concurrent-build corruption on the shared cache.
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    rm -f /etc/apt/apt.conf.d/docker-clean && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends build-essential ffmpeg
 
 COPY backend/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+
+# Cache pip downloads across builds so repeat installs skip network fetch.
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install -r requirements.txt
 
 COPY backend/ .
 
