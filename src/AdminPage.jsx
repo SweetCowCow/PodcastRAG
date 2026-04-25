@@ -596,7 +596,7 @@ const ScheduleTab = ({ lang }) => {
       {queueStatus && (
         <div style={{ marginBottom: 16, display: 'flex', gap: 16, fontSize: 13, color: TOKEN.textSecondary }}>
           <span>🟢 {t ? '執行中' : 'Active'} {queueStatus.active}/{queueStatus.max_concurrent}</span>
-          <span>⏳ {t ? '佇列中' : 'Queued'} {queueStatus.pending_in_queue}</span>
+          <span>⏳ {t ? '佇列中' : 'Queued'} {queueStatus.pending_in_db}</span>
         </div>
       )}
 
@@ -728,7 +728,7 @@ const ScheduleTab = ({ lang }) => {
                       {sched && <Badge variant="muted">{sched.whisper_model}</Badge>}
                     </div>
                   </div>
-                  <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                  <div style={{ display: 'flex', gap: 6, flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                     <Btn size="sm" variant="secondary" icon="refresh"
                       onClick={() => handleSyncShow(item)}
                       disabled={syncingId === item.show_id}>
