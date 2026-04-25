@@ -47,6 +47,7 @@ const Icon = ({ name, size = 18, color = 'currentColor', style = {} }) => {
     fileText: <svg viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={s}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>,
     zap: <svg viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={s}><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>,
     podcast: <svg viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={s}><circle cx="12" cy="11" r="1"/><path d="M11 17a1 1 0 0 1 2 0c0 .5-.34 3-.5 4.5a.5.5 0 0 1-1 0c-.16-1.5-.5-4-.5-4.5z"/><path d="M8 14a5 5 0 1 1 8 0"/><path d="M5 18a9 9 0 1 1 14 0"/></svg>,
+    moreVertical: <svg viewBox="0 0 24 24" fill={color} stroke="none" style={s}><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>,
   };
   return paths[name] || <svg viewBox="0 0 24 24" style={s}><circle cx="12" cy="12" r="10" stroke={color} strokeWidth="2" fill="none"/></svg>;
 };
@@ -224,4 +225,42 @@ const FormModal = ({ open, title, children, confirmLabel = 'Confirm', cancelLabe
   );
 };
 
-Object.assign(window, { API_BASE, TOKEN, Icon, Badge, Btn, Input, TopNav, ConfirmModal, FormModal });
+// --- OverflowMenu ---
+// items: [{ label, icon?, onClick, disabled?, danger? }]
+// Renders a "⋯" trigger button; menu opens on click, closes on backdrop click or ESC.
+const OverflowMenu = ({ items, ariaLabel = 'More actions' }) => {
+  const [open, setOpen] = React.useState(false);
+  React.useEffect(() => {
+    if (!open) return undefined;
+    const onKey = (e) => { if (e.key === 'Escape') setOpen(false); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open]);
+  return (
+    <div style={{ position: 'relative', display: 'inline-block' }}>
+      <button type="button" aria-label={ariaLabel} onClick={(e) => { e.stopPropagation(); setOpen(v => !v); }}
+        style={{ width: 30, height: 30, borderRadius: 8, border: `1px solid ${TOKEN.surfaceBorder}`, background: open ? TOKEN.accentDim : TOKEN.surfaceRaised, color: TOKEN.textSecondary, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}>
+        <Icon name="moreVertical" size={16} color="currentColor" />
+      </button>
+      {open && (
+        <React.Fragment>
+          <div onClick={() => setOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 50, background: 'transparent' }} />
+          <div role="menu" style={{ position: 'absolute', right: 0, top: 'calc(100% + 4px)', minWidth: 180, background: TOKEN.surface, border: `1px solid ${TOKEN.surfaceBorder}`, borderRadius: 10, boxShadow: '0 8px 28px rgba(0,0,0,0.45)', padding: 6, zIndex: 51 }}>
+            {items.map((it, idx) => (
+              <button key={idx} type="button" role="menuitem" disabled={it.disabled}
+                onClick={() => { if (it.disabled) return; setOpen(false); it.onClick && it.onClick(); }}
+                style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 6, border: 'none', background: 'transparent', color: it.danger ? '#f87171' : TOKEN.text, fontSize: 13, fontFamily: 'inherit', textAlign: 'left', cursor: it.disabled ? 'not-allowed' : 'pointer', opacity: it.disabled ? 0.45 : 1 }}
+                onMouseEnter={(e) => { if (!it.disabled) e.currentTarget.style.background = TOKEN.surfaceRaised; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}>
+                {it.icon && <Icon name={it.icon} size={14} color="currentColor" />}
+                <span>{it.label}</span>
+              </button>
+            ))}
+          </div>
+        </React.Fragment>
+      )}
+    </div>
+  );
+};
+
+Object.assign(window, { API_BASE, TOKEN, Icon, Badge, Btn, Input, TopNav, ConfirmModal, FormModal, OverflowMenu });

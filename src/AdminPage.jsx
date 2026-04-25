@@ -326,13 +326,27 @@ const ScheduleTab = ({ lang }) => {
   const [rssLoading, setRssLoading] = React.useState(false);
   const [rssError, setRssError] = React.useState(null);
   const [rssPreview, setRssPreview] = React.useState(null);
-  const [syncing, setSyncing] = React.useState(false);
   const [syncingId, setSyncingId] = React.useState(null);
   const [confirmState, setConfirmState] = React.useState(null);
   const [queueStatus, setQueueStatus] = React.useState(null);
   const [editState, setEditState] = React.useState(null);
   const [runningId, setRunningId] = React.useState(null);
+  // Selection set is transient client-side state; not persisted.
+  const [selectedIds, setSelectedIds] = React.useState(() => new Set());
+  const [batchRefreshing, setBatchRefreshing] = React.useState(false);
+  const [batchTranscribing, setBatchTranscribing] = React.useState(false);
+  const [batchTranscribeConfirmOpen, setBatchTranscribeConfirmOpen] = React.useState(false);
   const setF = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  const toggleSelect = (showId) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(showId)) next.delete(showId); else next.add(showId);
+      return next;
+    });
+  };
+  const clearSelection = () => setSelectedIds(new Set());
+  const selectAll = (allShowIds) => setSelectedIds(new Set(allShowIds));
 
   const fetchQueueStatus = React.useCallback(async () => {
     try {
@@ -367,48 +381,12 @@ const ScheduleTab = ({ lang }) => {
 
   React.useEffect(() => { loadSchedules(); }, [loadSchedules]);
 
-  const handleToggle = async (item) => {
-    const next = !(item.schedule?.enabled);
-    try {
-      const res = await fetch(`${API_BASE}/shows/${item.show_id}/schedule`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enabled: next }),
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const updated = await res.json();
-      setShows(prev => prev.map(s => s.show_id === item.show_id ? { ...s, schedule: updated } : s));
-    } catch (err) {
-      alert((t ? '更新失敗：' : 'Update failed: ') + err.message);
-    }
-  };
-
-  const handleSyncAll = async () => {
-    if (!shows) return;
-    const enabled = shows.filter(s => s.schedule?.enabled === true);
-    if (enabled.length === 0) {
-      alert(t ? '沒有啟用中的節目' : 'No enabled shows');
-      return;
-    }
-    setSyncing(true);
-    try {
-      await Promise.all(
-        enabled.map(s => fetch(`${API_BASE}/shows/${s.show_id}/transcribe-latest`, { method: 'POST' }))
-      );
-      alert((t ? '已對 ' : 'Queued ') + enabled.length + (t ? ' 個啟用節目排入轉錄' : ' enabled shows for transcription'));
-      await loadSchedules();
-    } catch (err) {
-      alert((t ? '同步失敗：' : 'Sync failed: ') + err.message);
-    } finally {
-      setSyncing(false);
-    }
-  };
-
   const handleOpenEdit = (item) => {
     if (!item.schedule) return;
     setEditState({
       item,
       form: {
+        enabled: item.schedule.enabled === true,
         frequency: item.schedule.frequency,
         run_time: item.schedule.run_time,
         whisper_model: item.schedule.whisper_model,
@@ -433,6 +411,85 @@ const ScheduleTab = ({ lang }) => {
       await loadSchedules();
     } catch (err) {
       alert((t ? '更新失敗：' : 'Update failed: ') + err.message);
+    }
+  };
+
+  const handleBatchRefreshEpisodes = async () => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    const idToTitle = new Map((shows || []).map(s => [s.show_id, s.show_title]));
+    setBatchRefreshing(true);
+    try {
+      const results = await Promise.allSettled(
+        ids.map(async (id) => {
+          const res = await fetch(`${API_BASE}/shows/${id}/sync`, { method: 'POST' });
+          if (!res.ok) {
+            const detail = await res.text();
+            throw new Error(detail || `HTTP ${res.status}`);
+          }
+          return res.json();
+        })
+      );
+      let added = 0, updated = 0;
+      const failures = [];
+      results.forEach((r, idx) => {
+        if (r.status === 'fulfilled') {
+          added += r.value.added || 0;
+          updated += r.value.updated || 0;
+        } else {
+          failures.push(`${idToTitle.get(ids[idx]) || ids[idx]}: ${r.reason && r.reason.message ? r.reason.message : 'error'}`);
+        }
+      });
+      const summary = t
+        ? `已更新 ${ids.length - failures.length}/${ids.length} 個節目（新增 ${added} 集、更新 ${updated} 集）`
+        : `Refreshed ${ids.length - failures.length}/${ids.length} shows (added ${added}, updated ${updated})`;
+      const failText = failures.length
+        ? '\n' + (t ? '失敗：\n' : 'Failed:\n') + failures.join('\n')
+        : '';
+      alert(summary + failText);
+      await loadSchedules();
+      // Selection persists (per spec).
+    } finally {
+      setBatchRefreshing(false);
+    }
+  };
+
+  const handleBatchTranscribePending = async () => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    const idToTitle = new Map((shows || []).map(s => [s.show_id, s.show_title]));
+    setBatchTranscribing(true);
+    try {
+      const results = await Promise.allSettled(
+        ids.map(async (id) => {
+          // Omit max_episodes query so backend uses each show's own schedule.max_episodes.
+          const res = await fetch(`${API_BASE}/shows/${id}/transcribe-latest`, { method: 'POST' });
+          if (!res.ok) {
+            const detail = await res.text();
+            throw new Error(detail || `HTTP ${res.status}`);
+          }
+          return res.json();
+        })
+      );
+      let queued = 0;
+      const failures = [];
+      results.forEach((r, idx) => {
+        if (r.status === 'fulfilled') {
+          queued += r.value.queued || 0;
+        } else {
+          failures.push(`${idToTitle.get(ids[idx]) || ids[idx]}: ${r.reason && r.reason.message ? r.reason.message : 'error'}`);
+        }
+      });
+      const summary = t
+        ? `已對 ${ids.length - failures.length}/${ids.length} 個節目排入 ${queued} 集轉錄`
+        : `Queued ${queued} episodes across ${ids.length - failures.length}/${ids.length} shows`;
+      const failText = failures.length
+        ? '\n' + (t ? '失敗：\n' : 'Failed:\n') + failures.join('\n')
+        : '';
+      alert(summary + failText);
+      await loadSchedules();
+    } finally {
+      setBatchTranscribing(false);
     }
   };
 
@@ -528,11 +585,11 @@ const ScheduleTab = ({ lang }) => {
       }
       const data = await res.json();
       alert(t
-        ? `已同步：新增 ${data.added} 集、更新 ${data.updated} 集（總計 ${data.total} 集）`
-        : `Synced: added ${data.added}, updated ${data.updated} (total ${data.total})`);
+        ? `已更新節目集數：新增 ${data.added} 集、更新 ${data.updated} 集（總計 ${data.total} 集）`
+        : `Episodes refreshed: added ${data.added}, updated ${data.updated} (total ${data.total})`);
       await loadSchedules();
     } catch (err) {
-      alert((t ? '同步失敗：' : 'Sync failed: ') + err.message);
+      alert((t ? '更新失敗：' : 'Refresh failed: ') + err.message);
     } finally {
       setSyncingId(null);
     }
@@ -588,7 +645,6 @@ const ScheduleTab = ({ lang }) => {
       <div style={{ marginBottom: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <p style={{ margin: 0, color: TOKEN.textSecondary, fontSize: 14 }}>{t ? '設定各節目的自動轉錄排程與進度監控。' : 'Configure auto-transcription schedules and monitor progress.'}</p>
         <div style={{ display: 'flex', gap: 8 }}>
-          <Btn icon="refresh" variant="secondary" size="sm" onClick={handleSyncAll} disabled={syncing || loading}>{syncing ? (t ? '同步中...' : 'Syncing...') : (t ? '同步所有' : 'Sync All')}</Btn>
           <Btn icon="plus" size="sm" onClick={() => setShowForm(v => !v)}>{t ? '新增排程' : 'Add Schedule'}</Btn>
         </div>
       </div>
@@ -704,17 +760,73 @@ const ScheduleTab = ({ lang }) => {
           {shows.length === 0 && (
             <div style={{ color: TOKEN.textMuted, padding: '24px 0', textAlign: 'center' }}>{t ? '目前沒有節目，請先新增。' : 'No shows yet.'}</div>
           )}
-          {shows.map(item => {
-            const enabled = item.schedule?.enabled === true;
-            const sched = item.schedule;
-            const lastTx = item.last_transcribed_at ? item.last_transcribed_at.slice(0, 16).replace('T', ' ') : '—';
+
+          {shows.length > 0 && (() => {
+            const allIds = shows.map(s => s.show_id);
+            const allSelected = allIds.length > 0 && allIds.every(id => selectedIds.has(id));
+            const someSelected = selectedIds.size > 0;
             return (
-              <div key={item.show_id} style={{ background: TOKEN.surface, border: `1px solid ${TOKEN.surfaceBorder}`, borderRadius: 12, padding: '18px 22px' }}>
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap' }}>
-                  <div onClick={() => handleToggle(item)}
-                    style={{ width: 36, height: 20, borderRadius: 99, background: enabled ? TOKEN.accent : TOKEN.surfaceBorder, cursor: 'pointer', position: 'relative', transition: 'background 0.15s', flexShrink: 0, marginTop: 3 }}>
-                    <div style={{ width: 14, height: 14, borderRadius: '50%', background: '#fff', position: 'absolute', top: 3, left: enabled ? 19 : 3, transition: 'left 0.15s' }} />
+              <React.Fragment>
+                {/* Master row: select-all checkbox + (when selected) count + clear */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '6px 4px' }}>
+                  <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, color: TOKEN.textSecondary, fontSize: 13, cursor: 'pointer' }}>
+                    <input type="checkbox" checked={allSelected} onChange={() => allSelected ? clearSelection() : selectAll(allIds)}
+                      style={{ accentColor: TOKEN.accent, width: 16, height: 16, cursor: 'pointer' }} />
+                    <span>{t ? '全選' : 'Select All'}</span>
+                  </label>
+                  {someSelected && (
+                    <span style={{ color: TOKEN.textMuted, fontSize: 12 }}>
+                      {t ? `已選 ${selectedIds.size} 個` : `${selectedIds.size} selected`}
+                    </span>
+                  )}
+                </div>
+
+                {/* Batch action bar — only when something is selected */}
+                {someSelected && (
+                  <div style={{ background: TOKEN.accentDim, border: `1px solid ${TOKEN.accent}55`, borderRadius: 10, padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                    <span style={{ color: TOKEN.accentHover, fontSize: 13, fontWeight: 600, marginRight: 'auto' }}>
+                      {t ? `已選 ${selectedIds.size} 個節目` : `${selectedIds.size} shows selected`}
+                    </span>
+                    <Btn size="sm" variant="secondary" icon="refresh"
+                      onClick={handleBatchRefreshEpisodes}
+                      disabled={batchRefreshing || batchTranscribing}>
+                      {batchRefreshing ? (t ? '更新中...' : 'Refreshing...') : (t ? '更新節目集數' : 'Refresh Episodes')}
+                    </Btn>
+                    <Btn size="sm" variant="primary" icon="play"
+                      onClick={() => setBatchTranscribeConfirmOpen(true)}
+                      disabled={batchRefreshing || batchTranscribing}>
+                      {batchTranscribing ? (t ? '排入中...' : 'Queueing...') : (t ? '轉錄未完成集數' : 'Transcribe Pending')}
+                    </Btn>
+                    <Btn size="sm" variant="ghost" onClick={clearSelection}
+                      disabled={batchRefreshing || batchTranscribing}>
+                      {t ? '取消選取' : 'Clear'}
+                    </Btn>
                   </div>
+                )}
+              </React.Fragment>
+            );
+          })()}
+
+          {shows.map(item => {
+            const sched = item.schedule;
+            const checked = selectedIds.has(item.show_id);
+            const lastTx = item.last_transcribed_at ? item.last_transcribed_at.slice(0, 16).replace('T', ' ') : '—';
+            const refreshDisabled = syncingId === item.show_id;
+            const refreshLabel = refreshDisabled
+              ? (t ? '更新中...' : 'Refreshing...')
+              : (t ? '更新節目集數' : 'Refresh Episodes');
+            const menuItems = [
+              { label: refreshLabel, icon: 'refresh', onClick: () => handleSyncShow(item), disabled: refreshDisabled },
+              ...(sched ? [{ label: t ? '編輯排程' : 'Edit Schedule', icon: 'settings', onClick: () => handleOpenEdit(item) }] : []),
+              ...(sched ? [{ label: t ? '移除排程' : 'Remove Schedule', icon: 'trash', onClick: () => setConfirmState({ kind: 'remove-schedule', item }) }] : []),
+              { label: t ? '刪除節目' : 'Delete Show', icon: 'trash', onClick: () => setConfirmState({ kind: 'delete-show', item }), danger: true },
+            ];
+            return (
+              <div key={item.show_id} style={{ background: TOKEN.surface, border: `1px solid ${checked ? TOKEN.accent + '88' : TOKEN.surfaceBorder}`, borderRadius: 12, padding: '18px 22px' }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap' }}>
+                  <input type="checkbox" checked={checked} onChange={() => toggleSelect(item.show_id)}
+                    aria-label={t ? `選取 ${item.show_title}` : `Select ${item.show_title}`}
+                    style={{ accentColor: TOKEN.accent, width: 16, height: 16, cursor: 'pointer', marginTop: 5, flexShrink: 0 }} />
                   <div style={{ flex: '1 1 320px', minWidth: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                       <span style={{ color: TOKEN.text, fontWeight: 600, fontSize: 15 }}>{item.show_title}</span>
@@ -728,18 +840,7 @@ const ScheduleTab = ({ lang }) => {
                       {sched && <Badge variant="muted">{sched.whisper_model}</Badge>}
                     </div>
                   </div>
-                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                    <Btn size="sm" variant="secondary" icon="refresh"
-                      onClick={() => handleSyncShow(item)}
-                      disabled={syncingId === item.show_id}>
-                      {syncingId === item.show_id ? (t ? '同步中...' : 'Syncing...') : (t ? '同步集數' : 'Sync Episodes')}
-                    </Btn>
-                    {sched && (
-                      <Btn size="sm" variant="ghost" icon="settings"
-                        onClick={() => handleOpenEdit(item)}>
-                        {t ? '編輯排程' : 'Edit Schedule'}
-                      </Btn>
-                    )}
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end', alignItems: 'center' }}>
                     {sched && (
                       <Btn size="sm" variant="primary" icon="play"
                         onClick={() => handleRunNow(item)}
@@ -747,16 +848,7 @@ const ScheduleTab = ({ lang }) => {
                         {runningId === item.show_id ? (t ? '執行中...' : 'Running...') : (t ? '立刻執行' : 'Run Now')}
                       </Btn>
                     )}
-                    {sched && (
-                      <Btn size="sm" variant="ghost" icon="trash"
-                        onClick={() => setConfirmState({ kind: 'remove-schedule', item })}>
-                        {t ? '移除排程' : 'Remove Schedule'}
-                      </Btn>
-                    )}
-                    <Btn size="sm" variant="danger" icon="trash"
-                      onClick={() => setConfirmState({ kind: 'delete-show', item })}>
-                      {t ? '刪除節目' : 'Delete Show'}
-                    </Btn>
+                    <OverflowMenu items={menuItems} ariaLabel={t ? '更多操作' : 'More actions'} />
                   </div>
                 </div>
               </div>
@@ -778,6 +870,21 @@ const ScheduleTab = ({ lang }) => {
         }}
         onCancel={() => setConfirmState(null)}
       />
+      <ConfirmModal
+        open={batchTranscribeConfirmOpen}
+        title={t ? '批次轉錄' : 'Batch Transcribe'}
+        message={t
+          ? `即將對 ${selectedIds.size} 個節目排入轉錄，會消耗 OpenAI 額度，是否繼續？`
+          : `About to queue transcription for ${selectedIds.size} shows. This will consume OpenAI credit. Continue?`}
+        confirmLabel={t ? '確認' : 'Confirm'}
+        cancelLabel={t ? '取消' : 'Cancel'}
+        danger={false}
+        onConfirm={() => {
+          setBatchTranscribeConfirmOpen(false);
+          handleBatchTranscribePending();
+        }}
+        onCancel={() => setBatchTranscribeConfirmOpen(false)}
+      />
       <FormModal
         open={editState !== null}
         title={t ? '編輯排程' : 'Edit Schedule'}
@@ -788,6 +895,22 @@ const ScheduleTab = ({ lang }) => {
       >
         {editState && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div>
+              <label style={{ display: 'block', color: TOKEN.textMuted, fontSize: 12, marginBottom: 6 }}>{t ? '自動轉錄' : 'Auto Transcribe'}</label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div onClick={() => setEditState(s => ({ ...s, form: { ...s.form, enabled: !s.form.enabled } }))}
+                  role="switch" aria-checked={editState.form.enabled}
+                  style={{ width: 36, height: 20, borderRadius: 99, background: editState.form.enabled ? TOKEN.accent : TOKEN.surfaceBorder, cursor: 'pointer', position: 'relative', transition: 'background 0.15s', flexShrink: 0 }}>
+                  <div style={{ width: 14, height: 14, borderRadius: '50%', background: '#fff', position: 'absolute', top: 3, left: editState.form.enabled ? 19 : 3, transition: 'left 0.15s' }} />
+                </div>
+                <span style={{ color: TOKEN.textSecondary, fontSize: 13 }}>
+                  {editState.form.enabled ? (t ? '已啟用' : 'Enabled') : (t ? '已停用' : 'Disabled')}
+                </span>
+              </div>
+              <p style={{ margin: '6px 0 0', color: TOKEN.textMuted, fontSize: 11 }}>
+                {t ? '待 cron 功能上線後生效。' : 'Takes effect once cron support ships.'}
+              </p>
+            </div>
             <div>
               <label style={{ display: 'block', color: TOKEN.textMuted, fontSize: 12, marginBottom: 6 }}>{t ? '排程頻率' : 'Frequency'}</label>
               <select value={editState.form.frequency}
