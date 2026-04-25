@@ -8,25 +8,38 @@ TBD - created by archiving change 'admin-show-crud-ui'. Update Purpose after arc
 
 ### Requirement: Admin schedule card exposes show-level actions
 
-The admin `ScheduleTab` SHALL render three action buttons on each show card: "Sync Episodes", "Remove Schedule", and "Delete Show". The "Remove Schedule" button SHALL be shown only when the card's `schedule` field is not null. The "Sync Episodes" and "Delete Show" buttons SHALL always be shown.
+The admin `ScheduleTab` SHALL render five action buttons on each show card: "Sync Episodes", "Edit Schedule", "Run Now", "Remove Schedule", and "Delete Show". The "Edit Schedule", "Run Now", and "Remove Schedule" buttons SHALL be shown only when the card's `schedule` field is not null. The "Sync Episodes" and "Delete Show" buttons SHALL always be shown.
 
-#### Scenario: Card with schedule shows all three buttons
+#### Scenario: Card with schedule shows all five buttons
 
 - **WHEN** a show card is rendered and its `schedule` field is an object
-- **THEN** the card SHALL display "Sync Episodes", "Remove Schedule", and "Delete Show" buttons
+- **THEN** the card SHALL display "Sync Episodes", "Edit Schedule", "Run Now", "Remove Schedule", and "Delete Show" buttons
 
-#### Scenario: Card without schedule hides Remove Schedule
+#### Scenario: Card without schedule hides schedule-only buttons
 
 - **WHEN** a show card is rendered and its `schedule` field is null
-- **THEN** the card SHALL display "Sync Episodes" and "Delete Show" buttons only; "Remove Schedule" SHALL NOT be rendered
+- **THEN** the card SHALL display "Sync Episodes" and "Delete Show" buttons only; "Edit Schedule", "Run Now", and "Remove Schedule" SHALL NOT be rendered
 
 
 <!-- @trace
-source: admin-show-crud-ui
-updated: 2026-04-24
+source: schedule-editing-and-run-now
+updated: 2026-04-25
 code:
   - CLAUDE.md
-  - prod-select.png
+  - backend/app/core/config.py
+  - backend/app/services/transcription/openai_provider.py
+  - src/AdminPage.jsx
+  - backend/app/workers/throttle.py
+  - backend/requirements.txt
+  - backend/app/api/transcripts.py
+  - backend/app/api/shows.py
+  - backend/app/workers/tasks.py
+  - backend/app/schemas/sync.py
+  - backend/app/api/admin.py
+  - backend/app/services/sync.py
+  - backend/app/main.py
+  - src/Shared.jsx
+  - backend/app/schemas/admin.py
 -->
 
 ---
@@ -190,4 +203,45 @@ code:
   - backend/app/schemas/admin.py
   - backend/app/services/transcription/openai_provider.py
   - backend/app/core/config.py
+-->
+
+---
+### Requirement: FormModal shared component
+
+The `Shared.jsx` module SHALL export a `FormModal` React component with props `{ open, title, children, confirmLabel, cancelLabel, onConfirm, onCancel, submitDisabled }`. When `open` is false, the component SHALL render nothing. When `open` is true, the component SHALL render a full-viewport backdrop and a centered card containing the title, the `children` slot for arbitrary form content, a primary confirm button (disabled when `submitDisabled` is true), and a ghost cancel button. Clicking the backdrop SHALL invoke `onCancel`. `FormModal` SHALL style the confirm button as `primary` (non-destructive), distinguishing it from `ConfirmModal` which uses `danger`.
+
+#### Scenario: FormModal hides when open is false
+
+- **WHEN** `FormModal` is rendered with `open={false}`
+- **THEN** the component SHALL return null / render no DOM
+
+#### Scenario: FormModal renders children in the body
+
+- **WHEN** `FormModal` is rendered with `open={true}` and `children` containing form inputs
+- **THEN** those inputs SHALL appear between the title and the action buttons
+
+#### Scenario: Submit button respects submitDisabled
+
+- **WHEN** `FormModal` is rendered with `open={true}` and `submitDisabled={true}`
+- **THEN** the confirm button SHALL be rendered in a disabled state and clicking it SHALL NOT call `onConfirm`
+
+<!-- @trace
+source: schedule-editing-and-run-now
+updated: 2026-04-25
+code:
+  - CLAUDE.md
+  - backend/app/core/config.py
+  - backend/app/services/transcription/openai_provider.py
+  - src/AdminPage.jsx
+  - backend/app/workers/throttle.py
+  - backend/requirements.txt
+  - backend/app/api/transcripts.py
+  - backend/app/api/shows.py
+  - backend/app/workers/tasks.py
+  - backend/app/schemas/sync.py
+  - backend/app/api/admin.py
+  - backend/app/services/sync.py
+  - backend/app/main.py
+  - src/Shared.jsx
+  - backend/app/schemas/admin.py
 -->
