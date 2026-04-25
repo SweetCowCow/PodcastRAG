@@ -710,12 +710,12 @@ const ScheduleTab = ({ lang }) => {
             const lastTx = item.last_transcribed_at ? item.last_transcribed_at.slice(0, 16).replace('T', ' ') : '—';
             return (
               <div key={item.show_id} style={{ background: TOKEN.surface, border: `1px solid ${TOKEN.surfaceBorder}`, borderRadius: 12, padding: '18px 22px' }}>
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16 }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap' }}>
                   <div onClick={() => handleToggle(item)}
                     style={{ width: 36, height: 20, borderRadius: 99, background: enabled ? TOKEN.accent : TOKEN.surfaceBorder, cursor: 'pointer', position: 'relative', transition: 'background 0.15s', flexShrink: 0, marginTop: 3 }}>
                     <div style={{ width: 14, height: 14, borderRadius: '50%', background: '#fff', position: 'absolute', top: 3, left: enabled ? 19 : 3, transition: 'left 0.15s' }} />
                   </div>
-                  <div style={{ flex: 1 }}>
+                  <div style={{ flex: '1 1 320px', minWidth: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                       <span style={{ color: TOKEN.text, fontWeight: 600, fontSize: 15 }}>{item.show_title}</span>
                       {item.pending_count > 0 && <Badge variant="warning">{item.pending_count} {t ? '集待轉錄' : 'pending'}</Badge>}
