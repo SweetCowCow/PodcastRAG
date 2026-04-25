@@ -395,6 +395,19 @@ const ScheduleTab = ({ lang }) => {
     });
   };
 
+  const handleOpenAddSchedule = (item) => {
+    setEditState({
+      item,
+      form: {
+        enabled: false,
+        frequency: 'manual',
+        run_time: '06:00',
+        whisper_model: 'large-v3',
+        max_episodes: 0,
+      },
+    });
+  };
+
   const handleSaveEdit = async () => {
     if (!editState) return;
     try {
@@ -645,7 +658,7 @@ const ScheduleTab = ({ lang }) => {
       <div style={{ marginBottom: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <p style={{ margin: 0, color: TOKEN.textSecondary, fontSize: 14 }}>{t ? '設定各節目的自動轉錄排程與進度監控。' : 'Configure auto-transcription schedules and monitor progress.'}</p>
         <div style={{ display: 'flex', gap: 8 }}>
-          <Btn icon="plus" size="sm" onClick={() => setShowForm(v => !v)}>{t ? '新增排程' : 'Add Schedule'}</Btn>
+          <Btn icon="plus" size="sm" onClick={() => setShowForm(v => !v)}>{t ? '新增節目' : 'Add Show'}</Btn>
         </div>
       </div>
 
@@ -661,7 +674,7 @@ const ScheduleTab = ({ lang }) => {
         <div style={{ background: TOKEN.surface, border: `1px solid ${TOKEN.accent}55`, borderRadius: 14, padding: 24, marginBottom: 22 }}>
           <p style={{ color: TOKEN.text, fontWeight: 700, fontSize: 15, margin: '0 0 18px', display: 'flex', alignItems: 'center', gap: 8 }}>
             <Icon name="rss" size={16} color={TOKEN.accent} />
-            {t ? '新增轉錄排程' : 'New Transcription Schedule'}
+            {t ? '新增節目轉錄排程' : 'New Show with Transcription Schedule'}
           </p>
 
           {/* RSS Input */}
@@ -816,6 +829,7 @@ const ScheduleTab = ({ lang }) => {
               ? (t ? '更新中...' : 'Refreshing...')
               : (t ? '更新節目集數' : 'Refresh Episodes');
             const menuItems = [
+              ...(sched ? [] : [{ label: t ? '新增排程' : 'Add Schedule', icon: 'plus', onClick: () => handleOpenAddSchedule(item) }]),
               { label: refreshLabel, icon: 'refresh', onClick: () => handleSyncShow(item), disabled: refreshDisabled },
               ...(sched ? [{ label: t ? '編輯排程' : 'Edit Schedule', icon: 'settings', onClick: () => handleOpenEdit(item) }] : []),
               ...(sched ? [{ label: t ? '移除排程' : 'Remove Schedule', icon: 'trash', onClick: () => setConfirmState({ kind: 'remove-schedule', item }) }] : []),
@@ -845,7 +859,7 @@ const ScheduleTab = ({ lang }) => {
                       <Btn size="sm" variant="primary" icon="play"
                         onClick={() => handleRunNow(item)}
                         disabled={runningId === item.show_id}>
-                        {runningId === item.show_id ? (t ? '執行中...' : 'Running...') : (t ? '立刻執行' : 'Run Now')}
+                        {runningId === item.show_id ? (t ? '執行中...' : 'Running...') : (t ? '立刻執行轉錄' : 'Run Transcribe Now')}
                       </Btn>
                     )}
                     <OverflowMenu items={menuItems} ariaLabel={t ? '更多操作' : 'More actions'} />
