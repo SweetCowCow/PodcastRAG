@@ -40,9 +40,9 @@
 
 ## 7. 驗證
 
-- [ ] 7.1 `curl -X POST http://localhost:8000/shows/{id}/transcribe-latest?max_episodes=2`，確認回 202 + 回應 body 含 `queued` 與 `synced.added`/`synced.updated`；檢查 DB 中對應 show 的 episodes 有 2 集 transcript.status=pending 且 published_at 最新的兩集
-- [ ] 7.2 再次呼叫同一 show 的 transcribe-latest（無 query param），確認使用 schedule.max_episodes（若有設）；若節目沒 schedule 改為預設 5
-- [ ] 7.3 在瀏覽器後台「轉錄排程」頁：點「編輯排程」→ modal 彈出並預填目前值 → 改 max_episodes 後儲存 → 重新整理後卡片顯示新值
-- [ ] 7.4 點「立刻執行」按鈕：按鈕 disabled → 短時間後 alert 顯示 queued 數字 → 卡片的 pending_count 更新
-- [ ] 7.5 點「同步所有」：只有 enabled 的節目被打 transcribe-latest（DB 中非 enabled 節目不新增 pending transcript）
-- [ ] 7.6 點「取消」或 modal backdrop：modal 關閉 且 DevTools Network 面板確認沒發出 PUT request
+- [x] 7.1 `curl -X POST http://localhost:8000/shows/{id}/transcribe-latest?max_episodes=2`，確認回 202 + 回應 body 含 `queued` 與 `synced.added`/`synced.updated`；檢查 DB 中對應 show 的 episodes 有 2 集 transcript.status=pending 且 published_at 最新的兩集
+- [x] 7.2 再次呼叫同一 show 的 transcribe-latest（無 query param），確認使用 schedule.max_episodes（若有設）；若節目沒 schedule 改為預設 5
+- [x] 7.3 在瀏覽器後台「轉錄排程」頁：點「編輯排程」→ modal 彈出並預填目前值 → 改 max_episodes 後儲存 → 重新整理後卡片顯示新值
+- [x] 7.4 點「立刻執行」按鈕：按鈕 disabled → 短時間後 alert 顯示 queued 數字 → 卡片的 pending_count 更新
+- [x] 7.5 點「同步所有」：只有 enabled 的節目被打 transcribe-latest（DB 中非 enabled 節目不新增 pending transcript）
+- [x] 7.6 點「取消」或 modal backdrop：modal 關閉 且 DevTools Network 面板確認沒發出 PUT request
