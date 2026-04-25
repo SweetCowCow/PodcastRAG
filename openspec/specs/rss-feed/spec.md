@@ -66,7 +66,7 @@ code:
 ---
 ### Requirement: Create show endpoint
 
-The backend SHALL expose `POST /shows` that accepts an RSS URL, parses the feed, persists the show and its initial episodes (up to 200), and returns the created show with episode count.
+The backend SHALL expose `POST /shows` that accepts an RSS URL, parses the feed, persists the show and all episodes returned by the feed, and returns the created show with episode count. The parser SHALL NOT impose an arbitrary upper bound on the number of episodes persisted from a single feed; if the feed contains 1 episode or 1000 episodes, all SHALL be persisted.
 
 #### Scenario: New show created
 
@@ -83,42 +83,24 @@ The backend SHALL expose `POST /shows` that accepts an RSS URL, parses the feed,
 - **WHEN** `POST /shows` is called with a URL that fails to parse
 - **THEN** the response SHALL be HTTP 400 with an error message describing the parse failure, and no show record SHALL be persisted
 
+#### Scenario: Feed with more than 200 episodes is persisted in full
+
+- **WHEN** `POST /shows` is called with an RSS feed URL whose XML contains 251 `<item>` elements
+- **THEN** the response SHALL be HTTP 201 and `episode_count` SHALL equal 251
+- **AND** the `episodes` table SHALL contain 251 rows linked to the new show's `show_id`
+
+##### Example: Firstory feed with 251 items
+
+- **GIVEN** an RSS feed XML containing 251 valid `<item>` elements with audio enclosures
+- **WHEN** the parser processes the feed via the default call signature `fetch_and_parse(url)` (no `max_episodes` argument)
+- **THEN** the returned `ParsedFeed.episodes` list SHALL contain 251 `ParsedEpisode` objects (not 200)
+
 
 <!-- @trace
-source: rss-feed
-updated: 2026-04-21
+source: fix-rss-200-cap
+updated: 2026-04-26
 code:
-  - backend/app/api/health.py
-  - backend/app/models/transcript.py
-  - backend/.dockerignore
-  - backend/app/models/show.py
-  - backend/alembic/versions/91e48beb1237_initial_schema.py
-  - backend/app/core/config.py
-  - backend/app/models/__init__.py
-  - backend/app/services/__init__.py
-  - backend/app/api/shows.py
-  - backend/app/api/episodes.py
-  - backend/app/schemas/episode.py
-  - backend/alembic.ini
-  - backend/app/core/__init__.py
-  - backend/Dockerfile
-  - backend/app/models/transcript_segment.py
-  - backend/app/schemas/show.py
-  - backend/alembic/script.py.mako
-  - backend/app/api/__init__.py
-  - backend/app/schemas/__init__.py
-  - backend/.env.example
-  - backend/requirements.txt
-  - backend/app/__init__.py
   - backend/app/services/rss_parser.py
-  - backend/alembic/README
-  - .spectra/spectra.db
-  - backend/app/core/database.py
-  - backend/app/schemas/sync.py
-  - backend/alembic/env.py
-  - backend/app/main.py
-  - backend/docker-compose.yml
-  - backend/app/models/episode.py
 -->
 
 ---
