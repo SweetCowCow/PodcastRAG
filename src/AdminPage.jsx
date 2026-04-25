@@ -728,7 +728,7 @@ const ScheduleTab = ({ lang }) => {
                       {sched && <Badge variant="muted">{sched.whisper_model}</Badge>}
                     </div>
                   </div>
-                  <div style={{ display: 'flex', gap: 6, flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                     <Btn size="sm" variant="secondary" icon="refresh"
                       onClick={() => handleSyncShow(item)}
                       disabled={syncingId === item.show_id}>
