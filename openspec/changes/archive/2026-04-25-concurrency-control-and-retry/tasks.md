@@ -1,7 +1,7 @@
 ## 1. 組態
 
 - [x] 1.1 實作 Requirement: MAX_CONCURRENT_TRANSCRIPTIONS is a backend setting——在 `backend/app/core/config.py` 的 `Settings` class 新增 `max_concurrent_transcriptions: int = 1` 欄位（Pydantic 自動從 env `MAX_CONCURRENT_TRANSCRIPTIONS` 讀取）
-- [ ] 1.2 在 Zeabur Dashboard 對 backend service (`69eb10360da29f05f49a4b0b`) 與 worker service (`69eb1c620da29f05f49a4e2a`) 各設 `MAX_CONCURRENT_TRANSCRIPTIONS=1` env var（或先保留預設，於驗證階段再設）
+- [x] 1.2 在 Zeabur Dashboard 對 backend service (`69eb10360da29f05f49a4b0b`) 與 worker service (`69eb1c620da29f05f49a4e2a`) 各設 `MAX_CONCURRENT_TRANSCRIPTIONS=1` env var（或先保留預設，於驗證階段再設）
 
 ## 2. 後端：throttle helpers
 
@@ -45,10 +45,10 @@
 
 ## 6. 驗證
 
-- [ ] 6.1 本地 docker compose 跑起來，從 backend 容器 exec python 檢查 `from app.workers.throttle import _get_redis; r=_get_redis(); print(r.ping())` 回 True
-- [ ] 6.2 觸發一集轉錄（`POST /episodes/{id}/transcribe`），worker log 可看到 task 正常完成；事後 `redis-cli GET transcribe:global:active_count` 回 0；`redis-cli KEYS transcribe:global:slot:*` 為空
-- [ ] 6.3 在本機暫時設 `MAX_CONCURRENT_TRANSCRIPTIONS=1`（worker env），同時觸發兩集；觀察第二集 worker log 顯示「retrying in ~15s」，等第一集轉完第二集開始
-- [ ] 6.4 觸發同一 show 兩集：第二集 log 顯示「retrying in ~60s」，等第一集完成 lock 釋放後第二集開始
-- [ ] 6.5 模擬 permanent error：手動把某 episode audio_url 改成壞 URL 讓 pydub 抛 CouldntDecodeError，觀察 transcript.status='failed' + error_message 非空；`retries` 次數為 0（未重試）
-- [ ] 6.6 `curl http://localhost:8000/admin/queue-status` 回 JSON 含四個欄位數字合理
-- [ ] 6.7 瀏覽器後台轉錄排程頁面頂部可看到「執行中 X/Y 佇列中 Z」；觸發轉錄後 30 秒內數字會更新；切到其他 tab DevTools 可見 fetch 停止
+- [x] 6.1 本地 docker compose 跑起來，從 backend 容器 exec python 檢查 `from app.workers.throttle import _get_redis; r=_get_redis(); print(r.ping())` 回 True
+- [x] 6.2 觸發一集轉錄（`POST /episodes/{id}/transcribe`），worker log 可看到 task 正常完成；事後 `redis-cli GET transcribe:global:active_count` 回 0；`redis-cli KEYS transcribe:global:slot:*` 為空
+- [x] 6.3 在本機暫時設 `MAX_CONCURRENT_TRANSCRIPTIONS=1`（worker env），同時觸發兩集；觀察第二集 worker log 顯示「retrying in ~15s」，等第一集轉完第二集開始
+- [x] 6.4 觸發同一 show 兩集：第二集 log 顯示「retrying in ~60s」，等第一集完成 lock 釋放後第二集開始
+- [x] 6.5 模擬 permanent error：手動把某 episode audio_url 改成壞 URL 讓 pydub 抛 CouldntDecodeError，觀察 transcript.status='failed' + error_message 非空；`retries` 次數為 0（未重試）
+- [x] 6.6 `curl http://localhost:8000/admin/queue-status` 回 JSON 含四個欄位數字合理
+- [x] 6.7 瀏覽器後台轉錄排程頁面頂部可看到「執行中 X/Y 佇列中 Z」；觸發轉錄後 30 秒內數字會更新；切到其他 tab DevTools 可見 fetch 停止
