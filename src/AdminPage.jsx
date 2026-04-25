@@ -330,6 +330,8 @@ const ScheduleTab = ({ lang }) => {
   const [syncingId, setSyncingId] = React.useState(null);
   const [confirmState, setConfirmState] = React.useState(null);
   const [queueStatus, setQueueStatus] = React.useState(null);
+  const [editState, setEditState] = React.useState(null);
+  const [runningId, setRunningId] = React.useState(null);
   const setF = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   const fetchQueueStatus = React.useCallback(async () => {
@@ -391,13 +393,66 @@ const ScheduleTab = ({ lang }) => {
     setSyncing(true);
     try {
       await Promise.all(
-        enabled.map(s => fetch(`${API_BASE}/shows/${s.show_id}/transcribe-all`, { method: 'POST' }))
+        enabled.map(s => fetch(`${API_BASE}/shows/${s.show_id}/transcribe-latest`, { method: 'POST' }))
       );
-      alert((t ? '已排入 ' : 'Queued ') + enabled.length + (t ? ' 個節目的轉錄任務' : ' shows for transcription'));
+      alert((t ? '已對 ' : 'Queued ') + enabled.length + (t ? ' 個啟用節目排入轉錄' : ' enabled shows for transcription'));
+      await loadSchedules();
     } catch (err) {
       alert((t ? '同步失敗：' : 'Sync failed: ') + err.message);
     } finally {
       setSyncing(false);
+    }
+  };
+
+  const handleOpenEdit = (item) => {
+    if (!item.schedule) return;
+    setEditState({
+      item,
+      form: {
+        frequency: item.schedule.frequency,
+        run_time: item.schedule.run_time,
+        whisper_model: item.schedule.whisper_model,
+        max_episodes: item.schedule.max_episodes,
+      },
+    });
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editState) return;
+    try {
+      const res = await fetch(`${API_BASE}/shows/${editState.item.show_id}/schedule`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(editState.form),
+      });
+      if (!res.ok) {
+        const detail = await res.text();
+        throw new Error(detail || `HTTP ${res.status}`);
+      }
+      setEditState(null);
+      await loadSchedules();
+    } catch (err) {
+      alert((t ? '更新失敗：' : 'Update failed: ') + err.message);
+    }
+  };
+
+  const handleRunNow = async (item) => {
+    setRunningId(item.show_id);
+    try {
+      const res = await fetch(`${API_BASE}/shows/${item.show_id}/transcribe-latest`, { method: 'POST' });
+      if (!res.ok) {
+        const detail = await res.text();
+        throw new Error(detail || `HTTP ${res.status}`);
+      }
+      const data = await res.json();
+      alert(t
+        ? `已排入 ${data.queued} 集（新增 ${data.synced.added}/更新 ${data.synced.updated}）`
+        : `Queued ${data.queued} episodes (added ${data.synced.added}/updated ${data.synced.updated})`);
+    } catch (err) {
+      alert((t ? '執行失敗：' : 'Run failed: ') + err.message);
+    } finally {
+      setRunningId(null);
+      await loadSchedules();
     }
   };
 
@@ -680,6 +735,19 @@ const ScheduleTab = ({ lang }) => {
                       {syncingId === item.show_id ? (t ? '同步中...' : 'Syncing...') : (t ? '同步集數' : 'Sync Episodes')}
                     </Btn>
                     {sched && (
+                      <Btn size="sm" variant="ghost" icon="settings"
+                        onClick={() => handleOpenEdit(item)}>
+                        {t ? '編輯排程' : 'Edit Schedule'}
+                      </Btn>
+                    )}
+                    {sched && (
+                      <Btn size="sm" variant="primary" icon="play"
+                        onClick={() => handleRunNow(item)}
+                        disabled={runningId === item.show_id}>
+                        {runningId === item.show_id ? (t ? '執行中...' : 'Running...') : (t ? '立刻執行' : 'Run Now')}
+                      </Btn>
+                    )}
+                    {sched && (
                       <Btn size="sm" variant="ghost" icon="trash"
                         onClick={() => setConfirmState({ kind: 'remove-schedule', item })}>
                         {t ? '移除排程' : 'Remove Schedule'}
@@ -710,6 +778,53 @@ const ScheduleTab = ({ lang }) => {
         }}
         onCancel={() => setConfirmState(null)}
       />
+      <FormModal
+        open={editState !== null}
+        title={t ? '編輯排程' : 'Edit Schedule'}
+        confirmLabel={t ? '儲存' : 'Save'}
+        cancelLabel={t ? '取消' : 'Cancel'}
+        onConfirm={handleSaveEdit}
+        onCancel={() => setEditState(null)}
+      >
+        {editState && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div>
+              <label style={{ display: 'block', color: TOKEN.textMuted, fontSize: 12, marginBottom: 6 }}>{t ? '排程頻率' : 'Frequency'}</label>
+              <select value={editState.form.frequency}
+                onChange={e => setEditState(s => ({ ...s, form: { ...s.form, frequency: e.target.value } }))}
+                style={{ width: '100%', background: TOKEN.surfaceRaised, border: `1px solid ${TOKEN.surfaceBorder}`, borderRadius: 8, padding: '9px 12px', color: TOKEN.text, fontSize: 14, outline: 'none', fontFamily: 'inherit' }}>
+                <option value="hourly">{t ? '每小時' : 'Hourly'}</option>
+                <option value="daily">{t ? '每天' : 'Daily'}</option>
+                <option value="weekly">{t ? '每週' : 'Weekly'}</option>
+                <option value="manual">{t ? '手動觸發' : 'Manual'}</option>
+              </select>
+            </div>
+            <div>
+              <label style={{ display: 'block', color: TOKEN.textMuted, fontSize: 12, marginBottom: 6 }}>{t ? '執行時間' : 'Run Time'}</label>
+              <input type="time" value={editState.form.run_time}
+                onChange={e => setEditState(s => ({ ...s, form: { ...s.form, run_time: e.target.value } }))}
+                style={{ width: '100%', boxSizing: 'border-box', background: TOKEN.surfaceRaised, border: `1px solid ${TOKEN.surfaceBorder}`, borderRadius: 8, padding: '9px 12px', color: TOKEN.text, fontSize: 14, outline: 'none', fontFamily: 'inherit', colorScheme: 'dark' }} />
+            </div>
+            <div>
+              <label style={{ display: 'block', color: TOKEN.textMuted, fontSize: 12, marginBottom: 6 }}>{t ? 'Whisper 模型' : 'Whisper Model'}</label>
+              <select value={editState.form.whisper_model}
+                onChange={e => setEditState(s => ({ ...s, form: { ...s.form, whisper_model: e.target.value } }))}
+                style={{ width: '100%', background: TOKEN.surfaceRaised, border: `1px solid ${TOKEN.surfaceBorder}`, borderRadius: 8, padding: '9px 12px', color: TOKEN.text, fontSize: 14, outline: 'none', fontFamily: 'inherit' }}>
+                <option value="large-v3">large-v3</option>
+                <option value="medium">medium</option>
+                <option value="small">small</option>
+                <option value="base">base</option>
+              </select>
+            </div>
+            <div>
+              <label style={{ display: 'block', color: TOKEN.textMuted, fontSize: 12, marginBottom: 6 }}>{t ? '每次最多集數 (0=全部)' : 'Max Episodes (0=all)'}</label>
+              <input type="number" min={0} max={50} value={editState.form.max_episodes}
+                onChange={e => setEditState(s => ({ ...s, form: { ...s.form, max_episodes: Number(e.target.value) } }))}
+                style={{ width: '100%', boxSizing: 'border-box', background: TOKEN.surfaceRaised, border: `1px solid ${TOKEN.surfaceBorder}`, borderRadius: 8, padding: '9px 12px', color: TOKEN.text, fontSize: 14, outline: 'none', fontFamily: 'inherit' }} />
+            </div>
+          </div>
+        )}
+      </FormModal>
     </div>
   );
 };
