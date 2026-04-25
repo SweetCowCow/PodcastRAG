@@ -2,20 +2,22 @@
 
 ### Requirement: Admin schedule card exposes show-level actions
 
-The admin `ScheduleTab` SHALL render a `selection checkbox`, the show metadata, a primary "立刻執行" / "Run Now" button, and a "⋯" overflow menu on each show card. The "立刻執行" button and the overflow menu's "編輯排程" / "Edit Schedule" and "移除排程" / "Remove Schedule" entries SHALL be shown only when the card's `schedule` field is not null. The selection checkbox, "更新節目集數" / "Refresh Episodes" overflow entry, and "刪除節目" / "Delete Show" overflow entry SHALL always be shown. The legacy in-card enable toggle, "Sync Episodes" button, "Edit Schedule" button, "Remove Schedule" button, and "Delete Show" button SHALL NOT be rendered as standalone card buttons.
+The admin `ScheduleTab` SHALL render a `selection checkbox`, the show metadata, a primary "立刻執行轉錄" / "Run Transcribe Now" button, and a "⋯" overflow menu on each show card. The "立刻執行轉錄" button and the overflow menu's "編輯排程" / "Edit Schedule" and "移除排程" / "Remove Schedule" entries SHALL be shown only when the card's `schedule` field is not null. The "新增排程" / "Add Schedule" overflow entry SHALL be shown only when the card's `schedule` field is null. The selection checkbox, "更新節目集數" / "Refresh Episodes" overflow entry, and "刪除節目" / "Delete Show" overflow entry SHALL always be shown. The legacy in-card enable toggle, "Sync Episodes" button, "Edit Schedule" button, "Remove Schedule" button, and "Delete Show" button SHALL NOT be rendered as standalone card buttons.
 
 #### Scenario: Card with schedule shows checkbox, primary button, and full overflow menu
 
 - **WHEN** a show card is rendered and its `schedule` field is an object
-- **THEN** the card SHALL display a selection checkbox, the show metadata, the "立刻執行" button, and a "⋯" overflow menu
+- **THEN** the card SHALL display a selection checkbox, the show metadata, the "立刻執行轉錄" button, and a "⋯" overflow menu
 - **AND** the overflow menu SHALL contain entries: "更新節目集數", "編輯排程", "移除排程", "刪除節目"
+- **AND** the overflow menu SHALL NOT contain a "新增排程" entry
 
-#### Scenario: Card without schedule hides schedule-only entries
+#### Scenario: Card without schedule hides schedule-only entries and exposes Add Schedule
 
 - **WHEN** a show card is rendered and its `schedule` field is null
 - **THEN** the card SHALL display the selection checkbox, the show metadata, and the "⋯" overflow menu
-- **AND** the "立刻執行" button SHALL NOT be rendered
-- **AND** the overflow menu SHALL contain entries: "更新節目集數", "刪除節目" only; "編輯排程" and "移除排程" SHALL NOT be rendered
+- **AND** the "立刻執行轉錄" button SHALL NOT be rendered
+- **AND** the overflow menu SHALL contain entries in this order: "新增排程", "更新節目集數", "刪除節目"
+- **AND** the menu SHALL NOT contain "編輯排程" or "移除排程"
 
 #### Scenario: Legacy in-card toggle is removed
 
@@ -116,8 +118,49 @@ The batch "轉錄未完成集數" / "Transcribe Pending" button SHALL open a con
 - **THEN** the frontend SHALL send `POST /shows/{show_id}/transcribe-latest` for each of the 2 shows
 - **AND** each request SHALL omit the `max_episodes` query parameter so the backend uses each show's own `schedule.max_episodes` value
 
-#### Scenario: Single-show "立刻執行" still skips the confirm modal
+#### Scenario: Single-show "立刻執行轉錄" still skips the confirm modal
 
-- **WHEN** the user clicks the per-card "立刻執行" button on a single card
+- **WHEN** the user clicks the per-card "立刻執行轉錄" button on a single card
 - **THEN** the frontend SHALL call `POST /shows/{show_id}/transcribe-latest` directly without opening the batch confirmation modal
+
+---
+
+### Requirement: Add Schedule from card without schedule
+
+When a show card has `schedule == null`, the "新增排程" / "Add Schedule" entry in the card's "⋯" overflow menu SHALL open the same modal used by "編輯排程" / "Edit Schedule", pre-filled with default values: `enabled=false`, `frequency="manual"`, `run_time="06:00"`, `whisper_model="large-v3"`, `max_episodes=0`. On confirm, the frontend SHALL call `PUT /shows/{show_id}/schedule` with the form values; on success the frontend SHALL re-fetch `GET /admin/schedules` so the card re-renders with the new schedule. On cancel or backdrop click, no network request SHALL be sent.
+
+#### Scenario: Add Schedule opens modal with defaults
+
+- **WHEN** the user opens the "⋯" menu on a card whose `schedule` is null and clicks "新增排程"
+- **THEN** a modal SHALL appear titled "編輯排程" / "Edit Schedule"
+- **AND** the form fields SHALL be pre-populated with `enabled=false`, `frequency="manual"`, `run_time="06:00"`, `whisper_model="large-v3"`, `max_episodes=0`
+- **AND** no network request SHALL be sent until the user clicks the modal's confirm button
+
+#### Scenario: Saving Add Schedule modal creates schedule via PUT
+
+- **WHEN** the user fills out the Add Schedule modal and clicks the confirm button
+- **THEN** the frontend SHALL call `PUT /shows/{show_id}/schedule` with `{enabled, frequency, run_time, whisper_model, max_episodes}`
+- **AND** on HTTP 200 response, the frontend SHALL re-fetch `GET /admin/schedules` and the card SHALL re-render with the new `schedule` object
+
+#### Scenario: Cancelling Add Schedule modal sends no request
+
+- **WHEN** the Add Schedule modal is open and the user clicks "取消" or the backdrop
+- **THEN** the modal SHALL close and no `PUT /shows/{show_id}/schedule` request SHALL be sent
+
+---
+
+### Requirement: ScheduleTab page header uses Add Show language
+
+The `ScheduleTab` page header button that opens the create-show form SHALL be labelled "新增節目" / "Add Show" (NOT "新增排程" / "Add Schedule"). The form panel that opens SHALL be titled "新增節目轉錄排程" / "New Show with Transcription Schedule". This wording disambiguates the page-header action (which creates BOTH a `Show` row and a `Schedule` row in one flow) from the per-card "新增排程" / "Add Schedule" overflow action (which creates a Schedule for an existing Show).
+
+#### Scenario: Page header button label
+
+- **WHEN** the `ScheduleTab` page header is rendered
+- **THEN** the right-side action button SHALL display the label "新增節目" / "Add Show"
+- **AND** the legacy label "新增排程" / "Add Schedule" SHALL NOT appear in the page header
+
+#### Scenario: Create-show panel title
+
+- **WHEN** the user clicks "新增節目" and the create form panel expands
+- **THEN** the panel SHALL show the heading "新增節目轉錄排程" / "New Show with Transcription Schedule"
 
