@@ -205,4 +205,23 @@ const ConfirmModal = ({ open, title, message, confirmLabel = 'Confirm', cancelLa
   );
 };
 
-Object.assign(window, { API_BASE, TOKEN, Icon, Badge, Btn, Input, TopNav, ConfirmModal });
+// --- Form Modal (for non-destructive form submissions) ---
+const FormModal = ({ open, title, children, confirmLabel = 'Confirm', cancelLabel = 'Cancel', onConfirm, onCancel, submitDisabled = false }) => {
+  if (!open) return null;
+  return (
+    <div onClick={onCancel}
+      style={{ position: 'fixed', inset: 0, background: 'rgba(4,8,20,0.72)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+      <div onClick={e => e.stopPropagation()}
+        style={{ background: TOKEN.surface, border: `1px solid ${TOKEN.surfaceBorder}`, borderRadius: 14, padding: '22px 26px', minWidth: 420, maxWidth: 520, boxShadow: '0 20px 60px rgba(0,0,0,0.5)' }}>
+        <div style={{ color: TOKEN.text, fontWeight: 700, fontSize: 16, marginBottom: 14 }}>{title}</div>
+        <div style={{ minHeight: 60, marginBottom: 20 }}>{children}</div>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+          <Btn variant="ghost" onClick={onCancel}>{cancelLabel}</Btn>
+          <Btn variant="primary" onClick={onConfirm} disabled={submitDisabled}>{confirmLabel}</Btn>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+Object.assign(window, { API_BASE, TOKEN, Icon, Badge, Btn, Input, TopNav, ConfirmModal, FormModal });
