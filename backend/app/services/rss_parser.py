@@ -35,7 +35,7 @@ class ParsedFeed:
     episodes: list[ParsedEpisode]
 
 
-async def fetch_and_parse(url: str, max_episodes: int = 200) -> ParsedFeed:
+async def fetch_and_parse(url: str, max_episodes: int | None = None) -> ParsedFeed:
     try:
         async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
             response = await client.get(url)
@@ -55,7 +55,8 @@ async def fetch_and_parse(url: str, max_episodes: int = 200) -> ParsedFeed:
         raise RssParseError("RSS Feed 缺少 channel 或 title 節點")
 
     show = _parse_show(parsed.feed)
-    episodes = [_parse_episode(entry) for entry in parsed.entries[:max_episodes]]
+    entries = parsed.entries if max_episodes is None else parsed.entries[:max_episodes]
+    episodes = [_parse_episode(entry) for entry in entries]
     episodes = [ep for ep in episodes if ep is not None]
 
     return ParsedFeed(show=show, episodes=episodes)
