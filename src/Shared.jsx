@@ -120,6 +120,7 @@ const TopNav = ({ lang, page, setPage, onToggleLang, onAdminClick }) => {
     { id: 'admin-llm', icon: 'brain', label: t ? 'LLM 模型' : 'LLM Models' },
     { id: 'admin-rag', icon: 'database', label: t ? 'RAG 設定' : 'RAG Config' },
     { id: 'admin-schedule', icon: 'calendar', label: t ? '轉錄排程' : 'Transcription' },
+    { id: 'admin-external-api', icon: 'globe', label: t ? '外部 API 狀態' : 'External API Status' },
   ];
 
   return (
@@ -263,4 +264,58 @@ const OverflowMenu = ({ items, ariaLabel = 'More actions' }) => {
   );
 };
 
-Object.assign(window, { API_BASE, TOKEN, Icon, Badge, Btn, Input, TopNav, ConfirmModal, FormModal, OverflowMenu });
+// --- ProgressCounts (transcription status row) ---
+const ProgressCounts = ({ counts, lang }) => {
+  const t = lang === 'zh';
+  const labels = t
+    ? { pending: '待處理', processing: '處理中', completed: '完成', failed: '失敗' }
+    : { pending: 'Pending', processing: 'Processing', completed: 'Completed', failed: 'Failed' };
+  const colors = {
+    pending: TOKEN.textSecondary,
+    processing: TOKEN.accent,
+    completed: TOKEN.success,
+    failed: TOKEN.danger,
+  };
+  return (
+    <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+      {['pending', 'processing', 'completed', 'failed'].map(k => (
+        <div key={k} style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+          <span style={{ color: colors[k], fontSize: 18, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{counts?.[k] ?? 0}</span>
+          <span style={{ color: TOKEN.textMuted, fontSize: 12 }}>{labels[k]}</span>
+        </div>
+      ))}
+    </div>
+  );
+};
+
+// --- categoryToBadge: map api_health error_category to {variant, label} ---
+// Single source of truth for category→colour mapping shared by ScheduleTab
+// and ExternalApiStatusTab so one category yields one consistent colour.
+const categoryToBadge = (category, lang) => {
+  const t = lang === 'zh';
+  const map = {
+    quota_exceeded: { variant: 'danger', label: t ? '額度不足' : 'Quota Exceeded' },
+    auth_error: { variant: 'danger', label: t ? '認證錯誤' : 'Auth Error' },
+    rate_limited: { variant: 'warning', label: t ? '速率受限' : 'Rate Limited' },
+    server_error: { variant: 'warning', label: t ? '伺服器錯誤' : 'Server Error' },
+    network_error: { variant: 'warning', label: t ? '網路錯誤' : 'Network Error' },
+    unknown: { variant: 'muted', label: t ? '未知錯誤' : 'Unknown Error' },
+  };
+  return map[category] || map.unknown;
+};
+
+// --- formatRelativeTime: ts_ms epoch → "2 分鐘前" / "2 minutes ago" ---
+const formatRelativeTime = (tsMs, lang) => {
+  if (!tsMs) return '';
+  const t = lang === 'zh';
+  const diffSec = Math.max(0, Math.floor((Date.now() - tsMs) / 1000));
+  if (diffSec < 60) return t ? '剛剛' : 'just now';
+  const m = Math.floor(diffSec / 60);
+  if (m < 60) return t ? `${m} 分鐘前` : `${m} minute${m === 1 ? '' : 's'} ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return t ? `${h} 小時前` : `${h} hour${h === 1 ? '' : 's'} ago`;
+  const d = Math.floor(h / 24);
+  return t ? `${d} 天前` : `${d} day${d === 1 ? '' : 's'} ago`;
+};
+
+Object.assign(window, { API_BASE, TOKEN, Icon, Badge, Btn, Input, TopNav, ConfirmModal, FormModal, OverflowMenu, ProgressCounts, categoryToBadge, formatRelativeTime });

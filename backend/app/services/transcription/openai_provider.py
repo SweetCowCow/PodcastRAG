@@ -5,10 +5,12 @@ import os
 import shutil
 import subprocess
 import tempfile
+import time
 
 from openai import OpenAI
 
 from app.core.config import settings
+from app.services import api_health
 from app.services.transcription.base import (
     TranscriptionProvider,
     TranscriptionResult,
@@ -110,7 +112,7 @@ class OpenAIWhisperProvider(TranscriptionProvider):
         chunk_size_bytes = settings.openai_whisper_chunk_size_mb * _BYTES_PER_MB
         if os.path.getsize(audio_path) <= chunk_size_bytes:
             with open(audio_path, "rb") as f:
-                response = self._client.audio.transcriptions.create(file=f, **kwargs)
+                response = self._call_with_tracker(file=f, **kwargs)
             return _response_to_result(response, offset_seconds=0.0)
 
         tempdir = tempfile.mkdtemp(prefix="whisper_chunks_")
@@ -123,9 +125,7 @@ class OpenAIWhisperProvider(TranscriptionProvider):
 
             for chunk_path, offset_seconds in chunks:
                 with open(chunk_path, "rb") as f:
-                    response = self._client.audio.transcriptions.create(
-                        file=f, **kwargs
-                    )
+                    response = self._call_with_tracker(file=f, **kwargs)
                 partial = _response_to_result(response, offset_seconds=offset_seconds)
                 merged_segments.extend(partial.segments)
                 if partial.text:
@@ -140,6 +140,30 @@ class OpenAIWhisperProvider(TranscriptionProvider):
             )
         finally:
             shutil.rmtree(tempdir, ignore_errors=True)
+
+    def _call_with_tracker(self, **kwargs):
+        start_ns = time.monotonic_ns()
+        try:
+            response = self._client.audio.transcriptions.create(**kwargs)
+        except Exception as exc:
+            duration_ms = (time.monotonic_ns() - start_ns) // 1_000_000
+            http_status = getattr(exc, "status_code", None)
+            api_health.record(
+                "openai_whisper",
+                ok=False,
+                duration_ms=duration_ms,
+                error_category=api_health.classify_error(exc, http_status),
+                http_status=http_status,
+            )
+            raise
+        duration_ms = (time.monotonic_ns() - start_ns) // 1_000_000
+        api_health.record(
+            "openai_whisper",
+            ok=True,
+            duration_ms=duration_ms,
+            http_status=200,
+        )
+        return response
 
 
 def _response_to_result(response, offset_seconds: float) -> TranscriptionResult:

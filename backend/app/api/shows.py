@@ -18,6 +18,12 @@ from app.schemas.show import (
     ShowResponse,
 )
 from app.schemas.sync import SyncResponse
+from app.schemas.transcription_status import (
+    CurrentlyProcessingItem,
+    RecentFailureItem,
+    TranscriptionStatusCounts,
+    TranscriptionStatusResponse,
+)
 from app.services.rss_parser import RssParseError, fetch_and_parse
 from app.services.sync import sync_show_episodes
 
@@ -168,6 +174,81 @@ async def sync_show(show_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 
     return SyncResponse(**result)
+
+
+@router.get(
+    "/{show_id}/transcription-status",
+    response_model=TranscriptionStatusResponse,
+)
+async def get_transcription_status(
+    show_id: uuid.UUID, db: AsyncSession = Depends(get_db)
+):
+    show = await db.get(Show, show_id)
+    if not show:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Show 不存在")
+
+    counts_stmt = (
+        select(Transcript.status, func.count(Transcript.id))
+        .join(Episode, Episode.id == Transcript.episode_id)
+        .where(Episode.show_id == show_id)
+        .group_by(Transcript.status)
+    )
+    counts_rows = (await db.execute(counts_stmt)).all()
+    counts = TranscriptionStatusCounts()
+    for status_value, n in counts_rows:
+        # status_value can be the enum or the str depending on driver path
+        key = status_value.value if hasattr(status_value, "value") else str(status_value)
+        if hasattr(counts, key):
+            setattr(counts, key, int(n))
+
+    processing_stmt = (
+        select(Episode.id, Episode.title, Transcript.updated_at)
+        .join(Transcript, Transcript.episode_id == Episode.id)
+        .where(
+            Episode.show_id == show_id,
+            Transcript.status == TranscriptStatus.processing,
+        )
+        .order_by(Transcript.updated_at.asc())
+        .limit(10)
+    )
+    currently_processing = [
+        CurrentlyProcessingItem(
+            episode_id=eid, episode_title=title, started_at=ts
+        )
+        for eid, title, ts in (await db.execute(processing_stmt)).all()
+    ]
+
+    failures_stmt = (
+        select(
+            Episode.id,
+            Episode.title,
+            Transcript.error_message,
+            Transcript.updated_at,
+        )
+        .join(Transcript, Transcript.episode_id == Episode.id)
+        .where(
+            Episode.show_id == show_id,
+            Transcript.status == TranscriptStatus.failed,
+        )
+        .order_by(Transcript.updated_at.desc())
+        .limit(10)
+    )
+    recent_failures = [
+        RecentFailureItem(
+            episode_id=eid,
+            episode_title=title,
+            error_message=(msg or "")[:200],
+            error_category=None,
+            failed_at=ts,
+        )
+        for eid, title, msg, ts in (await db.execute(failures_stmt)).all()
+    ]
+
+    return TranscriptionStatusResponse(
+        counts=counts,
+        currently_processing=currently_processing,
+        recent_failures=recent_failures,
+    )
 
 
 def _show_to_response(
