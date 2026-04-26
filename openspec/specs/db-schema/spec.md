@@ -124,12 +124,12 @@ code:
 ---
 ### Requirement: transcripts table
 
-The database SHALL contain a `transcripts` table with a one-to-one relationship to episodes, tracking transcription status and the last error message when a transcription fails.
+The database SHALL contain a `transcripts` table with a one-to-one relationship to episodes, tracking transcription status, the last error message when a transcription fails, and the time of the last row modification.
 
 #### Scenario: Transcript record created
 
 - **WHEN** a transcript is inserted for an episode
-- **THEN** the record SHALL be persisted with UUID primary key, `episode_id` (unique foreign key), `status` (enum: `pending`, `processing`, `completed`, `failed`), `language` (nullable), `transcribed_at` (nullable), `error_message` (nullable TEXT), and `created_at`
+- **THEN** the record SHALL be persisted with UUID primary key, `episode_id` (unique foreign key), `status` (enum: `pending`, `processing`, `completed`, `failed`), `language` (nullable), `transcribed_at` (nullable), `error_message` (nullable TEXT), `created_at`, and `updated_at` (timestamptz non-null)
 
 #### Scenario: Duplicate transcript for episode rejected
 
@@ -141,55 +141,47 @@ The database SHALL contain a `transcripts` table with a one-to-one relationship 
 - **WHEN** a transcript transitions from `processing` to `failed` with an error message up to 2000 characters
 - **THEN** the `error_message` column SHALL store the message exactly and subsequent reads SHALL return the same value
 
+#### Scenario: updated_at refreshes on row modification
+
+- **WHEN** any column of an existing `transcripts` row is updated (e.g. status transition, error_message assignment, transcribed_at set)
+- **THEN** the `updated_at` column SHALL be set to the current UTC timestamp as part of the same UPDATE statement (via SQLAlchemy `onupdate=func.now()`)
+
+#### Scenario: updated_at populated on insert
+
+- **WHEN** a new `transcripts` row is inserted without an explicit `updated_at` value
+- **THEN** the `updated_at` column SHALL receive the current UTC timestamp via the column's server default
+
+#### Scenario: Existing rows backfilled during migration
+
+- **WHEN** the migration that introduces the `updated_at` column is applied to a database containing existing `transcripts` rows
+- **THEN** all existing rows SHALL receive the migration execution timestamp as their `updated_at` value (via `server_default=func.now()` applied at column creation)
+- **AND** the column SHALL be declared NOT NULL
+
 
 <!-- @trace
-source: transcription-pipeline
-updated: 2026-04-21
+source: transcription-progress-visibility
+updated: 2026-04-27
 code:
-  - backend/alembic.ini
-  - backend/app/workers/tasks.py
-  - backend/app/services/transcription/factory.py
-  - backend/app/models/transcript_segment.py
-  - backend/app/schemas/show.py
-  - backend/app/models/__init__.py
-  - backend/alembic/env.py
-  - backend/app/models/episode.py
-  - backend/app/services/storage.py
-  - backend/alembic/README
-  - backend/alembic/versions/91e48beb1237_initial_schema.py
-  - backend/app/core/config.py
+  - backend/app/api/admin.py
+  - src/Shared.jsx
+  - backend/alembic/versions/e3f4a5b6c7d8_add_transcripts_updated_at.py
+  - backend/pytest.ini
+  - backend/app/schemas/transcription_status.py
   - backend/app/api/shows.py
-  - backend/app/models/show.py
-  - backend/app/services/rss_parser.py
-  - backend/Dockerfile
-  - backend/app/workers/celery_app.py
-  - backend/.dockerignore
-  - backend/.env.example
-  - backend/app/api/transcripts.py
-  - backend/app/workers/__init__.py
-  - .spectra/spectra.db
-  - backend/app/schemas/episode.py
-  - backend/app/schemas/transcript.py
-  - backend/app/models/transcript.py
-  - backend/app/services/transcription/faster_whisper_provider.py
-  - backend/app/schemas/sync.py
-  - backend/app/main.py
-  - backend/app/services/__init__.py
-  - backend/alembic/versions/a7b3c9d4e2f1_add_transcription_columns.py
-  - backend/app/api/__init__.py
   - backend/app/services/transcription/openai_provider.py
-  - backend/docker-compose.yml
-  - backend/app/core/database.py
-  - backend/app/schemas/__init__.py
-  - backend/app/__init__.py
-  - backend/app/api/health.py
-  - backend/alembic/script.py.mako
-  - backend/app/services/transcription/base.py
-  - backend/app/workers/dispatch.py
-  - backend/app/services/transcription/__init__.py
-  - backend/app/api/episodes.py
-  - backend/requirements.txt
-  - backend/app/core/__init__.py
+  - src/AdminPage.jsx
+  - src/ExternalApiStatusTab.jsx
+  - backend/app/services/api_health.py
+  - index.html
+  - backend/app/services/rag.py
+  - backend/app/schemas/api_health.py
+  - backend/app/services/embedding.py
+  - backend/app/models/transcript.py
+tests:
+  - backend/tests/__init__.py
+  - backend/tests/test_api_health.py
+  - backend/tests/test_status_endpoints.py
+  - backend/tests/conftest.py
 -->
 
 ---
@@ -509,4 +501,46 @@ code:
   - backend/app/services/rss_parser.py
   - backend/app/workers/tasks.py
   - backend/app/schemas/sync.py
+-->
+---
+### Requirement: Alembic migration for transcripts.updated_at
+
+The repository SHALL contain an Alembic migration that adds a non-null `updated_at` timestamptz column to the `transcripts` table with `server_default = now()` and backfills existing rows with the migration execution time, so deployments that already hold data apply cleanly without manual SQL.
+
+#### Scenario: Upgrade adds the column
+
+- **WHEN** `alembic upgrade head` runs against a database containing the prior schema
+- **THEN** the `transcripts` table SHALL gain an `updated_at` column of type `timestamptz NOT NULL DEFAULT now()`
+- **AND** every pre-existing `transcripts` row SHALL have `updated_at` set to a non-null timestamp
+
+#### Scenario: Downgrade removes the column
+
+- **WHEN** `alembic downgrade -1` is applied to the migration
+- **THEN** the `updated_at` column SHALL be dropped from the `transcripts` table
+- **AND** the schema SHALL match the state prior to this migration
+
+<!-- @trace
+source: transcription-progress-visibility
+updated: 2026-04-27
+code:
+  - backend/app/api/admin.py
+  - src/Shared.jsx
+  - backend/alembic/versions/e3f4a5b6c7d8_add_transcripts_updated_at.py
+  - backend/pytest.ini
+  - backend/app/schemas/transcription_status.py
+  - backend/app/api/shows.py
+  - backend/app/services/transcription/openai_provider.py
+  - src/AdminPage.jsx
+  - src/ExternalApiStatusTab.jsx
+  - backend/app/services/api_health.py
+  - index.html
+  - backend/app/services/rag.py
+  - backend/app/schemas/api_health.py
+  - backend/app/services/embedding.py
+  - backend/app/models/transcript.py
+tests:
+  - backend/tests/__init__.py
+  - backend/tests/test_api_health.py
+  - backend/tests/test_status_endpoints.py
+  - backend/tests/conftest.py
 -->
