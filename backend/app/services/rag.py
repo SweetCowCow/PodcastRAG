@@ -1,9 +1,12 @@
+import time
 import uuid
 from dataclasses import dataclass
 
 from openai import OpenAI
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.services import api_health
 
 RETRIEVAL_TOP_K = 8
 HISTORY_WINDOW = 10
@@ -85,6 +88,28 @@ def _vector_literal(vec: list[float]) -> str:
     return "[" + ",".join(repr(float(x)) for x in vec) + "]"
 
 
+def _chat_with_tracker(client: OpenAI, **kwargs):
+    start_ns = time.monotonic_ns()
+    try:
+        resp = client.chat.completions.create(**kwargs)
+    except Exception as exc:
+        duration_ms = (time.monotonic_ns() - start_ns) // 1_000_000
+        http_status = getattr(exc, "status_code", None)
+        api_health.record(
+            "openai_chat",
+            ok=False,
+            duration_ms=duration_ms,
+            error_category=api_health.classify_error(exc, http_status),
+            http_status=http_status,
+        )
+        raise
+    duration_ms = (time.monotonic_ns() - start_ns) // 1_000_000
+    api_health.record(
+        "openai_chat", ok=True, duration_ms=duration_ms, http_status=200
+    )
+    return resp
+
+
 def rewrite_question(
     client: OpenAI,
     model: str,
@@ -96,7 +121,7 @@ def rewrite_question(
     chat_messages.extend({"role": m["role"], "content": m["content"]} for m in history)
     chat_messages.append({"role": "user", "content": question})
 
-    resp = client.chat.completions.create(model=model, messages=chat_messages)
+    resp = _chat_with_tracker(client, model=model, messages=chat_messages)
     return (resp.choices[0].message.content or "").strip() or question
 
 
@@ -120,7 +145,8 @@ def answer_with_chunks(
     chat_messages.extend({"role": m["role"], "content": m["content"]} for m in history)
     chat_messages.append({"role": "user", "content": question})
 
-    resp = client.chat.completions.create(
+    resp = _chat_with_tracker(
+        client,
         model=model,
         messages=chat_messages,
         response_format={"type": "json_object"},

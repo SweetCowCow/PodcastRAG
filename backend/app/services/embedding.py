@@ -4,6 +4,7 @@ import time
 from openai import OpenAI, RateLimitError
 
 from app.core.config import settings
+from app.services import api_health
 
 logger = logging.getLogger(__name__)
 
@@ -36,18 +37,36 @@ def _embed_with_retry(client: OpenAI, batch: list[str]) -> list[list[float]]:
     attempt = 0
     delay = 1.0
     while True:
+        start_ns = time.monotonic_ns()
         try:
             response = client.embeddings.create(model=EMBEDDING_MODEL, input=batch)
-            return [item.embedding for item in response.data]
-        except RateLimitError:
-            if attempt >= MAX_RETRIES - 1:
-                raise
-            logger.warning(
-                "OpenAI embeddings rate limited (attempt %d/%d); backing off %.1fs",
-                attempt + 1,
-                MAX_RETRIES,
-                delay,
+        except Exception as exc:
+            duration_ms = (time.monotonic_ns() - start_ns) // 1_000_000
+            http_status = getattr(exc, "status_code", None)
+            api_health.record(
+                "openai_embedding",
+                ok=False,
+                duration_ms=duration_ms,
+                error_category=api_health.classify_error(exc, http_status),
+                http_status=http_status,
             )
-            time.sleep(delay)
-            attempt += 1
-            delay *= 2
+            if isinstance(exc, RateLimitError) and attempt < MAX_RETRIES - 1:
+                logger.warning(
+                    "OpenAI embeddings rate limited (attempt %d/%d); backing off %.1fs",
+                    attempt + 1,
+                    MAX_RETRIES,
+                    delay,
+                )
+                time.sleep(delay)
+                attempt += 1
+                delay *= 2
+                continue
+            raise
+        duration_ms = (time.monotonic_ns() - start_ns) // 1_000_000
+        api_health.record(
+            "openai_embedding",
+            ok=True,
+            duration_ms=duration_ms,
+            http_status=200,
+        )
+        return [item.embedding for item in response.data]

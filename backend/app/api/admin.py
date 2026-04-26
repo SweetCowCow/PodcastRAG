@@ -12,6 +12,12 @@ from app.schemas.admin import (
     LlmConfigUpdate,
     QueueStatusResponse,
 )
+from app.schemas.api_health import (
+    ApiEntry,
+    ApiHealthEvent,
+    ExternalApiStatusResponse,
+)
+from app.services import api_health
 from app.services.llm_config import get_config, update_config
 from app.workers.throttle import GLOBAL_ACTIVE_KEY, _get_redis
 
@@ -51,6 +57,25 @@ async def queue_status(db: AsyncSession = Depends(get_db)) -> QueueStatusRespons
         pending_in_db=pending_in_db,
         max_concurrent=settings.max_concurrent_transcriptions,
     )
+
+
+@router.get(
+    "/external-api-status", response_model=ExternalApiStatusResponse
+)
+async def external_api_status() -> ExternalApiStatusResponse:
+    entries: list[ApiEntry] = []
+    for name in api_health.API_NAMES:
+        events_raw, degraded = api_health.get_recent(name, api_health.MAX_EVENTS)
+        events = [ApiHealthEvent(**e) for e in events_raw]
+        entries.append(
+            ApiEntry(
+                name=name,
+                latest=events[0] if events else None,
+                recent=events,
+                degraded=degraded,
+            )
+        )
+    return ExternalApiStatusResponse(apis=entries)
 
 
 def _mask(cfg: LlmConfig) -> LlmConfigResponse:

@@ -6,13 +6,14 @@ const AdminPage = ({ lang, activePage }) => {
     'admin-llm': <LLMTab lang={lang} />,
     'admin-rag': <RAGTab lang={lang} />,
     'admin-schedule': <ScheduleTab lang={lang} />,
+    'admin-external-api': <ExternalApiStatusTab lang={lang} />,
   };
   return (
     <div style={{ flex: 1, overflowY: 'auto', background: TOKEN.bg }}>
       <div style={{ padding: '32px 40px 16px', borderBottom: `1px solid ${TOKEN.surfaceBorder}`, background: TOKEN.surface }}>
         <p style={{ color: TOKEN.accent, fontSize: 12, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', margin: '0 0 4px' }}>{t ? '後台管理' : 'Administration'}</p>
         <h1 style={{ color: TOKEN.text, fontSize: 24, fontWeight: 700, margin: 0 }}>
-          {{ 'admin-api': t ? 'API 金鑰管理' : 'API Key Management', 'admin-llm': t ? 'LLM 模型設定' : 'LLM Model Settings', 'admin-rag': t ? 'RAG 參數設定' : 'RAG Configuration', 'admin-schedule': t ? '轉錄排程管理' : 'Transcription Schedule' }[activePage]}
+          {{ 'admin-api': t ? 'API 金鑰管理' : 'API Key Management', 'admin-llm': t ? 'LLM 模型設定' : 'LLM Model Settings', 'admin-rag': t ? 'RAG 參數設定' : 'RAG Configuration', 'admin-schedule': t ? '轉錄排程管理' : 'Transcription Schedule', 'admin-external-api': t ? '外部 API 狀態' : 'External API Status' }[activePage]}
         </h1>
       </div>
       <div style={{ padding: '28px 40px 40px' }}>{pages[activePage]}</div>
@@ -316,6 +317,93 @@ const ToggleParam = ({ label, value, onChange, hint }) => (
 );
 
 // ── Schedule Tab ──
+// useTranscriptionStatus: poll GET /shows/{id}/transcription-status every 5s while enabled.
+// Returns { data, error }. enabled=false returns idle state (no fetch, no interval).
+const useTranscriptionStatus = (showId, enabled) => {
+  const [data, setData] = React.useState(null);
+  const [error, setError] = React.useState(null);
+  React.useEffect(() => {
+    if (!enabled || !showId) return undefined;
+    let cancelled = false;
+    const controller = new AbortController();
+    const fetchOnce = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/shows/${showId}/transcription-status`, { signal: controller.signal });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const json = await res.json();
+        if (!cancelled) { setData(json); setError(null); }
+      } catch (err) {
+        if (cancelled || err.name === 'AbortError') return;
+        setError(err.message || String(err));
+      }
+    };
+    fetchOnce();
+    const id = setInterval(fetchOnce, 5000);
+    return () => { cancelled = true; controller.abort(); clearInterval(id); };
+  }, [showId, enabled]);
+  return { data, error };
+};
+
+const TranscriptionProgressPanel = ({ showId, expanded, lang }) => {
+  const t = lang === 'zh';
+  const { data, error } = useTranscriptionStatus(showId, expanded);
+  if (!expanded) return null;
+  if (error && !data) {
+    return (
+      <div style={{ marginTop: 14, padding: 12, background: TOKEN.surfaceRaised, border: `1px solid ${TOKEN.surfaceBorder}`, borderRadius: 8, color: TOKEN.danger, fontSize: 12 }}>
+        {(t ? '載入進度失敗：' : 'Failed to load progress: ') + error}
+      </div>
+    );
+  }
+  if (!data) {
+    return (
+      <div style={{ marginTop: 14, color: TOKEN.textMuted, fontSize: 12 }}>{t ? '載入中…' : 'Loading…'}</div>
+    );
+  }
+  return (
+    <div style={{ marginTop: 14, padding: '14px 16px', background: TOKEN.surfaceRaised, border: `1px solid ${TOKEN.surfaceBorder}`, borderRadius: 10, display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <ProgressCounts counts={data.counts} lang={lang} />
+
+      <div>
+        <div style={{ color: TOKEN.textMuted, fontSize: 11, fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase', marginBottom: 6 }}>{t ? '處理中' : 'Currently Processing'}</div>
+        {data.currently_processing.length === 0 ? (
+          <div style={{ color: TOKEN.textMuted, fontSize: 13 }}>{t ? '目前沒有轉錄中' : 'None currently processing'}</div>
+        ) : (
+          <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
+            {data.currently_processing.map(ep => (
+              <li key={ep.episode_id} style={{ color: TOKEN.text, fontSize: 13 }}>{ep.episode_title}</li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      <div>
+        <div style={{ color: TOKEN.textMuted, fontSize: 11, fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase', marginBottom: 6 }}>{t ? '近期失敗' : 'Recent Failures'}</div>
+        {data.recent_failures.length === 0 ? (
+          <div style={{ color: TOKEN.textMuted, fontSize: 13 }}>{t ? '近期沒有失敗' : 'No recent failures'}</div>
+        ) : (
+          <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {data.recent_failures.map(ep => {
+              const badge = categoryToBadge(ep.error_category, lang);
+              return (
+                <li key={ep.episode_id} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    <span style={{ color: TOKEN.text, fontSize: 13 }}>{ep.episode_title}</span>
+                    {ep.error_category && <Badge variant={badge.variant}>{badge.label}</Badge>}
+                  </div>
+                  {ep.error_message && (
+                    <div style={{ color: TOKEN.textSecondary, fontSize: 12, fontFamily: 'monospace', wordBreak: 'break-word' }}>{ep.error_message}</div>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+    </div>
+  );
+};
+
 const ScheduleTab = ({ lang }) => {
   const t = lang === 'zh';
   const [shows, setShows] = React.useState(null);
@@ -333,6 +421,14 @@ const ScheduleTab = ({ lang }) => {
   const [runningId, setRunningId] = React.useState(null);
   // Selection set is transient client-side state; not persisted.
   const [selectedIds, setSelectedIds] = React.useState(() => new Set());
+  const [expandedIds, setExpandedIds] = React.useState(() => new Set());
+  const toggleExpand = (showId) => {
+    setExpandedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(showId)) next.delete(showId); else next.add(showId);
+      return next;
+    });
+  };
   const [batchRefreshing, setBatchRefreshing] = React.useState(false);
   const [batchTranscribing, setBatchTranscribing] = React.useState(false);
   const [batchTranscribeConfirmOpen, setBatchTranscribeConfirmOpen] = React.useState(false);
@@ -855,6 +951,13 @@ const ScheduleTab = ({ lang }) => {
                     </div>
                   </div>
                   <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end', alignItems: 'center' }}>
+                    <Btn size="sm" variant="ghost"
+                      icon={expandedIds.has(item.show_id) ? 'chevronLeft' : 'chevronRight'}
+                      onClick={() => toggleExpand(item.show_id)}>
+                      {expandedIds.has(item.show_id)
+                        ? (t ? '收合進度' : 'Hide Progress')
+                        : (t ? '查看進度' : 'View Progress')}
+                    </Btn>
                     {sched && (
                       <Btn size="sm" variant="primary" icon="play"
                         onClick={() => handleRunNow(item)}
@@ -865,6 +968,11 @@ const ScheduleTab = ({ lang }) => {
                     <OverflowMenu items={menuItems} ariaLabel={t ? '更多操作' : 'More actions'} />
                   </div>
                 </div>
+                <TranscriptionProgressPanel
+                  showId={item.show_id}
+                  expanded={expandedIds.has(item.show_id)}
+                  lang={lang}
+                />
               </div>
             );
           })}
