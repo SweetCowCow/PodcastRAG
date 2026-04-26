@@ -45,8 +45,8 @@
 
 ## 7. 部署與驗證
 
-- [ ] 7.1 commit + push；Zeabur 自動 build；backend 啟動時 alembic 自動 upgrade 加 transcripts.updated_at
-- [ ] 7.2 觸發一次轉錄（挑短集），確認 `api_health:openai_whisper` Redis key 有一筆 ok=true 紀錄（`redis-cli LRANGE api_health:openai_whisper 0 0`）
-- [ ] 7.3 手動讓 OpenAI key 無效（暫時改 env 為錯的）觸發一次轉錄，確認 `api_health:openai_whisper` 紀錄一筆 ok=false, error_category=auth_error；回復正確 key
-- [ ] 7.4 在後台展開 ScheduleTab 卡片，確認每 5 秒 devtools Network 都看到 transcription-status 請求；折疊後停止
-- [ ] 7.5 在後台進「外部 API 狀態」tab，確認三張卡片正確顯示近期狀態；切走 tab 後 Network 停 polling
+- [x] 7.1 commit + push；Zeabur 自動 build；backend 啟動時 alembic 自動 upgrade 加 transcripts.updated_at
+- [x] 7.2 觸發一次轉錄（挑短集），確認 `api_health:openai_whisper` Redis key 有一筆 ok=true 紀錄（`redis-cli LRANGE api_health:openai_whisper 0 0`）
+- [x] 7.3 手動讓 OpenAI key 無效（暫時改 env 為錯的）觸發一次轉錄，確認 `api_health:openai_whisper` 紀錄一筆 ok=false, error_category=auth_error；回復正確 key
+- [x] 7.4 在後台展開 ScheduleTab 卡片，確認每 5 秒 devtools Network 都看到 transcription-status 請求；折疊後停止
+- [x] 7.5 在後台進「外部 API 狀態」tab，確認三張卡片正確顯示近期狀態；切走 tab 後 Network 停 polling
