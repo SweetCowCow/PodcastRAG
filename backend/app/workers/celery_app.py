@@ -1,4 +1,5 @@
 from celery import Celery
+from celery.schedules import crontab
 
 from app.core.config import settings
 
@@ -9,7 +10,7 @@ celery_app = Celery(
     "podcastrag",
     broker=settings.celery_broker_url,
     backend=settings.celery_result_backend,
-    include=["app.workers.tasks"],
+    include=["app.workers.tasks", "app.workers.cron_tick"],
 )
 
 celery_app.conf.update(
@@ -22,4 +23,10 @@ celery_app.conf.update(
     timezone="UTC",
     enable_utc=True,
     broker_connection_retry_on_startup=True,
+    beat_schedule={
+        "cron-tick": {
+            "task": "app.workers.cron_tick.cron_tick",
+            "schedule": crontab(minute="*"),
+        },
+    },
 )

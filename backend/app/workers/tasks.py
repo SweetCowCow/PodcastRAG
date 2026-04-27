@@ -17,6 +17,7 @@ from app.models.episode import Episode
 from app.models.transcript import Transcript, TranscriptStatus
 from app.models.transcript_chunk import TranscriptChunk
 from app.models.transcript_segment import TranscriptSegment
+from app.models.transcription_queue import QueueStatus, TranscriptionQueue
 from app.services import storage
 from app.services.chunking import build_chunks
 from app.services.embedding import embed_texts
@@ -70,19 +71,76 @@ def transcribe_episode(self, episode_id: str) -> dict:
         logger.error("transcribe_episode: episode %s 不存在", episode_id)
         return {"status": "not_found", "episode_id": episode_id}
 
-    max_c = settings.max_concurrent_transcriptions
-    if not acquire_global_slot(self.request.id, max_c):
+    if not acquire_global_slot(self.request.id):
         raise self.retry(countdown=15, max_retries=None)
 
     try:
         if not acquire_show_lock(show_id):
             raise self.retry(countdown=60, max_retries=None)
         try:
+            asyncio.run(_mark_queue_started(episode_id))
             return asyncio.run(_run(episode_id))
         finally:
             release_show_lock(show_id)
     finally:
         release_global_slot(self.request.id)
+
+
+async def _mark_queue_started(episode_id: str) -> None:
+    """Set ``started_at = now`` on the queue row if not already set."""
+    ep_uuid = uuid.UUID(episode_id)
+    engine = create_async_engine(settings.database_url, poolclass=NullPool)
+    try:
+        async with async_sessionmaker(engine, expire_on_commit=False)() as session:
+            row = (
+                await session.execute(
+                    select(TranscriptionQueue).where(
+                        TranscriptionQueue.episode_id == ep_uuid
+                    )
+                )
+            ).scalar_one_or_none()
+            if row is not None and row.started_at is None:
+                row.started_at = datetime.now(timezone.utc)
+                await session.commit()
+    finally:
+        await engine.dispose()
+
+
+async def _is_queue_cancelled(session, ep_uuid: uuid.UUID) -> bool:
+    row = (
+        await session.execute(
+            select(TranscriptionQueue).where(
+                TranscriptionQueue.episode_id == ep_uuid
+            )
+        )
+    ).scalar_one_or_none()
+    return row is not None and row.status == QueueStatus.cancelled
+
+
+async def _mark_queue_finished(
+    ep_uuid: uuid.UUID, status: QueueStatus, error: str | None = None
+) -> None:
+    """Write back terminal state to the queue row."""
+    engine = create_async_engine(settings.database_url, poolclass=NullPool)
+    try:
+        async with async_sessionmaker(engine, expire_on_commit=False)() as session:
+            row = (
+                await session.execute(
+                    select(TranscriptionQueue).where(
+                        TranscriptionQueue.episode_id == ep_uuid
+                    )
+                )
+            ).scalar_one_or_none()
+            if row is None:
+                return
+            if row.status == QueueStatus.cancelled:
+                return
+            row.status = status
+            row.finished_at = datetime.now(timezone.utc)
+            row.error_message = error[:ERROR_MESSAGE_MAX_LEN] if error else None
+            await session.commit()
+    finally:
+        await engine.dispose()
 
 
 async def _lookup_show_id(episode_id: str) -> str | None:
@@ -105,6 +163,13 @@ async def _run(episode_id: str) -> dict:
 
     try:
         async with Session() as session:
+            if await _is_queue_cancelled(session, ep_uuid):
+                logger.info(
+                    "transcribe_episode: queue row for %s is cancelled — aborting",
+                    episode_id,
+                )
+                return {"status": "cancelled", "episode_id": episode_id}
+
             episode = (
                 await session.execute(
                     select(Episode)
@@ -150,6 +215,14 @@ async def _run(episode_id: str) -> dict:
             result = await provider.transcribe(temp_audio_path, language=show_language)
 
             async with Session() as session:
+                if await _is_queue_cancelled(session, ep_uuid):
+                    logger.info(
+                        "transcribe_episode: queue row for %s cancelled mid-task "
+                        "— skipping artifact writes",
+                        episode_id,
+                    )
+                    return {"status": "cancelled", "episode_id": episode_id}
+
                 await session.execute(
                     delete(TranscriptChunk).where(
                         TranscriptChunk.transcript_id == transcript_id
@@ -202,6 +275,8 @@ async def _run(episode_id: str) -> dict:
                     t.transcribed_at = datetime.now(timezone.utc)
                 await session.commit()
 
+            await _mark_queue_finished(ep_uuid, QueueStatus.completed)
+
             return {
                 "status": "completed",
                 "episode_id": episode_id,
@@ -225,6 +300,7 @@ async def _run(episode_id: str) -> dict:
                     t.status = TranscriptStatus.failed
                     t.error_message = message
                 await session.commit()
+            await _mark_queue_finished(ep_uuid, QueueStatus.failed, message)
             return {
                 "status": "failed",
                 "episode_id": episode_id,

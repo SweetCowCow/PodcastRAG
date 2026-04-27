@@ -23,7 +23,6 @@ SCHEDULE_DEFAULTS = {
     "frequency": "daily",
     "run_time": "06:00",
     "whisper_model": "large-v3",
-    "max_episodes": 0,
 }
 
 

@@ -3,7 +3,7 @@ import uuid
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import case, delete, func, select
+from sqlalchemy import case, delete, func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -11,6 +11,7 @@ from app.core.database import get_db
 from app.models.episode import Episode
 from app.models.show import Show
 from app.models.transcript import Transcript, TranscriptStatus
+from app.models.transcription_queue import QueueStatus, TranscriptionQueue
 from app.schemas.show import (
     RssPreviewResponse,
     ShowCreate,
@@ -158,6 +159,19 @@ async def delete_show(show_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
     show = await db.get(Show, show_id)
     if not show:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Show 不存在")
+
+    await db.execute(
+        update(TranscriptionQueue)
+        .where(
+            TranscriptionQueue.show_id == show_id,
+            TranscriptionQueue.status.in_(
+                (QueueStatus.pending, QueueStatus.running)
+            ),
+        )
+        .values(status=QueueStatus.cancelled)
+    )
+    await db.commit()
+
     await db.execute(delete(Show).where(Show.id == show_id))
     return None
 
