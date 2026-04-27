@@ -62,6 +62,11 @@ async def _enqueue_in(
     ):
         return str(existing.id)
 
+    if existing is not None and existing.ignored:
+        # Per transcription-queue spec: ignored rows MUST NOT be revived
+        # by re-enqueue (whether triggered manually or by cron tick).
+        return str(existing.id)
+
     episode = await session.get(Episode, episode_id)
     if episode is None:
         raise ValueError(f"Episode {episode_id} 不存在")
