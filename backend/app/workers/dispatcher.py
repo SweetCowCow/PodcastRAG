@@ -1,0 +1,109 @@
+"""Standalone process: pop pending rows from transcription_queue and
+dispatch ``transcribe_episode`` Celery tasks.
+
+Runs an infinite loop with a 1-second sleep. Per design "Dispatcher:
+poll-based, not pubsub" — picked over Redis pub/sub for simplicity at
+single-show / single-worker scale.
+
+Concurrency safety:
+- ``SELECT ... FOR UPDATE SKIP LOCKED`` ensures two dispatcher
+  processes never claim the same row.
+- Concurrency cap is read from
+  ``settings_cache.get_max_concurrent`` so it can be tuned at runtime
+  without restart.
+
+Run via:  ``python -m app.workers.dispatcher``
+"""
+import asyncio
+import logging
+import signal
+from datetime import datetime, timezone
+
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.pool import NullPool
+
+from app.core.config import settings
+from app.models.transcription_queue import QueueStatus, TranscriptionQueue
+from app.services.settings_cache import get_max_concurrent
+from app.workers.celery_app import celery_app
+
+logger = logging.getLogger(__name__)
+
+POLL_INTERVAL_SECONDS = 1.0
+_shutdown = False
+
+
+def _request_shutdown(*_args) -> None:
+    global _shutdown
+    _shutdown = True
+    logger.info("dispatcher: shutdown signal received")
+
+
+async def _try_pop_one(session) -> str | None:
+    """Pop the lowest-position pending row, transition to running.
+
+    Returns the popped episode_id (str) or None if nothing eligible.
+    """
+    running_count = await session.scalar(
+        select(func.count(TranscriptionQueue.id)).where(
+            TranscriptionQueue.status == QueueStatus.running
+        )
+    )
+    max_concurrent = get_max_concurrent()
+    if running_count >= max_concurrent:
+        return None
+
+    stmt = (
+        select(TranscriptionQueue)
+        .where(
+            TranscriptionQueue.status == QueueStatus.pending,
+            TranscriptionQueue.ignored.is_(False),
+        )
+        .order_by(TranscriptionQueue.position.asc())
+        .limit(1)
+        .with_for_update(skip_locked=True)
+    )
+    row = (await session.execute(stmt)).scalar_one_or_none()
+    if row is None:
+        return None
+
+    row.status = QueueStatus.running
+    row.started_at = datetime.now(timezone.utc)
+    await session.commit()
+    return str(row.episode_id)
+
+
+async def main() -> None:
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    )
+    logger.info("dispatcher: starting (poll interval %.1fs)", POLL_INTERVAL_SECONDS)
+
+    engine = create_async_engine(settings.database_url, poolclass=NullPool)
+    Session = async_sessionmaker(engine, expire_on_commit=False)
+
+    try:
+        while not _shutdown:
+            try:
+                async with Session() as session:
+                    episode_id = await _try_pop_one(session)
+                if episode_id is not None:
+                    celery_app.send_task(
+                        "app.workers.tasks.transcribe_episode",
+                        args=[episode_id],
+                    )
+                    logger.info("dispatcher: dispatched episode %s", episode_id)
+            except Exception:
+                logger.exception("dispatcher: tick failed")
+            await asyncio.sleep(POLL_INTERVAL_SECONDS)
+    finally:
+        await engine.dispose()
+        logger.info("dispatcher: stopped")
+
+
+if __name__ == "__main__":
+    signal.signal(signal.SIGTERM, _request_shutdown)
+    signal.signal(signal.SIGINT, _request_shutdown)
+    asyncio.run(main())

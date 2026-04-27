@@ -55,7 +55,7 @@ async def transcribe_episode(
         transcript.error_message = None
 
     await db.flush()
-    enqueue_transcription(episode_id)
+    await enqueue_transcription(episode_id, db)
     queued_at = datetime.now(timezone.utc)
 
     return TranscriptQueuedResponse(
@@ -135,7 +135,7 @@ async def transcribe_show(
             transcript.error_message = None
 
         await db.flush()
-        enqueue_transcription(ep.id)
+        await enqueue_transcription(ep.id, db)
         queued += 1
 
     return BatchTranscribeResponse(queued=queued)
@@ -168,8 +168,8 @@ async def transcribe_latest(
                 select(ShowSchedule).where(ShowSchedule.show_id == show_id)
             )
         ).scalar_one_or_none()
-        if schedule and schedule.max_episodes > 0:
-            effective_max = schedule.max_episodes
+        if schedule and schedule.max_episodes_per_run > 0:
+            effective_max = schedule.max_episodes_per_run
         else:
             effective_max = 5
 
@@ -200,7 +200,7 @@ async def transcribe_latest(
             transcript.error_message = None
 
         await db.flush()
-        enqueue_transcription(ep.id)
+        await enqueue_transcription(ep.id, db)
         queued += 1
 
     return TranscribeLatestResponse(

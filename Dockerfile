@@ -24,5 +24,7 @@ RUN chmod +x /entrypoint.sh
 EXPOSE 8000
 
 # Default: run alembic upgrade + uvicorn (backend).
-# Worker: set START_COMMAND env to `celery -A app.workers.celery_app worker --loglevel=info --concurrency=1`.
+# Worker:     set START_COMMAND=`celery -A app.workers.celery_app worker --loglevel=info --concurrency=1`
+# Dispatcher: set START_COMMAND=`python -m app.workers.dispatcher`
+# Beat:       set START_COMMAND=`celery -A app.workers.celery_app beat --loglevel=info`
 ENTRYPOINT ["/entrypoint.sh"]

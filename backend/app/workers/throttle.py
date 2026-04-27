@@ -3,6 +3,7 @@ from functools import lru_cache
 import redis
 
 from app.core.config import settings
+from app.services.settings_cache import get_max_concurrent
 
 GLOBAL_ACTIVE_KEY = "transcribe:global:active_count"
 GLOBAL_SLOT_KEY = "transcribe:global:slot:{}"
@@ -16,7 +17,14 @@ def _get_redis() -> redis.Redis:
     return redis.Redis.from_url(settings.celery_broker_url)
 
 
-def acquire_global_slot(task_id: str, max_concurrent: int) -> bool:
+def acquire_global_slot(task_id: str) -> bool:
+    """Try to claim one of the global concurrent transcription slots.
+
+    The cap is read from ``settings_cache.get_max_concurrent`` (DB-backed,
+    Redis-published, 60s in-process cache) so the value can be tuned
+    without restarting the worker.
+    """
+    max_concurrent = get_max_concurrent()
     r = _get_redis()
     count = r.incr(GLOBAL_ACTIVE_KEY)
     if count > max_concurrent:
