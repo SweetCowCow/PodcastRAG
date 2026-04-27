@@ -75,10 +75,6 @@ const AdminLogin = ({ lang, onSuccess, onCancel }) => {
             </Btn>
             <Btn variant="ghost" onClick={onCancel}>{t ? '取消' : 'Cancel'}</Btn>
           </div>
-
-          <p style={{ color: TOKEN.textMuted, fontSize: 11, textAlign: 'center', margin: 0 }}>
-            {t ? '示範帳號：admin / ***REDACTED***' : 'Demo: admin / ***REDACTED***'}
-          </p>
         </div>
       </div>
     </div>
