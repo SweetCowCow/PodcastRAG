@@ -8,6 +8,7 @@ Create Date: 2026-04-27
 from collections.abc import Sequence
 
 import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
 
 from alembic import op
 
@@ -18,15 +19,27 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    queue_status = sa.Enum(
+    # Pre-create the enum idempotently so re-runs after partial failure
+    # don't crash. ``create_type=False`` on the column reference below
+    # prevents ``create_table`` from emitting a second CREATE TYPE.
+    sa.Enum(
         "pending",
         "running",
         "completed",
         "failed",
         "cancelled",
         name="queue_status",
+    ).create(op.get_bind(), checkfirst=True)
+
+    queue_status_col = postgresql.ENUM(
+        "pending",
+        "running",
+        "completed",
+        "failed",
+        "cancelled",
+        name="queue_status",
+        create_type=False,
     )
-    queue_status.create(op.get_bind(), checkfirst=True)
 
     op.create_table(
         "transcription_queue",
@@ -35,7 +48,7 @@ def upgrade() -> None:
         sa.Column("show_id", sa.UUID(as_uuid=True), nullable=False),
         sa.Column(
             "status",
-            queue_status,
+            queue_status_col,
             nullable=False,
             server_default=sa.text("'pending'"),
         ),

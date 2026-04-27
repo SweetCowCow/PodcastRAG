@@ -12,6 +12,7 @@ removed.
 from collections.abc import Sequence
 
 import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
 
 from alembic import op
 
@@ -22,8 +23,17 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    refresh_status = sa.Enum("never", "success", "failed", name="refresh_status")
-    refresh_status.create(op.get_bind(), checkfirst=True)
+    sa.Enum("never", "success", "failed", name="refresh_status").create(
+        op.get_bind(), checkfirst=True
+    )
+
+    refresh_status_col = postgresql.ENUM(
+        "never",
+        "success",
+        "failed",
+        name="refresh_status",
+        create_type=False,
+    )
 
     op.add_column(
         "show_schedules",
@@ -42,7 +52,7 @@ def upgrade() -> None:
         "show_schedules",
         sa.Column(
             "last_refresh_status",
-            refresh_status,
+            refresh_status_col,
             nullable=False,
             server_default=sa.text("'never'"),
         ),
