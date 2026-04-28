@@ -19,13 +19,21 @@
 
 ## Decisions
 
-### Worker 平行模型：固定 3 replica × concurrency=1
+### Worker 平行模型：實作改為單 replica × concurrency=3（偏離原計畫）
 
-選擇：Zeabur worker service 寫死 3 replicas，每個 `--concurrency=1`。
+**原設計**：Zeabur worker service 固定 3 replicas，每個 `--concurrency=1`。理由是擔心 Linode `g6-standard-2`（2 vCPU / 4GB RAM）下 prefork 多 worker process 風險高。
 
-**為什麼不用單 replica `--concurrency=3`**：Linode `g6-standard-2`（2 vCPU / 4GB RAM）若 prefork 出 3 個 worker process，每個都載 ffmpeg + 同時做音訊下載 + Whisper API I/O，記憶體與 file descriptor 風險高。Replica 隔離記憶體、進程崩潰只影響自己。
+**實作偏離（2026-04-28）**：使用者選擇用單 replica `--concurrency=3`（Zeabur AI 建議），調整 worker service 的 `START_COMMAND` env var 為 `celery -A app.workers.celery_app worker --loglevel=info --concurrency=3`。
 
-**為什麼不用 dynamic auto-scale**：Whisper 任務時間長（分鐘級），縮放反應慢；replicas 數對使用者體驗來說只是「最多幾條同時跑」，固定上限直白。
+**為什麼可接受**：本專案 Whisper 走 OpenAI API（不載 local 模型），記憶體壓力主要來自 ffmpeg（transient）+ httpx audio buffer（暫存檔），不會常駐。3 個 prefork worker 在 4GB RAM 下可承受。
+
+**Trade-offs**：
+- ✅ 單 container，部署簡單、不用手動 scale replicas UI
+- ✅ Prefork copy-on-write 比 3 個 container 略省記憶體
+- ⚠️ 失去 replica 隔離：一個 worker process 崩會影響整個 prefork pool（Celery 自動重 spawn）
+- ⚠️ 所有壓力集中在單一 container 的記憶體上限
+
+**為什麼不用 dynamic auto-scale**：Whisper 任務時間長（分鐘級），縮放反應慢；concurrency 對使用者體驗來說只是「最多幾條同時跑」，固定上限直白。
 
 ### `celery_task_id` 欄位 + worker 寫回時機
 
