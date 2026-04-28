@@ -20,7 +20,7 @@ processing — every show is wrapped in its own try/except.
 """
 import asyncio
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
@@ -34,10 +34,14 @@ from app.services.rss_parser import RssParseError
 from app.services.sync import sync_show_episodes
 from app.workers.celery_app import celery_app
 from app.workers.dispatch import enqueue_transcription
+from app.workers.throttle import release_global_slot
 
 logger = logging.getLogger(__name__)
 
 REFRESH_MESSAGE_MAX_LEN = 500
+STALE_THRESHOLD_MINUTES = 30
+STALE_ERROR_MESSAGE = "Stale task — worker message lost"
+INSPECT_TIMEOUT_SECONDS = 5
 
 
 @celery_app.task(name="app.workers.cron_tick.cron_tick")
@@ -56,8 +60,17 @@ async def _run_tick() -> dict:
 
     processed = 0
     enqueued = 0
+    stale_marked = 0
 
     try:
+        try:
+            stale_marked = await _detect_stale_running(Session)
+        except Exception:
+            logger.warning(
+                "cron_tick: stale detection raised — skipping this tick",
+                exc_info=True,
+            )
+
         async with Session() as session:
             schedules = (
                 await session.execute(
@@ -114,7 +127,75 @@ async def _run_tick() -> dict:
         "tick_at": now.isoformat(),
         "processed": processed,
         "enqueued": enqueued,
+        "stale_marked": stale_marked,
     }
+
+
+async def _detect_stale_running(session_factory) -> int:
+    """Find queue rows stuck in ``running`` longer than the threshold and
+    not currently being processed by any Celery worker, mark them
+    ``failed`` and release their throttle slots.
+
+    Returns the count of rows marked stale. If Celery inspect fails,
+    times out, or returns no workers at all (broker unreachable), the
+    function logs a warning and returns 0 without touching any rows.
+    """
+    inspect = celery_app.control.inspect(timeout=INSPECT_TIMEOUT_SECONDS)
+    try:
+        active = inspect.active() or {}
+        reserved = inspect.reserved() or {}
+    except Exception:
+        logger.warning(
+            "cron_tick: inspect raised — skipping stale detection", exc_info=True
+        )
+        return 0
+
+    if not active and not reserved:
+        logger.warning(
+            "cron_tick: inspect returned no workers — skipping stale detection"
+        )
+        return 0
+
+    running_ids: set[str] = set()
+    for tasks in active.values():
+        running_ids.update(t.get("id") for t in (tasks or []) if t.get("id"))
+    for tasks in reserved.values():
+        running_ids.update(t.get("id") for t in (tasks or []) if t.get("id"))
+
+    threshold = datetime.now(timezone.utc) - timedelta(minutes=STALE_THRESHOLD_MINUTES)
+    marked = 0
+
+    async with session_factory() as session:
+        candidates = (
+            await session.execute(
+                select(TranscriptionQueue).where(
+                    TranscriptionQueue.status == QueueStatus.running,
+                    TranscriptionQueue.started_at < threshold,
+                )
+            )
+        ).scalars().all()
+
+        for row in candidates:
+            if row.celery_task_id and row.celery_task_id in running_ids:
+                continue
+            row.status = QueueStatus.failed
+            row.finished_at = datetime.now(timezone.utc)
+            row.error_message = STALE_ERROR_MESSAGE
+            marked += 1
+            if row.celery_task_id:
+                try:
+                    release_global_slot(row.celery_task_id)
+                except Exception:
+                    logger.exception(
+                        "cron_tick: release_global_slot failed for task %s",
+                        row.celery_task_id,
+                    )
+
+        if marked:
+            await session.commit()
+            logger.info("cron_tick: stale detected: %d rows", marked)
+
+    return marked
 
 
 def _is_due(schedule: ShowSchedule, current_hhmm: str, weekday: int) -> bool:
