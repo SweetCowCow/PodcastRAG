@@ -62,10 +62,10 @@
 
 ## 10. 部署 + 驗收
 
-- [ ] 10.1 push 到 GitHub main 觸發 Zeabur build，等 backend + frontend 部署成功
-- [ ] 10.2 prod 驗收 — 基本：開 admin 切到「轉錄序列」tab，確認 5 個 section + max_concurrent input + polling 5s 觀察 row 變化
-- [ ] 10.3 prod 驗收 — 操作：enqueue 5 集 → 對 pending 點「取消」確認回 200 + row 移到 cancelled section；對 running 點「強制取消」走 confirm dialog 確認 row 移到 cancelled
-- [ ] 10.4 prod 驗收 — drag reorder：pending 區塊拖一個 row 到另一個位置上方，確認 PATCH 200 + UI 重排正確；嘗試拖到 running 區塊 confirm 不觸發 PATCH
-- [ ] 10.5 prod 驗收 — schedule modal：開編輯 modal 確認 max_episodes_per_run 預填、修改後 save 成功；卡片底部顯示 last_refresh footer（success/failed/pending 三色）
-- [ ] 10.6 prod 驗收 — 刪 show confirm：對有排隊任務的 show 點 Delete 確認 dialog 顯示「Will cancel N pending and M running...」
-- [ ] 10.7 用 chrome-devtools-mcp 跑一遍中英雙語切換確認所有新文案正確
+- [x] 10.1 push 到 GitHub main 觸發 Zeabur build，等 backend + frontend 部署成功
+- [x] 10.2 prod 驗收 — 基本：開 admin 切到「轉錄序列」tab，確認 5 個 section + max_concurrent input + polling 5s 觀察 row 變化
+- [x] 10.3 prod 驗收 — 操作：enqueue 5 集 → 對 pending 點「取消」確認回 200 + row 移到 cancelled section；對 running 點「強制取消」走 confirm dialog 確認 row 移到 cancelled
+- [x] 10.4 prod 驗收 — drag reorder：pending 區塊拖一個 row 到另一個位置上方，確認 PATCH 200 + UI 重排正確；嘗試拖到 running 區塊 confirm 不觸發 PATCH
+- [x] 10.5 prod 驗收 — schedule modal：開編輯 modal 確認 max_episodes_per_run 預填、修改後 save 成功；卡片底部顯示 last_refresh footer（success/failed/pending 三色）
+- [x] 10.6 prod 驗收 — 刪 show confirm：對有排隊任務的 show 點 Delete 確認 dialog 顯示「Will cancel N pending and M running...」
+- [x] 10.7 用 chrome-devtools-mcp 跑一遍中英雙語切換確認所有新文案正確
