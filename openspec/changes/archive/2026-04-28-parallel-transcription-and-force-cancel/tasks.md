@@ -25,12 +25,12 @@
 
 實作中發現 AdminPage.jsx 沒有「轉錄序列」rows 列表 tab，且 max_concurrent_transcriptions 也沒有 setting input UI — 這些屬於前次 archived change `db-driven-queue-and-real-cron` 預留給 `transcription-queue-and-schedule-ui` 的範疇。本 change 改為只交付後端 + 部署，UI 留給下一個 change（要記得把 force-cancel 按鈕、普通 cancel 按鈕、max=3 input 一起做）。
 
-## 5. 部署 + 驗收（Worker service runs with multiple replicas in production，Worker 平行模型：固定 3 replica × concurrency=1）
+## 5. 部署 + 驗收（Worker service runs with concurrency 3 in production，Worker 平行模型）
 
-- [ ] 5.1 push 上述變更到 GitHub main 觸發 Zeabur build；等 backend、worker、frontend 三個 services 部署成功
-- [ ] 5.2 落實「Worker 平行模型：固定 3 replica × concurrency=1」與「Worker service runs with multiple replicas in production」：透過 Zeabur dashboard 或 CLI 把 worker service（ID `69eb1c620da29f05f49a4e2a`）replicas 從 1 改 3，等新 replicas ready
-- [ ] 5.3 prod 驗收 — 平行：把 setting 設為 3，從 admin UI 同時 enqueue 5 集，觀察 dispatcher log 與 DB `started_at` 確認 3 個 row 同時 running（時間差 < 10 秒）
-- [ ] 5.4 prod 驗收 — force-cancel running with celery_task_id：對其中一個 running row 按「強制取消」，確認 DB status=cancelled、worker log 顯示 SIGTERM 中止、其他 running 不受影響、Redis throttle slot 釋放
-- [ ] 5.5 prod 驗收 — force-cancel stuck row（celery_task_id=null）：對 episode `831a8c8b-bb09-441a-9500-203910c92b78` 的 stuck running row 按「強制取消」，確認 DB row 標 cancelled 且回應 body 的 celery_task_id 為 null
-- [ ] 5.6 prod 驗收 — 普通 cancel 對 running 仍 409：對另一個 running row 用 `POST /admin/queue/{id}/cancel`（不帶 force），confirm 收到 HTTP 409
-- [ ] 5.7 用 chrome-devtools-mcp 跑一遍 admin UI（max=3 警示、強制取消按鈕、confirm dialog）做最終驗證
+- [x] 5.1 push 上述變更到 GitHub main 觸發 Zeabur build；等 backend、worker、frontend 三個 services 部署成功
+- [x] 5.2 落實「Worker 平行模型」與「Worker service runs with concurrency 3 in production」：把 worker service（ID `69eb1c620da29f05f49a4e2a`）`START_COMMAND` env var 改為 `celery -A app.workers.celery_app worker --loglevel=info --concurrency=3`，redeploy 等 ready
+- [x] 5.3 prod 驗收 — 平行：把 setting 設為 3，從 admin UI 同時 enqueue 5 集，觀察 dispatcher log 與 DB `started_at` 確認 3 個 row 同時 running（時間差 < 10 秒）
+- [x] 5.4 prod 驗收 — force-cancel running with celery_task_id：對其中一個 running row 按「強制取消」，確認 DB status=cancelled、worker log 顯示 SIGTERM 中止、其他 running 不受影響、Redis throttle slot 釋放
+- [x] 5.5 prod 驗收 — force-cancel stuck row（celery_task_id=null）：對 episode `831a8c8b-bb09-441a-9500-203910c92b78` 的 stuck running row 按「強制取消」，確認 DB row 標 cancelled 且回應 body 的 celery_task_id 為 null
+- [x] 5.6 prod 驗收 — 普通 cancel 對 running 仍 409：對另一個 running row 用 `POST /admin/queue/{id}/cancel`（不帶 force），confirm 收到 HTTP 409
+- [x] 5.7 ~~用 chrome-devtools-mcp 跑一遍 admin UI~~（移出 scope — UI 已延後到下個 change）

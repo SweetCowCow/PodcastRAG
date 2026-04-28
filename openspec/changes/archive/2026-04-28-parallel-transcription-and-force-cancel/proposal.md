@@ -4,7 +4,7 @@
 
 ## What Changes
 
-- Worker service 部署 replicas 從 1 改為固定 3（每個 `--concurrency=1`，靠 Celery broker FIFO 自動分流）
+- Worker service 跑 `--concurrency=3`（單 replica × 3 prefork worker process；實作偏離原 design「3 replicas × concurrency=1」，詳見 design.md「Worker 平行模型」）
 - `transcription_queue` 表新增 `celery_task_id` 欄位（nullable string），任務開始時由 worker 寫回，供 force-cancel 透過 Celery `revoke(terminate=True, signal='SIGTERM')` 中止實際執行的任務
 - 擴充 `POST /admin/queue/{id}/cancel`：新增 `force` query param（預設 false），不帶 force 時維持原行為（pending → cancel OK / running → 409）；帶 `force=true` 時 running row 也接受，呼叫 Celery revoke + 標 cancelled + 釋放 running 槽
 - ~~Admin UI `max_concurrent_transcriptions` 數字輸入框 max 改 3 + 警示~~（移出 scope — 見 Non-Goals）
@@ -28,7 +28,7 @@
 ### Modified Capabilities
 
 - `transcription-queue`: 新增 `celery_task_id` 欄位；cancel API 擴充 `force` 參數允許強制取消 running row
-- `task-queue`: worker 部署從單 replica 改為固定 3 replica
+- `task-queue`: worker 部署改為 `--concurrency=3`（單 replica × 3 prefork process）
 
 ## Impact
 
@@ -41,5 +41,5 @@
     - backend/app/workers/dispatcher.py
   - New:
     - backend/alembic/versions/<new>_add_celery_task_id_to_queue.py
-- Affected infrastructure: Zeabur worker service（ID `69eb1c620da29f05f49a4e2a`）replicas 1 → 3
+- Affected infrastructure: Zeabur worker service（ID `69eb1c620da29f05f49a4e2a`）`START_COMMAND` env var 改 `--concurrency=3`
 - Affected operations: prod 1 筆 stuck running row（episode `831a8c8b-...`）會在驗收階段用新 force-cancel 清掉
