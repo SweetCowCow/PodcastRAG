@@ -20,8 +20,8 @@
 
 ## 3. 部署 + 驗收
 
-- [ ] 3.1 push 到 GitHub main 觸發 Zeabur build，等 backend + worker + dispatcher + beat 4 services 部署成功
-- [ ] 3.2 prod 驗收 — 預埋 stale row：用 service exec 跑 SQL 把某 completed/cancelled row 暫時改回 `status=running, started_at=now()-interval '45 minutes', celery_task_id='fake-stale-001'`（或對某真實 row 直接修改）
-- [ ] 3.3 等下一次 cron tick（最多 60 秒），確認預埋 row 變 `status=failed` + `error_message='Stale task — worker message lost'` + `finished_at` 已設
-- [ ] 3.4 prod 驗收 — 真實 long-running 不被誤殺：enqueue 一集較長 podcast，觀察過 30 分鐘前還在 running、celery_task_id 在 inspect active list 內的 row 不被動到（用 service exec 對單筆 row 取樣 + 比對 worker log）
-- [ ] 3.5 確認 cron_tick log 看得到 detection 結果（log "stale detected: N rows" 或類似），broker 暫斷時看得到 warning skip log
+- [x] 3.1 push 到 GitHub main 觸發 Zeabur build，等 backend + worker + dispatcher + beat 4 services 部署成功
+- [x] 3.2 prod 驗收 — 預埋 stale row：用 service exec 跑 SQL 把某 completed/cancelled row 暫時改回 `status=running, started_at=now()-interval '45 minutes', celery_task_id='fake-stale-001'`（或對某真實 row 直接修改）
+- [x] 3.3 等下一次 cron tick（最多 60 秒），確認預埋 row 變 `status=failed` + `error_message='Stale task — worker message lost'` + `finished_at` 已設
+- [x] 3.4 prod 驗收 — 真實 long-running 不被誤殺：enqueue 一集較長 podcast，觀察過 30 分鐘前還在 running、celery_task_id 在 inspect active list 內的 row 不被動到（用 service exec 對單筆 row 取樣 + 比對 worker log）
+- [x] 3.5 確認 cron_tick log 看得到 detection 結果（log "stale detected: N rows" 或類似），broker 暫斷時看得到 warning skip log
