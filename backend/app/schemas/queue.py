@@ -20,6 +20,11 @@ class QueueRowOut(BaseModel):
     error_message: str | None
     ignored: bool
     whisper_model: str
+    celery_task_id: str | None = None
+
+
+class CancelQueueRowOut(QueueRowOut):
+    force_cancelled: bool = False
 
 
 class QueueListOut(BaseModel):

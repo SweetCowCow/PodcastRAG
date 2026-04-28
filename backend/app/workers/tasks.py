@@ -66,6 +66,13 @@ PERMANENT_ERRORS = (
     retry_jitter=True,
 )
 def transcribe_episode(self, episode_id: str) -> dict:
+    if asyncio.run(_write_celery_task_id(episode_id, self.request.id)):
+        logger.info(
+            "transcribe_episode: queue row for %s already cancelled — exiting",
+            episode_id,
+        )
+        return {"status": "cancelled", "episode_id": episode_id}
+
     show_id = asyncio.run(_lookup_show_id(episode_id))
     if show_id is None:
         logger.error("transcribe_episode: episode %s 不存在", episode_id)
@@ -84,6 +91,33 @@ def transcribe_episode(self, episode_id: str) -> dict:
             release_show_lock(show_id)
     finally:
         release_global_slot(self.request.id)
+
+
+async def _write_celery_task_id(episode_id: str, task_id: str) -> bool:
+    """Write ``celery_task_id`` onto the queue row at task start.
+
+    Returns True if the row is already cancelled (caller should exit early)
+    so a force-cancel that arrived before the worker picked up the task
+    is honoured without acquiring slots or processing audio.
+    """
+    ep_uuid = uuid.UUID(episode_id)
+    engine = create_async_engine(settings.database_url, poolclass=NullPool)
+    try:
+        async with async_sessionmaker(engine, expire_on_commit=False)() as session:
+            row = (
+                await session.execute(
+                    select(TranscriptionQueue).where(
+                        TranscriptionQueue.episode_id == ep_uuid
+                    )
+                )
+            ).scalar_one_or_none()
+            if row is None:
+                return False
+            row.celery_task_id = task_id
+            await session.commit()
+            return row.status == QueueStatus.cancelled
+    finally:
+        await engine.dispose()
 
 
 async def _mark_queue_started(episode_id: str) -> None:

@@ -54,3 +54,4 @@ class TranscriptionQueue(Base):
         Boolean, nullable=False, default=False, server_default="false"
     )
     whisper_model: Mapped[str] = mapped_column(String(50), nullable=False)
+    celery_task_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
