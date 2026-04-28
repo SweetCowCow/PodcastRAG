@@ -48,6 +48,7 @@ const Icon = ({ name, size = 18, color = 'currentColor', style = {} }) => {
     zap: <svg viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={s}><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>,
     podcast: <svg viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={s}><circle cx="12" cy="11" r="1"/><path d="M11 17a1 1 0 0 1 2 0c0 .5-.34 3-.5 4.5a.5.5 0 0 1-1 0c-.16-1.5-.5-4-.5-4.5z"/><path d="M8 14a5 5 0 1 1 8 0"/><path d="M5 18a9 9 0 1 1 14 0"/></svg>,
     moreVertical: <svg viewBox="0 0 24 24" fill={color} stroke="none" style={s}><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>,
+    list: <svg viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={s}><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>,
   };
   return paths[name] || <svg viewBox="0 0 24 24" style={s}><circle cx="12" cy="12" r="10" stroke={color} strokeWidth="2" fill="none"/></svg>;
 };
@@ -120,6 +121,7 @@ const TopNav = ({ lang, page, setPage, onToggleLang, onAdminClick }) => {
     { id: 'admin-llm', icon: 'brain', label: t ? 'LLM 模型' : 'LLM Models' },
     { id: 'admin-rag', icon: 'database', label: t ? 'RAG 設定' : 'RAG Config' },
     { id: 'admin-schedule', icon: 'calendar', label: t ? '轉錄排程' : 'Transcription' },
+    { id: 'admin-queue', icon: 'list', label: t ? '轉錄序列' : 'Queue' },
     { id: 'admin-external-api', icon: 'globe', label: t ? '外部 API 狀態' : 'External API Status' },
   ];
 
@@ -189,18 +191,18 @@ const TopNavItem = ({ icon, label, active, onClick, secondary }) => {
 };
 
 // --- Confirm Modal (for destructive actions) ---
-const ConfirmModal = ({ open, title, message, confirmLabel = 'Confirm', cancelLabel = 'Cancel', danger = false, onConfirm, onCancel }) => {
+const ConfirmModal = ({ open, title, message, confirmLabel = 'Confirm', cancelLabel = 'Cancel', danger = false, loading = false, onConfirm, onCancel }) => {
   if (!open) return null;
   return (
-    <div onClick={onCancel}
+    <div onClick={loading ? undefined : onCancel}
       style={{ position: 'fixed', inset: 0, background: 'rgba(4,8,20,0.72)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
       <div onClick={e => e.stopPropagation()}
         style={{ background: TOKEN.surface, border: `1px solid ${TOKEN.surfaceBorder}`, borderRadius: 14, padding: '22px 26px', minWidth: 380, maxWidth: 480, boxShadow: '0 20px 60px rgba(0,0,0,0.5)' }}>
         <div style={{ color: TOKEN.text, fontWeight: 700, fontSize: 16, marginBottom: 10 }}>{title}</div>
-        <div style={{ color: TOKEN.textSecondary, fontSize: 14, lineHeight: 1.6, marginBottom: 20 }}>{message}</div>
+        <div style={{ color: TOKEN.textSecondary, fontSize: 14, lineHeight: 1.6, marginBottom: 20, whiteSpace: 'pre-line' }}>{message}</div>
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-          <Btn variant="ghost" onClick={onCancel}>{cancelLabel}</Btn>
-          <Btn variant={danger ? 'danger' : 'primary'} onClick={onConfirm}>{confirmLabel}</Btn>
+          <Btn variant="ghost" onClick={onCancel} disabled={loading}>{cancelLabel}</Btn>
+          <Btn variant={danger ? 'danger' : 'primary'} onClick={onConfirm} disabled={loading}>{confirmLabel}</Btn>
         </div>
       </div>
     </div>

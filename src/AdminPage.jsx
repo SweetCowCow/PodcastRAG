@@ -6,6 +6,7 @@ const AdminPage = ({ lang, activePage }) => {
     'admin-llm': <LLMTab lang={lang} />,
     'admin-rag': <RAGTab lang={lang} />,
     'admin-schedule': <ScheduleTab lang={lang} />,
+    'admin-queue': <QueueTab lang={lang} />,
     'admin-external-api': <ExternalApiStatusTab lang={lang} />,
   };
   return (
@@ -13,7 +14,7 @@ const AdminPage = ({ lang, activePage }) => {
       <div style={{ padding: '32px 40px 16px', borderBottom: `1px solid ${TOKEN.surfaceBorder}`, background: TOKEN.surface }}>
         <p style={{ color: TOKEN.accent, fontSize: 12, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', margin: '0 0 4px' }}>{t ? '後台管理' : 'Administration'}</p>
         <h1 style={{ color: TOKEN.text, fontSize: 24, fontWeight: 700, margin: 0 }}>
-          {{ 'admin-api': t ? 'API 金鑰管理' : 'API Key Management', 'admin-llm': t ? 'LLM 模型設定' : 'LLM Model Settings', 'admin-rag': t ? 'RAG 參數設定' : 'RAG Configuration', 'admin-schedule': t ? '轉錄排程管理' : 'Transcription Schedule', 'admin-external-api': t ? '外部 API 狀態' : 'External API Status' }[activePage]}
+          {{ 'admin-api': t ? 'API 金鑰管理' : 'API Key Management', 'admin-llm': t ? 'LLM 模型設定' : 'LLM Model Settings', 'admin-rag': t ? 'RAG 參數設定' : 'RAG Configuration', 'admin-schedule': t ? '轉錄排程管理' : 'Transcription Schedule', 'admin-queue': t ? '轉錄序列' : 'Transcription Queue', 'admin-external-api': t ? '外部 API 狀態' : 'External API Status' }[activePage]}
         </h1>
       </div>
       <div style={{ padding: '28px 40px 40px' }}>{pages[activePage]}</div>
@@ -486,7 +487,7 @@ const ScheduleTab = ({ lang }) => {
         frequency: item.schedule.frequency,
         run_time: item.schedule.run_time,
         whisper_model: item.schedule.whisper_model,
-        max_episodes: item.schedule.max_episodes,
+        max_episodes_per_run: item.schedule.max_episodes_per_run,
       },
     });
   };
@@ -499,7 +500,7 @@ const ScheduleTab = ({ lang }) => {
         frequency: 'manual',
         run_time: '06:00',
         whisper_model: 'large-v3',
-        max_episodes: 0,
+        max_episodes_per_run: 5,
       },
     });
   };
@@ -672,11 +673,11 @@ const ScheduleTab = ({ lang }) => {
           frequency: form.freq,
           run_time: form.time,
           whisper_model: form.whisperModel,
-          max_episodes: form.maxEp,
+          max_episodes_per_run: form.maxEp || 5,
         }),
       });
       setShowForm(false);
-      setForm({ rss: '', name: '', freq: 'daily', time: '06:00', whisperModel: 'large-v3', maxEp: 0 });
+      setForm({ rss: '', name: '', freq: 'daily', time: '06:00', whisperModel: 'large-v3', maxEp: 5 });
       setRssPreview(null);
       await loadSchedules();
     } catch (err) {
@@ -730,12 +731,35 @@ const ScheduleTab = ({ lang }) => {
     }
   };
 
+  const openDeleteShowConfirm = async (item) => {
+    let pending_count = 0, running_count = 0;
+    try {
+      const res = await fetch(`${API_BASE}/admin/queue`);
+      if (res.ok) {
+        const q = await res.json();
+        pending_count = (q.pending || []).filter(r => r.show_id === item.show_id).length;
+        running_count = (q.running || []).filter(r => r.show_id === item.show_id).length;
+      }
+    } catch {}
+    setConfirmState({ kind: 'delete-show', item, cascade: { pending_count, running_count } });
+  };
+
   const confirmLabels = {
     'delete-show': {
       title: t ? '刪除節目' : 'Delete Show',
-      message: (item) => t
-        ? `即將刪除節目「${item.show_title}」及其所有集數、逐字稿、排程設定。此操作不可復原。`
-        : `About to delete show "${item.show_title}" and all its episodes, transcripts, and schedule. This cannot be undone.`,
+      message: (item, extra) => {
+        const base = t
+          ? `即將刪除節目「${item.show_title}」及其所有集數、逐字稿、排程設定。此操作不可復原。`
+          : `About to delete show "${item.show_title}" and all its episodes, transcripts, and schedule. This cannot be undone.`;
+        const cascade = extra && extra.cascade;
+        if (cascade && (cascade.pending_count > 0 || cascade.running_count > 0)) {
+          const cascadeLine = t
+            ? `將同時取消 ${cascade.pending_count} 筆排隊中、${cascade.running_count} 筆執行中的轉錄任務。`
+            : `Will cancel ${cascade.pending_count} pending and ${cascade.running_count} running transcription jobs.`;
+          return base + '\n\n' + cascadeLine;
+        }
+        return base;
+      },
       confirmLabel: t ? '確認刪除' : 'Confirm Delete',
       handler: handleDeleteShow,
     },
@@ -747,6 +771,11 @@ const ScheduleTab = ({ lang }) => {
       confirmLabel: t ? '確認移除' : 'Confirm Remove',
       handler: handleRemoveSchedule,
     },
+  };
+  const renderConfirmMessage = () => {
+    if (!confirmState) return '';
+    const cfg = confirmLabels[confirmState.kind];
+    return cfg.message(confirmState.item, confirmState);
   };
 
   return (
@@ -929,7 +958,7 @@ const ScheduleTab = ({ lang }) => {
               { label: refreshLabel, icon: 'refresh', onClick: () => handleSyncShow(item), disabled: refreshDisabled },
               ...(sched ? [{ label: t ? '編輯排程' : 'Edit Schedule', icon: 'settings', onClick: () => handleOpenEdit(item) }] : []),
               ...(sched ? [{ label: t ? '移除排程' : 'Remove Schedule', icon: 'trash', onClick: () => setConfirmState({ kind: 'remove-schedule', item }) }] : []),
-              { label: t ? '刪除節目' : 'Delete Show', icon: 'trash', onClick: () => setConfirmState({ kind: 'delete-show', item }), danger: true },
+              { label: t ? '刪除節目' : 'Delete Show', icon: 'trash', onClick: () => openDeleteShowConfirm(item), danger: true },
             ];
             return (
               <div key={item.show_id} style={{ background: TOKEN.surface, border: `1px solid ${checked ? TOKEN.accent + '88' : TOKEN.surfaceBorder}`, borderRadius: 12, padding: '18px 22px' }}>
@@ -968,6 +997,27 @@ const ScheduleTab = ({ lang }) => {
                     <OverflowMenu items={menuItems} ariaLabel={t ? '更多操作' : 'More actions'} />
                   </div>
                 </div>
+                {sched && (() => {
+                  const status = sched.last_refresh_status || 'pending';
+                  const ts = sched.last_refresh_at;
+                  const msg = sched.last_refresh_message;
+                  const colorMap = { success: '#22c55e', failed: '#f87171', pending: TOKEN.textMuted };
+                  const iconMap = { success: '✓', failed: '✗', pending: '·' };
+                  const color = colorMap[status] || TOKEN.textMuted;
+                  const icon = iconMap[status] || '·';
+                  const label = ts
+                    ? (t ? `${formatRelativeTime(new Date(ts).getTime(), lang)}刷新` : `Refreshed ${formatRelativeTime(new Date(ts).getTime(), lang)}`)
+                    : (t ? '尚未刷新' : 'Not yet refreshed');
+                  return (
+                    <div title={msg || ''} style={{ marginTop: 12, paddingTop: 10, borderTop: `1px dashed ${TOKEN.surfaceBorder}`, color, fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ fontWeight: 700 }}>{icon}</span>
+                      <span>{label}</span>
+                      {status === 'failed' && msg && (
+                        <span style={{ color: TOKEN.textMuted, marginLeft: 8, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 360 }}>{msg}</span>
+                      )}
+                    </div>
+                  );
+                })()}
                 <TranscriptionProgressPanel
                   showId={item.show_id}
                   expanded={expandedIds.has(item.show_id)}
@@ -981,7 +1031,7 @@ const ScheduleTab = ({ lang }) => {
       <ConfirmModal
         open={confirmState !== null}
         title={confirmState ? confirmLabels[confirmState.kind].title : ''}
-        message={confirmState ? confirmLabels[confirmState.kind].message(confirmState.item) : ''}
+        message={renderConfirmMessage()}
         confirmLabel={confirmState ? confirmLabels[confirmState.kind].confirmLabel : ''}
         cancelLabel={t ? '取消' : 'Cancel'}
         danger={true}
@@ -1062,11 +1112,23 @@ const ScheduleTab = ({ lang }) => {
               </select>
             </div>
             <div>
-              <label style={{ display: 'block', color: TOKEN.textMuted, fontSize: 12, marginBottom: 6 }}>{t ? '每次最多集數 (0=全部)' : 'Max Episodes (0=all)'}</label>
-              <input type="number" min={0} max={50} value={editState.form.max_episodes}
-                onChange={e => setEditState(s => ({ ...s, form: { ...s.form, max_episodes: Number(e.target.value) } }))}
+              <label style={{ display: 'block', color: TOKEN.textMuted, fontSize: 12, marginBottom: 6 }}>{t ? '每次最多轉錄集數' : 'Max Episodes Per Run'}</label>
+              <input type="number" min={1} max={50} value={editState.form.max_episodes_per_run}
+                onChange={e => setEditState(s => ({ ...s, form: { ...s.form, max_episodes_per_run: Number(e.target.value) } }))}
                 style={{ width: '100%', boxSizing: 'border-box', background: TOKEN.surfaceRaised, border: `1px solid ${TOKEN.surfaceBorder}`, borderRadius: 8, padding: '9px 12px', color: TOKEN.text, fontSize: 14, outline: 'none', fontFamily: 'inherit' }} />
             </div>
+            {editState.item && editState.item.schedule && (
+              <div style={{ marginTop: 4, padding: '10px 12px', background: TOKEN.bg, border: `1px solid ${TOKEN.surfaceBorder}`, borderRadius: 8 }}>
+                <div style={{ color: TOKEN.textMuted, fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 6 }}>
+                  {t ? '最後刷新狀態' : 'Last Refresh'}
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, color: TOKEN.textSecondary }}>
+                  <div>{t ? '時間：' : 'At: '}{editState.item.schedule.last_refresh_at ? new Date(editState.item.schedule.last_refresh_at).toLocaleString() : (t ? '尚未刷新' : 'Not yet refreshed')}</div>
+                  <div>{t ? '狀態：' : 'Status: '}{editState.item.schedule.last_refresh_status || '—'}</div>
+                  <div style={{ wordBreak: 'break-word' }}>{t ? '訊息：' : 'Message: '}{editState.item.schedule.last_refresh_message || '—'}</div>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </FormModal>

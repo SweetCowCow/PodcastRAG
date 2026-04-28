@@ -21,10 +21,16 @@ class QueueRowOut(BaseModel):
     ignored: bool
     whisper_model: str
     celery_task_id: str | None = None
+    episode_title: str | None = None
+    show_title: str | None = None
 
 
 class CancelQueueRowOut(QueueRowOut):
     force_cancelled: bool = False
+
+
+class QueuePositionUpdate(BaseModel):
+    position: int
 
 
 class QueueListOut(BaseModel):
