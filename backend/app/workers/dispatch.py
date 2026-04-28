@@ -98,6 +98,7 @@ async def _enqueue_in(
     existing.started_at = None
     existing.finished_at = None
     existing.error_message = None
+    existing.celery_task_id = None
     if owns_commit:
         await session.commit()
     else:
