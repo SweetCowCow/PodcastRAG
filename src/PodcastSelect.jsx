@@ -13,6 +13,7 @@ const deriveColor = (id) => {
 
 const PodcastSelect = ({ lang, onSelect }) => {
   const t = lang === 'zh';
+  const { isMobile } = useViewport();
   const [search, setSearch] = React.useState('');
   const [hovered, setHovered] = React.useState(null);
   const [shows, setShows] = React.useState(null);
@@ -47,13 +48,13 @@ const PodcastSelect = ({ lang, onSelect }) => {
   return (
     <div style={{ flex: 1, overflowY: 'auto', background: TOKEN.bg }}>
       {/* Header */}
-      <div style={{ padding: '36px 40px 24px', borderBottom: `1px solid ${TOKEN.surfaceBorder}` }}>
-        <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16 }}>
-          <div>
+      <div style={{ padding: isMobile ? '20px 16px 16px' : '36px 40px 24px', borderBottom: `1px solid ${TOKEN.surfaceBorder}` }}>
+        <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', flexWrap: 'wrap', gap: isMobile ? 12 : 16 }}>
+          <div style={{ flex: isMobile ? '1 1 100%' : 'none' }}>
             <p style={{ color: TOKEN.accent, fontSize: 12, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', margin: '0 0 6px' }}>
               {t ? '節目庫' : 'Show Library'}
             </p>
-            <h1 style={{ color: TOKEN.text, fontSize: 28, fontWeight: 700, margin: 0, lineHeight: 1.2 }}>
+            <h1 style={{ color: TOKEN.text, fontSize: isMobile ? 22 : 28, fontWeight: 700, margin: 0, lineHeight: 1.2 }}>
               {t ? '選擇 Podcast 節目' : 'Select a Podcast Show'}
             </h1>
             <p style={{ color: TOKEN.textSecondary, fontSize: 14, margin: '8px 0 0' }}>
@@ -62,14 +63,14 @@ const PodcastSelect = ({ lang, onSelect }) => {
                 : (t ? '載入中...' : 'Loading...')}
             </p>
           </div>
-          <div style={{ width: 280 }}>
+          <div style={{ width: isMobile ? '100%' : 280 }}>
             <Input value={search} onChange={e => setSearch(e.target.value)} placeholder={t ? '搜尋節目名稱...' : 'Search shows...'} icon="search" />
           </div>
         </div>
       </div>
 
       {/* Content */}
-      <div style={{ padding: '28px 40px 40px' }}>
+      <div style={{ padding: isMobile ? '20px 16px 32px' : '28px 40px 40px' }}>
         {error && (
           <div style={{ textAlign: 'center', padding: '60px 0', color: TOKEN.danger }}>
             <Icon name="search" size={36} color={TOKEN.danger} />

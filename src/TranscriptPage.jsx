@@ -1,6 +1,7 @@
 // Transcript Page — Layer 3: Timeline + Keyword highlight
 const TranscriptPage = ({ lang, show, episode, onBack, initSearch, highlightTime }) => {
   const t = lang === 'zh';
+  const { isMobile } = useViewport();
   const [search, setSearch] = React.useState(initSearch || '');
   const [activeIdx, setActiveIdx] = React.useState(null);
   const [highlightedIdx, setHighlightedIdx] = React.useState(null);
@@ -64,24 +65,25 @@ const TranscriptPage = ({ lang, show, episode, onBack, initSearch, highlightTime
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: TOKEN.bg }}>
       {/* Top bar */}
-      <div style={{ padding: '14px 32px', borderBottom: `1px solid ${TOKEN.surfaceBorder}`, background: TOKEN.surface, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-        <Btn variant="ghost" size="sm" icon="arrowLeft" onClick={onBack}>{t ? '返回查詢' : 'Back'}</Btn>
-        <div style={{ width: 1, height: 20, background: TOKEN.surfaceBorder }} />
-        <div style={{ flex: 1, minWidth: 200 }}>
-          <div style={{ color: TOKEN.text, fontWeight: 600, fontSize: 14 }}>{episode.title}</div>
+      <div style={{ padding: isMobile ? '10px 12px' : '14px 32px', borderBottom: `1px solid ${TOKEN.surfaceBorder}`, background: TOKEN.surface, flexShrink: 0, display: 'flex', alignItems: 'center', gap: isMobile ? 8 : 12, flexWrap: 'wrap' }}>
+        <Btn variant="ghost" size="sm" icon="arrowLeft" onClick={onBack}>{isMobile ? '' : (t ? '返回查詢' : 'Back')}</Btn>
+        {!isMobile && <div style={{ width: 1, height: 20, background: TOKEN.surfaceBorder }} />}
+        <div style={{ flex: 1, minWidth: isMobile ? 0 : 200 }}>
+          <div style={{ color: TOKEN.text, fontWeight: 600, fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{episode.title}</div>
           <div style={{ display: 'flex', gap: 12, marginTop: 3, fontSize: 12, color: TOKEN.textMuted }}>
             {episode.published_at && <span>{episode.published_at.slice(0, 10)}</span>}
             {episode.duration_seconds && <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}><Icon name="clock" size={11} />{fmtTime(episode.duration_seconds)}</span>}
           </div>
         </div>
-        <div style={{ width: 260 }}>
+        <div style={{ width: isMobile ? '100%' : 260 }}>
           <Input value={search} onChange={e => setSearch(e.target.value)} placeholder={t ? '關鍵字高亮搜尋...' : 'Highlight keywords...'} icon="search" />
         </div>
         {search && <span style={{ fontSize: 12, color: TOKEN.textMuted, whiteSpace: 'nowrap' }}>{matchCount} {t ? '個匹配' : 'matches'}</span>}
       </div>
 
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-        {/* Left: Timeline */}
+        {/* Left: Timeline (desktop only) */}
+        {!isMobile && (
         <div style={{ width: 280, borderRight: `1px solid ${TOKEN.surfaceBorder}`, display: 'flex', flexDirection: 'column', overflowY: 'auto', flexShrink: 0 }}>
           <div style={{ padding: '16px 16px 16px' }}>
             <div style={{ fontSize: 12, color: TOKEN.textSecondary, fontWeight: 600, marginBottom: 10 }}>{t ? '時間軸' : 'Timeline'}</div>
@@ -125,9 +127,10 @@ const TranscriptPage = ({ lang, show, episode, onBack, initSearch, highlightTime
             {segError && <div style={{ color: '#f87171', fontSize: 12, padding: 8 }}>{segError}</div>}
           </div>
         </div>
+        )}
 
         {/* Right: Full transcript */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '20px 32px' }}>
+        <div style={{ flex: 1, overflowY: 'auto', padding: isMobile ? '14px 12px' : '20px 32px' }}>
           {!segments && !segError && (
             <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 60 }}>
               <div style={{ display: 'flex', gap: 6 }}>
@@ -153,10 +156,10 @@ const TranscriptPage = ({ lang, show, episode, onBack, initSearch, highlightTime
                 const active = activeIdx === i;
                 return (
                   <div key={i} id={`seg-${i}`}
-                    style={{ display: 'flex', gap: 20, padding: '16px 14px', borderRadius: 10, background: highlightedIdx === i ? TOKEN.accent + '33' : active ? TOKEN.accentDim : matched ? '#fbbf2411' : 'transparent', border: `1px solid ${highlightedIdx === i ? TOKEN.accent : active ? TOKEN.accent + '44' : matched ? '#fbbf2433' : 'transparent'}`, marginBottom: 4, transition: 'all 0.3s', cursor: 'pointer' }}
+                    style={{ display: 'flex', gap: isMobile ? 10 : 20, padding: isMobile ? '12px 8px' : '16px 14px', borderRadius: 10, background: highlightedIdx === i ? TOKEN.accent + '33' : active ? TOKEN.accentDim : matched ? '#fbbf2411' : 'transparent', border: `1px solid ${highlightedIdx === i ? TOKEN.accent : active ? TOKEN.accent + '44' : matched ? '#fbbf2433' : 'transparent'}`, marginBottom: 4, transition: 'all 0.3s', cursor: 'pointer' }}
                     onClick={() => setActiveIdx(i)}>
-                    <div style={{ minWidth: 80, textAlign: 'right', flexShrink: 0 }}>
-                      <div style={{ color: TOKEN.accent, fontSize: 12, fontFamily: 'monospace', fontWeight: 600 }}>{fmtTime(seg.start_time)}</div>
+                    <div style={{ minWidth: isMobile ? 50 : 80, textAlign: 'right', flexShrink: 0 }}>
+                      <div style={{ color: TOKEN.accent, fontSize: isMobile ? 11 : 12, fontFamily: 'monospace', fontWeight: 600 }}>{fmtTime(seg.start_time)}</div>
                     </div>
                     <div style={{ width: 1, background: active ? TOKEN.accent + '55' : TOKEN.surfaceBorder, flexShrink: 0, borderRadius: 99 }} />
                     <p style={{ margin: 0, color: active ? TOKEN.text : TOKEN.textSecondary, fontSize: 14, lineHeight: 1.8, flex: 1 }}>

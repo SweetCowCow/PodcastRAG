@@ -18,9 +18,10 @@ const formatTimestamp = (seconds) => {
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 };
 
-// ── Resizable Episode Panel ──
-const ResizableLayout = ({ lang, leftContent, rightHeader, rightContent, epCount, epTotal }) => {
+// ── Resizable Episode Panel (desktop) / Drawer (mobile) ──
+const ResizableLayout = ({ lang, leftContent, rightContent, epCount, epTotal, drawerOpen, setDrawerOpen }) => {
   const t = lang === 'zh';
+  const { isMobile } = useViewport();
   const containerRef = React.useRef(null);
   const [panelWidth, setPanelWidth] = React.useState(340);
   const [collapsed, setCollapsed] = React.useState(false);
@@ -36,7 +37,7 @@ const ResizableLayout = ({ lang, leftContent, rightHeader, rightContent, epCount
     const move = (ev) => {
       if (!containerRef.current) return;
       const maxW = containerRef.current.offsetWidth * MAX_RATIO;
-      const delta = startX - ev.clientX; // dragging handle leftward = wider panel
+      const delta = startX - ev.clientX;
       const newW = Math.min(maxW, Math.max(MIN_WIDTH, startW + delta));
       setPanelWidth(newW);
     };
@@ -44,6 +45,51 @@ const ResizableLayout = ({ lang, leftContent, rightHeader, rightContent, epCount
     window.addEventListener('mousemove', move);
     window.addEventListener('mouseup', up);
   };
+
+  if (isMobile) {
+    return (
+      <div ref={containerRef} style={{ flex: 1, display: 'flex', overflow: 'hidden', position: 'relative' }}>
+        {/* Chat full width */}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
+          {leftContent}
+        </div>
+
+        {/* Overlay */}
+        {drawerOpen && (
+          <div onClick={() => setDrawerOpen(false)}
+            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 99 }} />
+        )}
+
+        {/* Drawer */}
+        <div style={{
+          position: 'fixed', right: 0, top: 0, bottom: 0,
+          width: 'min(85vw, 360px)',
+          transform: drawerOpen ? 'translateX(0)' : 'translateX(100%)',
+          transition: 'transform 0.18s ease-out',
+          background: TOKEN.surface,
+          borderLeft: `1px solid ${TOKEN.surfaceBorder}`,
+          display: 'flex', flexDirection: 'column',
+          zIndex: 100, boxShadow: drawerOpen ? '-8px 0 32px rgba(0,0,0,0.4)' : 'none',
+        }}>
+          <div style={{ padding: '0 12px', height: 52, borderBottom: `1px solid ${TOKEN.surfaceBorder}`, display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ color: TOKEN.text, fontWeight: 600, fontSize: 14, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {t ? '已轉錄集數' : 'Transcribed Episodes'}
+              </div>
+              <div style={{ color: TOKEN.textMuted, fontSize: 11 }}>{epCount} / {epTotal} {t ? '集' : 'eps'}</div>
+            </div>
+            <button onClick={() => setDrawerOpen(false)} aria-label={t ? '關閉' : 'Close'}
+              style={{ width: 36, height: 36, borderRadius: 7, background: TOKEN.surfaceRaised, border: `1px solid ${TOKEN.surfaceBorder}`, color: TOKEN.textSecondary, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: 0, flexShrink: 0 }}>
+              <Icon name="x" size={16} color="currentColor" />
+            </button>
+          </div>
+          <div style={{ flex: 1, overflowY: 'auto', padding: '10px 10px' }}>
+            {rightContent}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div ref={containerRef} style={{ flex: 1, display: 'flex', overflow: 'hidden', position: 'relative', cursor: dragging ? 'col-resize' : 'auto', userSelect: dragging ? 'none' : 'auto' }}>
@@ -57,7 +103,6 @@ const ResizableLayout = ({ lang, leftContent, rightHeader, rightContent, epCount
         style={{ width: 5, flexShrink: 0, background: dragging ? TOKEN.accent : TOKEN.surfaceBorder, cursor: 'col-resize', transition: 'background 0.15s', position: 'relative', zIndex: 10 }}
         onMouseEnter={e => { if (!dragging) e.currentTarget.style.background = TOKEN.accent + '88'; }}
         onMouseLeave={e => { if (!dragging) e.currentTarget.style.background = TOKEN.surfaceBorder; }}>
-        {/* Dots on handle */}
         <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', display: 'flex', flexDirection: 'column', gap: 3 }}>
           {[0,1,2].map(i => <div key={i} style={{ width: 3, height: 3, borderRadius: '50%', background: TOKEN.textMuted }} />)}
         </div>
@@ -65,7 +110,6 @@ const ResizableLayout = ({ lang, leftContent, rightHeader, rightContent, epCount
 
       {/* Right: Episode panel (collapsible) */}
       <div style={{ width: collapsed ? 36 : panelWidth, flexShrink: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', borderLeft: `1px solid ${TOKEN.surfaceBorder}`, transition: collapsed ? 'width 0.2s' : 'none', background: TOKEN.surface }}>
-        {/* Panel header with collapse toggle */}
         <div style={{ padding: '0 12px', height: 49, borderBottom: `1px solid ${TOKEN.surfaceBorder}`, display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, background: TOKEN.surface }}>
           <button onClick={() => setCollapsed(v => !v)}
             style={{ width: 26, height: 26, borderRadius: 6, background: TOKEN.surfaceRaised, border: `1px solid ${TOKEN.surfaceBorder}`, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}>
@@ -83,14 +127,12 @@ const ResizableLayout = ({ lang, leftContent, rightHeader, rightContent, epCount
           )}
         </div>
 
-        {/* Episode list (hidden when collapsed) */}
         {!collapsed && (
           <div style={{ flex: 1, overflowY: 'auto', padding: '10px 10px' }}>
             {rightContent}
           </div>
         )}
 
-        {/* Collapsed: rotated label */}
         {collapsed && (
           <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <span style={{ color: TOKEN.textMuted, fontSize: 11, writingMode: 'vertical-rl', transform: 'rotate(180deg)', letterSpacing: '0.05em' }}>
@@ -106,6 +148,8 @@ const ResizableLayout = ({ lang, leftContent, rightHeader, rightContent, epCount
 // ── Main QueryPage ──
 const QueryPage = ({ lang, show, onBack, onOpenEpisode, queryMode }) => {
   const t = lang === 'zh';
+  const { isMobile } = useViewport();
+  const [drawerOpen, setDrawerOpen] = React.useState(false);
   const [activeTab, setActiveTab] = React.useState('chat');
   const [chatInput, setChatInput] = React.useState('');
   const [messages, setMessages] = React.useState(MOCK_CHAT);
@@ -309,17 +353,23 @@ const QueryPage = ({ lang, show, onBack, onOpenEpisode, queryMode }) => {
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: TOKEN.bg }}>
       {/* Top bar */}
-      <div style={{ padding: '0 24px', height: 52, borderBottom: `1px solid ${TOKEN.surfaceBorder}`, display: 'flex', alignItems: 'center', gap: 14, background: TOKEN.surface, flexShrink: 0 }}>
-        <Btn variant="ghost" size="sm" icon="arrowLeft" onClick={onBack}>{t ? '返回' : 'Back'}</Btn>
-        <div style={{ width: 1, height: 20, background: TOKEN.surfaceBorder }} />
-        <div style={{ width: 24, height: 24, borderRadius: 6, background: showColor + '22', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ padding: isMobile ? '0 12px' : '0 24px', height: 52, borderBottom: `1px solid ${TOKEN.surfaceBorder}`, display: 'flex', alignItems: 'center', gap: isMobile ? 8 : 14, background: TOKEN.surface, flexShrink: 0 }}>
+        <Btn variant="ghost" size="sm" icon="arrowLeft" onClick={onBack}>{isMobile ? '' : (t ? '返回' : 'Back')}</Btn>
+        {!isMobile && <div style={{ width: 1, height: 20, background: TOKEN.surfaceBorder }} />}
+        <div style={{ width: 24, height: 24, borderRadius: 6, background: showColor + '22', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
           <Icon name="mic" size={13} color={showColor} />
         </div>
-        <span style={{ color: TOKEN.text, fontWeight: 600, fontSize: 14 }}>{showName}</span>
-        <Badge variant="default">{transcribedCount} {t ? '集已轉錄' : 'transcribed'}</Badge>
+        <span style={{ color: TOKEN.text, fontWeight: 600, fontSize: 14, flex: isMobile ? 1 : 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{showName}</span>
+        {!isMobile && <Badge variant="default">{transcribedCount} {t ? '集已轉錄' : 'transcribed'}</Badge>}
+        {isMobile && (
+          <button onClick={() => setDrawerOpen(true)} aria-label={t ? '集數列表' : 'Episodes'}
+            style={{ width: 44, height: 44, borderRadius: 8, background: TOKEN.surfaceRaised, border: `1px solid ${TOKEN.surfaceBorder}`, color: TOKEN.textSecondary, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: 0, flexShrink: 0 }}>
+            <Icon name="list" size={18} color="currentColor" />
+          </button>
+        )}
       </div>
 
-      <ResizableLayout lang={lang} leftContent={leftContent} rightContent={rightContent} epCount={epCount} epTotal={show.episode_count || 0} />
+      <ResizableLayout lang={lang} leftContent={leftContent} rightContent={rightContent} epCount={epCount} epTotal={show.episode_count || 0} drawerOpen={drawerOpen} setDrawerOpen={setDrawerOpen} />
     </div>
   );
 };
