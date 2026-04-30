@@ -130,8 +130,8 @@
 
 ## 13. 部署與驗證
 
-- [ ] 13.1 commit + push 到 main 觸發 Zeabur 部署；前端為 static plan，build 後等 `https://podcastrag.zeabur.app/src/Shared.jsx` 內容含 `useViewport` 字串確認部署完成
-- [ ] 13.2 用 chrome-devtools-mcp `resize_page` 模擬 iPhone 14 Pro（393×852）走過：節目選擇 → 進入查詢頁 → 開 drawer → 看逐字稿 → 後台登入 → 切到排程 → 開 modal 改頻率到 weekly 點 day picker → 切到佇列 → 切三 sub-tab → 點 pending row ↑↓ 排序至少 1 次成功
-- [ ] 13.3 用 chrome-devtools-mcp 模擬 iPhone SE（375×667）跑同樣流程，確認 modal、drawer、按鈕觸控目標皆未破版
-- [ ] 13.4 桌機 viewport（1280×800）回歸測試：所有頁面與 modal 樣式與今日相同（regression check）
-- [ ] 13.5 iPad mini 直立（768×1024）邊界測試：確認顯示桌機 layout（≥ 768 → desktop）；若實機顯示擠則回 design open question 評估調整斷點
+- [x] 13.1 commit + push 到 main 觸發 Zeabur 部署；前端為 static plan，build 後等 `https://podcastrag.zeabur.app/src/Shared.jsx` 內容含 `useViewport` 字串確認部署完成
+- [x] 13.2 用 chrome-devtools-mcp `resize_page` 模擬 iPhone 14 Pro（393×852）走過：節目選擇 → 進入查詢頁 → 開 drawer → 看逐字稿 → 後台登入 → 切到排程 → 開 modal 改頻率到 weekly 點 day picker → 切到佇列 → 切三 sub-tab → 點 pending row ↑↓ 排序至少 1 次成功
+- [x] 13.3 用 chrome-devtools-mcp 模擬 iPhone SE（375×667）跑同樣流程，確認 modal、drawer、按鈕觸控目標皆未破版
+- [x] 13.4 桌機 viewport（1280×800）回歸測試：所有頁面與 modal 樣式與今日相同（regression check）
+- [x] 13.5 iPad mini 直立（768×1024）邊界測試：確認顯示桌機 layout（≥ 768 → desktop）；若實機顯示擠則回 design open question 評估調整斷點
