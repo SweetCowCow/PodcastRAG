@@ -131,7 +131,7 @@ const App = () => {
   const t = lang === 'zh';
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', fontFamily: "'Inter', 'Helvetica Neue', Arial, sans-serif", background: TOKEN.bg, overflow: 'hidden' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh', fontFamily: "'Inter', 'Helvetica Neue', Arial, sans-serif", background: TOKEN.bg, overflow: 'hidden' }}>
       <style>{`
         * { box-sizing: border-box; }
         ::-webkit-scrollbar { width: 6px; height: 6px; }
