@@ -998,7 +998,7 @@ const ScheduleTab = ({ lang }) => {
                   <input type="checkbox" checked={checked} onChange={() => toggleSelect(item.show_id)}
                     aria-label={t ? `選取 ${item.show_title}` : `Select ${item.show_title}`}
                     style={{ accentColor: TOKEN.accent, width: 16, height: 16, cursor: 'pointer', marginTop: 5, flexShrink: 0 }} />
-                  <div style={{ flex: '1 1 320px', minWidth: 0 }}>
+                  <div style={{ flex: isMobile ? 'none' : '1 1 320px', width: isMobile ? '100%' : 'auto', minWidth: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                       <span style={{ color: TOKEN.text, fontWeight: 600, fontSize: 15 }}>{item.show_title}</span>
                       {item.pending_count > 0 && <Badge variant="warning">{item.pending_count} {t ? '集待轉錄' : 'pending'}</Badge>}
