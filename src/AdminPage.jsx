@@ -411,7 +411,7 @@ const ScheduleTab = ({ lang }) => {
   const [loading, setLoading] = React.useState(true);
   const [fetchError, setFetchError] = React.useState(null);
   const [showForm, setShowForm] = React.useState(false);
-  const [form, setForm] = React.useState({ rss: '', name: '', freq: 'daily', time: '06:00', whisperModel: 'large-v3', maxEp: 0 });
+  const [form, setForm] = React.useState({ rss: '', name: '', freq: 'daily', time: '06:00', dayOfWeek: 0, whisperModel: 'large-v3', maxEp: 0 });
   const [rssLoading, setRssLoading] = React.useState(false);
   const [rssError, setRssError] = React.useState(null);
   const [rssPreview, setRssPreview] = React.useState(null);
@@ -478,14 +478,43 @@ const ScheduleTab = ({ lang }) => {
 
   React.useEffect(() => { loadSchedules(); }, [loadSchedules]);
 
+  const VALID_FREQUENCIES = ['daily', 'weekly', 'manual'];
+  const DAY_LABELS_ZH = ['一', '二', '三', '四', '五', '六', '日'];
+  const DAY_LABELS_EN = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+  const formatScheduleHint = (form, lang) => {
+    const isZh = lang === 'zh';
+    if (form.frequency === 'manual') {
+      return isZh ? '不會自動執行' : 'Will not run automatically';
+    }
+    if (form.frequency === 'daily') {
+      return isZh
+        ? `每日 ${form.run_time} (UTC) 觸發`
+        : `Runs daily at ${form.run_time} (UTC)`;
+    }
+    if (form.frequency === 'weekly') {
+      const idx = Math.max(0, Math.min(6, form.day_of_week ?? 0));
+      const dayZh = DAY_LABELS_ZH[idx];
+      const dayEn = DAY_LABELS_EN[idx];
+      return isZh
+        ? `每週${dayZh} ${form.run_time} (UTC) 觸發`
+        : `Runs every ${dayEn} at ${form.run_time} (UTC)`;
+    }
+    return '';
+  };
+
   const handleOpenEdit = (item) => {
     if (!item.schedule) return;
+    const persistedFreq = item.schedule.frequency;
+    const isLegacy = !VALID_FREQUENCIES.includes(persistedFreq);
     setEditState({
       item,
+      hourlyFallback: isLegacy,
       form: {
         enabled: item.schedule.enabled === true,
-        frequency: item.schedule.frequency,
+        frequency: isLegacy ? 'daily' : persistedFreq,
         run_time: item.schedule.run_time,
+        day_of_week: item.schedule.day_of_week ?? 0,
         whisper_model: item.schedule.whisper_model,
         max_episodes_per_run: item.schedule.max_episodes_per_run,
       },
@@ -495,10 +524,12 @@ const ScheduleTab = ({ lang }) => {
   const handleOpenAddSchedule = (item) => {
     setEditState({
       item,
+      hourlyFallback: false,
       form: {
         enabled: false,
         frequency: 'manual',
         run_time: '06:00',
+        day_of_week: 0,
         whisper_model: 'large-v3',
         max_episodes_per_run: 5,
       },
@@ -672,6 +703,7 @@ const ScheduleTab = ({ lang }) => {
           enabled: true,
           frequency: form.freq,
           run_time: form.time,
+          day_of_week: form.dayOfWeek,
           whisper_model: form.whisperModel,
           max_episodes_per_run: form.maxEp || 5,
         }),
@@ -839,7 +871,6 @@ const ScheduleTab = ({ lang }) => {
               <label style={{ display: 'block', color: TOKEN.textMuted, fontSize: 12, marginBottom: 6 }}>{t ? '排程頻率' : 'Frequency'}</label>
               <select value={form.freq} onChange={e => setF('freq', e.target.value)}
                 style={{ width: '100%', background: TOKEN.surfaceRaised, border: `1px solid ${TOKEN.surfaceBorder}`, borderRadius: 8, padding: '9px 12px', color: TOKEN.text, fontSize: 14, outline: 'none', fontFamily: 'inherit' }}>
-                <option value="hourly">{t ? '每小時' : 'Hourly'}</option>
                 <option value="daily">{t ? '每天' : 'Daily'}</option>
                 <option value="weekly">{t ? '每週' : 'Weekly'}</option>
                 <option value="manual">{t ? '手動觸發' : 'Manual'}</option>
@@ -974,7 +1005,7 @@ const ScheduleTab = ({ lang }) => {
                     </div>
                     <div style={{ display: 'flex', gap: 16, marginTop: 7, fontSize: 12, color: TOKEN.textMuted, flexWrap: 'wrap', alignItems: 'center' }}>
                       <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Icon name="rss" size={11} /><span style={{ fontFamily: 'monospace', maxWidth: 240, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.rss_url}</span></span>
-                      {sched && <span>{t ? '頻率' : 'Freq'}: {sched.frequency} · {sched.run_time}</span>}
+                      {sched && <span>{t ? '頻率' : 'Freq'}: {sched.frequency}{sched.frequency === 'weekly' ? ` · ${(t ? DAY_LABELS_ZH : DAY_LABELS_EN)[sched.day_of_week ?? 0]}` : ''} · {sched.run_time}</span>}
                       <span><Icon name="clock" size={11} style={{ marginRight: 3 }} />{t ? '最後轉錄' : 'Last'}: {lastTx}</span>
                       {sched && <Badge variant="muted">{sched.whisper_model}</Badge>}
                     </div>
@@ -1088,18 +1119,72 @@ const ScheduleTab = ({ lang }) => {
               <select value={editState.form.frequency}
                 onChange={e => setEditState(s => ({ ...s, form: { ...s.form, frequency: e.target.value } }))}
                 style={{ width: '100%', background: TOKEN.surfaceRaised, border: `1px solid ${TOKEN.surfaceBorder}`, borderRadius: 8, padding: '9px 12px', color: TOKEN.text, fontSize: 14, outline: 'none', fontFamily: 'inherit' }}>
-                <option value="hourly">{t ? '每小時' : 'Hourly'}</option>
                 <option value="daily">{t ? '每天' : 'Daily'}</option>
                 <option value="weekly">{t ? '每週' : 'Weekly'}</option>
                 <option value="manual">{t ? '手動觸發' : 'Manual'}</option>
               </select>
+              {editState.hourlyFallback && (
+                <div style={{ color: TOKEN.warning, fontSize: 12, marginTop: 6 }}>
+                  {t
+                    ? '原設定『每小時』已停用，已改為每天，請確認後儲存。'
+                    : "The previous 'hourly' setting is no longer supported; switched to daily. Please confirm and save."}
+                </div>
+              )}
+              {editState.form.frequency === 'manual' && (
+                <>
+                  <div style={{ color: TOKEN.textSecondary, fontSize: 12, marginTop: 6 }}>
+                    {t
+                      ? '不會自動執行，需從清單點「立即執行」'
+                      : 'Will not run automatically. Trigger manually from the list.'}
+                  </div>
+                  <div style={{ color: TOKEN.textMuted, fontSize: 12, marginTop: 4 }}>
+                    {formatScheduleHint(editState.form, lang)}
+                  </div>
+                </>
+              )}
             </div>
-            <div>
-              <label style={{ display: 'block', color: TOKEN.textMuted, fontSize: 12, marginBottom: 6 }}>{t ? '執行時間' : 'Run Time'}</label>
-              <input type="time" value={editState.form.run_time}
-                onChange={e => setEditState(s => ({ ...s, form: { ...s.form, run_time: e.target.value } }))}
-                style={{ width: '100%', boxSizing: 'border-box', background: TOKEN.surfaceRaised, border: `1px solid ${TOKEN.surfaceBorder}`, borderRadius: 8, padding: '9px 12px', color: TOKEN.text, fontSize: 14, outline: 'none', fontFamily: 'inherit', colorScheme: 'dark' }} />
-            </div>
+            {editState.form.frequency === 'weekly' && (
+              <div>
+                <label style={{ display: 'block', color: TOKEN.textMuted, fontSize: 12, marginBottom: 6 }}>{t ? '星期幾' : 'Day of Week'}</label>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {(t ? DAY_LABELS_ZH : DAY_LABELS_EN).map((label, i) => {
+                    const selected = editState.form.day_of_week === i;
+                    return (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => setEditState(s => ({ ...s, form: { ...s.form, day_of_week: i } }))}
+                        style={{
+                          minWidth: 44,
+                          padding: '8px 12px',
+                          borderRadius: 8,
+                          border: `1px solid ${selected ? TOKEN.accent : TOKEN.surfaceBorder}`,
+                          background: selected ? TOKEN.accent : TOKEN.surfaceRaised,
+                          color: selected ? '#fff' : TOKEN.textSecondary,
+                          fontSize: 13,
+                          fontWeight: selected ? 600 : 500,
+                          cursor: 'pointer',
+                          fontFamily: 'inherit',
+                        }}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+            {editState.form.frequency !== 'manual' && (
+              <div>
+                <label style={{ display: 'block', color: TOKEN.textMuted, fontSize: 12, marginBottom: 6 }}>{t ? '執行時間' : 'Run Time'}</label>
+                <input type="time" value={editState.form.run_time}
+                  onChange={e => setEditState(s => ({ ...s, form: { ...s.form, run_time: e.target.value } }))}
+                  style={{ width: '100%', boxSizing: 'border-box', background: TOKEN.surfaceRaised, border: `1px solid ${TOKEN.surfaceBorder}`, borderRadius: 8, padding: '9px 12px', color: TOKEN.text, fontSize: 14, outline: 'none', fontFamily: 'inherit', colorScheme: 'dark' }} />
+                <div style={{ color: TOKEN.textMuted, fontSize: 12, marginTop: 6 }}>
+                  {formatScheduleHint(editState.form, lang)}
+                </div>
+              </div>
+            )}
             <div>
               <label style={{ display: 'block', color: TOKEN.textMuted, fontSize: 12, marginBottom: 6 }}>{t ? 'Whisper 模型' : 'Whisper Model'}</label>
               <select value={editState.form.whisper_model}

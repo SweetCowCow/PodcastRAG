@@ -201,16 +201,19 @@ async def _detect_stale_running(session_factory) -> int:
 def _is_due(schedule: ShowSchedule, current_hhmm: str, weekday: int) -> bool:
     """Return True if this schedule should fire at this minute.
 
-    ``manual`` frequency always returns False — manual schedules opt
-    out of the cron entirely (the schedule row still stores model and
-    per-trigger episode cap for the manual UI button).
+    Weekly schedules fire only when the current UTC weekday matches
+    ``schedule.day_of_week`` (0=Monday..6=Sunday per Python
+    ``datetime.weekday()``). ``manual`` frequency always returns
+    False — manual schedules opt out of the cron entirely (the
+    schedule row still stores model and per-trigger episode cap for
+    the manual UI button).
     """
     if schedule.run_time != current_hhmm:
         return False
     if schedule.frequency == "daily":
         return True
     if schedule.frequency == "weekly":
-        return weekday == 0  # Monday
+        return weekday == schedule.day_of_week
     return False
 
 

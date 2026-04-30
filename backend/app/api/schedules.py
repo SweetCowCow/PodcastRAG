@@ -22,6 +22,7 @@ SCHEDULE_DEFAULTS = {
     "enabled": False,
     "frequency": "daily",
     "run_time": "06:00",
+    "day_of_week": 0,
     "whisper_model": "large-v3",
 }
 
