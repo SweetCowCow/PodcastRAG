@@ -8,14 +8,23 @@ TBD - created by archiving change 'transcription-schedule-api'. Update Purpose a
 
 ### Requirement: Show schedule settings persisted per show
 
-The backend SHALL maintain a `show_schedules` table with at most one row per show. Each row SHALL store `enabled` (boolean), `frequency` (one of `daily`, `weekly`, `manual`), `run_time` (string in HH:MM UTC format), `whisper_model` (string), `max_episodes_per_run` (integer, ≥ 1, REQUIRED — replaces the previous `max_episodes` column whose `0 = unlimited` semantic is removed), `last_refresh_at` (nullable timestamp UTC), `last_refresh_status` (enum: `success`, `failed`, `never`, default `never`), and `last_refresh_message` (nullable string, max 500 chars). Rows SHALL be deleted automatically when the parent show is deleted (CASCADE).
+The backend SHALL maintain a `show_schedules` table with at most one row per show. Each row SHALL store `enabled` (boolean), `frequency` (one of `daily`, `weekly`, `manual`), `run_time` (string in HH:MM UTC format), `day_of_week` (integer in `[0, 6]`, NOT NULL, DEFAULT 0, where 0=Monday and 6=Sunday following Python `datetime.weekday()` convention), `whisper_model` (string), `max_episodes_per_run` (integer, ≥ 1, REQUIRED — replaces the previous `max_episodes` column whose `0 = unlimited` semantic is removed), `last_refresh_at` (nullable timestamp UTC), `last_refresh_status` (enum: `success`, `failed`, `never`, default `never`), and `last_refresh_message` (nullable string, max 500 chars). Rows SHALL be deleted automatically when the parent show is deleted (CASCADE).
+
+The `day_of_week` column SHALL be consulted only when `frequency = weekly`. For `frequency = daily` and `frequency = manual`, the value of `day_of_week` SHALL be ignored by the cron tick (but still persisted as-is so users may switch frequencies without losing the prior selection).
 
 When `frequency = manual`, the cron tick SHALL skip this show (manual is opt-out from auto-execution; the schedule row still stores the model and per-trigger episode cap for use by the manual "transcribe latest" UI button).
+
+The Alembic migration that adds `day_of_week` SHALL backfill all existing rows to `0` (Monday), preserving the prior hard-coded weekly behavior for any rows already configured with `frequency = weekly`.
 
 #### Scenario: Create schedule for a show
 
 - **WHEN** a client calls `PUT /shows/{show_id}/schedule` with `enabled=true, frequency=daily, run_time=06:00, whisper_model=whisper-1, max_episodes_per_run=5` and no existing schedule row for the show
-- **THEN** the backend SHALL insert a new row in `show_schedules` with those fields, `last_refresh_status=never`, and return HTTP 200 with the created schedule
+- **THEN** the backend SHALL insert a new row in `show_schedules` with those fields, `day_of_week=0` (default), `last_refresh_status=never`, and return HTTP 200 with the created schedule
+
+#### Scenario: Create weekly schedule with day_of_week
+
+- **WHEN** a client calls `PUT /shows/{show_id}/schedule` with `enabled=true, frequency=weekly, run_time=09:30, day_of_week=2, whisper_model=whisper-1, max_episodes_per_run=5`
+- **THEN** the backend SHALL insert a new row with `day_of_week=2` and return HTTP 200
 
 #### Scenario: Update existing schedule
 
@@ -25,7 +34,7 @@ When `frequency = manual`, the cron tick SHALL skip this show (manual is opt-out
 #### Scenario: Get schedule for a show
 
 - **WHEN** a client calls `GET /shows/{show_id}/schedule` and a schedule row exists
-- **THEN** the backend SHALL return HTTP 200 with all schedule fields including `last_refresh_at`, `last_refresh_status`, `last_refresh_message`
+- **THEN** the backend SHALL return HTTP 200 with all schedule fields including `day_of_week`, `last_refresh_at`, `last_refresh_status`, `last_refresh_message`
 
 #### Scenario: Get schedule for a show with no schedule
 
@@ -47,45 +56,39 @@ When `frequency = manual`, the cron tick SHALL skip this show (manual is opt-out
 - **WHEN** a client calls `PUT /shows/{show_id}/schedule` without `max_episodes_per_run` (or with value < 1)
 - **THEN** the backend SHALL return HTTP 422 validation error
 
+#### Scenario: day_of_week out of range is rejected
+
+- **WHEN** a client calls `PUT /shows/{show_id}/schedule` with `day_of_week=7` or `day_of_week=-1`
+- **THEN** the backend SHALL return HTTP 422 validation error
+
 #### Scenario: Manual frequency disables cron
 
 - **GIVEN** a schedule with `enabled=true, frequency=manual, run_time=06:00`
 - **WHEN** the cron tick runs at 06:00
 - **THEN** the cron tick SHALL NOT refresh or enqueue this show
 
+#### Scenario: Migration backfills existing rows to Monday
+
+- **GIVEN** existing `show_schedules` rows with no `day_of_week` column prior to upgrade
+- **WHEN** the Alembic migration runs
+- **THEN** the `day_of_week` column SHALL be added with default 0 and all pre-existing rows SHALL have value 0 (Monday)
+
 
 <!-- @trace
-source: db-driven-queue-and-real-cron
-updated: 2026-04-28
+source: queue-tabs-and-schedule-cleanup
+updated: 2026-04-30
 code:
-  - backend/requirements.txt
-  - backend/app/workers/dispatcher.py
-  - backend/app/workers/throttle.py
-  - backend/app/api/schedules.py
-  - backend/app/models/app_settings.py
-  - backend/app/workers/celery_app.py
-  - backend/app/workers/dispatch.py
-  - backend/app/workers/cron_tick.py
-  - backend/alembic/versions/g5b6c7d8e9f0_extend_show_schedule.py
-  - backend/app/api/transcripts.py
-  - backend/app/schemas/settings.py
-  - Dockerfile
-  - backend/app/models/transcription_queue.py
-  - backend/app/main.py
-  - backend/app/api/shows.py
-  - backend/app/schemas/queue.py
-  - backend/app/workers/tasks.py
-  - docs/case-studies/local-vs-prod-verification-violation.md
   - docs/case-studies/transcription-queue-discussion.md
-  - backend/app/services/settings_cache.py
-  - backend/docker-compose.yml
   - backend/app/models/show_schedule.py
-  - backend/alembic/versions/h6c7d8e9f0a1_add_app_settings.py
-  - backend/app/models/__init__.py
-  - backend/app/api/settings.py
-  - backend/app/api/queue.py
   - backend/app/schemas/schedule.py
-  - backend/alembic/versions/f4a5b6c7d8e9_add_transcription_queue.py
+  - src/AdminPage.jsx
+  - backend/app/workers/cron_tick.py
+  - src/QueueTab.jsx
+  - backend/app/api/schedules.py
+  - docs/case-studies/local-vs-prod-verification-violation.md
+  - backend/alembic/versions/j8e9f0a1b2c3_add_day_of_week_to_show_schedules.py
+tests:
+  - backend/tests/test_cron_tick_is_due.py
 -->
 
 ---
@@ -190,7 +193,7 @@ code:
 ---
 ### Requirement: Cron tick triggers refresh and enqueue per schedule
 
-The backend SHALL run a Celery Beat-driven `cron_tick` task once per minute. On each tick, the task SHALL select all rows from `show_schedules` where `enabled = true` AND the current UTC time matches the schedule's next due moment derived from `frequency` and `run_time`. For each matched show, the task SHALL execute the following sequence atomically per show:
+The backend SHALL run a Celery Beat-driven `cron_tick` task once per minute. On each tick, the task SHALL select all rows from `show_schedules` where `enabled = true` AND the current UTC time matches the schedule's next due moment derived from `frequency`, `run_time`, and (for weekly) `day_of_week`. For each matched show, the task SHALL execute the following sequence atomically per show:
 
 1. Refresh the show's episode list by re-fetching its RSS feed (same code path as the manual `POST /shows/{show_id}/refresh-episodes` endpoint)
 2. On refresh success: update `show_schedules.last_refresh_at = now`, `last_refresh_status = success`, `last_refresh_message = "+N 集"` where N is the number of newly inserted episodes
@@ -200,11 +203,33 @@ The backend SHALL run a Celery Beat-driven `cron_tick` task once per minute. On 
 
 The cron tick SHALL handle each show independently — a failure for one show SHALL NOT prevent processing of other shows in the same tick.
 
+The due-moment evaluation SHALL be:
+
+- `frequency = daily`: due when the current UTC `HH:MM` equals `run_time`, every day
+- `frequency = weekly`: due when the current UTC `HH:MM` equals `run_time` AND the current UTC weekday (per Python `datetime.weekday()`, 0=Monday..6=Sunday) equals `day_of_week`
+- `frequency = manual`: never due (always skipped)
+
 #### Scenario: Daily schedule fires at run_time
 
 - **GIVEN** a show with `enabled=true`, `frequency=daily`, `run_time=06:00`
 - **WHEN** the cron tick runs at 06:00 UTC
 - **THEN** the backend SHALL refresh that show's episodes and enqueue up to `max_episodes_per_run` of them
+
+#### Scenario: Weekly schedule fires only on configured day_of_week
+
+- **GIVEN** a show with `enabled=true`, `frequency=weekly`, `run_time=09:30`, `day_of_week=2` (Wednesday)
+- **WHEN** the cron tick runs at 09:30 UTC on a Wednesday
+- **THEN** the backend SHALL refresh that show's episodes and enqueue up to `max_episodes_per_run` of them
+
+##### Example: weekly due-evaluation across the week
+
+| Current UTC weekday | Current UTC HH:MM | Schedule day_of_week | Schedule run_time | Due? |
+| ------------------- | ----------------- | -------------------- | ----------------- | ---- |
+| 2 (Wed)             | 09:30             | 2                    | 09:30             | yes  |
+| 1 (Tue)             | 09:30             | 2                    | 09:30             | no   |
+| 2 (Wed)             | 09:31             | 2                    | 09:30             | no   |
+| 0 (Mon)             | 06:00             | 0                    | 06:00             | yes  |
+| 6 (Sun)             | 23:00             | 6                    | 23:00             | yes  |
 
 #### Scenario: Refresh failure is recorded and enqueue is skipped
 
@@ -223,38 +248,21 @@ The cron tick SHALL handle each show independently — a failure for one show SH
 
 - **GIVEN** a show with `enabled=false`
 - **WHEN** the cron tick runs
-- **THEN** that show SHALL NOT be refreshed and SHALL NOT have anything enqueued, regardless of `frequency` / `run_time`
+- **THEN** that show SHALL NOT be refreshed and SHALL NOT have anything enqueued, regardless of `frequency` / `run_time` / `day_of_week`
 
 <!-- @trace
-source: db-driven-queue-and-real-cron
-updated: 2026-04-28
+source: queue-tabs-and-schedule-cleanup
+updated: 2026-04-30
 code:
-  - backend/requirements.txt
-  - backend/app/workers/dispatcher.py
-  - backend/app/workers/throttle.py
-  - backend/app/api/schedules.py
-  - backend/app/models/app_settings.py
-  - backend/app/workers/celery_app.py
-  - backend/app/workers/dispatch.py
-  - backend/app/workers/cron_tick.py
-  - backend/alembic/versions/g5b6c7d8e9f0_extend_show_schedule.py
-  - backend/app/api/transcripts.py
-  - backend/app/schemas/settings.py
-  - Dockerfile
-  - backend/app/models/transcription_queue.py
-  - backend/app/main.py
-  - backend/app/api/shows.py
-  - backend/app/schemas/queue.py
-  - backend/app/workers/tasks.py
-  - docs/case-studies/local-vs-prod-verification-violation.md
   - docs/case-studies/transcription-queue-discussion.md
-  - backend/app/services/settings_cache.py
-  - backend/docker-compose.yml
   - backend/app/models/show_schedule.py
-  - backend/alembic/versions/h6c7d8e9f0a1_add_app_settings.py
-  - backend/app/models/__init__.py
-  - backend/app/api/settings.py
-  - backend/app/api/queue.py
   - backend/app/schemas/schedule.py
-  - backend/alembic/versions/f4a5b6c7d8e9_add_transcription_queue.py
+  - src/AdminPage.jsx
+  - backend/app/workers/cron_tick.py
+  - src/QueueTab.jsx
+  - backend/app/api/schedules.py
+  - docs/case-studies/local-vs-prod-verification-violation.md
+  - backend/alembic/versions/j8e9f0a1b2c3_add_day_of_week_to_show_schedules.py
+tests:
+  - backend/tests/test_cron_tick_is_due.py
 -->

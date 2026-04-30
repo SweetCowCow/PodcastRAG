@@ -7,7 +7,7 @@
 - [x] 1.2 建立 Alembic migration 檔案 `backend/alembic/versions/<timestamp>_add_day_of_week_to_show_schedules.py`：upgrade 加 `day_of_week INTEGER NOT NULL DEFAULT 0`，downgrade drop column
 - [x] 1.3 在 `backend/app/schemas/schedule.py` 的 `ScheduleUpsert` 與 `ScheduleResponse` 加 `day_of_week` 欄位，加 Pydantic 驗證 `Field(ge=0, le=6)`，`ScheduleUpsert` 中型別為 `int | None = None`（沿用其他 optional field 慣例）
 - [x] 1.4 更新 `backend/app/api/schedules.py` 的 `SCHEDULE_DEFAULTS` dict 加 `"day_of_week": 0`
-- [ ] 1.5 在本機執行 `alembic upgrade head` 驗證 migration 成功；用 `psql` 確認既有列 `day_of_week=0`
+- [x] 1.5 在本機執行 `alembic upgrade head` 驗證 migration 成功；用 `psql` 確認既有列 `day_of_week=0`
 - [x] 1.6 對齊 spec requirement「Show schedule settings persisted per show」— 確認本群所有任務涵蓋該 requirement 全部 scenarios（含 day_of_week 欄位、422 驗證、CASCADE、migration backfill）
 
 ## 2. Backend：cron tick triggers refresh and enqueue per schedule（weekly 改讀 day_of_week）
@@ -82,8 +82,8 @@
 
 ## 8. 整合測試與部署驗證
 
-- [ ] 8.1 本機 `docker compose up` 啟動全棧；用 `psql` 確認 migration 跑完後 `\d show_schedules` 看到 `day_of_week` 欄位
-- [ ] 8.2 在後台手動測試：建立新排程選 `每天` → 看到 daily hint；切 `每週` → 看到 segmented day picker、選星期三、看到 `每週三 ... 觸發` hint；切 `手動` → 執行時間與星期消失、看到「不會自動執行」hint
-- [ ] 8.3 用 `psql` 寫一筆 `frequency='hourly'` 的 row，重新整理打開 modal：select 顯示 `每天`、警示文案出現；按儲存後 DB row 變成 `frequency='daily'`
-- [ ] 8.4 在後台轉錄序列分頁：用 `psql` 注入或自然累積 5 種 status 各幾筆，逐一切 sub-tab 確認分組正確、count badge 對；拖曳測試在 `active` 分頁仍可動；強制取消、重試、忽略按鈕在對應 sub-tab 內仍可動
-- [ ] 8.5 push 到 Zeabur prod 並用 chrome-devtools-mcp 跑一次完整驗證流程（依使用者偏好）：登入後台 → 排程 modal 三種頻率切換 → 佇列三 sub-tab 切換 → 至少跑一次批次轉錄到完成
+- [x] 8.1 本機 `docker compose up` 啟動全棧；用 `psql` 確認 migration 跑完後 `\d show_schedules` 看到 `day_of_week` 欄位
+- [x] 8.2 在後台手動測試：建立新排程選 `每天` → 看到 daily hint；切 `每週` → 看到 segmented day picker、選星期三、看到 `每週三 ... 觸發` hint；切 `手動` → 執行時間與星期消失、看到「不會自動執行」hint
+- [x] 8.3 用 `psql` 寫一筆 `frequency='hourly'` 的 row，重新整理打開 modal：select 顯示 `每天`、警示文案出現；按儲存後 DB row 變成 `frequency='daily'`
+- [x] 8.4 在後台轉錄序列分頁：用 `psql` 注入或自然累積 5 種 status 各幾筆，逐一切 sub-tab 確認分組正確、count badge 對；拖曳測試在 `active` 分頁仍可動；強制取消、重試、忽略按鈕在對應 sub-tab 內仍可動
+- [x] 8.5 push 到 Zeabur prod 並用 chrome-devtools-mcp 跑一次完整驗證流程（依使用者偏好）：登入後台 → 排程 modal 三種頻率切換 → 佇列三 sub-tab 切換 → 至少跑一次批次轉錄到完成
