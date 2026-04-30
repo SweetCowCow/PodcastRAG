@@ -13,6 +13,7 @@ const QueueTab = ({ lang }) => {
   const [draggingId, setDraggingId] = React.useState(null);
   const [dragInFlight, setDragInFlight] = React.useState(false);
   const [pendingOverride, setPendingOverride] = React.useState(null); // optimistic order array of row ids
+  const [activeTab, setActiveTab] = React.useState('active'); // 'active' | 'completed' | 'closed'
   const debounceRef = React.useRef(null);
 
   // Polling
@@ -367,11 +368,70 @@ const QueueTab = ({ lang }) => {
         </div>
       )}
 
-      <Section title={t ? '排隊中（可拖動排序）' : 'Pending (drag to reorder)'} rows={pendingDisplay} status="pending" />
-      <Section title={t ? '執行中' : 'Running'} rows={queue.running} status="running" />
-      <Section title={t ? '完成' : 'Completed'} rows={queue.completed} status="completed" />
-      <Section title={t ? '失敗' : 'Failed'} rows={queue.failed} status="failed" />
-      <Section title={t ? '已取消' : 'Cancelled'} rows={queue.cancelled} status="cancelled" />
+      {/* Sub-tab switcher */}
+      {(() => {
+        const counts = {
+          active: (queue.pending?.length || 0) + (queue.running?.length || 0),
+          completed: queue.completed?.length || 0,
+          closed: (queue.failed?.length || 0) + (queue.cancelled?.length || 0),
+        };
+        const tabs = [
+          { key: 'active', label: t ? '進行中' : 'Active' },
+          { key: 'completed', label: t ? '已完成' : 'Completed' },
+          { key: 'closed', label: t ? '已結束' : 'Closed' },
+        ];
+        return (
+          <div style={{ display: 'flex', gap: 4, borderBottom: `1px solid ${TOKEN.surfaceBorder}`, marginBottom: 20 }}>
+            {tabs.map(tab => {
+              const selected = activeTab === tab.key;
+              return (
+                <button
+                  key={tab.key}
+                  onClick={() => setActiveTab(tab.key)}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    borderBottom: `2px solid ${selected ? TOKEN.accent : 'transparent'}`,
+                    color: selected ? TOKEN.text : TOKEN.textSecondary,
+                    fontSize: 14,
+                    fontWeight: selected ? 600 : 500,
+                    padding: '10px 16px',
+                    cursor: 'pointer',
+                    fontFamily: 'inherit',
+                    marginBottom: -1,
+                  }}
+                >
+                  {tab.label} ({counts[tab.key]})
+                </button>
+              );
+            })}
+          </div>
+        );
+      })()}
+
+      {activeTab === 'active' && (
+        <>
+          <Section title={t ? '排隊中（可拖動排序）' : 'Pending (drag to reorder)'} rows={pendingDisplay} status="pending" />
+          <Section title={t ? '執行中' : 'Running'} rows={queue.running} status="running" />
+        </>
+      )}
+      {activeTab === 'completed' && (
+        queue.completed.length === 0 ? (
+          <div style={{ color: TOKEN.textMuted, fontSize: 13, padding: '14px 16px', background: TOKEN.surface, border: `1px dashed ${TOKEN.surfaceBorder}`, borderRadius: 8 }}>
+            {t ? '空' : 'Empty'}
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {queue.completed.map(r => <Row key={r.id} row={r} status="completed" />)}
+          </div>
+        )
+      )}
+      {activeTab === 'closed' && (
+        <>
+          <Section title={t ? '失敗' : 'Failed'} rows={queue.failed} status="failed" />
+          <Section title={t ? '已取消' : 'Cancelled'} rows={queue.cancelled} status="cancelled" />
+        </>
+      )}
 
       <ConfirmModal
         open={confirmOpen}

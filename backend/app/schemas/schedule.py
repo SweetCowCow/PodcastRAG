@@ -16,6 +16,7 @@ class ScheduleUpsert(BaseModel):
     enabled: bool | None = None
     frequency: str | None = None
     run_time: str | None = None
+    day_of_week: int | None = Field(default=None, ge=0, le=6)
     whisper_model: str | None = None
     max_episodes_per_run: int = Field(..., ge=1)
 
@@ -27,6 +28,7 @@ class ScheduleResponse(BaseModel):
     enabled: bool
     frequency: str
     run_time: str
+    day_of_week: int
     whisper_model: str
     max_episodes_per_run: int
     last_refresh_at: datetime | None
