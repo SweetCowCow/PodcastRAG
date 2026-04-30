@@ -1,6 +1,7 @@
 // Transcription Queue Tab — admin queue rows + max_concurrent input + drag reorder
 const QueueTab = ({ lang }) => {
   const t = lang === 'zh';
+  const { isMobile } = useViewport();
   const [queue, setQueue] = React.useState({ pending: [], running: [], completed: [], failed: [], cancelled: [] });
   const [settings, setSettings] = React.useState({ max_concurrent_transcriptions: 1 });
   const [maxLocal, setMaxLocal] = React.useState('');
@@ -167,6 +168,45 @@ const QueueTab = ({ lang }) => {
     return ordered;
   }, [queue.pending, pendingOverride]);
 
+  // ── Mobile arrow-button reorder ──
+  const moveRow = async (row, direction) => {
+    if (dragInFlight) return;
+    const order = pendingDisplay;
+    const i = order.findIndex(r => r.id === row.id);
+    if (i < 0) return;
+    const targetIdx = direction === 'up' ? i - 1 : i + 1;
+    if (targetIdx < 0 || targetIdx >= order.length) return;
+    const target = order[targetIdx];
+    clearActionErr(row.id);
+    // optimistic reorder
+    const previousOverride = pendingOverride;
+    const newOrder = order.map(r => r.id);
+    newOrder.splice(i, 1);
+    newOrder.splice(targetIdx, 0, row.id);
+    setPendingOverride(newOrder);
+    setDragInFlight(true);
+    try {
+      const res = await fetch(`${API_BASE}/admin/queue/${row.id}/position`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ position: target.position }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        setActionErr(row.id, body.detail || `HTTP ${res.status}`);
+        setPendingOverride(previousOverride);
+        return;
+      }
+      await refetch();
+      setPendingOverride(null);
+    } catch (err) {
+      setActionErr(row.id, err.message || String(err));
+      setPendingOverride(previousOverride);
+    } finally {
+      setDragInFlight(false);
+    }
+  };
+
   const onDragStart = (e, row) => {
     if (dragInFlight) { e.preventDefault(); return; }
     e.dataTransfer.setData('text/plain', row.id);
@@ -225,34 +265,36 @@ const QueueTab = ({ lang }) => {
     return formatRelativeTime(ms, lang);
   };
 
-  const Row = ({ row, status }) => {
+  const Row = ({ row, status, canMoveUp, canMoveDown }) => {
     const isPending = status === 'pending';
     const isRunning = status === 'running';
     const isFailed = status === 'failed';
     const ignored = row.ignored;
     const dragging = draggingId === row.id;
     const errMsg = actionError[row.id];
+    const dragEnabled = isPending && !dragInFlight && !isMobile;
     return (
       <div
-        draggable={isPending && !dragInFlight}
-        onDragStart={isPending ? (e) => onDragStart(e, row) : undefined}
-        onDragEnd={isPending ? onDragEnd : undefined}
-        onDragOver={isPending ? onDragOverPending : undefined}
-        onDrop={isPending ? (e) => onDropPending(e, row) : undefined}
+        draggable={dragEnabled}
+        onDragStart={dragEnabled ? (e) => onDragStart(e, row) : undefined}
+        onDragEnd={dragEnabled ? onDragEnd : undefined}
+        onDragOver={dragEnabled ? onDragOverPending : undefined}
+        onDrop={dragEnabled ? (e) => onDropPending(e, row) : undefined}
         style={{
           background: ignored ? TOKEN.bg : TOKEN.surface,
           border: `1px solid ${TOKEN.surfaceBorder}`,
           borderRadius: 8,
           padding: '12px 14px',
           display: 'flex',
-          gap: 12,
-          alignItems: 'flex-start',
+          gap: isMobile ? 8 : 12,
+          flexDirection: isMobile ? 'column' : 'row',
+          alignItems: isMobile ? 'stretch' : 'flex-start',
           opacity: ignored ? 0.55 : (dragging ? 0.4 : 1),
-          cursor: isPending ? (dragInFlight ? 'wait' : 'grab') : 'default',
+          cursor: dragEnabled ? 'grab' : (isPending && dragInFlight && !isMobile ? 'wait' : 'default'),
           transition: 'opacity 0.15s',
         }}
       >
-        {isPending && (
+        {isPending && !isMobile && (
           <span style={{ color: TOKEN.textMuted, fontSize: 14, marginTop: 2 }}>⋮⋮</span>
         )}
         <div style={{ flex: 1, minWidth: 0 }}>
@@ -295,7 +337,13 @@ const QueueTab = ({ lang }) => {
             </div>
           )}
         </div>
-        <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+        <div style={{ display: 'flex', gap: 6, flexShrink: 0, flexWrap: isMobile ? 'wrap' : 'nowrap' }}>
+          {isPending && isMobile && (
+            <>
+              <Btn size="sm" variant="ghost" icon="chevronUp" onClick={() => moveRow(row, 'up')} disabled={!canMoveUp}>{''}</Btn>
+              <Btn size="sm" variant="ghost" icon="chevronDown" onClick={() => moveRow(row, 'down')} disabled={!canMoveDown}>{''}</Btn>
+            </>
+          )}
           {isPending && <Btn size="sm" variant="secondary" onClick={() => cancelPending(row)}>{t ? '取消' : 'Cancel'}</Btn>}
           {isRunning && <Btn size="sm" variant="danger" onClick={() => openForceCancel(row)}>{t ? '強制取消' : 'Force Cancel'}</Btn>}
           {isFailed && !ignored && (
@@ -322,10 +370,18 @@ const QueueTab = ({ lang }) => {
         </div>
       ) : (
         <div
-          onDragOver={status === 'pending' ? onDragOverPending : undefined}
+          onDragOver={status === 'pending' && !isMobile ? onDragOverPending : undefined}
           style={{ display: 'flex', flexDirection: 'column', gap: 8, pointerEvents: (status === 'pending' && dragInFlight) ? 'none' : 'auto' }}
         >
-          {rows.map(r => <Row key={r.id} row={r} status={status} />)}
+          {rows.map((r, i) => (
+            <Row
+              key={r.id}
+              row={r}
+              status={status}
+              canMoveUp={status === 'pending' && i > 0 && !dragInFlight}
+              canMoveDown={status === 'pending' && i < rows.length - 1 && !dragInFlight}
+            />
+          ))}
         </div>
       )}
     </div>
@@ -411,7 +467,7 @@ const QueueTab = ({ lang }) => {
 
       {activeTab === 'active' && (
         <>
-          <Section title={t ? '排隊中（可拖動排序）' : 'Pending (drag to reorder)'} rows={pendingDisplay} status="pending" />
+          <Section title={isMobile ? (t ? '排隊中' : 'Pending') : (t ? '排隊中（可拖動排序）' : 'Pending (drag to reorder)')} rows={pendingDisplay} status="pending" />
           <Section title={t ? '執行中' : 'Running'} rows={queue.running} status="running" />
         </>
       )}

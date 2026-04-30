@@ -3,6 +3,33 @@
 // can point the frontend at its own backend without rebuilding the JSX.
 const API_BASE = (typeof window !== 'undefined' && window.__API_BASE__) || 'http://localhost:8000';
 
+// --- useViewport: shared hook returning { isMobile } ---
+// isMobile === window.innerWidth < 768. Initial value taken synchronously
+// from window.innerWidth to avoid first-render flash. Resize listener wraps
+// state updates in requestAnimationFrame to coalesce within a frame, and
+// only triggers setState when isMobile actually changes (so resizes within
+// the same band cause no extra renders).
+const useViewport = () => {
+  const [isMobile, setIsMobile] = React.useState(() => (typeof window !== 'undefined' ? window.innerWidth < 768 : false));
+  React.useEffect(() => {
+    let rafId = 0;
+    const onResize = () => {
+      if (rafId) return;
+      rafId = window.requestAnimationFrame(() => {
+        rafId = 0;
+        const next = window.innerWidth < 768;
+        setIsMobile(prev => (prev === next ? prev : next));
+      });
+    };
+    window.addEventListener('resize', onResize);
+    return () => {
+      window.removeEventListener('resize', onResize);
+      if (rafId) window.cancelAnimationFrame(rafId);
+    };
+  }, []);
+  return { isMobile };
+};
+
 const TOKEN = {
   bg: '#0b1120',
   surface: '#131c2e',
@@ -49,6 +76,10 @@ const Icon = ({ name, size = 18, color = 'currentColor', style = {} }) => {
     podcast: <svg viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={s}><circle cx="12" cy="11" r="1"/><path d="M11 17a1 1 0 0 1 2 0c0 .5-.34 3-.5 4.5a.5.5 0 0 1-1 0c-.16-1.5-.5-4-.5-4.5z"/><path d="M8 14a5 5 0 1 1 8 0"/><path d="M5 18a9 9 0 1 1 14 0"/></svg>,
     moreVertical: <svg viewBox="0 0 24 24" fill={color} stroke="none" style={s}><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>,
     list: <svg viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={s}><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>,
+    menu: <svg viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={s}><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>,
+    chevronUp: <svg viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={s}><polyline points="18 15 12 9 6 15"/></svg>,
+    chevronDown: <svg viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={s}><polyline points="6 9 12 15 18 9"/></svg>,
+    x: <svg viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={s}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>,
   };
   return paths[name] || <svg viewBox="0 0 24 24" style={s}><circle cx="12" cy="12" r="10" stroke={color} strokeWidth="2" fill="none"/></svg>;
 };
@@ -73,10 +104,12 @@ const Badge = ({ children, variant = 'default' }) => {
 // --- Button ---
 const Btn = ({ children, onClick, variant = 'primary', size = 'md', disabled, style: extraStyle = {}, icon }) => {
   const [hovered, setHovered] = React.useState(false);
+  const { isMobile } = useViewport();
   const base = {
     display: 'inline-flex', alignItems: 'center', gap: 6, borderRadius: 8,
     cursor: disabled ? 'not-allowed' : 'pointer', border: 'none', fontWeight: 500,
     transition: 'all 0.15s', opacity: disabled ? 0.5 : 1, fontFamily: 'inherit',
+    ...(isMobile && { minHeight: 44, minWidth: 44, justifyContent: 'center' }),
   };
   const sizes = { sm: { padding: '5px 12px', fontSize: 13 }, md: { padding: '8px 16px', fontSize: 14 }, lg: { padding: '11px 22px', fontSize: 15 } };
   const variants = {
@@ -111,6 +144,8 @@ const Input = ({ value, onChange, placeholder, type = 'text', icon, style: extra
 const TopNav = ({ lang, page, setPage, onToggleLang, onAdminClick }) => {
   const t = lang === 'zh';
   const isAdmin = page && page.startsWith('admin');
+  const { isMobile } = useViewport();
+  const [menuOpen, setMenuOpen] = React.useState(false);
 
   const mainItems = [
     { id: 'select', icon: 'podcast', label: t ? '節目選擇' : 'Shows' },
@@ -125,44 +160,87 @@ const TopNav = ({ lang, page, setPage, onToggleLang, onAdminClick }) => {
     { id: 'admin-external-api', icon: 'globe', label: t ? '外部 API 狀態' : 'External API Status' },
   ];
 
+  const onMainClick = (id) => {
+    setMenuOpen(false);
+    if (id === 'admin') onAdminClick();
+    else setPage(id);
+  };
+
   return (
-    <div style={{ flexShrink: 0, borderBottom: `1px solid ${TOKEN.surfaceBorder}`, background: TOKEN.surface }}>
+    <div style={{ flexShrink: 0, borderBottom: `1px solid ${TOKEN.surfaceBorder}`, background: TOKEN.surface, position: 'relative' }}>
       {/* Primary bar */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 0, padding: '0 28px', height: 56 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 0, padding: isMobile ? '0 14px' : '0 28px', height: 56 }}>
+        {isMobile && (
+          <button onClick={() => setMenuOpen(v => !v)} aria-label={t ? '主選單' : 'Main menu'}
+            style={{ width: 44, height: 44, borderRadius: 8, background: menuOpen ? TOKEN.accentDim : 'transparent', border: 'none', color: TOKEN.text, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: 0, marginRight: 8 }}>
+            <Icon name="menu" size={20} color="currentColor" />
+          </button>
+        )}
         {/* Logo */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginRight: 32 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginRight: isMobile ? 0 : 32, flex: isMobile ? 1 : 'none' }}>
           <div style={{ width: 28, height: 28, borderRadius: 7, background: TOKEN.accentDim, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <Icon name="zap" size={15} color={TOKEN.accent} />
           </div>
           <span style={{ color: TOKEN.text, fontWeight: 700, fontSize: 15 }}>PodcastRAG</span>
-          <span style={{ color: TOKEN.textMuted, fontSize: 11, marginLeft: -4 }}>beta</span>
+          {!isMobile && <span style={{ color: TOKEN.textMuted, fontSize: 11, marginLeft: -4 }}>beta</span>}
         </div>
 
-        {/* Main nav items */}
-        <nav style={{ display: 'flex', alignItems: 'stretch', gap: 2, flex: 1 }}>
-          {mainItems.map(item => {
-            const active = item.id === 'select' ? !isAdmin && (page === 'select' || page === 'query' || page === 'transcript') : isAdmin;
-            return (
-              <TopNavItem key={item.id} icon={item.icon} label={item.label} active={active}
-                onClick={() => item.id === 'admin' ? onAdminClick() : setPage(item.id)} />
-            );
-          })}
-        </nav>
+        {/* Desktop: main nav items inline */}
+        {!isMobile && (
+          <nav style={{ display: 'flex', alignItems: 'stretch', gap: 2, flex: 1 }}>
+            {mainItems.map(item => {
+              const active = item.id === 'select' ? !isAdmin && (page === 'select' || page === 'query' || page === 'transcript') : isAdmin;
+              return (
+                <TopNavItem key={item.id} icon={item.icon} label={item.label} active={active}
+                  onClick={() => onMainClick(item.id)} />
+              );
+            })}
+          </nav>
+        )}
 
-        {/* Right: lang toggle */}
-        <button onClick={onToggleLang}
-          style={{ display: 'flex', alignItems: 'center', gap: 6, background: TOKEN.surfaceRaised, border: `1px solid ${TOKEN.surfaceBorder}`, borderRadius: 7, padding: '5px 11px', color: TOKEN.textSecondary, cursor: 'pointer', fontSize: 13, fontFamily: 'inherit' }}>
-          <Icon name="globe" size={13} />
-          {lang === 'zh' ? '中文' : 'EN'}
-        </button>
+        {/* Right: lang toggle (desktop only — mobile lang is in dropdown) */}
+        {!isMobile && (
+          <button onClick={onToggleLang}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, background: TOKEN.surfaceRaised, border: `1px solid ${TOKEN.surfaceBorder}`, borderRadius: 7, padding: '5px 11px', color: TOKEN.textSecondary, cursor: 'pointer', fontSize: 13, fontFamily: 'inherit' }}>
+            <Icon name="globe" size={13} />
+            {lang === 'zh' ? '中文' : 'EN'}
+          </button>
+        )}
       </div>
 
-      {/* Admin secondary bar */}
+      {/* Mobile hamburger dropdown */}
+      {isMobile && menuOpen && (
+        <React.Fragment>
+          <div onClick={() => setMenuOpen(false)}
+            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 998 }} />
+          <div role="menu"
+            style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: TOKEN.surface, borderBottom: `1px solid ${TOKEN.surfaceBorder}`, padding: '8px 0', zIndex: 999, boxShadow: '0 8px 24px rgba(0,0,0,0.4)' }}>
+            {mainItems.map(item => {
+              const active = item.id === 'select' ? !isAdmin && (page === 'select' || page === 'query' || page === 'transcript') : isAdmin;
+              return (
+                <button key={item.id} onClick={() => onMainClick(item.id)}
+                  style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', padding: '14px 20px', minHeight: 44, background: active ? TOKEN.accentDim : 'transparent', border: 'none', color: active ? TOKEN.accent : TOKEN.text, fontSize: 15, fontWeight: active ? 600 : 500, textAlign: 'left', cursor: 'pointer', fontFamily: 'inherit' }}>
+                  <Icon name={item.icon} size={18} color="currentColor" />
+                  {item.label}
+                </button>
+              );
+            })}
+            <div style={{ height: 1, background: TOKEN.surfaceBorder, margin: '6px 0' }} />
+            <button onClick={() => { onToggleLang(); setMenuOpen(false); }}
+              style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', padding: '14px 20px', minHeight: 44, background: 'transparent', border: 'none', color: TOKEN.textSecondary, fontSize: 14, textAlign: 'left', cursor: 'pointer', fontFamily: 'inherit' }}>
+              <Icon name="globe" size={16} color="currentColor" />
+              {lang === 'zh' ? '切換為 English' : '切換為中文'}
+            </button>
+          </div>
+        </React.Fragment>
+      )}
+
+      {/* Admin secondary bar — desktop: flex; mobile: horizontal scroll */}
       {isAdmin && (
-        <div style={{ display: 'flex', alignItems: 'stretch', padding: '0 28px', height: 42, borderTop: `1px solid ${TOKEN.surfaceBorder}`, background: TOKEN.bg, gap: 2 }}>
+        <div style={{ display: 'flex', alignItems: 'stretch', padding: isMobile ? '0 8px' : '0 28px', height: isMobile ? 48 : 42, borderTop: `1px solid ${TOKEN.surfaceBorder}`, background: TOKEN.bg, gap: 2, overflowX: isMobile ? 'auto' : 'visible', flexWrap: 'nowrap', whiteSpace: 'nowrap' }}>
           {adminItems.map(item => (
             <TopNavItem key={item.id} icon={item.icon} label={item.label} active={page === item.id}
-              onClick={() => setPage(item.id)} secondary />
+              onClick={() => setPage(item.id)} secondary mobile={isMobile} />
           ))}
         </div>
       )}
@@ -170,14 +248,16 @@ const TopNav = ({ lang, page, setPage, onToggleLang, onAdminClick }) => {
   );
 };
 
-const TopNavItem = ({ icon, label, active, onClick, secondary }) => {
+const TopNavItem = ({ icon, label, active, onClick, secondary, mobile }) => {
   const [hovered, setHovered] = React.useState(false);
   return (
     <button onClick={onClick} onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}
       style={{
         display: 'inline-flex', alignItems: 'center', gap: 6,
         padding: secondary ? '0 14px' : '0 16px',
-        height: '100%', background: 'none', border: 'none',
+        height: '100%', minHeight: mobile ? 44 : undefined,
+        flexShrink: 0,
+        background: 'none', border: 'none',
         borderBottom: `2px solid ${active ? TOKEN.accent : 'transparent'}`,
         color: active ? TOKEN.accent : hovered ? TOKEN.text : TOKEN.textSecondary,
         cursor: 'pointer', fontSize: secondary ? 13 : 14,
@@ -192,12 +272,13 @@ const TopNavItem = ({ icon, label, active, onClick, secondary }) => {
 
 // --- Confirm Modal (for destructive actions) ---
 const ConfirmModal = ({ open, title, message, confirmLabel = 'Confirm', cancelLabel = 'Cancel', danger = false, loading = false, onConfirm, onCancel }) => {
+  const { isMobile } = useViewport();
   if (!open) return null;
   return (
     <div onClick={loading ? undefined : onCancel}
-      style={{ position: 'fixed', inset: 0, background: 'rgba(4,8,20,0.72)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+      style={{ position: 'fixed', inset: 0, background: 'rgba(4,8,20,0.72)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: isMobile ? 12 : 0 }}>
       <div onClick={e => e.stopPropagation()}
-        style={{ background: TOKEN.surface, border: `1px solid ${TOKEN.surfaceBorder}`, borderRadius: 14, padding: '22px 26px', minWidth: 380, maxWidth: 480, boxShadow: '0 20px 60px rgba(0,0,0,0.5)' }}>
+        style={{ background: TOKEN.surface, border: `1px solid ${TOKEN.surfaceBorder}`, borderRadius: 14, padding: isMobile ? '18px 18px' : '22px 26px', width: 'min(95vw, 520px)', boxShadow: '0 20px 60px rgba(0,0,0,0.5)' }}>
         <div style={{ color: TOKEN.text, fontWeight: 700, fontSize: 16, marginBottom: 10 }}>{title}</div>
         <div style={{ color: TOKEN.textSecondary, fontSize: 14, lineHeight: 1.6, marginBottom: 20, whiteSpace: 'pre-line' }}>{message}</div>
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
@@ -211,12 +292,13 @@ const ConfirmModal = ({ open, title, message, confirmLabel = 'Confirm', cancelLa
 
 // --- Form Modal (for non-destructive form submissions) ---
 const FormModal = ({ open, title, children, confirmLabel = 'Confirm', cancelLabel = 'Cancel', onConfirm, onCancel, submitDisabled = false }) => {
+  const { isMobile } = useViewport();
   if (!open) return null;
   return (
     <div onClick={onCancel}
-      style={{ position: 'fixed', inset: 0, background: 'rgba(4,8,20,0.72)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+      style={{ position: 'fixed', inset: 0, background: 'rgba(4,8,20,0.72)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: isMobile ? 12 : 0 }}>
       <div onClick={e => e.stopPropagation()}
-        style={{ background: TOKEN.surface, border: `1px solid ${TOKEN.surfaceBorder}`, borderRadius: 14, padding: '22px 26px', minWidth: 420, maxWidth: 520, boxShadow: '0 20px 60px rgba(0,0,0,0.5)' }}>
+        style={{ background: TOKEN.surface, border: `1px solid ${TOKEN.surfaceBorder}`, borderRadius: 14, padding: isMobile ? '18px 18px' : '22px 26px', width: 'min(95vw, 520px)', maxHeight: isMobile ? '90vh' : 'none', overflowY: isMobile ? 'auto' : 'visible', boxShadow: '0 20px 60px rgba(0,0,0,0.5)' }}>
         <div style={{ color: TOKEN.text, fontWeight: 700, fontSize: 16, marginBottom: 14 }}>{title}</div>
         <div style={{ minHeight: 60, marginBottom: 20 }}>{children}</div>
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
@@ -233,6 +315,7 @@ const FormModal = ({ open, title, children, confirmLabel = 'Confirm', cancelLabe
 // Renders a "⋯" trigger button; menu opens on click, closes on backdrop click or ESC.
 const OverflowMenu = ({ items, ariaLabel = 'More actions' }) => {
   const [open, setOpen] = React.useState(false);
+  const { isMobile } = useViewport();
   React.useEffect(() => {
     if (!open) return undefined;
     const onKey = (e) => { if (e.key === 'Escape') setOpen(false); };
@@ -242,8 +325,8 @@ const OverflowMenu = ({ items, ariaLabel = 'More actions' }) => {
   return (
     <div style={{ position: 'relative', display: 'inline-block' }}>
       <button type="button" aria-label={ariaLabel} onClick={(e) => { e.stopPropagation(); setOpen(v => !v); }}
-        style={{ width: 30, height: 30, borderRadius: 8, border: `1px solid ${TOKEN.surfaceBorder}`, background: open ? TOKEN.accentDim : TOKEN.surfaceRaised, color: TOKEN.textSecondary, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}>
-        <Icon name="moreVertical" size={16} color="currentColor" />
+        style={{ width: isMobile ? 44 : 30, height: isMobile ? 44 : 30, borderRadius: 8, border: `1px solid ${TOKEN.surfaceBorder}`, background: open ? TOKEN.accentDim : TOKEN.surfaceRaised, color: TOKEN.textSecondary, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}>
+        <Icon name="moreVertical" size={isMobile ? 18 : 16} color="currentColor" />
       </button>
       {open && (
         <React.Fragment>
@@ -320,4 +403,4 @@ const formatRelativeTime = (tsMs, lang) => {
   return t ? `${d} 天前` : `${d} day${d === 1 ? '' : 's'} ago`;
 };
 
-Object.assign(window, { API_BASE, TOKEN, Icon, Badge, Btn, Input, TopNav, ConfirmModal, FormModal, OverflowMenu, ProgressCounts, categoryToBadge, formatRelativeTime });
+Object.assign(window, { API_BASE, TOKEN, Icon, Badge, Btn, Input, TopNav, ConfirmModal, FormModal, OverflowMenu, ProgressCounts, categoryToBadge, formatRelativeTime, useViewport });

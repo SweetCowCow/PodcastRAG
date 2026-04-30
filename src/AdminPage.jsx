@@ -407,6 +407,7 @@ const TranscriptionProgressPanel = ({ showId, expanded, lang }) => {
 
 const ScheduleTab = ({ lang }) => {
   const t = lang === 'zh';
+  const { isMobile } = useViewport();
   const [shows, setShows] = React.useState(null);
   const [loading, setLoading] = React.useState(true);
   const [fetchError, setFetchError] = React.useState(null);
@@ -865,7 +866,7 @@ const ScheduleTab = ({ lang }) => {
             <Input value={form.name} onChange={e => setF('name', e.target.value)} placeholder={t ? '輸入或自動填入' : 'Enter or auto-filled from RSS'} />
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14, marginBottom: 16 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr 1fr', gap: 12, marginBottom: 16 }}>
             {/* Frequency */}
             <div>
               <label style={{ display: 'block', color: TOKEN.textMuted, fontSize: 12, marginBottom: 6 }}>{t ? '排程頻率' : 'Frequency'}</label>
@@ -992,8 +993,8 @@ const ScheduleTab = ({ lang }) => {
               { label: t ? '刪除節目' : 'Delete Show', icon: 'trash', onClick: () => openDeleteShowConfirm(item), danger: true },
             ];
             return (
-              <div key={item.show_id} style={{ background: TOKEN.surface, border: `1px solid ${checked ? TOKEN.accent + '88' : TOKEN.surfaceBorder}`, borderRadius: 12, padding: '18px 22px' }}>
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap' }}>
+              <div key={item.show_id} style={{ background: TOKEN.surface, border: `1px solid ${checked ? TOKEN.accent + '88' : TOKEN.surfaceBorder}`, borderRadius: 12, padding: isMobile ? '14px 16px' : '18px 22px' }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: isMobile ? 12 : 16, flexWrap: 'wrap', flexDirection: isMobile ? 'column' : 'row' }}>
                   <input type="checkbox" checked={checked} onChange={() => toggleSelect(item.show_id)}
                     aria-label={t ? `選取 ${item.show_title}` : `Select ${item.show_title}`}
                     style={{ accentColor: TOKEN.accent, width: 16, height: 16, cursor: 'pointer', marginTop: 5, flexShrink: 0 }} />
@@ -1010,7 +1011,7 @@ const ScheduleTab = ({ lang }) => {
                       {sched && <Badge variant="muted">{sched.whisper_model}</Badge>}
                     </div>
                   </div>
-                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: isMobile ? 'flex-start' : 'flex-end', alignItems: 'center', width: isMobile ? '100%' : 'auto' }}>
                     <Btn size="sm" variant="ghost"
                       icon={expandedIds.has(item.show_id) ? 'chevronLeft' : 'chevronRight'}
                       onClick={() => toggleExpand(item.show_id)}>
@@ -1156,6 +1157,7 @@ const ScheduleTab = ({ lang }) => {
                         onClick={() => setEditState(s => ({ ...s, form: { ...s.form, day_of_week: i } }))}
                         style={{
                           minWidth: 44,
+                          minHeight: isMobile ? 44 : undefined,
                           padding: '8px 12px',
                           borderRadius: 8,
                           border: `1px solid ${selected ? TOKEN.accent : TOKEN.surfaceBorder}`,
