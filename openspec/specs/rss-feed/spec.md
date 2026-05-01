@@ -66,7 +66,7 @@ code:
 ---
 ### Requirement: Create show endpoint
 
-The backend SHALL expose `POST /shows` that accepts an RSS URL, parses the feed, persists the show and all episodes returned by the feed, and returns the created show with episode count. The parser SHALL NOT impose an arbitrary upper bound on the number of episodes persisted from a single feed; if the feed contains 1 episode or 1000 episodes, all SHALL be persisted.
+The backend SHALL expose `POST /shows` that accepts an RSS URL, parses the feed, persists the show and all episodes returned by the feed, and returns the created show with episode count. The parser SHALL NOT impose an arbitrary upper bound on the number of episodes persisted from a single feed; if the feed contains 1 episode or 1000 episodes, all SHALL be persisted. The endpoint SHALL catch RSS parsing and timeout exceptions and convert them to HTTP errors whose body matches the unified error response schema, mapping `RssParseError` to HTTP 422 with `error_code = "rss_invalid"` and `httpx.TimeoutException` (or `asyncio.TimeoutError`) to HTTP 504 with `error_code = "rss_timeout"`.
 
 #### Scenario: New show created
 
@@ -76,12 +76,17 @@ The backend SHALL expose `POST /shows` that accepts an RSS URL, parses the feed,
 #### Scenario: Duplicate RSS URL rejected
 
 - **WHEN** `POST /shows` is called with an `rss_url` matching an existing show
-- **THEN** the response SHALL be HTTP 409 with an error message indicating the feed is already registered
+- **THEN** the response SHALL be HTTP 409 with body `{"detail": {"error_code": "show_duplicate_rss", "provider": null, "detail": <message>}}`
 
 #### Scenario: Invalid RSS feed rejected
 
-- **WHEN** `POST /shows` is called with a URL that fails to parse
-- **THEN** the response SHALL be HTTP 400 with an error message describing the parse failure, and no show record SHALL be persisted
+- **WHEN** `POST /shows` is called with a URL whose response cannot be parsed as a valid RSS feed
+- **THEN** the response SHALL be HTTP 422 with body `{"detail": {"error_code": "rss_invalid", "provider": null, "detail": <message>}}` and no show record SHALL be persisted
+
+#### Scenario: RSS fetch timeout returns 504
+
+- **WHEN** `POST /shows` is called with a URL whose remote server does not respond within the configured timeout
+- **THEN** the response SHALL be HTTP 504 with body `{"detail": {"error_code": "rss_timeout", "provider": null, "detail": <message>}}` and no show record SHALL be persisted
 
 #### Scenario: Feed with more than 200 episodes is persisted in full
 
@@ -97,10 +102,23 @@ The backend SHALL expose `POST /shows` that accepts an RSS URL, parses the feed,
 
 
 <!-- @trace
-source: fix-rss-200-cap
-updated: 2026-04-26
+source: friendly-external-api-errors
+updated: 2026-05-01
 code:
-  - backend/app/services/rss_parser.py
+  - backend/app/main.py
+  - backend/app/api/shows.py
+  - src/i18n.jsx
+  - docs/case-studies/transcription-queue-discussion.md
+  - docs/case-studies/local-vs-prod-verification-violation.md
+  - backend/app/schemas/errors.py
+  - src/QueryPage.jsx
+  - backend/app/services/llm_config.py
+  - backend/app/api/query.py
+  - index.html
+tests:
+  - backend/tests/test_provider_label.py
+  - backend/tests/conftest.py
+  - backend/tests/test_error_responses.py
 -->
 
 ---
@@ -363,22 +381,22 @@ code:
 ---
 ### Requirement: RSS preview endpoint
 
-The backend SHALL expose `GET /rss-preview?url=<encoded_rss_url>` that fetches and parses the RSS feed at the given URL and returns a preview without creating any database records. The response SHALL include `title` (feed title), `episode_count` (total number of items in the feed), and `latest_published_at` (publication date of the most recent item, ISO 8601 string or null). The endpoint SHALL apply a 5-second HTTP timeout when fetching the remote feed.
+The backend SHALL expose `GET /rss-preview?url=<encoded_rss_url>` that fetches and parses the RSS feed at the given URL and returns a preview without creating any database records. The response SHALL include `title` (feed title), `episode_count` (total number of items in the feed), and `latest_published_at` (publication date of the most recent item, ISO 8601 string or null). The endpoint SHALL apply a 5-second HTTP timeout when fetching the remote feed. Error responses SHALL match the unified error response schema, mapping parse failures to HTTP 422 with `error_code = "rss_invalid"` and timeouts to HTTP 504 with `error_code = "rss_timeout"`.
 
 #### Scenario: Valid RSS URL returns preview
 
 - **WHEN** a client calls `GET /rss-preview?url=<valid_rss_url>` and the remote feed is reachable
 - **THEN** the backend SHALL return HTTP 200 with `title`, `episode_count`, and `latest_published_at`
 
-#### Scenario: Unreachable or invalid URL returns error
+#### Scenario: Invalid feed returns 422 with rss_invalid
 
-- **WHEN** a client calls `GET /rss-preview?url=<invalid_or_unreachable_url>` and the feed fetch fails or the response is not valid RSS/Atom
-- **THEN** the backend SHALL return HTTP 422 with an error message describing the failure
+- **WHEN** a client calls `GET /rss-preview?url=<invalid_url>` and the response is not valid RSS/Atom
+- **THEN** the backend SHALL return HTTP 422 with body `{"detail": {"error_code": "rss_invalid", "provider": null, "detail": <message>}}`
 
 #### Scenario: Remote feed times out
 
 - **WHEN** the remote RSS URL does not respond within 5 seconds
-- **THEN** the backend SHALL return HTTP 504 with an error message indicating timeout
+- **THEN** the backend SHALL return HTTP 504 with body `{"detail": {"error_code": "rss_timeout", "provider": null, "detail": <message>}}`
 
 #### Scenario: Frontend RSS preview uses real endpoint
 
@@ -386,36 +404,21 @@ The backend SHALL expose `GET /rss-preview?url=<encoded_rss_url>` that fetches a
 - **THEN** the frontend SHALL call `GET /rss-preview?url=<encoded_url>` and display the returned `title` and `episode_count`; the hardcoded setTimeout mock SHALL NOT be used
 
 <!-- @trace
-source: transcription-schedule-api
-updated: 2026-04-24
+source: friendly-external-api-errors
+updated: 2026-05-01
 code:
-  - PodcastRAG.html
-  - config.js
-  - backend/app/schemas/episode.py
-  - backend/docker-compose.yml
-  - backend/app/schemas/show.py
-  - backend/Dockerfile
-  - backend/app/api/shows.py
-  - backend/app/api/schedules.py
-  - entrypoint.sh
-  - backend/app/api/query.py
-  - backend/app/services/rag.py
-  - index.html
-  - backend/app/models/__init__.py
-  - src/Shared.jsx
-  - prod-select.png
-  - backend/app/schemas/schedule.py
   - backend/app/main.py
-  - backend/app/models/show_schedule.py
-  - .mcp.json
-  - src/PodcastSelect.jsx
-  - backend/alembic/versions/d2e3f4a5b6c7_add_show_schedules.py
-  - zbpack.frontend.json
-  - backend/app/api/episodes.py
-  - src/App.jsx
-  - Dockerfile
-  - src/AdminPage.jsx
-  - CLAUDE.md
+  - backend/app/api/shows.py
+  - src/i18n.jsx
+  - docs/case-studies/transcription-queue-discussion.md
+  - docs/case-studies/local-vs-prod-verification-violation.md
+  - backend/app/schemas/errors.py
   - src/QueryPage.jsx
-  - src/TranscriptPage.jsx
+  - backend/app/services/llm_config.py
+  - backend/app/api/query.py
+  - index.html
+tests:
+  - backend/tests/test_provider_label.py
+  - backend/tests/conftest.py
+  - backend/tests/test_error_responses.py
 -->
