@@ -7,7 +7,7 @@
 // transcript_chunks count is estimated (~50 chunks/episode); zeabur-service-exec
 // hits Cloudflare 524 timeout so direct DB query was unreliable.
 const STATS_AS_OF = '2026-05-01';
-const STATS_CHANGES_COUNT = 24;
+const STATS_CHANGES_COUNT = 25;
 const STATS_EPISODES_COUNT = 137;        // transcripts.status = 'completed'
 const STATS_VECTORS_COUNT = 6850;        // ~estimate: 137 × ~50 chunks/ep
 
@@ -29,6 +29,17 @@ const MILESTONE_LABELS = {
 // Entries — newest milestone first; within each milestone newest date first.
 const RELEASE_LOG = [
   // ─── v0.4 — Mobile & Friendly Errors (5/01, 4/30) ───
+  {
+    date: '2026-05-01', slug: 'release-log-and-presentation', milestone: 'v0.4', tag: 'feature',
+    title: {
+      zh: '新增更新日誌 + 簡報頁',
+      en: 'Release Log + Presentation Pages',
+    },
+    summary: {
+      zh: '前端加入「更新日誌」分頁,把過去 24 個 archived changes 翻成白話雙語條目按里程碑分組。獨立的 #presentation 簡報頁 13 張 slide 介紹系統演進,可同步產出 .pptx。',
+      en: 'Adds a Release Log tab translating 24 historic archived changes into plain bilingual entries grouped by milestone, plus a standalone #presentation deck (13 slides) that can also export as .pptx.',
+    },
+  },
   {
     date: '2026-05-01', slug: 'responsive-mobile-layout', milestone: 'v0.4', tag: 'ui',
     title: {
