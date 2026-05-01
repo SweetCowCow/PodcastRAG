@@ -40,23 +40,23 @@
 
 - [x] 7.1 修改 `src/QueryPage.jsx` 兩處 fetch 失敗區塊（chat 與 search 模式），原本 `await res.text()` 改為 `await res.json().catch(() => null)` 然後 `formatError(body, lang)` 顯示
 - [x] 7.2 fetch reject（network failure）case 改用 `networkErrorMessage(lang)`
-- [ ] 7.3 prod 部署前用 `python3 -m http.server 8080` 開 PodcastRAG.html 本機快檢：故意把 backend URL 指向不存在的 host 觸發 fetch reject，確認顯示「網路連線失敗」而非 "Failed to fetch"
+- [x] 7.3 prod 部署前用 `python3 -m http.server 8080` 開 PodcastRAG.html 本機快檢：故意把 backend URL 指向不存在的 host 觸發 fetch reject，確認顯示「網路連線失敗」而非 "Failed to fetch"
 
 ## 8. 部署與 prod 驗證
 
-- [ ] 8.1 `git add` 所有改動 → commit message `feat: friendly external API error responses (i18n + global handler)` → push 到 GitHub 觸發 Zeabur build；等 backend / frontend 兩個 service 都 deployed 完成
-- [ ] 8.2 prod 驗證 case A — quota：用 chrome-devtools-mcp 開 https://podcastrag.zeabur.app，登入後台關掉 OpenAI 金鑰（或設成已知無 quota 的 key），切到節目查詢頁送一次 chat → 預期顯示「OpenAI 配額不足」中文訊息（lang=zh）；切 lang=en 預期顯示英文版
-- [ ] 8.3 prod 驗證 case B — auth：把 `llm_config.answer_api_key` 改成空字串或無效字串，送 chat → 預期 502 + 「OpenAI API 金鑰失效，請至後台更新」
-- [ ] 8.4 prod 驗證 case C — Zeabur AI Hub provider label：把 `answer_base_url` 暫時設為含 `zeabur` 的 base_url（即使 key 無效也行）→ 觸發 chat → 預期訊息含 `"Zeabur AI Hub"` 字樣（不是 OpenAI）；驗證後恢復原設定
-- [ ] 8.5 prod 驗證 case D — RSS：在後台「新增節目」輸入無效 URL（如 `https://example.com/notfound`）→ 預期 422 + 「RSS Feed 格式錯誤」；輸入會逾時的 URL → 預期 504 + 「RSS Feed 逾時」
-- [ ] 8.6 prod 驗證 case E — CORS header：chrome devtools network panel 檢查 8.2–8.5 期間錯誤回應都帶 `Access-Control-Allow-Origin` header（驗證 global handler + per-call HTTPException 兩條路徑都正確走過 CORSMiddleware）
-- [ ] 8.7 回歸：原本能 work 的查詢（chat + search）仍正常回 200；後台「外部 API 狀態」tab 仍能讀到 `api_health.record` 的歷史事件（確認本次改動沒破壞 health tracking）
+- [x] 8.1 `git add` 所有改動 → commit message `feat: friendly external API error responses (i18n + global handler)` → push 到 GitHub 觸發 Zeabur build；等 backend / frontend 兩個 service 都 deployed 完成
+- [x] 8.2 prod 驗證 case A — quota：用 chrome-devtools-mcp 開 https://podcastrag.zeabur.app，登入後台關掉 OpenAI 金鑰（或設成已知無 quota 的 key），切到節目查詢頁送一次 chat → 預期顯示「OpenAI 配額不足」中文訊息（lang=zh）；切 lang=en 預期顯示英文版
+- [x] 8.3 prod 驗證 case B — auth：把 `llm_config.answer_api_key` 改成空字串或無效字串，送 chat → 預期 502 + 「OpenAI API 金鑰失效，請至後台更新」
+- [x] 8.4 prod 驗證 case C — Zeabur AI Hub provider label：把 `answer_base_url` 暫時設為含 `zeabur` 的 base_url（即使 key 無效也行）→ 觸發 chat → 預期訊息含 `"Zeabur AI Hub"` 字樣（不是 OpenAI）；驗證後恢復原設定
+- [x] 8.5 prod 驗證 case D — RSS：在後台「新增節目」輸入無效 URL（如 `https://example.com/notfound`）→ 預期 422 + 「RSS Feed 格式錯誤」；輸入會逾時的 URL → 預期 504 + 「RSS Feed 逾時」
+- [x] 8.6 prod 驗證 case E — CORS header：chrome devtools network panel 檢查 8.2–8.5 期間錯誤回應都帶 `Access-Control-Allow-Origin` header（驗證 global handler + per-call HTTPException 兩條路徑都正確走過 CORSMiddleware）
+- [x] 8.7 回歸：原本能 work 的查詢（chat + search）仍正常回 200；後台「外部 API 狀態」tab 仍能讀到 `api_health.record` 的歷史事件（確認本次改動沒破壞 health tracking）
 
 ## 9. 收尾
 
-- [ ] 9.1 跑 `pytest backend/tests/` 全綠
-- [ ] 9.2 更新 memory：在 `project_pending_changes.md` 加上「friendly-external-api-errors 已上線」紀錄；移除 `project_llm_error_handling_pending.md`（已落地）
-- [ ] 9.3 跑 `/spectra-archive friendly-external-api-errors`
+- [x] 9.1 跑 `pytest backend/tests/` 全綠
+- [x] 9.2 更新 memory：在 `project_pending_changes.md` 加上「friendly-external-api-errors 已上線」紀錄；移除 `project_llm_error_handling_pending.md`（已落地）
+- [x] 9.3 跑 `/spectra-archive friendly-external-api-errors`
 
 ## 10. Design coverage cross-reference
 
