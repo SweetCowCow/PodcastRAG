@@ -86,5 +86,5 @@
 
 ## 13. 收尾
 
-- [ ] 13.1 commit 所有變更
-- [ ] 13.2 archive 階段更新 `project_pending_changes.md`
+- [x] 13.1 commit 所有變更
+- [x] 13.2 archive 階段更新 `project_pending_changes.md`
