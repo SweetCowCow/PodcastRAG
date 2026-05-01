@@ -7,3 +7,4 @@ os.environ.setdefault(
 os.environ.setdefault("CELERY_BROKER_URL", "redis://localhost:6379/0")
 os.environ.setdefault("CELERY_RESULT_BACKEND", "redis://localhost:6379/1")
 os.environ.setdefault("OPENAI_API_KEY", "sk-test")
+os.environ.setdefault("FRONTEND_ORIGIN", "http://localhost:8080")

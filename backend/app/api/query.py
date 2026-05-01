@@ -1,11 +1,13 @@
 import asyncio
 import uuid
 
+import openai
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.models.show import Show
+from app.schemas.errors import ErrorCode, ErrorResponse
 from app.schemas.query import (
     ChatResponse,
     ChunkHit,
@@ -19,11 +21,58 @@ from app.services.llm_config import (
     get_answer_client,
     get_config,
     get_rewrite_client,
+    infer_provider_label,
     require_keys_present,
 )
 from app.services.rag import ChunkHit as RagHit
 
 router = APIRouter(tags=["query"])
+
+
+def _is_insufficient_quota(exc: openai.RateLimitError) -> bool:
+    body = getattr(exc, "body", None)
+    if isinstance(body, dict):
+        err = body.get("error")
+        if isinstance(err, dict) and err.get("code") == "insufficient_quota":
+            return True
+    return False
+
+
+def _raise_openai_http_error(exc: Exception, provider_label: str) -> None:
+    """Convert an OpenAI client exception into an HTTPException with ErrorResponse detail."""
+    if isinstance(exc, openai.RateLimitError):
+        code = (
+            ErrorCode.LLM_QUOTA_EXCEEDED
+            if _is_insufficient_quota(exc)
+            else ErrorCode.LLM_RATE_LIMITED
+        )
+        raise HTTPException(
+            status_code=429,
+            detail=ErrorResponse(
+                error_code=code,
+                provider=provider_label,
+                detail=str(exc) or "LLM rate limit",
+            ).model_dump(),
+        ) from exc
+    if isinstance(exc, openai.AuthenticationError):
+        raise HTTPException(
+            status_code=502,
+            detail=ErrorResponse(
+                error_code=ErrorCode.LLM_AUTH_FAILED,
+                provider=provider_label,
+                detail=str(exc) or "LLM authentication failed",
+            ).model_dump(),
+        ) from exc
+    if isinstance(exc, (openai.APIConnectionError, openai.APITimeoutError)):
+        raise HTTPException(
+            status_code=503,
+            detail=ErrorResponse(
+                error_code=ErrorCode.LLM_UNAVAILABLE,
+                provider=provider_label,
+                detail=str(exc) or "LLM unavailable",
+            ).model_dump(),
+        ) from exc
+    raise exc
 
 
 @router.post("/shows/{show_id}/query")
@@ -39,7 +88,15 @@ async def query_show(
     history = [m.model_dump() for m in payload.messages[-rag.HISTORY_WINDOW:]]
 
     if payload.mode == "search":
-        query_embedding = await asyncio.to_thread(embed_texts, [payload.question])
+        try:
+            query_embedding = await asyncio.to_thread(embed_texts, [payload.question])
+        except (
+            openai.RateLimitError,
+            openai.AuthenticationError,
+            openai.APIConnectionError,
+            openai.APITimeoutError,
+        ) as exc:
+            _raise_openai_http_error(exc, "OpenAI")
         hits = await rag.retrieve(db, show_id, query_embedding[0])
         return SearchResponse(results=[_to_schema_hit(h) for h in hits])
 
@@ -48,33 +105,62 @@ async def query_show(
         require_keys_present(cfg)
     except LLMNotConfigured as exc:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=ErrorResponse(
+                error_code=ErrorCode.LLM_NOT_CONFIGURED,
+                provider=None,
+                detail=str(exc),
+            ).model_dump(),
         ) from exc
 
     if history:
         rewrite_client, rewrite_model = get_rewrite_client(cfg)
-        rewritten = await asyncio.to_thread(
-            rag.rewrite_question,
-            rewrite_client,
-            rewrite_model,
-            history,
-            payload.question,
-        )
+        try:
+            rewritten = await asyncio.to_thread(
+                rag.rewrite_question,
+                rewrite_client,
+                rewrite_model,
+                history,
+                payload.question,
+            )
+        except (
+            openai.RateLimitError,
+            openai.AuthenticationError,
+            openai.APIConnectionError,
+            openai.APITimeoutError,
+        ) as exc:
+            _raise_openai_http_error(exc, infer_provider_label(cfg.rewrite_base_url))
     else:
         rewritten = payload.question
 
-    query_embedding = await asyncio.to_thread(embed_texts, [rewritten])
+    try:
+        query_embedding = await asyncio.to_thread(embed_texts, [rewritten])
+    except (
+        openai.RateLimitError,
+        openai.AuthenticationError,
+        openai.APIConnectionError,
+        openai.APITimeoutError,
+    ) as exc:
+        _raise_openai_http_error(exc, "OpenAI")
     hits = await rag.retrieve(db, show_id, query_embedding[0])
 
     answer_client, answer_model = get_answer_client(cfg)
-    answer_text, used_ids = await asyncio.to_thread(
-        rag.answer_with_chunks,
-        answer_client,
-        answer_model,
-        history,
-        payload.question,
-        hits,
-    )
+    try:
+        answer_text, used_ids = await asyncio.to_thread(
+            rag.answer_with_chunks,
+            answer_client,
+            answer_model,
+            history,
+            payload.question,
+            hits,
+        )
+    except (
+        openai.RateLimitError,
+        openai.AuthenticationError,
+        openai.APIConnectionError,
+        openai.APITimeoutError,
+    ) as exc:
+        _raise_openai_http_error(exc, infer_provider_label(cfg.answer_base_url))
 
     if used_ids:
         used_set = set(used_ids)

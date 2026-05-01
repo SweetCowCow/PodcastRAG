@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from urllib.parse import urlparse
 
 from openai import OpenAI
 from sqlalchemy import select
@@ -56,3 +57,19 @@ def get_answer_client(cfg: LlmConfig) -> tuple[OpenAI, str]:
 def get_rewrite_client(cfg: LlmConfig) -> tuple[OpenAI, str]:
     client = OpenAI(base_url=cfg.rewrite_base_url, api_key=cfg.rewrite_api_key)
     return client, cfg.rewrite_model
+
+
+def infer_provider_label(base_url: str | None) -> str:
+    if not base_url:
+        return "OpenAI"
+    try:
+        host = urlparse(base_url).hostname or ""
+    except (ValueError, AttributeError):
+        return "External API"
+    if not host:
+        return "External API"
+    if host.endswith("openai.com"):
+        return "OpenAI"
+    if "zeabur" in host:
+        return "Zeabur AI Hub"
+    return host

@@ -195,20 +195,24 @@ const QueryPage = ({ lang, show, onBack, onOpenEpisode, queryMode }) => {
         .slice(0, -1)
         .slice(-10)
         .map(m => ({ role: m.role, content: m.text }));
-      const res = await fetch(`${API_BASE}/shows/${show.id}/query`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mode: 'chat', question, messages: history }),
-      });
+      let res;
+      try {
+        res = await fetch(`${API_BASE}/shows/${show.id}/query`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mode: 'chat', question, messages: history }),
+        });
+      } catch (netErr) {
+        throw new Error(networkErrorMessage(lang));
+      }
       if (!res.ok) {
-        const detail = await res.text();
-        throw new Error(detail || `HTTP ${res.status}`);
+        const body = await res.json().catch(() => null);
+        throw new Error(formatError(body, lang));
       }
       const data = await res.json();
       setMessages(m => [...m, { role: 'assistant', text: data.answer, citations: data.citations || [] }]);
     } catch (err) {
-      const msg = t ? `查詢失敗：${err.message}` : `Query failed: ${err.message}`;
-      setMessages(m => [...m, { role: 'assistant', text: msg, citations: [] }]);
+      setMessages(m => [...m, { role: 'assistant', text: err.message, citations: [] }]);
     } finally {
       setSending(false);
     }
@@ -220,14 +224,19 @@ const QueryPage = ({ lang, show, onBack, onOpenEpisode, queryMode }) => {
     setSearching(true);
     setSearchResults(null);
     try {
-      const res = await fetch(`${API_BASE}/shows/${show.id}/query`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mode: 'search', question }),
-      });
+      let res;
+      try {
+        res = await fetch(`${API_BASE}/shows/${show.id}/query`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mode: 'search', question }),
+        });
+      } catch (netErr) {
+        throw new Error(networkErrorMessage(lang));
+      }
       if (!res.ok) {
-        const detail = await res.text();
-        throw new Error(detail || `HTTP ${res.status}`);
+        const body = await res.json().catch(() => null);
+        throw new Error(formatError(body, lang));
       }
       const data = await res.json();
       const mapped = (data.results || []).map(r => ({

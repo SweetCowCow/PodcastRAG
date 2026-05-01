@@ -1,9 +1,12 @@
+import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from app.api.admin import router as admin_router
+from app.schemas.errors import ErrorCode, ErrorResponse
 from app.api.episodes import router as episodes_router
 from app.api.health import router as health_router
 from app.api.query import router as query_router
@@ -15,6 +18,8 @@ from app.api.shows import rss_preview_router
 from app.api.transcripts import router as transcripts_router
 from app.core.bootstrap import seed_llm_config_from_env
 from app.core.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
@@ -28,6 +33,43 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+
+
+def _cors_headers_for(request: Request) -> dict[str, str]:
+    """Manually compute CORS headers for error responses.
+
+    Starlette's `ServerErrorMiddleware` sits outside `CORSMiddleware`, so any
+    response produced by an exception_handler bypasses the CORS middleware.
+    Without these headers the browser cannot read the body and shows
+    "Failed to fetch" — exactly the bug this change fixes.
+    """
+    origin = request.headers.get("origin")
+    if origin and origin == settings.frontend_origin:
+        return {
+            "Access-Control-Allow-Origin": origin,
+            "Access-Control-Allow-Credentials": "true",
+            "Vary": "Origin",
+        }
+    return {}
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    logger.exception(
+        "Unhandled exception in %s %s", request.method, request.url.path
+    )
+    return JSONResponse(
+        status_code=500,
+        content={
+            "detail": ErrorResponse(
+                error_code=ErrorCode.INTERNAL_ERROR,
+                provider=None,
+                detail="Internal server error",
+            ).model_dump()
+        },
+        headers=_cors_headers_for(request),
+    )
+
 
 app.add_middleware(
     CORSMiddleware,
