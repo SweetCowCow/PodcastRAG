@@ -34,3 +34,6 @@ openspec/.vector-search.db*
 
 # Playwright MCP 測試產物（截圖、console log）
 .playwright-mcp/
+
+# Generated presentation deck (not source-controlled)
+*.pptx

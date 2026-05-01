@@ -104,6 +104,25 @@ const App = () => {
     return () => window.removeEventListener('message', handler);
   }, []);
 
+  // Presentation routing via URL hash. `#presentation` shows fullscreen deck;
+  // clearing the hash exits back to the previous page (state preserved).
+  const [prevPage, setPrevPage] = React.useState('select');
+  React.useEffect(() => {
+    const sync = () => {
+      if (window.location.hash === '#presentation') {
+        setPage(p => {
+          if (p !== 'presentation') setPrevPage(p);
+          return 'presentation';
+        });
+      } else {
+        setPage(p => (p === 'presentation' ? prevPage : p));
+      }
+    };
+    sync();
+    window.addEventListener('hashchange', sync);
+    return () => window.removeEventListener('hashchange', sync);
+  }, [prevPage]);
+
   const applyTweak = (key, val) => {
     setTweaks(t => ({ ...t, [key]: val }));
     window.parent.postMessage({ type: '__edit_mode_set_keys', edits: { [key]: val } }, '*');
@@ -149,9 +168,11 @@ const App = () => {
         input:focus { outline: none; }
       `}</style>
 
-      <TopNav lang={lang} page={page} setPage={handleSetPage}
-        onToggleLang={() => setLang(l => l === 'zh' ? 'en' : 'zh')}
-        onAdminClick={handleAdminClick} />
+      {page !== 'presentation' && (
+        <TopNav lang={lang} page={page} setPage={handleSetPage}
+          onToggleLang={() => setLang(l => l === 'zh' ? 'en' : 'zh')}
+          onAdminClick={handleAdminClick} />
+      )}
 
       {/* Main content */}
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
@@ -167,6 +188,8 @@ const App = () => {
           <TranscriptPage lang={lang} show={selectedShow} episode={selectedEpisode}
             initSearch={initSearch} highlightTime={highlightTime} onBack={() => setPage('query')} />
         )}
+        {page === 'release-log' && <ReleaseLogPage lang={lang} />}
+        {page === 'presentation' && <PresentationPage />}
         {page.startsWith('admin') && <AdminPage lang={lang} activePage={page} />}
       </div>
 

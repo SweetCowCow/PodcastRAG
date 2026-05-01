@@ -149,6 +149,7 @@ const TopNav = ({ lang, page, setPage, onToggleLang, onAdminClick }) => {
 
   const mainItems = [
     { id: 'select', icon: 'podcast', label: t ? '節目選擇' : 'Shows' },
+    { id: 'release-log', icon: 'fileText', label: t ? '更新日誌' : 'Release Log' },
     { id: 'admin', icon: 'settings', label: t ? '後台管理' : 'Admin' },
   ];
   const adminItems = [
@@ -189,7 +190,11 @@ const TopNav = ({ lang, page, setPage, onToggleLang, onAdminClick }) => {
         {!isMobile && (
           <nav style={{ display: 'flex', alignItems: 'stretch', gap: 2, flex: 1 }}>
             {mainItems.map(item => {
-              const active = item.id === 'select' ? !isAdmin && (page === 'select' || page === 'query' || page === 'transcript') : isAdmin;
+              const active = item.id === 'select'
+                ? !isAdmin && (page === 'select' || page === 'query' || page === 'transcript')
+                : item.id === 'release-log'
+                ? page === 'release-log'
+                : isAdmin;
               return (
                 <TopNavItem key={item.id} icon={item.icon} label={item.label} active={active}
                   onClick={() => onMainClick(item.id)} />
@@ -216,7 +221,11 @@ const TopNav = ({ lang, page, setPage, onToggleLang, onAdminClick }) => {
           <div role="menu"
             style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: TOKEN.surface, borderBottom: `1px solid ${TOKEN.surfaceBorder}`, padding: '8px 0', zIndex: 999, boxShadow: '0 8px 24px rgba(0,0,0,0.4)' }}>
             {mainItems.map(item => {
-              const active = item.id === 'select' ? !isAdmin && (page === 'select' || page === 'query' || page === 'transcript') : isAdmin;
+              const active = item.id === 'select'
+                ? !isAdmin && (page === 'select' || page === 'query' || page === 'transcript')
+                : item.id === 'release-log'
+                ? page === 'release-log'
+                : isAdmin;
               return (
                 <button key={item.id} onClick={() => onMainClick(item.id)}
                   style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', padding: '14px 20px', minHeight: 44, background: active ? TOKEN.accentDim : 'transparent', border: 'none', color: active ? TOKEN.accent : TOKEN.text, fontSize: 15, fontWeight: active ? 600 : 500, textAlign: 'left', cursor: 'pointer', fontFamily: 'inherit' }}>
