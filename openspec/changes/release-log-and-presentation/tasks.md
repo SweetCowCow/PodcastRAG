@@ -62,22 +62,22 @@
 ## 9. Presentation is Chinese-Only
 
 - [x] 9.1 [Presentation is Chinese-Only] PresentationPage 元件不接受 lang prop，所有文字直接寫繁中字面量
-- [ ] 9.2 chrome-devtools 驗證 lang === 'en' 時進入 #presentation 仍顯示中文
+- [x] 9.2 chrome-devtools 驗證 lang === 'en' 時進入 #presentation 仍顯示中文
 
 ## 10. 部署與瀏覽器驗證
 
-- [ ] 10.1 commit + push 至 GitHub，等 Zeabur 自動部署 frontend
-- [ ] 10.2 chrome-devtools-mcp 驗 release log 頁里程碑分組、雙語切換、tag badge 顯色
-- [ ] 10.3 chrome-devtools-mcp 改 URL 加 `#presentation` 進簡報，驗 13 張 slide、左右鍵 / Space / Esc、邊界
-- [ ] 10.4 修任何 bug 並 redeploy
+- [x] 10.1 commit + push 至 GitHub，等 Zeabur 自動部署 frontend
+- [x] 10.2 chrome-devtools-mcp 驗 release log 頁里程碑分組、雙語切換、tag badge 顯色
+- [x] 10.3 chrome-devtools-mcp 改 URL 加 `#presentation` 進簡報，驗 13 張 slide、左右鍵 / Space / Esc、邊界
+- [x] 10.4 修任何 bug 並 redeploy
 
 ## 11. PPTX 生成
 
-- [ ] 11.1 用 ToolSearch 查詢 `pptx` / `powerpoint` / `slide` 相關 skill
-- [ ] 11.2 若找到直接用；找不到則提示使用者從 marketplace 安裝相關 plugin
-- [ ] 11.3 將 13 張 slide 內容對齊網頁版傳入 skill 產出 `PodcastRAG_presentation.pptx`
+- [x] 11.1 用 ToolSearch 查詢 `pptx` / `powerpoint` / `slide` 相關 skill
+- [x] 11.2 若找到直接用；找不到則提示使用者從 marketplace 安裝相關 plugin
+- [x] 11.3 將 13 張 slide 內容對齊網頁版傳入 skill 產出 `PodcastRAG_presentation.pptx`
 - [x] 11.4 在 `.gitignore` 加 `*.pptx` 規則
-- [ ] 11.5 本機開啟 .pptx 確認版面正常
+- [x] 11.5 本機開啟 .pptx 確認版面正常
 
 ## 12. 流程記憶
 
