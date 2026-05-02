@@ -41,8 +41,13 @@ async function apiFetch(path, opts = {}) {
     credentials: 'include',
   });
 
-  if (res.status === 401) {
-    // session expired or never authenticated — clear local state and notify.
+  // 401 from /me is the discovery probe — getting 401 there just means
+  // "not logged in", which is the expected state for anonymous visitors.
+  // Notifying listeners would cause useCurrentUser.refresh to re-fire and
+  // re-probe /me, creating an infinite 401 loop. Only notify for 401 from
+  // protected endpoints (which indicates a session that died mid-flight).
+  if (res.status === 401 && !path.startsWith('/me') && !path.startsWith('/auth/')) {
+    _setCsrfToken(null);
     _notifyAuthChange();
   }
   return res;
