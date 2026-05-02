@@ -94,7 +94,7 @@ src/
 - **新增元件**：共用元件放 `Shared.jsx`，並在檔案末尾的 `Object.assign(window, {...})` 匯出
 - **模擬資料**：目前各頁面使用 `MOCK_*` 常數作為假資料，之後需串接真實 API
 - **雙語支援**：所有使用者看得到的文字，都需提供 `zh`（繁體中文）和 `en`（英文）兩種版本
-- **後台登入**：示範帳密為 `admin` / `admin999`，正式版需串接後端驗證
+- **後台登入**：Google SSO（OAuth 2.0 PKCE）+ session cookie + CSRF 雙保險。env `ADMIN_EMAILS` 白名單裡的 email 第一次登入後自動為 admin
 
 ## 後續開發規劃
 
@@ -103,4 +103,5 @@ src/
 - [ ] 整合向量資料庫（Pinecone / pgvector）
 - [ ] 實作真實 RAG 查詢後端
 - [ ] 後台使用量統計 Dashboard
-- [ ] 正式帳號驗證系統
+- [ ] 全站登入 gate（Phase 2，現只 gate 後台 + query）
+- [ ] 自動每月 quota 補回 + 點數計價
