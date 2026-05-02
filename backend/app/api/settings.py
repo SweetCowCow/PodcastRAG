@@ -3,11 +3,16 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
+from app.core.security import require_admin
 from app.models.app_settings import AppSettings
 from app.schemas.settings import AppSettingsOut, AppSettingsUpdate
 from app.services.settings_cache import publish_max_concurrent
 
-router = APIRouter(prefix="/admin/settings", tags=["settings"])
+router = APIRouter(
+    prefix="/admin/settings",
+    tags=["settings"],
+    dependencies=[Depends(require_admin)],
+)
 
 SINGLETON_ID = 1
 

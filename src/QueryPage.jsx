@@ -146,8 +146,9 @@ const ResizableLayout = ({ lang, leftContent, rightContent, epCount, epTotal, dr
 };
 
 // ── Main QueryPage ──
-const QueryPage = ({ lang, show, onBack, onOpenEpisode, queryMode }) => {
+const QueryPage = ({ lang, show, onBack, onOpenEpisode, queryMode, user, onUserChange }) => {
   const t = lang === 'zh';
+  const quotaExhausted = user && user.quota_remaining === 0;
   const { isMobile } = useViewport();
   const [drawerOpen, setDrawerOpen] = React.useState(false);
   const [activeTab, setActiveTab] = React.useState('chat');
@@ -172,7 +173,7 @@ const QueryPage = ({ lang, show, onBack, onOpenEpisode, queryMode }) => {
     setEpError(null);
     (async () => {
       try {
-        const res = await fetch(`${API_BASE}/shows/${show.id}/episodes?limit=200`);
+        const res = await apiFetch(`/shows/${show.id}/episodes?limit=200`);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
         if (!cancelled) setEpisodes(data);
@@ -197,7 +198,7 @@ const QueryPage = ({ lang, show, onBack, onOpenEpisode, queryMode }) => {
         .map(m => ({ role: m.role, content: m.text }));
       let res;
       try {
-        res = await fetch(`${API_BASE}/shows/${show.id}/query`, {
+        res = await apiFetch(`/shows/${show.id}/query`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ mode: 'chat', question, messages: history }),
@@ -211,6 +212,7 @@ const QueryPage = ({ lang, show, onBack, onOpenEpisode, queryMode }) => {
       }
       const data = await res.json();
       setMessages(m => [...m, { role: 'assistant', text: data.answer, citations: data.citations || [] }]);
+      if (typeof data.quota_remaining === 'number' && onUserChange) onUserChange();
     } catch (err) {
       setMessages(m => [...m, { role: 'assistant', text: err.message, citations: [] }]);
     } finally {
@@ -226,7 +228,7 @@ const QueryPage = ({ lang, show, onBack, onOpenEpisode, queryMode }) => {
     try {
       let res;
       try {
-        res = await fetch(`${API_BASE}/shows/${show.id}/query`, {
+        res = await apiFetch(`/shows/${show.id}/query`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ mode: 'search', question }),
@@ -247,6 +249,7 @@ const QueryPage = ({ lang, show, onBack, onOpenEpisode, queryMode }) => {
         text: r.text,
       }));
       setSearchResults(mapped);
+      if (typeof data.quota_remaining === 'number' && onUserChange) onUserChange();
     } catch (err) {
       setSearchResults({ error: err.message });
     } finally {
@@ -293,12 +296,16 @@ const QueryPage = ({ lang, show, onBack, onOpenEpisode, queryMode }) => {
           <div style={{ padding: '14px 24px', borderTop: `1px solid ${TOKEN.surfaceBorder}`, background: TOKEN.surface, flexShrink: 0 }}>
             <div style={{ display: 'flex', gap: 8 }}>
               <Input value={chatInput} onChange={e => setChatInput(e.target.value)}
-                placeholder={t ? '針對此節目內容提問...' : 'Ask anything about this show...'}
+                placeholder={!user ? (t ? '請先登入再提問...' : 'Sign in to ask...') : (quotaExhausted ? (t ? '查詢額度已用完' : 'Quota exhausted') : (t ? '針對此節目內容提問...' : 'Ask anything about this show...'))}
                 onKeyDown={e => e.key === 'Enter' && handleSend()} />
-              <Btn onClick={handleSend} disabled={sending || !chatInput.trim()} icon="send">{t ? '送出' : 'Send'}</Btn>
+              <Btn onClick={handleSend} disabled={sending || !chatInput.trim() || !user || quotaExhausted} icon="send">{t ? '送出' : 'Send'}</Btn>
             </div>
-            <p style={{ margin: '7px 0 0', fontSize: 12, color: TOKEN.textMuted }}>
-              {t ? `RAG 範圍：${transcribedCount} 集逐字稿` : `RAG scope: ${transcribedCount} transcripts`}
+            <p style={{ margin: '7px 0 0', fontSize: 12, color: quotaExhausted ? TOKEN.danger : TOKEN.textMuted }}>
+              {!user
+                ? (t ? '需登入才能查詢' : 'Sign in required')
+                : quotaExhausted
+                  ? (t ? '查詢額度已用完，請聯絡管理員加值' : 'Quota exhausted — contact admin to top up')
+                  : (t ? `RAG 範圍：${transcribedCount} 集逐字稿 · 剩餘 ${user.quota_remaining} 次` : `RAG scope: ${transcribedCount} transcripts · ${user.quota_remaining} queries left`)}
             </p>
           </div>
         </div>
@@ -310,10 +317,15 @@ const QueryPage = ({ lang, show, onBack, onOpenEpisode, queryMode }) => {
           <div style={{ padding: '16px 24px', borderBottom: `1px solid ${TOKEN.surfaceBorder}`, background: TOKEN.surface, flexShrink: 0 }}>
             <div style={{ display: 'flex', gap: 8 }}>
               <Input value={searchQ} onChange={e => setSearchQ(e.target.value)}
-                placeholder={t ? '輸入關鍵字或語意搜尋...' : 'Keyword or semantic search...'}
+                placeholder={!user ? (t ? '請先登入再搜尋...' : 'Sign in to search...') : (quotaExhausted ? (t ? '查詢額度已用完' : 'Quota exhausted') : (t ? '輸入關鍵字或語意搜尋...' : 'Keyword or semantic search...'))}
                 icon="search" onKeyDown={e => e.key === 'Enter' && handleSearch()} />
-              <Btn onClick={handleSearch} disabled={searching || !searchQ.trim()}>{t ? '搜尋' : 'Search'}</Btn>
+              <Btn onClick={handleSearch} disabled={searching || !searchQ.trim() || !user || quotaExhausted}>{t ? '搜尋' : 'Search'}</Btn>
             </div>
+            {(quotaExhausted || !user) && (
+              <p style={{ margin: '7px 0 0', fontSize: 12, color: quotaExhausted ? TOKEN.danger : TOKEN.textMuted }}>
+                {!user ? (t ? '需登入才能查詢' : 'Sign in required') : (t ? '查詢額度已用完，請聯絡管理員加值' : 'Quota exhausted — contact admin to top up')}
+              </p>
+            )}
           </div>
           <div style={{ flex: 1, overflowY: 'auto', padding: '16px 24px' }}>
             {searching && <div style={{ color: TOKEN.textMuted, textAlign: 'center', padding: '40px 0' }}>{t ? '搜尋中...' : 'Searching...'}</div>}

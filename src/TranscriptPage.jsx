@@ -13,7 +13,7 @@ const TranscriptPage = ({ lang, show, episode, onBack, initSearch, highlightTime
     setSegments(null);
     setSegError(null);
     setActiveIdx(null);
-    fetch(`${API_BASE}/episodes/${episode.id}/transcript`)
+    apiFetch(`/episodes/${episode.id}/transcript`)
       .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
       .then(data => setSegments(data.segments || []))
       .catch(err => setSegError(err.message));

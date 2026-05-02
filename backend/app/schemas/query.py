@@ -26,8 +26,10 @@ class ChunkHit(BaseModel):
 
 class SearchResponse(BaseModel):
     results: list[ChunkHit]
+    quota_remaining: int
 
 
 class ChatResponse(BaseModel):
     answer: str
     citations: list[ChunkHit]
+    quota_remaining: int

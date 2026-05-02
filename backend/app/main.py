@@ -6,6 +6,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.api.admin import router as admin_router
+from app.api.auth import me_router as me_router
+from app.api.auth import router as auth_router
 from app.schemas.errors import ErrorCode, ErrorResponse
 from app.api.episodes import router as episodes_router
 from app.api.health import router as health_router
@@ -16,8 +18,10 @@ from app.api.settings import router as settings_router
 from app.api.shows import router as shows_router
 from app.api.shows import rss_preview_router
 from app.api.transcripts import router as transcripts_router
+from app.api.users import router as users_router
 from app.core.bootstrap import seed_llm_config_from_env
 from app.core.config import settings
+from app.core.csrf import CsrfAndOriginMiddleware
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +48,7 @@ def _cors_headers_for(request: Request) -> dict[str, str]:
     "Failed to fetch" — exactly the bug this change fixes.
     """
     origin = request.headers.get("origin")
-    if origin and origin == settings.frontend_origin:
+    if origin and origin in settings.frontend_origin_list:
         return {
             "Access-Control-Allow-Origin": origin,
             "Access-Control-Allow-Credentials": "true",
@@ -71,15 +75,21 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
     )
 
 
+# Order matters: middleware added LAST runs FIRST (outermost). We want
+# CORSMiddleware outermost (so preflight OPTIONS short-circuits before CSRF),
+# then CsrfAndOriginMiddleware. So we add CSRF first, then CORS.
+app.add_middleware(CsrfAndOriginMiddleware)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[settings.frontend_origin],
+    allow_origins=settings.frontend_origin_list,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "X-CSRF-Token"],
 )
 
 app.include_router(health_router)
+app.include_router(auth_router)
+app.include_router(me_router)
 app.include_router(shows_router)
 app.include_router(rss_preview_router)
 app.include_router(schedules_router)
@@ -89,6 +99,7 @@ app.include_router(query_router)
 app.include_router(admin_router)
 app.include_router(queue_router)
 app.include_router(settings_router)
+app.include_router(users_router)
 
 
 @app.get("/")

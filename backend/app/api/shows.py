@@ -8,6 +8,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
+from app.core.security import require_admin
 from app.models.episode import Episode
 from app.models.show import Show
 from app.models.transcript import Transcript, TranscriptStatus
@@ -30,7 +31,7 @@ from app.services.rss_parser import RssParseError, fetch_and_parse
 from app.services.sync import sync_show_episodes
 
 router = APIRouter(prefix="/shows", tags=["shows"])
-rss_preview_router = APIRouter(tags=["shows"])
+rss_preview_router = APIRouter(tags=["shows"], dependencies=[Depends(require_admin)])
 
 
 @rss_preview_router.get("/rss-preview", response_model=RssPreviewResponse)
@@ -71,7 +72,12 @@ async def rss_preview(url: str = Query(..., description="RSS feed URL")):
     )
 
 
-@router.post("", response_model=ShowResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "",
+    response_model=ShowResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_admin)],
+)
 async def create_show(payload: ShowCreate, db: AsyncSession = Depends(get_db)):
     rss_url = str(payload.rss_url)
 
@@ -183,7 +189,11 @@ async def get_show(show_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
     return _show_to_response(show, count or 0)
 
 
-@router.delete("/{show_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/{show_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(require_admin)],
+)
 async def delete_show(show_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
     show = await db.get(Show, show_id)
     if not show:
@@ -205,7 +215,11 @@ async def delete_show(show_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
     return None
 
 
-@router.post("/{show_id}/sync", response_model=SyncResponse)
+@router.post(
+    "/{show_id}/sync",
+    response_model=SyncResponse,
+    dependencies=[Depends(require_admin)],
+)
 async def sync_show(show_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
     show = await db.get(Show, show_id)
     if not show:

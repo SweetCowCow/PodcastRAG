@@ -1,85 +1,9 @@
-// Main App — top nav layout + admin login gate
+// Main App — top nav layout + Google SSO auth gate
 const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
   "queryMode": 0,
   "defaultLang": "zh",
   "accentColor": "#6366f1"
 }/*EDITMODE-END*/;
-
-// ── Admin Login Gate ──
-const AdminLogin = ({ lang, onSuccess, onCancel }) => {
-  const t = lang === 'zh';
-  const [user, setUser] = React.useState('');
-  const [pass, setPass] = React.useState('');
-  const [showPass, setShowPass] = React.useState(false);
-  const [error, setError] = React.useState('');
-  const [loading, setLoading] = React.useState(false);
-
-  const handleLogin = () => {
-    if (!user || !pass) { setError(t ? '請填寫帳號與密碼' : 'Please enter credentials'); return; }
-    setLoading(true);
-    setError('');
-    setTimeout(() => {
-      if (user === 'admin' && pass === '***REDACTED***') {
-        onSuccess();
-      } else {
-        setError(t ? '帳號或密碼錯誤' : 'Invalid credentials');
-        setLoading(false);
-      }
-    }, 800);
-  };
-
-  return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 500, backdropFilter: 'blur(4px)' }}>
-      <div style={{ background: TOKEN.surface, border: `1px solid ${TOKEN.surfaceBorder}`, borderRadius: 16, padding: 36, width: 380, boxShadow: '0 24px 80px rgba(0,0,0,0.6)' }}>
-        {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 28 }}>
-          <div style={{ width: 40, height: 40, borderRadius: 10, background: TOKEN.accentDim, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <Icon name="settings" size={20} color={TOKEN.accent} />
-          </div>
-          <div>
-            <div style={{ color: TOKEN.text, fontWeight: 700, fontSize: 17 }}>{t ? '後台管理登入' : 'Admin Login'}</div>
-            <div style={{ color: TOKEN.textMuted, fontSize: 12, marginTop: 2 }}>{t ? '請輸入管理員帳號與密碼' : 'Enter admin credentials to continue'}</div>
-          </div>
-        </div>
-
-        {/* Form */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <div>
-            <label style={{ display: 'block', color: TOKEN.textMuted, fontSize: 12, marginBottom: 6 }}>{t ? '帳號' : 'Username'}</label>
-            <Input value={user} onChange={e => setUser(e.target.value)} placeholder={t ? '輸入管理員帳號' : 'Enter username'} icon="key"
-              onKeyDown={e => e.key === 'Enter' && handleLogin()} />
-          </div>
-          <div>
-            <label style={{ display: 'block', color: TOKEN.textMuted, fontSize: 12, marginBottom: 6 }}>{t ? '密碼' : 'Password'}</label>
-            <div style={{ position: 'relative' }}>
-              <input value={pass} onChange={e => setPass(e.target.value)} type={showPass ? 'text' : 'password'}
-                placeholder={t ? '輸入密碼' : 'Enter password'}
-                onKeyDown={e => e.key === 'Enter' && handleLogin()}
-                style={{ width: '100%', background: TOKEN.surfaceRaised, border: `1px solid ${TOKEN.surfaceBorder}`, borderRadius: 8, padding: '9px 40px 9px 12px', color: TOKEN.text, fontSize: 14, outline: 'none', fontFamily: 'inherit' }} />
-              <button onClick={() => setShowPass(v => !v)}
-                style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: TOKEN.textMuted, display: 'flex', alignItems: 'center' }}>
-                <Icon name={showPass ? 'eyeOff' : 'eye'} size={16} />
-              </button>
-            </div>
-          </div>
-
-          {error && (
-            <div style={{ background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 8, padding: '9px 13px', color: '#f87171', fontSize: 13 }}>
-              {error}
-            </div>
-          )}
-
-          <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
-            <Btn onClick={handleLogin} disabled={loading} style={{ flex: 1 }}>
-              {loading ? (t ? '驗證中...' : 'Verifying...') : (t ? '登入後台' : 'Login')}
-            </Btn>
-            <Btn variant="ghost" onClick={onCancel}>{t ? '取消' : 'Cancel'}</Btn>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
 
 // ── Main App ──
 const App = () => {
@@ -91,8 +15,8 @@ const App = () => {
   const [highlightTime, setHighlightTime] = React.useState(null);
   const [tweaksVisible, setTweaksVisible] = React.useState(false);
   const [tweaks, setTweaks] = React.useState(TWEAK_DEFAULTS);
-  const [adminAuth, setAdminAuth] = React.useState(false);
-  const [showAdminLogin, setShowAdminLogin] = React.useState(false);
+  const { user, loading: userLoading, refresh: refreshUser, logout: doLogout } = useCurrentUser();
+  const isAdmin = user && user.role === 'admin' && user.status === 'active';
 
   React.useEffect(() => {
     const handler = (e) => {
@@ -128,26 +52,29 @@ const App = () => {
     window.parent.postMessage({ type: '__edit_mode_set_keys', edits: { [key]: val } }, '*');
   };
 
-  const handleAdminClick = () => {
-    if (adminAuth) {
-      setPage('admin-api');
-    } else {
-      setShowAdminLogin(true);
-    }
-  };
+  const t = lang === 'zh';
 
-  const handleAdminSuccess = () => {
-    setAdminAuth(true);
-    setShowAdminLogin(false);
+  const handleAdminClick = () => {
+    if (!user) { window.location.href = googleLoginUrl(); return; }
+    if (!isAdmin) {
+      window.alert(t ? '此頁面僅限管理員使用' : 'Admin role required');
+      return;
+    }
     setPage('admin-api');
   };
 
+  const handleSignIn = () => { window.location.href = googleLoginUrl(); };
+
   const handleSetPage = (p) => {
     if (p === 'select') { setSelectedShow(null); setSelectedEpisode(null); }
+    if (p && p.startsWith('admin') && !isAdmin) {
+      // Guard direct hash navigation to admin pages
+      if (!user) { window.location.href = googleLoginUrl(); return; }
+      window.alert(t ? '此頁面僅限管理員使用' : 'Admin role required');
+      return;
+    }
     setPage(p);
   };
-
-  const t = lang === 'zh';
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh', fontFamily: "'Inter', 'Helvetica Neue', Arial, sans-serif", background: TOKEN.bg, overflow: 'hidden' }}>
@@ -171,7 +98,10 @@ const App = () => {
       {page !== 'presentation' && (
         <TopNav lang={lang} page={page} setPage={handleSetPage}
           onToggleLang={() => setLang(l => l === 'zh' ? 'en' : 'zh')}
-          onAdminClick={handleAdminClick} />
+          onAdminClick={handleAdminClick}
+          user={user}
+          onSignIn={handleSignIn}
+          onLogout={async () => { await doLogout(); setPage('select'); }} />
       )}
 
       {/* Main content */}
@@ -180,6 +110,7 @@ const App = () => {
         {selectedShow && (page === 'query' || page === 'transcript') && (
           <div style={{ display: page === 'query' ? 'flex' : 'none', flex: 1, overflow: 'hidden' }}>
             <QueryPage lang={lang} show={selectedShow} queryMode={tweaks.queryMode}
+              user={user} onUserChange={refreshUser}
               onBack={() => setPage('select')}
               onOpenEpisode={(ep, ht) => { setSelectedEpisode(ep); setInitSearch(''); setHighlightTime(typeof ht === 'number' ? ht : null); setPage('transcript'); }} />
           </div>
@@ -190,13 +121,10 @@ const App = () => {
         )}
         {page === 'release-log' && <ReleaseLogPage lang={lang} />}
         {page === 'presentation' && <PresentationPage />}
-        {page.startsWith('admin') && <AdminPage lang={lang} activePage={page} />}
+        {page.startsWith('admin') && isAdmin && (
+          <AdminPage lang={lang} activePage={page} currentUser={user} onUserChange={refreshUser} />
+        )}
       </div>
-
-      {/* Admin login modal */}
-      {showAdminLogin && (
-        <AdminLogin lang={lang} onSuccess={handleAdminSuccess} onCancel={() => setShowAdminLogin(false)} />
-      )}
 
       {/* Tweaks panel */}
       {tweaksVisible && (

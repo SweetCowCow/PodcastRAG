@@ -28,11 +28,26 @@ class Settings(BaseSettings):
     r2_bucket: str | None = None
     r2_endpoint: str | None = None
 
+    google_client_id: str
+    google_client_secret: str
+    google_redirect_uri: str
+    session_secret: str
+    admin_emails: str = ""
+    session_ttl_days: int = 14
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=False,
     )
+
+    @property
+    def frontend_origin_list(self) -> list[str]:
+        return [o.strip() for o in self.frontend_origin.split(",") if o.strip()]
+
+    @property
+    def admin_email_set(self) -> set[str]:
+        return {e.strip().lower() for e in self.admin_emails.split(",") if e.strip()}
 
 
 settings = Settings()

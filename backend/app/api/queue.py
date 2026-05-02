@@ -7,6 +7,7 @@ from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
+from app.core.security import require_admin
 from app.models.transcription_queue import QueueStatus, TranscriptionQueue
 from app.schemas.queue import (
     CancelQueueRowOut,
@@ -21,7 +22,11 @@ logger = logging.getLogger(__name__)
 
 FORCE_CANCEL_MESSAGE = "Force cancelled by admin"
 
-router = APIRouter(prefix="/admin/queue", tags=["queue"])
+router = APIRouter(
+    prefix="/admin/queue",
+    tags=["queue"],
+    dependencies=[Depends(require_admin)],
+)
 
 
 @router.get("", response_model=QueueListOut)

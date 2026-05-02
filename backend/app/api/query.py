@@ -3,10 +3,13 @@ import uuid
 
 import openai
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
+from app.core.security import require_authenticated_user
 from app.models.show import Show
+from app.models.user import User
 from app.schemas.errors import ErrorCode, ErrorResponse
 from app.schemas.query import (
     ChatResponse,
@@ -75,15 +78,50 @@ def _raise_openai_http_error(exc: Exception, provider_label: str) -> None:
     raise exc
 
 
+async def _atomic_decrement_quota(db: AsyncSession, user_id: uuid.UUID) -> int:
+    """Atomically decrement the user's quota. Returns the new remaining value.
+
+    Raises HTTPException(429) if quota_remaining was already 0.
+    Per design: failure after this call does NOT refund quota — admin can top up.
+    """
+    stmt = (
+        update(User)
+        .where(User.id == user_id, User.quota_remaining > 0)
+        .values(
+            quota_remaining=User.quota_remaining - 1,
+            total_queries=User.total_queries + 1,
+        )
+        .returning(User.quota_remaining)
+    )
+    result = await db.execute(stmt)
+    new_remaining = result.scalar_one_or_none()
+    await db.commit()
+    if new_remaining is None:
+        raise HTTPException(
+            status_code=429,
+            detail=ErrorResponse(
+                error_code=ErrorCode.QUOTA_EXHAUSTED,
+                provider=None,
+                detail="Query quota exhausted",
+            ).model_dump(),
+        )
+    return int(new_remaining)
+
+
 @router.post("/shows/{show_id}/query")
 async def query_show(
     show_id: uuid.UUID,
     payload: QueryRequest,
     db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_authenticated_user),
 ) -> SearchResponse | ChatResponse:
     show = await db.get(Show, show_id)
     if show is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Show 不存在")
+
+    # Atomically decrement quota BEFORE any LLM/embedding call. If subsequent
+    # RAG calls fail, we do NOT refund (see design: 失敗成本權衡).
+    quota_remaining = await _atomic_decrement_quota(db, user.id)
 
     history = [m.model_dump() for m in payload.messages[-rag.HISTORY_WINDOW:]]
 
@@ -98,7 +136,10 @@ async def query_show(
         ) as exc:
             _raise_openai_http_error(exc, "OpenAI")
         hits = await rag.retrieve(db, show_id, query_embedding[0])
-        return SearchResponse(results=[_to_schema_hit(h) for h in hits])
+        return SearchResponse(
+            results=[_to_schema_hit(h) for h in hits],
+            quota_remaining=quota_remaining,
+        )
 
     try:
         cfg = await get_config(db)
@@ -176,6 +217,7 @@ async def query_show(
     return ChatResponse(
         answer=answer_text,
         citations=[_to_schema_hit(h) for h in cited_hits],
+        quota_remaining=quota_remaining,
     )
 
 
