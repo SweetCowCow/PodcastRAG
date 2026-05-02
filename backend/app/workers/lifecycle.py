@@ -72,13 +72,13 @@ def _inspect_active_task_ids() -> tuple[set[str], bool]:
             "lifecycle: celery inspect raised — conservative mode", exc_info=True
         )
         return set(), False
-    if active is None and reserved is None:
+    active = active or {}
+    reserved = reserved or {}
+    if not active and not reserved:
         logger.warning(
             "lifecycle: celery inspect returned no workers — conservative mode"
         )
         return set(), False
-    active = active or {}
-    reserved = reserved or {}
     ids: set[str] = set()
     for tasks in active.values():
         ids.update(t.get("id") for t in (tasks or []) if t.get("id"))
