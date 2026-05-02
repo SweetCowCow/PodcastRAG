@@ -18,11 +18,9 @@ The admin page SHALL expose a "轉錄序列" (zh) / "Transcription Queue" (en) t
 
 Each sub-tab label SHALL include a count badge showing the total rows in that sub-tab (sum of constituent statuses). The active sub-tab indicator SHALL use `TOKEN.accent` for the underline/highlight; inactive sub-tabs SHALL use `TOKEN.textSecondary`.
 
-Within each sub-tab, rows SHALL be grouped by status into sections when the sub-tab contains more than one status:
+Within the `active` sub-tab, all `running` rows SHALL appear above all `pending` rows (no section headers between them — visual ordering only). Within the `closed` sub-tab, rows SHALL still group by status into "失敗" / "Failed" and "已取消" / "Cancelled" sections. Within the `completed` sub-tab, rows SHALL render as a single flat list with no section header.
 
-- `active`: two sections, "排隊中（可拖動排序）" / "Pending (drag to reorder)" on desktop, "排隊中" / "Pending" on mobile (drag is unavailable on mobile, see below); and "執行中" / "Running"
-- `closed`: two sections, "失敗" / "Failed" and "已取消" / "Cancelled"
-- `completed`: a single flat list with no section header
+Within the `active` sub-tab, each `pending` row SHALL render a queue-position badge displaying its 1-based ordinal position within the pending segment (the topmost pending row shows `1`, the next shows `2`, and so on). The position numbering SHALL be derived purely from the rendered order of pending rows; it SHALL NOT be persisted in the API response. `running` rows SHALL NOT render a position badge — their status badge already conveys "executing".
 
 Each row SHALL display the episode title, the show name, a status badge, the relevant timestamps (`enqueued_at`, `started_at`, `finished_at` when present), the `error_message` for failed/cancelled rows, and the `celery_task_id` (collapsible/folded by default for debug).
 
@@ -42,18 +40,29 @@ All existing per-row actions SHALL be preserved unchanged: "取消" / "Cancel" f
 - **AND** each sub-tab label SHALL include a count badge showing the total rows for the statuses it covers
 - **AND** the `active` sub-tab SHALL be selected by default
 
-#### Scenario: Active sub-tab shows pending and running with section headers
+#### Scenario: Active sub-tab shows running rows above pending rows with position numbers
 
-- **GIVEN** the queue has 3 pending rows and 1 running row, desktop viewport
+- **GIVEN** the queue has 3 pending rows (P1, P2, P3) and 1 running row (R1), desktop viewport
 - **WHEN** the user views the `active` sub-tab
-- **THEN** the sub-tab SHALL render two sections: "排隊中（可拖動排序）" with 3 rows and "執行中" with 1 row
-- **AND** pending rows SHALL remain draggable and running row SHALL render the "強制取消" button
+- **THEN** the rendered order from top to bottom SHALL be R1, P1, P2, P3
+- **AND** R1 SHALL NOT render a queue-position badge
+- **AND** P1 SHALL render a queue-position badge showing `1`
+- **AND** P2 SHALL render a queue-position badge showing `2`
+- **AND** P3 SHALL render a queue-position badge showing `3`
+
+##### Example: queue-position numbering after drag-to-reorder
+
+- **GIVEN** active sub-tab displays R1, P1(pos=1), P2(pos=2), P3(pos=3)
+- **WHEN** the user drags P3 above P1
+- **THEN** the rendered order becomes R1, P3, P1, P2
+- **AND** the position badges become P3=1, P1=2, P2=3
 
 #### Scenario: Active sub-tab on mobile
 
 - **GIVEN** the queue has 3 pending rows and 1 running row, mobile viewport
 - **WHEN** the user views the `active` sub-tab
-- **THEN** the pending section heading SHALL read "排隊中" / "Pending" (without "(drag to reorder)")
+- **THEN** running rows SHALL still appear above pending rows (same ordering rule as desktop)
+- **AND** each pending row SHALL render its queue-position badge
 - **AND** each pending row SHALL render in a vertical stack with metadata stacked above wrapped action buttons
 - **AND** no drag handle (⋮⋮) SHALL appear
 
@@ -61,51 +70,34 @@ All existing per-row actions SHALL be preserved unchanged: "取消" / "Cancel" f
 
 - **GIVEN** the queue has 2 failed rows and 1 cancelled row
 - **WHEN** the user views the `closed` sub-tab
-- **THEN** the sub-tab SHALL render two sections: "失敗" with 2 rows and "已取消" with 1 row
-- **AND** failed rows SHALL render "重試" / "忽略" buttons and cancelled rows SHALL render no action buttons
-
-#### Scenario: Completed sub-tab is a flat list
-
-- **GIVEN** the queue has 5 completed rows
-- **WHEN** the user views the `completed` sub-tab
-- **THEN** the sub-tab SHALL render the 5 rows as a flat list with no section header
-
-#### Scenario: Switching sub-tabs does not trigger network request
-
-- **GIVEN** the Transcription Queue tab is mounted on the `active` sub-tab
-- **WHEN** the user clicks the `completed` sub-tab
-- **THEN** no additional `GET /admin/queue` request SHALL be sent solely as a result of the click
-- **AND** the next scheduled 5-second poll SHALL still execute normally
-
-#### Scenario: Empty sub-tab shows empty placeholder
-
-- **GIVEN** the queue contains zero failed and zero cancelled rows
-- **WHEN** the user views the `closed` sub-tab
-- **THEN** each section within the sub-tab SHALL render the "空" / "Empty" placeholder
-- **AND** the count badge in the `closed` sub-tab label SHALL show 0
-
-#### Scenario: Polling refreshes data every 5 seconds
-
-- **GIVEN** the Transcription Queue tab is mounted
-- **WHEN** 5 seconds elapse
-- **THEN** the frontend SHALL re-call `GET /admin/queue` and `GET /admin/settings`
-- **AND** when the tab unmounts, the polling interval SHALL be cleared
+- **THEN** the sub-tab SHALL render two sections: "失敗" / "Failed" with 2 rows and "已取消" / "Cancelled" with 1 row
 
 
 <!-- @trace
-source: responsive-mobile-layout
-updated: 2026-05-01
+source: post-auth-ui-and-cleanup
+updated: 2026-05-02
 code:
-  - index.html
-  - src/Shared.jsx
-  - src/TranscriptPage.jsx
-  - docs/case-studies/transcription-queue-discussion.md
-  - docs/case-studies/local-vs-prod-verification-violation.md
-  - src/PodcastSelect.jsx
   - src/App.jsx
-  - src/QueryPage.jsx
   - src/QueueTab.jsx
-  - src/AdminPage.jsx
+  - docs/case-studies/transcription-queue-discussion.md
+  - src/ReleaseLogPage.jsx
+  - backend/app/main.py
+  - index.html
+  - src/AuthContext.jsx
+  - src/PodcastSelect.jsx
+  - backend/app/api/stats.py
+  - docs/case-studies/local-vs-prod-verification-violation.md
+  - backend/app/schemas/stats.py
+  - src/i18n.jsx
+tests:
+  - backend/tests/test_admin_stats.py
+  - backend/tests/test_queue_reorder.py
+  - backend/tests/test_error_responses.py
+  - backend/tests/test_cron_tick_stale.py
+  - backend/tests/test_transcribe_task_celery_id.py
+  - backend/tests/test_status_endpoints.py
+  - backend/tests/conftest.py
+  - backend/tests/test_queue_cancel.py
 -->
 
 ---

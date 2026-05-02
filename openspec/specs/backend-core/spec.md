@@ -286,3 +286,51 @@ code:
   - docs/case-studies/transcription-queue-discussion.md
   - docs/case-studies/local-vs-prod-verification-violation.md
 -->
+
+---
+### Requirement: Admin stats endpoint returns aggregate counts
+
+The backend SHALL expose `GET /admin/stats` (guarded by `require_admin`) returning aggregate counts of resources used by the Release Log page banner. The response body SHALL be a JSON object with exactly the fields `episodes_completed` (integer count of `transcripts.status='completed'`), `transcript_chunks` (integer count of rows in `transcript_chunks`), `shows` (integer count of rows in `shows`), and `users` (integer count of rows in `users`).
+
+#### Scenario: Authenticated admin retrieves live stats
+
+- **WHEN** an authenticated admin sends `GET /admin/stats`
+- **THEN** the response SHALL be HTTP 200 with body `{"episodes_completed": <int>, "transcript_chunks": <int>, "shows": <int>, "users": <int>}`
+- **AND** each field value SHALL match the corresponding live database count at request time
+
+#### Scenario: Unauthenticated request rejected
+
+- **WHEN** an unauthenticated request hits `GET /admin/stats`
+- **THEN** the response SHALL be HTTP 401 with error code `not_authenticated`
+
+#### Scenario: Member request rejected
+
+- **WHEN** an authenticated user with `role='member'` sends `GET /admin/stats`
+- **THEN** the response SHALL be HTTP 403 with error code `forbidden`
+
+<!-- @trace
+source: post-auth-ui-and-cleanup
+updated: 2026-05-02
+code:
+  - src/App.jsx
+  - src/QueueTab.jsx
+  - docs/case-studies/transcription-queue-discussion.md
+  - src/ReleaseLogPage.jsx
+  - backend/app/main.py
+  - index.html
+  - src/AuthContext.jsx
+  - src/PodcastSelect.jsx
+  - backend/app/api/stats.py
+  - docs/case-studies/local-vs-prod-verification-violation.md
+  - backend/app/schemas/stats.py
+  - src/i18n.jsx
+tests:
+  - backend/tests/test_admin_stats.py
+  - backend/tests/test_queue_reorder.py
+  - backend/tests/test_error_responses.py
+  - backend/tests/test_cron_tick_stale.py
+  - backend/tests/test_transcribe_task_celery_id.py
+  - backend/tests/test_status_endpoints.py
+  - backend/tests/conftest.py
+  - backend/tests/test_queue_cancel.py
+-->

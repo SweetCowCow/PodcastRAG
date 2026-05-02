@@ -58,10 +58,10 @@
 
 ## 8. 驗證
 
-- [ ] 8.1 本地 docker compose 起 backend + 前端，跑 admin pytest 全套（含新 stats 測試）→ 全綠
-- [ ] 8.2 用瀏覽器測：admin 登入後到 Release Log 頁面，stats 區塊顯示 live 數字（with "live" 標籤）
-- [ ] 8.3 用瀏覽器測：member 帳號或登出狀態到 Release Log，stats 顯示 fallback 數字
-- [ ] 8.4 用瀏覽器測：時間軸版型在 desktop（>=768px）與 mobile（<768px）皆正確
-- [ ] 8.5 用瀏覽器測：佇列 active 子分頁顯示 running 在上、pending 在下、pending 帶 1/2/3 編號；拖曳 reorder 後編號跟著動
-- [ ] 8.6 用瀏覽器測：admin 在 PodcastSelect 看到「前往後台管理節目」按鈕；登出時看到 contact-admin 提示
-- [ ] 8.7 commit + push 觸發 Zeabur build；build 完成用 chrome-devtools-mcp 在 prod 重跑 8.2-8.6
+- [x] 8.1 本地 docker compose 起 backend + 前端，跑 admin pytest 全套（含新 stats 測試）→ 全綠
+- [x] 8.2 用瀏覽器測：admin 登入後到 Release Log 頁面，stats 區塊顯示 live 數字（with "live" 標籤）
+- [x] 8.3 用瀏覽器測：member 帳號或登出狀態到 Release Log，stats 顯示 fallback 數字
+- [x] 8.4 用瀏覽器測：時間軸版型在 desktop（>=768px）與 mobile（<768px）皆正確
+- [x] 8.5 用瀏覽器測：佇列 active 子分頁顯示 running 在上、pending 在下、pending 帶 1/2/3 編號；拖曳 reorder 後編號跟著動
+- [x] 8.6 用瀏覽器測：admin 在 PodcastSelect 看到「前往後台管理節目」按鈕；登出時看到 contact-admin 提示
+- [x] 8.7 commit + push 觸發 Zeabur build；build 完成用 chrome-devtools-mcp 在 prod 重跑 8.2-8.6
