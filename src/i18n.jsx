@@ -90,4 +90,20 @@ function networkErrorMessage(lang) {
   return lang === 'zh' ? '網路連線失敗，請檢查網路' : 'Network error — check your connection';
 }
 
-Object.assign(window, { ERROR_MESSAGES, formatError, networkErrorMessage });
+const UI_STRINGS = {
+  empty_shows_admin_cta: {
+    zh: '前往後台管理節目',
+    en: 'Go to admin show management',
+  },
+  empty_shows_member_hint: {
+    zh: '目前尚無節目，請聯絡管理員加入節目',
+    en: 'No shows yet — please contact an administrator to add one',
+  },
+};
+
+function uiString(key, lang) {
+  const m = UI_STRINGS[key];
+  return m ? m[lang] || m.en : key;
+}
+
+Object.assign(window, { ERROR_MESSAGES, UI_STRINGS, formatError, networkErrorMessage, uiString });

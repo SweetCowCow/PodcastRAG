@@ -58,12 +58,17 @@ if not any(
 
 
 @pytest_asyncio.fixture
-async def client():
+async def client(auth_admin):
+    """Authenticated admin client — most tests in this file hit gated endpoints
+    (POST /shows, POST /shows/{id}/query). Tests that need to verify
+    unauthenticated behavior should construct their own AsyncClient."""
     transport = ASGITransport(app=app, raise_app_exceptions=False)
+    headers = {"origin": "http://localhost:8080", **auth_admin["csrf_headers"]}
     async with AsyncClient(
         transport=transport,
         base_url="http://test",
-        headers={"origin": "http://localhost:8080"},
+        headers=headers,
+        cookies=auth_admin["cookies"],
     ) as ac:
         yield ac
 

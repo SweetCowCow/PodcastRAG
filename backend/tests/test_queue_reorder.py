@@ -14,9 +14,14 @@ from app.models.transcription_queue import QueueStatus, TranscriptionQueue
 
 
 @pytest_asyncio.fixture
-async def client():
+async def client(auth_admin):
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+    async with AsyncClient(
+        transport=transport,
+        base_url="http://test",
+        cookies=auth_admin["cookies"],
+        headers=auth_admin["csrf_headers"],
+    ) as ac:
         yield ac
 
 
@@ -43,7 +48,7 @@ async def three_pending_rows():
         for i, label in enumerate(["a", "b", "c"]):
             ep = Episode(
                 show_id=show.id,
-                episode_guid=str(uuid.uuid4()),
+                guid=str(uuid.uuid4()),
                 title=f"Ep {label}",
                 audio_url="https://example.com/a.mp3",
             )

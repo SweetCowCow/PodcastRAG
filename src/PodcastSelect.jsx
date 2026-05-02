@@ -11,7 +11,7 @@ const deriveColor = (id) => {
   return COLOR_PALETTE[Math.abs(hash) % COLOR_PALETTE.length];
 };
 
-const PodcastSelect = ({ lang, onSelect }) => {
+const PodcastSelect = ({ lang, onSelect, user, setPage }) => {
   const t = lang === 'zh';
   const { isMobile } = useViewport();
   const [search, setSearch] = React.useState('');
@@ -89,9 +89,20 @@ const PodcastSelect = ({ lang, onSelect }) => {
         {!error && shows && shows.length === 0 && (
           <div style={{ textAlign: 'center', padding: '60px 0', color: TOKEN.textMuted }}>
             <Icon name="rss" size={36} color={TOKEN.textMuted} />
-            <p style={{ marginTop: 12, fontSize: 14 }}>
-              {t ? '尚未新增節目，請透過 POST /shows 加入第一個 RSS feed' : 'No shows yet — add one via POST /shows with an RSS URL'}
-            </p>
+            {user && user.role === 'admin' && user.status === 'active' ? (
+              <>
+                <p style={{ marginTop: 12, fontSize: 14, marginBottom: 14 }}>
+                  {t ? '目前尚無節目' : 'No shows yet'}
+                </p>
+                <Btn onClick={() => setPage && setPage('admin-rag')}>
+                  {uiString('empty_shows_admin_cta', lang)}
+                </Btn>
+              </>
+            ) : (
+              <p style={{ marginTop: 12, fontSize: 14 }}>
+                {uiString('empty_shows_member_hint', lang)}
+              </p>
+            )}
           </div>
         )}
 

@@ -17,6 +17,7 @@ from app.api.schedules import router as schedules_router
 from app.api.settings import router as settings_router
 from app.api.shows import router as shows_router
 from app.api.shows import rss_preview_router
+from app.api.stats import router as stats_router
 from app.api.transcripts import router as transcripts_router
 from app.api.users import router as users_router
 from app.core.bootstrap import seed_llm_config_from_env
@@ -100,6 +101,7 @@ app.include_router(admin_router)
 app.include_router(queue_router)
 app.include_router(settings_router)
 app.include_router(users_router)
+app.include_router(stats_router)
 
 
 @app.get("/")

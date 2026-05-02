@@ -106,7 +106,7 @@ const App = () => {
 
       {/* Main content */}
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-        {page === 'select' && <PodcastSelect lang={lang} onSelect={(show) => { setSelectedShow(show); setPage('query'); }} />}
+        {page === 'select' && <PodcastSelect lang={lang} user={user} setPage={handleSetPage} onSelect={(show) => { setSelectedShow(show); setPage('query'); }} />}
         {selectedShow && (page === 'query' || page === 'transcript') && (
           <div style={{ display: page === 'query' ? 'flex' : 'none', flex: 1, overflow: 'hidden' }}>
             <QueryPage lang={lang} show={selectedShow} queryMode={tweaks.queryMode}

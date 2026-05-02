@@ -27,7 +27,7 @@ async def queue_row():
 
         episode = Episode(
             show_id=show.id,
-            episode_guid=str(uuid.uuid4()),
+            guid=str(uuid.uuid4()),
             title="Ep 1",
             audio_url="https://example.com/a.mp3",
         )

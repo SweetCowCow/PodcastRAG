@@ -265,7 +265,7 @@ const QueueTab = ({ lang }) => {
     return formatRelativeTime(ms, lang);
   };
 
-  const Row = ({ row, status, canMoveUp, canMoveDown }) => {
+  const Row = ({ row, status, canMoveUp, canMoveDown, position }) => {
     const isPending = status === 'pending';
     const isRunning = status === 'running';
     const isFailed = status === 'failed';
@@ -294,6 +294,19 @@ const QueueTab = ({ lang }) => {
           transition: 'opacity 0.15s',
         }}
       >
+        {isPending && typeof position === 'number' && (
+          <span title={t ? `排隊順位 ${position}` : `Queue position ${position}`}
+            style={{
+              flexShrink: 0,
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+              width: 26, height: 26, borderRadius: '50%',
+              background: TOKEN.accentDim, color: TOKEN.accent,
+              fontSize: 12, fontWeight: 700, fontVariantNumeric: 'tabular-nums',
+              marginTop: 1,
+            }}>
+            {position}
+          </span>
+        )}
         {isPending && !isMobile && (
           <span style={{ color: TOKEN.textMuted, fontSize: 14, marginTop: 2 }}>⋮⋮</span>
         )}
@@ -466,10 +479,38 @@ const QueueTab = ({ lang }) => {
       })()}
 
       {activeTab === 'active' && (
-        <>
-          <Section title={isMobile ? (t ? '排隊中' : 'Pending') : (t ? '排隊中（可拖動排序）' : 'Pending (drag to reorder)')} rows={pendingDisplay} status="pending" />
-          <Section title={t ? '執行中' : 'Running'} rows={queue.running} status="running" />
-        </>
+        (() => {
+          const runningRows = queue.running || [];
+          const pendingRows = pendingDisplay || [];
+          const total = runningRows.length + pendingRows.length;
+          if (total === 0) {
+            return (
+              <div style={{ color: TOKEN.textMuted, fontSize: 13, padding: '14px 16px', background: TOKEN.surface, border: `1px dashed ${TOKEN.surfaceBorder}`, borderRadius: 8 }}>
+                {t ? '空' : 'Empty'}
+              </div>
+            );
+          }
+          return (
+            <div
+              onDragOver={!isMobile && pendingRows.length > 0 ? onDragOverPending : undefined}
+              style={{ display: 'flex', flexDirection: 'column', gap: 8, pointerEvents: (dragInFlight) ? 'none' : 'auto' }}
+            >
+              {runningRows.map(r => (
+                <Row key={r.id} row={r} status="running" />
+              ))}
+              {pendingRows.map((r, i) => (
+                <Row
+                  key={r.id}
+                  row={r}
+                  status="pending"
+                  position={i + 1}
+                  canMoveUp={i > 0 && !dragInFlight}
+                  canMoveDown={i < pendingRows.length - 1 && !dragInFlight}
+                />
+              ))}
+            </div>
+          );
+        })()
       )}
       {activeTab === 'completed' && (
         queue.completed.length === 0 ? (

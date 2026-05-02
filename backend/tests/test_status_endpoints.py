@@ -118,7 +118,7 @@ async def test_transcription_status_mixed(client, show_with_episodes):
     assert failure["error_category"] is None  # not stored on transcript yet
 
 
-async def test_external_api_status_redis_down(client, monkeypatch):
+async def test_external_api_status_redis_down(client, monkeypatch, auth_admin):
     def _raise(*_a, **_kw):
         import redis as _r
         raise _r.ConnectionError("simulated")
@@ -126,7 +126,9 @@ async def test_external_api_status_redis_down(client, monkeypatch):
     monkeypatch.setattr(
         api_health._get_redis(), "lrange", _raise
     )
-    resp = await client.get("/admin/external-api-status")
+    resp = await client.get(
+        "/admin/external-api-status", cookies=auth_admin["cookies"]
+    )
     assert resp.status_code == 200
     body = resp.json()
     assert len(body["apis"]) == 3
