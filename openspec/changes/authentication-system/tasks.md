@@ -121,15 +121,15 @@
 
 - [x] 17.1 在 Google Cloud Console OAuth client 加 prod redirect URI `https://podcastrag-api.zeabur.app/auth/google/callback`
 - [x] 17.2 在 Zeabur backend service env 設定 GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET / SESSION_SECRET / ADMIN_EMAILS=16249390+SweetCowCow@users.noreply.github.com / FRONTEND_ORIGIN=https://podcastrag.zeabur.app / GOOGLE_REDIRECT_URI=https://podcastrag-api.zeabur.app/auth/google/callback
-- [ ] 17.3 push 觸發 Zeabur build，待 deploy 完成
-- [ ] 17.4 用 chrome-devtools-mcp 在 prod 完整跑：未登入 → 點登入 → Google 授權 → callback 回前端 → 看到 avatar + quota=100 → 進後台（admin email 應可進）→ 用 member 帳號試應被擋
-- [ ] 17.5 用 chrome-devtools-mcp 驗 prod query 扣 quota + 後台手動加值生效
-- [ ] 17.6 確認 prod 的既有功能（show 列表、轉錄序列、設定）仍正常
+- [x] 17.3 push 觸發 Zeabur build，待 deploy 完成
+- [x] 17.4 用 chrome-devtools-mcp 在 prod 完整跑：未登入 → 點登入 → Google 授權 → callback 回前端 → 看到 avatar + quota=100 → 進後台（admin email 應可進）→ 用 member 帳號試應被擋
+- [x] 17.5 用 chrome-devtools-mcp 驗 prod query 扣 quota + 後台手動加值生效
+- [x] 17.6 確認 prod 的既有功能（show 列表、轉錄序列、設定）仍正常
 
 ## 18. 公開 repo 前清理（最後步驟）
 
-- [ ] 18.1 確認 prod 與本地都不再依賴舊密碼字串
-- [ ] 18.2 撰寫 `replacements.txt`（內容：`***REDACTED***==>***REDACTED***` 與 `***REDACTED***==>***REDACTED***`）（對應「公開 repo 前洗 git history 用 git filter-repo」決策）
+- [x] 18.1 確認 prod 與本地都不再依賴舊密碼字串
+- [x] 18.2 撰寫 `replacements.txt`（內容：`***REDACTED***==>***REDACTED***` 與 `***REDACTED***==>***REDACTED***`）（對應「公開 repo 前洗 git history 用 git filter-repo」決策）
 - [x] 18.3 由使用者親自執行 `git filter-repo --replace-text replacements.txt` 並警示後果（須重新 clone）
 - [x] 18.4 由使用者親自 `git push --force-with-lease origin main`
 - [x] 18.5 觸發 Zeabur 重新 build，驗證 prod 仍正常運作
