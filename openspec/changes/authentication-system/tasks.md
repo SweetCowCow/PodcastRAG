@@ -130,6 +130,6 @@
 
 - [ ] 18.1 確認 prod 與本地都不再依賴舊密碼字串
 - [ ] 18.2 撰寫 `replacements.txt`（內容：`***REDACTED***==>***REDACTED***` 與 `***REDACTED***==>***REDACTED***`）（對應「公開 repo 前洗 git history 用 git filter-repo」決策）
-- [ ] 18.3 由使用者親自執行 `git filter-repo --replace-text replacements.txt` 並警示後果（須重新 clone）
-- [ ] 18.4 由使用者親自 `git push --force-with-lease origin main`
-- [ ] 18.5 觸發 Zeabur 重新 build，驗證 prod 仍正常運作
+- [x] 18.3 由使用者親自執行 `git filter-repo --replace-text replacements.txt` 並警示後果（須重新 clone）
+- [x] 18.4 由使用者親自 `git push --force-with-lease origin main`
+- [x] 18.5 觸發 Zeabur 重新 build，驗證 prod 仍正常運作
