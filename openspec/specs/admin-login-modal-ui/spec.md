@@ -8,44 +8,85 @@ TBD - created by archiving change 'remove-admin-login-demo-hint'. Update Purpose
 
 ### Requirement: Admin login modal SHALL NOT expose valid credentials in UI
 
-The admin login modal SHALL NOT render any text, placeholder, tooltip, or helper note that reveals a working username or password (or any substring sufficient to recover one) for the admin account.
+The frontend SHALL NOT render any text, placeholder, tooltip, helper note, or hardcoded string anywhere in the bundle that reveals a working username or password (or any substring sufficient to recover one) for any admin account. Because authentication has moved to Google SSO, the application SHALL NOT contain any local password comparison string in source code.
 
-#### Scenario: Modal opens for an unauthenticated visitor
+#### Scenario: Bundle contains no hardcoded admin credential
 
-- **WHEN** an unauthenticated visitor opens the admin login modal
-- **THEN** no element inside the modal SHALL display the strings `***REDACTED***`, `示範帳號`, or `Demo:` followed by credentials
-- **AND** no helper text SHALL state or hint at the actual username/password pair required to authenticate
+- **WHEN** the frontend source files (`src/**/*.jsx`, `index.html`) are searched for the strings `***REDACTED***`, `***REDACTED***`, `示範帳號`, or `Demo:` followed by credentials
+- **THEN** no occurrence SHALL be found
+- **AND** no JavaScript expression SHALL compare a user-entered password against a string literal
 
 ##### Example: previously-shown demo hint is gone
 
-- **GIVEN** the modal is rendered in either Traditional Chinese or English locale
-- **WHEN** the DOM under the modal root is inspected
-- **THEN** it MUST NOT contain the substring `admin / ***REDACTED***`
+- **GIVEN** the application is rendered in either Traditional Chinese or English locale
+- **WHEN** the DOM and the page-loaded JavaScript are inspected
+- **THEN** they MUST NOT contain the substrings `admin / ***REDACTED***` or `admin / ***REDACTED***`
 
 
 <!-- @trace
-source: remove-admin-login-demo-hint
-updated: 2026-04-27
+source: authentication-system
+updated: 2026-05-02
 code:
-  - src/App.jsx
+  - docs/case-studies/transcription-queue-discussion.md
   - docs/case-studies/local-vs-prod-verification-violation.md
 -->
 
 ---
-### Requirement: Admin login modal SHALL keep its existing input and action affordances
+### Requirement: Top navigation provides Google sign-in entry point
 
-The admin login modal SHALL continue to provide a username field, a password field, a submit ("Login") button, and a cancel button, with bilingual labels driven by the active language.
+The top navigation bar SHALL render a "Sign in with Google" / "使用 Google 登入" button when no authenticated session exists. Clicking the button SHALL navigate the browser to the backend endpoint `GET /auth/google/start` (full URL constructed from the configured backend base URL).
 
-#### Scenario: Modal renders with required controls
+#### Scenario: Unauthenticated visitor sees the sign-in button
 
-- **WHEN** the modal is rendered
-- **THEN** it MUST contain one username input, one password input, one submit button, and one cancel button
-- **AND** the labels MUST switch between Traditional Chinese and English based on the `lang` prop
+- **WHEN** the application loads without a valid session cookie
+- **THEN** the top navigation bar SHALL contain exactly one element labeled "Sign in with Google" or "使用 Google 登入" (depending on active language)
+- **AND** the element SHALL navigate to `<BACKEND_BASE_URL>/auth/google/start` when clicked
+
+#### Scenario: Authenticated visitor does not see the sign-in button
+
+- **WHEN** the application loads with a valid session cookie and `GET /me` returns a user payload
+- **THEN** the top navigation bar SHALL NOT render the sign-in button
+- **AND** SHALL render the user's avatar, name, remaining quota, and a logout affordance instead
 
 <!-- @trace
-source: remove-admin-login-demo-hint
-updated: 2026-04-27
+source: authentication-system
+updated: 2026-05-02
+-->
+
+
+<!-- @trace
+source: authentication-system
+updated: 2026-05-02
 code:
-  - src/App.jsx
+  - docs/case-studies/transcription-queue-discussion.md
+  - docs/case-studies/local-vs-prod-verification-violation.md
+-->
+
+---
+### Requirement: Admin section is gated by authenticated admin role
+
+The frontend admin section (any page whose path starts with `admin-`) SHALL only render when the authenticated user's `role` is `admin` and `status` is `active`. Unauthenticated users SHALL be redirected to the sign-in flow; authenticated members SHALL be redirected to the public landing page.
+
+#### Scenario: Member tries to navigate to admin URL
+
+- **WHEN** a user with `role='member'` triggers navigation to any `admin-*` page
+- **THEN** the admin pages SHALL NOT render
+- **AND** the user SHALL be redirected to the `select` page
+
+#### Scenario: Unauthenticated user clicks admin nav
+
+- **WHEN** an unauthenticated user clicks the admin navigation link
+- **THEN** the browser SHALL be navigated to the backend Google sign-in endpoint
+
+<!-- @trace
+source: authentication-system
+updated: 2026-05-02
+-->
+
+<!-- @trace
+source: authentication-system
+updated: 2026-05-02
+code:
+  - docs/case-studies/transcription-queue-discussion.md
   - docs/case-studies/local-vs-prod-verification-violation.md
 -->

@@ -180,12 +180,14 @@ code:
 ---
 ### Requirement: Semantic search endpoint returns ranked chunks
 
-The backend SHALL expose `POST /shows/{show_id}/query` which, when called with `mode="search"` and a non-empty `question`, SHALL embed the question, run pgvector cosine similarity search against `transcript_chunks` filtered to `completed` transcripts belonging to the specified show, and return the top 8 chunks ordered by ascending cosine distance.
+The backend SHALL expose `POST /shows/{show_id}/query` which SHALL be guarded by `require_authenticated_user` and SHALL atomically decrement the caller's `quota_remaining` (incrementing `total_queries`) before invoking any embedding or LLM call. When called by an authenticated user with `quota_remaining > 0`, with `mode="search"` and a non-empty `question`, the endpoint SHALL embed the question, run pgvector cosine similarity search against `transcript_chunks` filtered to `completed` transcripts belonging to the specified show, and return the top 8 chunks ordered by ascending cosine distance. The response payload SHALL include the user's updated `quota_remaining` value.
 
 #### Scenario: Search returns top-K chunks from the specified show
 
-- **WHEN** a client calls `POST /shows/{show_id}/query` with body `{"question": "...", "mode": "search"}` and the show has at least 8 chunks from completed transcripts
-- **THEN** the endpoint SHALL return HTTP 200 with a JSON body containing a `results` array of exactly 8 items, each item including `episode_id`, `episode_title`, `start_time`, `end_time`, `text`, and `distance`, ordered by ascending `distance`
+- **WHEN** an authenticated user with `quota_remaining > 0` calls `POST /shows/{show_id}/query` with body `{"question": "...", "mode": "search"}` and the show has at least 8 chunks from completed transcripts
+- **THEN** the user's `quota_remaining` SHALL be decremented by 1 atomically before the embedding call
+- **AND** the endpoint SHALL return HTTP 200 with a JSON body containing a `results` array of exactly 8 items (each with `episode_id`, `episode_title`, `start_time`, `end_time`, `text`, `distance`) ordered by ascending `distance`
+- **AND** the response SHALL include the updated `quota_remaining`
 
 #### Scenario: Search excludes other shows
 
@@ -197,70 +199,26 @@ The backend SHALL expose `POST /shows/{show_id}/query` which, when called with `
 - **WHEN** a search query is issued and one episode in the show has a transcript whose `status` is not `completed`
 - **THEN** the response SHALL NOT include any chunk from that incomplete transcript
 
+#### Scenario: Unauthenticated request is rejected
+
+- **WHEN** a request to `POST /shows/{show_id}/query` arrives with no valid session cookie
+- **THEN** the response SHALL be HTTP 401 with error code `not_authenticated`
+- **AND** no embedding API SHALL be called
+
+#### Scenario: Quota-exhausted request is rejected before LLM call
+
+- **WHEN** an authenticated user with `quota_remaining=0` sends a query request
+- **THEN** the response SHALL be HTTP 429 with error code `quota_exhausted`
+- **AND** no embedding or LLM API SHALL be called
+- **AND** `total_queries` SHALL NOT be incremented
+
 
 <!-- @trace
-source: rag-query
-updated: 2026-04-23
+source: authentication-system
+updated: 2026-05-02
 code:
-  - backend/alembic/versions/c1f2d3e4a5b6_add_rag_tables.py
-  - backend/alembic/versions/a7b3c9d4e2f1_add_transcription_columns.py
-  - backend/app/api/transcripts.py
-  - backend/app/services/__init__.py
-  - backend/app/api/query.py
-  - backend/alembic/env.py
-  - backend/app/core/__init__.py
-  - backend/app/models/llm_config.py
-  - backend/app/services/chunking.py
-  - backend/app/workers/dispatch.py
-  - backend/requirements.txt
-  - src/AdminPage.jsx
-  - backend/app/workers/celery_app.py
-  - backend/app/workers/__init__.py
-  - backend/.env.example
-  - backend/app/services/embedding.py
-  - backend/app/services/llm_config.py
-  - backend/.dockerignore
-  - backend/app/api/admin.py
-  - backend/app/core/database.py
-  - backend/app/main.py
-  - backend/app/services/rag.py
-  - backend/app/schemas/__init__.py
-  - backend/app/__init__.py
-  - backend/app/schemas/transcript.py
-  - backend/app/services/transcription/base.py
-  - backend/app/api/health.py
-  - src/Shared.jsx
-  - backend/app/schemas/admin.py
-  - backend/app/core/bootstrap.py
-  - backend/app/services/storage.py
-  - backend/alembic/README
-  - backend/alembic.ini
-  - backend/app/schemas/show.py
-  - backend/app/models/__init__.py
-  - backend/app/core/config.py
-  - backend/app/schemas/episode.py
-  - backend/app/services/transcription/factory.py
-  - backend/app/services/transcription/openai_provider.py
-  - .spectra/spectra.db
-  - backend/app/models/transcript.py
-  - backend/app/schemas/query.py
-  - backend/alembic/versions/91e48beb1237_initial_schema.py
-  - backend/alembic/script.py.mako
-  - backend/app/models/transcript_segment.py
-  - backend/app/services/transcription/faster_whisper_provider.py
-  - backend/app/api/episodes.py
-  - backend/Dockerfile
-  - src/QueryPage.jsx
-  - backend/app/api/shows.py
-  - backend/app/models/transcript_chunk.py
-  - backend/app/api/__init__.py
-  - backend/app/models/episode.py
-  - backend/app/models/show.py
-  - backend/app/services/transcription/__init__.py
-  - backend/docker-compose.yml
-  - backend/app/services/rss_parser.py
-  - backend/app/workers/tasks.py
-  - backend/app/schemas/sync.py
+  - docs/case-studies/transcription-queue-discussion.md
+  - docs/case-studies/local-vs-prod-verification-violation.md
 -->
 
 ---
