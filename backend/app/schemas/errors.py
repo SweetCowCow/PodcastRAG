@@ -13,6 +13,15 @@ class ErrorCode:
     RSS_INVALID = "rss_invalid"
     SHOW_DUPLICATE_RSS = "show_duplicate_rss"
     INTERNAL_ERROR = "internal_error"
+    NOT_AUTHENTICATED = "not_authenticated"
+    FORBIDDEN = "forbidden"
+    CSRF_TOKEN_MISSING = "csrf_token_missing"
+    CSRF_TOKEN_INVALID = "csrf_token_invalid"
+    ORIGIN_MISSING = "origin_missing"
+    ORIGIN_FORBIDDEN = "origin_forbidden"
+    INVALID_OAUTH_STATE = "invalid_oauth_state"
+    ACCOUNT_DISABLED = "account_disabled"
+    QUOTA_EXHAUSTED = "quota_exhausted"
 
 
 class ErrorResponse(BaseModel):

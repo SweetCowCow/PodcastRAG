@@ -9,7 +9,7 @@ const ExternalApiStatusTab = ({ lang }) => {
     const controller = new AbortController();
     const fetchOnce = async () => {
       try {
-        const res = await fetch(`${API_BASE}/admin/external-api-status`, { signal: controller.signal });
+        const res = await apiFetch(`/admin/external-api-status`, { signal: controller.signal });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const json = await res.json();
         if (!cancelled) { setData(json); setError(null); }

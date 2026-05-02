@@ -5,6 +5,7 @@ from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
+from app.core.security import require_admin
 from app.models.episode import Episode
 from app.models.show import Show
 from app.models.show_schedule import ShowSchedule
@@ -15,7 +16,7 @@ from app.schemas.schedule import (
     ScheduleUpsert,
 )
 
-router = APIRouter(tags=["schedules"])
+router = APIRouter(tags=["schedules"], dependencies=[Depends(require_admin)])
 
 
 SCHEDULE_DEFAULTS = {

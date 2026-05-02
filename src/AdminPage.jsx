@@ -1,5 +1,5 @@
 // Admin Page — API Keys, LLM, RAG Config, Transcription Schedule
-const AdminPage = ({ lang, activePage }) => {
+const AdminPage = ({ lang, activePage, currentUser }) => {
   const t = lang === 'zh';
   const pages = {
     'admin-api': <ApiKeysTab lang={lang} />,
@@ -7,6 +7,7 @@ const AdminPage = ({ lang, activePage }) => {
     'admin-rag': <RAGTab lang={lang} />,
     'admin-schedule': <ScheduleTab lang={lang} />,
     'admin-queue': <QueueTab lang={lang} />,
+    'admin-users': <UserManagementTab lang={lang} currentUser={currentUser} />,
     'admin-external-api': <ExternalApiStatusTab lang={lang} />,
   };
   return (
@@ -14,7 +15,7 @@ const AdminPage = ({ lang, activePage }) => {
       <div style={{ padding: '32px 40px 16px', borderBottom: `1px solid ${TOKEN.surfaceBorder}`, background: TOKEN.surface }}>
         <p style={{ color: TOKEN.accent, fontSize: 12, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', margin: '0 0 4px' }}>{t ? '後台管理' : 'Administration'}</p>
         <h1 style={{ color: TOKEN.text, fontSize: 24, fontWeight: 700, margin: 0 }}>
-          {{ 'admin-api': t ? 'API 金鑰管理' : 'API Key Management', 'admin-llm': t ? 'LLM 模型設定' : 'LLM Model Settings', 'admin-rag': t ? 'RAG 參數設定' : 'RAG Configuration', 'admin-schedule': t ? '轉錄排程管理' : 'Transcription Schedule', 'admin-queue': t ? '轉錄序列' : 'Transcription Queue', 'admin-external-api': t ? '外部 API 狀態' : 'External API Status' }[activePage]}
+          {{ 'admin-api': t ? 'API 金鑰管理' : 'API Key Management', 'admin-llm': t ? 'LLM 模型設定' : 'LLM Model Settings', 'admin-rag': t ? 'RAG 參數設定' : 'RAG Configuration', 'admin-schedule': t ? '轉錄排程管理' : 'Transcription Schedule', 'admin-queue': t ? '轉錄序列' : 'Transcription Queue', 'admin-users': t ? '使用者管理' : 'User Management', 'admin-external-api': t ? '外部 API 狀態' : 'External API Status' }[activePage]}
         </h1>
       </div>
       <div style={{ padding: '28px 40px 40px' }}>{pages[activePage]}</div>
@@ -106,7 +107,7 @@ const LLMTab = ({ lang }) => {
     setLoading(true);
     setMessage(null);
     try {
-      const res = await fetch(`${API_BASE}/admin/llm-config`);
+      const res = await apiFetch(`/admin/llm-config`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       setForm({
@@ -151,7 +152,7 @@ const LLMTab = ({ lang }) => {
       payload.rewrite_api_key = form.rewrite_api_key;
     }
     try {
-      const res = await fetch(`${API_BASE}/admin/llm-config`, {
+      const res = await apiFetch(`/admin/llm-config`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -329,7 +330,7 @@ const useTranscriptionStatus = (showId, enabled) => {
     const controller = new AbortController();
     const fetchOnce = async () => {
       try {
-        const res = await fetch(`${API_BASE}/shows/${showId}/transcription-status`, { signal: controller.signal });
+        const res = await apiFetch(`/shows/${showId}/transcription-status`, { signal: controller.signal });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const json = await res.json();
         if (!cancelled) { setData(json); setError(null); }
@@ -448,7 +449,7 @@ const ScheduleTab = ({ lang }) => {
 
   const fetchQueueStatus = React.useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE}/admin/queue-status`);
+      const res = await apiFetch(`/admin/queue-status`);
       if (!res.ok) return;
       setQueueStatus(await res.json());
     } catch (_) {
@@ -466,7 +467,7 @@ const ScheduleTab = ({ lang }) => {
     setLoading(true);
     setFetchError(null);
     try {
-      const res = await fetch(`${API_BASE}/admin/schedules`);
+      const res = await apiFetch(`/admin/schedules`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       setShows(data);
@@ -540,7 +541,7 @@ const ScheduleTab = ({ lang }) => {
   const handleSaveEdit = async () => {
     if (!editState) return;
     try {
-      const res = await fetch(`${API_BASE}/shows/${editState.item.show_id}/schedule`, {
+      const res = await apiFetch(`/shows/${editState.item.show_id}/schedule`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(editState.form),
@@ -564,7 +565,7 @@ const ScheduleTab = ({ lang }) => {
     try {
       const results = await Promise.allSettled(
         ids.map(async (id) => {
-          const res = await fetch(`${API_BASE}/shows/${id}/sync`, { method: 'POST' });
+          const res = await apiFetch(`/shows/${id}/sync`, { method: 'POST' });
           if (!res.ok) {
             const detail = await res.text();
             throw new Error(detail || `HTTP ${res.status}`);
@@ -605,7 +606,7 @@ const ScheduleTab = ({ lang }) => {
       const results = await Promise.allSettled(
         ids.map(async (id) => {
           // Omit max_episodes query so backend uses each show's own schedule.max_episodes.
-          const res = await fetch(`${API_BASE}/shows/${id}/transcribe-latest`, { method: 'POST' });
+          const res = await apiFetch(`/shows/${id}/transcribe-latest`, { method: 'POST' });
           if (!res.ok) {
             const detail = await res.text();
             throw new Error(detail || `HTTP ${res.status}`);
@@ -638,7 +639,7 @@ const ScheduleTab = ({ lang }) => {
   const handleRunNow = async (item) => {
     setRunningId(item.show_id);
     try {
-      const res = await fetch(`${API_BASE}/shows/${item.show_id}/transcribe-latest`, { method: 'POST' });
+      const res = await apiFetch(`/shows/${item.show_id}/transcribe-latest`, { method: 'POST' });
       if (!res.ok) {
         const detail = await res.text();
         throw new Error(detail || `HTTP ${res.status}`);
@@ -661,7 +662,7 @@ const ScheduleTab = ({ lang }) => {
     setRssError(null);
     setRssPreview(null);
     try {
-      const res = await fetch(`${API_BASE}/rss-preview?url=${encodeURIComponent(form.rss)}`);
+      const res = await apiFetch(`/rss-preview?url=${encodeURIComponent(form.rss)}`);
       if (!res.ok) {
         const detail = await res.text();
         throw new Error(detail || `HTTP ${res.status}`);
@@ -679,7 +680,7 @@ const ScheduleTab = ({ lang }) => {
   const handleAddSchedule = async () => {
     if (!form.rss || !form.name) return;
     try {
-      const createRes = await fetch(`${API_BASE}/shows`, {
+      const createRes = await apiFetch(`/shows`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ rss_url: form.rss }),
@@ -692,12 +693,12 @@ const ScheduleTab = ({ lang }) => {
       if (createRes.ok) {
         show = await createRes.json();
       } else {
-        const listRes = await fetch(`${API_BASE}/shows`);
+        const listRes = await apiFetch(`/shows`);
         const list = await listRes.json();
         show = list.find(s => s.rss_url === form.rss);
         if (!show) throw new Error(t ? '找不到對應節目' : 'Show not found');
       }
-      await fetch(`${API_BASE}/shows/${show.id}/schedule`, {
+      await apiFetch(`/shows/${show.id}/schedule`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -721,7 +722,7 @@ const ScheduleTab = ({ lang }) => {
   const handleSyncShow = async (item) => {
     setSyncingId(item.show_id);
     try {
-      const res = await fetch(`${API_BASE}/shows/${item.show_id}/sync`, { method: 'POST' });
+      const res = await apiFetch(`/shows/${item.show_id}/sync`, { method: 'POST' });
       if (!res.ok) {
         const detail = await res.text();
         throw new Error(detail || `HTTP ${res.status}`);
@@ -740,7 +741,7 @@ const ScheduleTab = ({ lang }) => {
 
   const handleRemoveSchedule = async (item) => {
     try {
-      const res = await fetch(`${API_BASE}/shows/${item.show_id}/schedule`, { method: 'DELETE' });
+      const res = await apiFetch(`/shows/${item.show_id}/schedule`, { method: 'DELETE' });
       if (!res.ok && res.status !== 204) {
         const detail = await res.text();
         throw new Error(detail || `HTTP ${res.status}`);
@@ -753,7 +754,7 @@ const ScheduleTab = ({ lang }) => {
 
   const handleDeleteShow = async (item) => {
     try {
-      const res = await fetch(`${API_BASE}/shows/${item.show_id}`, { method: 'DELETE' });
+      const res = await apiFetch(`/shows/${item.show_id}`, { method: 'DELETE' });
       if (!res.ok && res.status !== 204) {
         const detail = await res.text();
         throw new Error(detail || `HTTP ${res.status}`);
@@ -767,7 +768,7 @@ const ScheduleTab = ({ lang }) => {
   const openDeleteShowConfirm = async (item) => {
     let pending_count = 0, running_count = 0;
     try {
-      const res = await fetch(`${API_BASE}/admin/queue`);
+      const res = await apiFetch(`/admin/queue`);
       if (res.ok) {
         const q = await res.json();
         pending_count = (q.pending || []).filter(r => r.show_id === item.show_id).length;

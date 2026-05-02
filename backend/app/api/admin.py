@@ -1,4 +1,6 @@
 from fastapi import APIRouter, Depends
+
+from app.core.security import require_admin
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -21,7 +23,9 @@ from app.services import api_health
 from app.services.llm_config import get_config, update_config
 from app.workers.throttle import GLOBAL_ACTIVE_KEY, _get_redis
 
-router = APIRouter(prefix="/admin", tags=["admin"])
+router = APIRouter(
+    prefix="/admin", tags=["admin"], dependencies=[Depends(require_admin)]
+)
 
 
 @router.get("/llm-config", response_model=LlmConfigResponse)

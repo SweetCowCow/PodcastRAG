@@ -23,8 +23,8 @@ const QueueTab = ({ lang }) => {
     const fetchAll = async () => {
       try {
         const [qRes, sRes] = await Promise.all([
-          fetch(`${API_BASE}/admin/queue`),
-          fetch(`${API_BASE}/admin/settings`),
+          apiFetch(`/admin/queue`),
+          apiFetch(`/admin/settings`),
         ]);
         if (!qRes.ok || !sRes.ok) throw new Error(`HTTP ${qRes.status}/${sRes.status}`);
         const q = await qRes.json();
@@ -45,7 +45,7 @@ const QueueTab = ({ lang }) => {
 
   const refetch = async () => {
     try {
-      const qRes = await fetch(`${API_BASE}/admin/queue`);
+      const qRes = await apiFetch(`/admin/queue`);
       if (qRes.ok) setQueue(await qRes.json());
     } catch {}
   };
@@ -57,7 +57,7 @@ const QueueTab = ({ lang }) => {
   const cancelPending = async (row) => {
     clearActionErr(row.id);
     try {
-      const res = await fetch(`${API_BASE}/admin/queue/${row.id}/cancel`, { method: 'POST' });
+      const res = await apiFetch(`/admin/queue/${row.id}/cancel`, { method: 'POST' });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         setActionErr(row.id, body.detail || `HTTP ${res.status}`);
@@ -77,7 +77,7 @@ const QueueTab = ({ lang }) => {
     setConfirmLoading(true);
     clearActionErr(confirmTarget.id);
     try {
-      const res = await fetch(`${API_BASE}/admin/queue/${confirmTarget.id}/cancel?force=true`, { method: 'POST' });
+      const res = await apiFetch(`/admin/queue/${confirmTarget.id}/cancel?force=true`, { method: 'POST' });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         setActionErr(confirmTarget.id, body.detail || `HTTP ${res.status}`);
@@ -97,7 +97,7 @@ const QueueTab = ({ lang }) => {
   const retryRow = async (row) => {
     clearActionErr(row.id);
     try {
-      const res = await fetch(`${API_BASE}/episodes/${row.episode_id}/transcribe`, { method: 'POST' });
+      const res = await apiFetch(`/episodes/${row.episode_id}/transcribe`, { method: 'POST' });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         setActionErr(row.id, body.detail || `HTTP ${res.status}`);
@@ -107,14 +107,14 @@ const QueueTab = ({ lang }) => {
   const ignoreRow = async (row) => {
     clearActionErr(row.id);
     try {
-      const res = await fetch(`${API_BASE}/admin/queue/${row.id}/ignore`, { method: 'POST' });
+      const res = await apiFetch(`/admin/queue/${row.id}/ignore`, { method: 'POST' });
       if (!res.ok) setActionErr(row.id, `HTTP ${res.status}`);
     } catch (e) { setActionErr(row.id, e.message || String(e)); }
   };
   const unignoreRow = async (row) => {
     clearActionErr(row.id);
     try {
-      const res = await fetch(`${API_BASE}/admin/queue/${row.id}/unignore`, { method: 'POST' });
+      const res = await apiFetch(`/admin/queue/${row.id}/unignore`, { method: 'POST' });
       if (!res.ok) setActionErr(row.id, `HTTP ${res.status}`);
     } catch (e) { setActionErr(row.id, e.message || String(e)); }
   };
@@ -129,7 +129,7 @@ const QueueTab = ({ lang }) => {
     debounceRef.current = setTimeout(async () => {
       if (Number.isNaN(num)) return;
       try {
-        const res = await fetch(`${API_BASE}/admin/settings`, {
+        const res = await apiFetch(`/admin/settings`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ max_concurrent_transcriptions: num }),
@@ -186,7 +186,7 @@ const QueueTab = ({ lang }) => {
     setPendingOverride(newOrder);
     setDragInFlight(true);
     try {
-      const res = await fetch(`${API_BASE}/admin/queue/${row.id}/position`, {
+      const res = await apiFetch(`/admin/queue/${row.id}/position`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ position: target.position }),
@@ -236,7 +236,7 @@ const QueueTab = ({ lang }) => {
     setDraggingId(null);
     setDragInFlight(true);
     try {
-      const res = await fetch(`${API_BASE}/admin/queue/${sourceId}/position`, {
+      const res = await apiFetch(`/admin/queue/${sourceId}/position`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ position: targetRow.position }),

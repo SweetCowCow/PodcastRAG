@@ -25,7 +25,7 @@ const PodcastSelect = ({ lang, onSelect }) => {
     setError(null);
     (async () => {
       try {
-        const res = await fetch(`${API_BASE}/shows`);
+        const res = await apiFetch(`/shows`);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
         if (!cancelled) setShows(data);

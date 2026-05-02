@@ -37,6 +37,42 @@ const ERROR_MESSAGES = {
     zh: () => '伺服器內部錯誤，請稍後重試',
     en: () => 'Internal server error — please retry later',
   },
+  not_authenticated: {
+    zh: () => '請先登入',
+    en: () => 'Please sign in',
+  },
+  forbidden: {
+    zh: () => '權限不足',
+    en: () => 'Permission denied',
+  },
+  csrf_token_missing: {
+    zh: () => '安全驗證失敗（CSRF token 缺失），請重新整理頁面',
+    en: () => 'Security check failed (CSRF token missing) — refresh the page',
+  },
+  csrf_token_invalid: {
+    zh: () => '安全驗證失敗（CSRF token 不符），請重新整理頁面',
+    en: () => 'Security check failed (CSRF token invalid) — refresh the page',
+  },
+  origin_missing: {
+    zh: () => '請求來源驗證失敗',
+    en: () => 'Origin validation failed',
+  },
+  origin_forbidden: {
+    zh: () => '請求來源不被允許',
+    en: () => 'Origin not allowed',
+  },
+  account_disabled: {
+    zh: () => '帳號已停用，請聯絡管理員',
+    en: () => 'Account is disabled — contact administrator',
+  },
+  invalid_oauth_state: {
+    zh: () => '登入流程驗證失敗，請重新登入',
+    en: () => 'OAuth state invalid — please sign in again',
+  },
+  quota_exhausted: {
+    zh: () => '查詢額度已用完，請聯絡管理員加值',
+    en: () => 'Query quota exhausted — contact admin to top up',
+  },
 };
 
 function formatError(errorBody, lang) {

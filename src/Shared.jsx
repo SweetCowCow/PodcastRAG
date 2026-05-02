@@ -80,6 +80,7 @@ const Icon = ({ name, size = 18, color = 'currentColor', style = {} }) => {
     chevronUp: <svg viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={s}><polyline points="18 15 12 9 6 15"/></svg>,
     chevronDown: <svg viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={s}><polyline points="6 9 12 15 18 9"/></svg>,
     x: <svg viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={s}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>,
+    users: <svg viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={s}><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>,
   };
   return paths[name] || <svg viewBox="0 0 24 24" style={s}><circle cx="12" cy="12" r="10" stroke={color} strokeWidth="2" fill="none"/></svg>;
 };
@@ -141,11 +142,12 @@ const Input = ({ value, onChange, placeholder, type = 'text', icon, style: extra
 };
 
 // --- Top Nav ---
-const TopNav = ({ lang, page, setPage, onToggleLang, onAdminClick }) => {
+const TopNav = ({ lang, page, setPage, onToggleLang, onAdminClick, user, onSignIn, onLogout }) => {
   const t = lang === 'zh';
   const isAdmin = page && page.startsWith('admin');
   const { isMobile } = useViewport();
   const [menuOpen, setMenuOpen] = React.useState(false);
+  const [userMenuOpen, setUserMenuOpen] = React.useState(false);
 
   const mainItems = [
     { id: 'select', icon: 'podcast', label: t ? '節目選擇' : 'Shows' },
@@ -158,6 +160,7 @@ const TopNav = ({ lang, page, setPage, onToggleLang, onAdminClick }) => {
     { id: 'admin-rag', icon: 'database', label: t ? 'RAG 設定' : 'RAG Config' },
     { id: 'admin-schedule', icon: 'calendar', label: t ? '轉錄排程' : 'Transcription' },
     { id: 'admin-queue', icon: 'list', label: t ? '轉錄序列' : 'Queue' },
+    { id: 'admin-users', icon: 'users', label: t ? '使用者' : 'Users' },
     { id: 'admin-external-api', icon: 'globe', label: t ? '外部 API 狀態' : 'External API Status' },
   ];
 
@@ -203,12 +206,34 @@ const TopNav = ({ lang, page, setPage, onToggleLang, onAdminClick }) => {
           </nav>
         )}
 
-        {/* Right: lang toggle (desktop only — mobile lang is in dropdown) */}
+        {/* Right: lang toggle + user / sign-in (desktop only — mobile lang is in dropdown) */}
         {!isMobile && (
-          <button onClick={onToggleLang}
-            style={{ display: 'flex', alignItems: 'center', gap: 6, background: TOKEN.surfaceRaised, border: `1px solid ${TOKEN.surfaceBorder}`, borderRadius: 7, padding: '5px 11px', color: TOKEN.textSecondary, cursor: 'pointer', fontSize: 13, fontFamily: 'inherit' }}>
-            <Icon name="globe" size={13} />
-            {lang === 'zh' ? '中文' : 'EN'}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <button onClick={onToggleLang}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, background: TOKEN.surfaceRaised, border: `1px solid ${TOKEN.surfaceBorder}`, borderRadius: 7, padding: '5px 11px', color: TOKEN.textSecondary, cursor: 'pointer', fontSize: 13, fontFamily: 'inherit' }}>
+              <Icon name="globe" size={13} />
+              {lang === 'zh' ? '中文' : 'EN'}
+            </button>
+            {user ? (
+              <UserMenu user={user} lang={lang} open={userMenuOpen}
+                setOpen={setUserMenuOpen} onLogout={onLogout} />
+            ) : (
+              <button onClick={onSignIn}
+                style={{ display: 'flex', alignItems: 'center', gap: 6, background: TOKEN.accent, border: 'none', borderRadius: 7, padding: '6px 12px', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600, fontFamily: 'inherit' }}>
+                <Icon name="key" size={13} color="#fff" />
+                {t ? '使用 Google 登入' : 'Sign in with Google'}
+              </button>
+            )}
+          </div>
+        )}
+        {isMobile && user && (
+          <UserMenu user={user} lang={lang} open={userMenuOpen}
+            setOpen={setUserMenuOpen} onLogout={onLogout} compact />
+        )}
+        {isMobile && !user && (
+          <button onClick={onSignIn}
+            style={{ background: TOKEN.accent, border: 'none', borderRadius: 7, padding: '6px 10px', color: '#fff', cursor: 'pointer', fontSize: 12, fontWeight: 600, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+            {t ? '登入' : 'Sign in'}
           </button>
         )}
       </div>
@@ -251,6 +276,58 @@ const TopNav = ({ lang, page, setPage, onToggleLang, onAdminClick }) => {
             <TopNavItem key={item.id} icon={item.icon} label={item.label} active={page === item.id}
               onClick={() => setPage(item.id)} secondary mobile={isMobile} />
           ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const UserMenu = ({ user, lang, open, setOpen, onLogout, compact }) => {
+  const t = lang === 'zh';
+  const ref = React.useRef(null);
+  const quotaLow = user.quota_remaining === 0;
+  React.useEffect(() => {
+    if (!open) return;
+    const onClick = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', onClick);
+    return () => document.removeEventListener('mousedown', onClick);
+  }, [open, setOpen]);
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <button onClick={() => setOpen(v => !v)}
+        title={user.email}
+        style={{ display: 'flex', alignItems: 'center', gap: 8, background: TOKEN.surfaceRaised, border: `1px solid ${TOKEN.surfaceBorder}`, borderRadius: 99, padding: compact ? '3px 6px' : '4px 10px 4px 4px', color: TOKEN.text, cursor: 'pointer', fontSize: 12, fontFamily: 'inherit' }}>
+        {user.avatar_url
+          ? <img src={user.avatar_url} alt="" referrerPolicy="no-referrer" style={{ width: 26, height: 26, borderRadius: '50%' }} />
+          : <div style={{ width: 26, height: 26, borderRadius: '50%', background: TOKEN.accentDim, display: 'flex', alignItems: 'center', justifyContent: 'center', color: TOKEN.accent, fontWeight: 700 }}>{(user.name || user.email || '?').slice(0,1).toUpperCase()}</div>}
+        {!compact && (
+          <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: 1.15 }}>
+            <span style={{ fontSize: 12, fontWeight: 600 }}>{user.name || user.email.split('@')[0]}</span>
+            <span style={{ fontSize: 10, color: quotaLow ? TOKEN.danger : TOKEN.textMuted }}>
+              {t ? '剩餘' : 'Remaining'} {user.quota_remaining}
+            </span>
+          </span>
+        )}
+      </button>
+      {open && (
+        <div style={{ position: 'absolute', right: 0, top: 'calc(100% + 6px)', background: TOKEN.surface, border: `1px solid ${TOKEN.surfaceBorder}`, borderRadius: 10, padding: 12, minWidth: 220, zIndex: 600, boxShadow: '0 12px 40px rgba(0,0,0,0.5)' }}>
+          <div style={{ color: TOKEN.text, fontSize: 13, fontWeight: 600 }}>{user.name || user.email.split('@')[0]}</div>
+          <div style={{ color: TOKEN.textMuted, fontSize: 11, marginTop: 2 }}>{user.email}</div>
+          <div style={{ height: 1, background: TOKEN.surfaceBorder, margin: '10px 0' }} />
+          <div style={{ display: 'flex', justifyContent: 'space-between', color: TOKEN.textSecondary, fontSize: 12 }}>
+            <span>{t ? '角色' : 'Role'}</span><span>{user.role}</span>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', color: TOKEN.textSecondary, fontSize: 12, marginTop: 4 }}>
+            <span>{t ? '剩餘額度' : 'Remaining quota'}</span>
+            <span style={{ color: quotaLow ? TOKEN.danger : TOKEN.text, fontWeight: 600 }}>{user.quota_remaining}</span>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', color: TOKEN.textSecondary, fontSize: 12, marginTop: 4 }}>
+            <span>{t ? '累計查詢' : 'Total queries'}</span><span>{user.total_queries}</span>
+          </div>
+          <button onClick={() => { setOpen(false); onLogout && onLogout(); }}
+            style={{ width: '100%', marginTop: 12, background: TOKEN.surfaceRaised, border: `1px solid ${TOKEN.surfaceBorder}`, borderRadius: 8, padding: '8px 10px', color: TOKEN.danger, cursor: 'pointer', fontSize: 13, fontFamily: 'inherit' }}>
+            {t ? '登出' : 'Sign out'}
+          </button>
         </div>
       )}
     </div>
