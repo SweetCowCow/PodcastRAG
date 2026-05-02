@@ -7,7 +7,7 @@
 // transcript_chunks count is estimated (~50 chunks/episode); zeabur-service-exec
 // hits Cloudflare 524 timeout so direct DB query was unreliable.
 const STATS_AS_OF = '2026-05-02';
-const STATS_CHANGES_COUNT = 26;
+const STATS_CHANGES_COUNT = 27;
 const STATS_EPISODES_COUNT = 137;        // transcripts.status = 'completed'
 const STATS_VECTORS_COUNT = 6850;        // ~estimate: 137 × ~50 chunks/ep
 
@@ -30,6 +30,17 @@ const MILESTONE_LABELS = {
 // Entries — newest milestone first; within each milestone newest date first.
 const RELEASE_LOG = [
   // ─── v0.5 — Auth & Query Quota (5/02) ───
+  {
+    date: '2026-05-02', slug: 'post-auth-ui-and-cleanup', milestone: 'v0.5', tag: 'ui',
+    title: {
+      zh: '更新日誌時間軸 + 佇列排隊編號 + 清債',
+      en: 'Timeline UI + Queue Numbering + Cleanup',
+    },
+    summary: {
+      zh: '更新日誌頁改成單條垂直時間軸（最新在上）；轉錄佇列「進行中」分頁改成 running 在上、pending 帶 1/2/3 排隊編號；空節目時 admin 可一鍵跳後台。後端新增 GET /admin/stats 讓更新日誌的數字即時顯示。順手把 23 個既有 admin pytest 補上 auth fixture。',
+      en: 'Release Log redesigned as a vertical timeline (newest first); Transcription Queue active sub-tab puts running rows on top with 1/2/3 position badges on pending; empty PodcastSelect routes admins to admin show management. New GET /admin/stats lets the Release Log show live numbers; 23 admin pytest cases got the missing auth fixture.',
+    },
+  },
   {
     date: '2026-05-02', slug: 'authentication-system', milestone: 'v0.5', tag: 'feature',
     title: {
