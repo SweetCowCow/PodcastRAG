@@ -15,7 +15,6 @@ counter reflects reality.
 """
 import asyncio
 import logging
-import threading
 import uuid
 
 from celery.signals import worker_ready, worker_shutting_down
@@ -26,26 +25,35 @@ from sqlalchemy.pool import NullPool
 from app.core.config import settings
 from app.models.transcription_queue import QueueStatus, TranscriptionQueue
 from app.workers.celery_app import celery_app
-from app.workers.throttle import release_global_slot
+from app.workers.throttle import _get_redis, release_global_slot
 
 logger = logging.getLogger(__name__)
 
 INSPECT_TIMEOUT_SECONDS = 5
 
-_active_row_ids: set[str] = set()
-_active_lock = threading.Lock()
+ACTIVE_ROWS_KEY = "transcribe:worker:active_rows"
 
 
 def register_active_row(row_id: str) -> None:
-    """Mark a queue row as actively processed by this worker process."""
-    with _active_lock:
-        _active_row_ids.add(row_id)
+    """Mark a queue row as actively processed by this worker.
+
+    Stored in Redis (not in-memory) because Celery prefork workers run
+    tasks in forked child processes whose memory is not visible to the
+    main process where ``worker_shutting_down`` fires. A shared Redis
+    set lets the shutdown handler see what every fork child registered.
+    """
+    try:
+        _get_redis().sadd(ACTIVE_ROWS_KEY, row_id)
+    except Exception:
+        logger.exception("lifecycle: register_active_row failed for %s", row_id)
 
 
 def deregister_active_row(row_id: str) -> None:
     """Drop a queue row from the active set (task finished or failed)."""
-    with _active_lock:
-        _active_row_ids.discard(row_id)
+    try:
+        _get_redis().srem(ACTIVE_ROWS_KEY, row_id)
+    except Exception:
+        logger.exception("lifecycle: deregister_active_row failed for %s", row_id)
 
 
 def _inspect_active_task_ids() -> tuple[set[str], bool]:
@@ -179,8 +187,11 @@ def _on_worker_ready(sender=None, **kwargs):
     try:
         active_ids, ok = _inspect_active_task_ids()
         n = _revert_orphan_rows(active_ids, ok)
-        if n:
-            logger.info("lifecycle: worker_ready reverted %d orphan rows", n)
+        logger.info(
+            "lifecycle: worker_ready — reverted %d orphan rows (inspect_ok=%s)",
+            n,
+            ok,
+        )
     except Exception:
         logger.exception("lifecycle: worker_ready handler raised")
 
@@ -188,14 +199,26 @@ def _on_worker_ready(sender=None, **kwargs):
 @worker_shutting_down.connect
 def _on_worker_shutdown(sig=None, how=None, exitcode=None, **kwargs):
     try:
-        with _active_lock:
-            ids = set(_active_row_ids)
+        try:
+            raw = _get_redis().smembers(ACTIVE_ROWS_KEY)
+        except Exception:
+            logger.exception("lifecycle: reading active rows from redis failed")
+            return
+        ids = {b.decode() if isinstance(b, bytes) else b for b in (raw or set())}
+        logger.info(
+            "lifecycle: worker_shutting_down received — %d active rows tracked",
+            len(ids),
+        )
         if ids:
             n = asyncio.run(_revert_specific_rows_async(ids))
-            if n:
-                logger.info(
-                    "lifecycle: worker_shutting_down reverted %d running rows",
-                    n,
+            try:
+                _get_redis().srem(ACTIVE_ROWS_KEY, *ids)
+            except Exception:
+                logger.exception(
+                    "lifecycle: clearing active rows set in redis failed"
                 )
+            logger.info(
+                "lifecycle: worker_shutting_down reverted %d running rows", n
+            )
     except Exception:
         logger.exception("lifecycle: worker_shutting_down handler raised")
