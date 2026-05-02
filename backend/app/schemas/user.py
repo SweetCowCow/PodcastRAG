@@ -18,6 +18,7 @@ class UserOut(BaseModel):
     total_queries: int
     quota_remaining: int
     quota_initial: int
+    csrf_token: str | None = None
 
 
 class UserAdminOut(UserOut):
