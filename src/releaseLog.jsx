@@ -7,7 +7,7 @@
 // transcript_chunks count is estimated (~50 chunks/episode); zeabur-service-exec
 // hits Cloudflare 524 timeout so direct DB query was unreliable.
 const STATS_AS_OF = '2026-05-02';
-const STATS_CHANGES_COUNT = 27;
+const STATS_CHANGES_COUNT = 28;
 const STATS_EPISODES_COUNT = 137;        // transcripts.status = 'completed'
 const STATS_VECTORS_COUNT = 6850;        // ~estimate: 137 × ~50 chunks/ep
 
@@ -25,10 +25,24 @@ const MILESTONE_LABELS = {
   'v0.3': { zh: 'v0.3 — 真實 Cron 與平行轉錄',     en: 'v0.3 — Real Cron & Parallel Queue' },
   'v0.4': { zh: 'v0.4 — 手機版與友善錯誤',         en: 'v0.4 — Mobile & Friendly Errors' },
   'v0.5': { zh: 'v0.5 — 帳號驗證與查詢額度',       en: 'v0.5 — Auth & Query Quota' },
+  'v0.6': { zh: 'v0.6 — 部署不中斷正在跑的轉錄',   en: 'v0.6 — Deploys Without Interrupting Transcriptions' },
 };
 
 // Entries — newest milestone first; within each milestone newest date first.
 const RELEASE_LOG = [
+  // ─── v0.6 — Deploys Without Interrupting Transcriptions (5/03) ───
+  {
+    date: '2026-05-03', slug: 'deploy-resilience', milestone: 'v0.6', tag: 'fix',
+    title: {
+      zh: '部署不中斷正在跑的轉錄',
+      en: 'Deploys No Longer Interrupt Running Transcriptions',
+    },
+    summary: {
+      zh: '以前每次重新部署，正在跑的轉錄會卡在「進行中」狀態，要等 30 分鐘系統才會自動把它清掉重跑。現在改成 worker 重啟後 1～3 分鐘內就會自動把卡住的集數推回排隊，由新 worker 接手繼續轉。順手修了強制取消的隱藏 bug（某些狀況下排隊額度會卡死）。dispatcher 跟 beat 兩個背景服務也不會再因為缺登入相關設定就啟動失敗。',
+      en: 'Previously a redeploy would leave any in-flight transcription stuck in "running" for 30 min before the stale-detection cron would re-queue it. Now stuck rows are pushed back to the pending queue within 1–3 min after a worker restart, so a new worker can pick up where the dead one left off. Also fixed a hidden bug in force-cancel that could leave a transcription throttle slot occupied; and dispatcher/beat services no longer crash on startup when auth-only env vars are unset.',
+    },
+  },
+
   // ─── v0.5 — Auth & Query Quota (5/02) ───
   {
     date: '2026-05-02', slug: 'post-auth-ui-and-cleanup', milestone: 'v0.5', tag: 'ui',
