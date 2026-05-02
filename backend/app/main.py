@@ -27,8 +27,32 @@ from app.core.csrf import CsrfAndOriginMiddleware
 logger = logging.getLogger(__name__)
 
 
+_WEB_REQUIRED_ENV = (
+    ("GOOGLE_CLIENT_ID", "google_client_id"),
+    ("GOOGLE_CLIENT_SECRET", "google_client_secret"),
+    ("GOOGLE_REDIRECT_URI", "google_redirect_uri"),
+    ("SESSION_SECRET", "session_secret"),
+)
+
+
+def _validate_web_env() -> None:
+    missing: list[str] = []
+    for env_name, attr in _WEB_REQUIRED_ENV:
+        if not getattr(settings, attr):
+            missing.append(env_name)
+    if missing:
+        for var in missing:
+            logger.error("Web service requires %s but it is unset or empty", var)
+        raise RuntimeError(
+            "Web service requires "
+            + ", ".join(missing)
+            + " — set these environment variables on the backend service"
+        )
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    _validate_web_env()
     await seed_llm_config_from_env()
     yield
 

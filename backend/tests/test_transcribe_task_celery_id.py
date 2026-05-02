@@ -61,8 +61,9 @@ async def queue_row():
 async def test_write_celery_task_id_on_running_row(queue_row):
     """Worker writes celery_task_id at task start; row remains running."""
     queue_id, episode_id, _ = queue_row
-    early_exit = await _write_celery_task_id(episode_id, "task-abc-123")
+    row_id, early_exit = await _write_celery_task_id(episode_id, "task-abc-123")
     assert early_exit is False
+    assert row_id == queue_id
 
     async with AsyncSessionFactory() as db:
         row = await db.get(TranscriptionQueue, uuid.UUID(queue_id))
@@ -81,8 +82,9 @@ async def test_cancelled_before_worker_starts_signals_early_exit(queue_row):
         row.status = QueueStatus.cancelled
         await db.commit()
 
-    early_exit = await _write_celery_task_id(episode_id, "task-xyz-999")
+    row_id, early_exit = await _write_celery_task_id(episode_id, "task-xyz-999")
     assert early_exit is True
+    assert row_id == queue_id
 
     async with AsyncSessionFactory() as db:
         row = await db.get(TranscriptionQueue, uuid.UUID(queue_id))

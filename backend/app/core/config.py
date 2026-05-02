@@ -28,10 +28,10 @@ class Settings(BaseSettings):
     r2_bucket: str | None = None
     r2_endpoint: str | None = None
 
-    google_client_id: str
-    google_client_secret: str
-    google_redirect_uri: str
-    session_secret: str
+    google_client_id: str | None = None
+    google_client_secret: str | None = None
+    google_redirect_uri: str | None = None
+    session_secret: str | None = None
     admin_emails: str = ""
     session_ttl_days: int = 14
 

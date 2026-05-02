@@ -182,14 +182,13 @@ async def _detect_stale_running(session_factory) -> int:
             row.finished_at = datetime.now(timezone.utc)
             row.error_message = STALE_ERROR_MESSAGE
             marked += 1
-            if row.celery_task_id:
-                try:
-                    release_global_slot(row.celery_task_id)
-                except Exception:
-                    logger.exception(
-                        "cron_tick: release_global_slot failed for task %s",
-                        row.celery_task_id,
-                    )
+            try:
+                release_global_slot(str(row.id))
+            except Exception:
+                logger.exception(
+                    "cron_tick: release_global_slot failed for queue_id=%s",
+                    row.id,
+                )
 
         if marked:
             await session.commit()

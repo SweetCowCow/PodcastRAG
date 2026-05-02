@@ -110,13 +110,13 @@ async def cancel_queue_row(
                     task_id,
                     queue_id,
                 )
-            try:
-                release_global_slot(task_id)
-            except Exception:
-                logger.exception(
-                    "force-cancel: release_global_slot failed for task_id=%s",
-                    task_id,
-                )
+        try:
+            release_global_slot(str(queue_id))
+        except Exception:
+            logger.exception(
+                "force-cancel: release_global_slot failed for queue_id=%s",
+                queue_id,
+            )
         row.status = QueueStatus.cancelled
         row.finished_at = datetime.now(timezone.utc)
         row.error_message = FORCE_CANCEL_MESSAGE

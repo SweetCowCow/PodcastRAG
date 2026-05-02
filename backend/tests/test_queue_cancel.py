@@ -114,7 +114,7 @@ async def test_force_cancel_running_with_task_id_revokes_and_updates(
     mock_revoke.assert_called_once_with(
         "task-bbb", terminate=True, signal="SIGTERM"
     )
-    mock_release.assert_called_once_with("task-bbb")
+    mock_release.assert_called_once_with(str(queue_id))
 
 
 @pytest.mark.asyncio
@@ -134,7 +134,7 @@ async def test_force_cancel_running_with_null_task_id_skips_revoke(
     assert body["force_cancelled"] is True
     assert body["celery_task_id"] is None
     mock_revoke.assert_not_called()
-    mock_release.assert_not_called()
+    mock_release.assert_called_once_with(str(queue_id))
 
 
 @pytest.mark.asyncio

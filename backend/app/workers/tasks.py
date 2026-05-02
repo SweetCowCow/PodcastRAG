@@ -25,6 +25,7 @@ from app.services.rss_parser import RssParseError
 from app.services.storage import StorageError
 from app.services.transcription import get_provider
 from app.workers.celery_app import celery_app
+from app.workers.lifecycle import deregister_active_row, register_active_row
 from app.workers.throttle import (
     acquire_global_slot,
     acquire_show_lock,
@@ -66,21 +67,31 @@ PERMANENT_ERRORS = (
     retry_jitter=True,
 )
 def transcribe_episode(self, episode_id: str) -> dict:
-    if asyncio.run(_write_celery_task_id(episode_id, self.request.id)):
+    queue_row_id, already_cancelled = asyncio.run(
+        _write_celery_task_id(episode_id, self.request.id)
+    )
+    if already_cancelled:
         logger.info(
             "transcribe_episode: queue row for %s already cancelled — exiting",
             episode_id,
         )
         return {"status": "cancelled", "episode_id": episode_id}
+    if queue_row_id is None:
+        logger.error(
+            "transcribe_episode: queue row for %s 不存在",
+            episode_id,
+        )
+        return {"status": "not_found", "episode_id": episode_id}
 
     show_id = asyncio.run(_lookup_show_id(episode_id))
     if show_id is None:
         logger.error("transcribe_episode: episode %s 不存在", episode_id)
         return {"status": "not_found", "episode_id": episode_id}
 
-    if not acquire_global_slot(self.request.id):
+    if not acquire_global_slot(queue_row_id):
         raise self.retry(countdown=15, max_retries=None)
 
+    register_active_row(queue_row_id)
     try:
         if not acquire_show_lock(show_id):
             raise self.retry(countdown=60, max_retries=None)
@@ -90,15 +101,22 @@ def transcribe_episode(self, episode_id: str) -> dict:
         finally:
             release_show_lock(show_id)
     finally:
-        release_global_slot(self.request.id)
+        deregister_active_row(queue_row_id)
+        release_global_slot(queue_row_id)
 
 
-async def _write_celery_task_id(episode_id: str, task_id: str) -> bool:
+async def _write_celery_task_id(
+    episode_id: str, task_id: str
+) -> tuple[str | None, bool]:
     """Write ``celery_task_id`` onto the queue row at task start.
 
-    Returns True if the row is already cancelled (caller should exit early)
-    so a force-cancel that arrived before the worker picked up the task
-    is honoured without acquiring slots or processing audio.
+    Returns ``(queue_row_id, is_cancelled)``:
+    - ``queue_row_id`` is the str(UUID) of the row, or None if no row exists.
+      Callers use this as the throttle slot ownership key so release works
+      even when ``celery_task_id`` later gets cleared by graceful shutdown.
+    - ``is_cancelled`` is True when the row is already cancelled so a
+      force-cancel that arrived before the worker picked up the task is
+      honoured without acquiring slots or processing audio.
     """
     ep_uuid = uuid.UUID(episode_id)
     engine = create_async_engine(settings.database_url, poolclass=NullPool)
@@ -112,10 +130,10 @@ async def _write_celery_task_id(episode_id: str, task_id: str) -> bool:
                 )
             ).scalar_one_or_none()
             if row is None:
-                return False
+                return None, False
             row.celery_task_id = task_id
             await session.commit()
-            return row.status == QueueStatus.cancelled
+            return str(row.id), row.status == QueueStatus.cancelled
     finally:
         await engine.dispose()
 
