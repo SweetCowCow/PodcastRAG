@@ -7,10 +7,12 @@ const _API_BASE = (typeof window !== 'undefined' && window.__API_BASE__) || 'htt
 
 const UNSAFE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
-function _getCookie(name) {
-  const m = document.cookie.match(new RegExp('(?:^|; )' + name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '=([^;]*)'));
-  return m ? decodeURIComponent(m[1]) : null;
-}
+// CSRF token cached in module memory. Populated from /me response body
+// (synchronizer-token pattern). The backend's csrf cookie cannot be read
+// across subdomains, so we don't rely on document.cookie at all.
+let _csrfToken = null;
+function _setCsrfToken(t) { _csrfToken = t || null; }
+function _getCsrfToken() { return _csrfToken; }
 
 const _authListeners = new Set();
 function _notifyAuthChange() {
@@ -25,7 +27,7 @@ async function apiFetch(path, opts = {}) {
   const headers = new Headers(opts.headers || {});
 
   if (UNSAFE_METHODS.has(method)) {
-    const csrf = _getCookie('csrf_token');
+    const csrf = _getCsrfToken();
     if (csrf) headers.set('X-CSRF-Token', csrf);
   }
   if (opts.body && !headers.has('Content-Type') && typeof opts.body === 'string') {
@@ -52,6 +54,7 @@ async function logout() {
   try {
     await apiFetch('/auth/logout', { method: 'POST' });
   } finally {
+    _setCsrfToken(null);
     _notifyAuthChange();
   }
 }
@@ -70,8 +73,10 @@ function useCurrentUser() {
       const res = await apiFetch('/me');
       if (res.status === 200) {
         const body = await res.json();
+        _setCsrfToken(body.csrf_token);
         setUser(body);
       } else if (res.status === 401) {
+        _setCsrfToken(null);
         setUser(null);
       } else {
         setError(`HTTP ${res.status}`);

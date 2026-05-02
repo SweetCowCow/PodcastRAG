@@ -20,6 +20,7 @@ from starlette.responses import JSONResponse
 
 from app.core.config import settings
 from app.schemas.errors import ErrorCode, ErrorResponse
+from app.services.session_service import derive_csrf_token
 
 UNSAFE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
 
@@ -73,9 +74,12 @@ class CsrfAndOriginMiddleware(BaseHTTPMiddleware):
                 f"Origin {origin} is not allowed",
             )
 
-        # 2. CSRF double-submit
+        # 2. CSRF synchronizer-token (HMAC of session_id with SESSION_SECRET).
+        #    Frontend gets the token from /me response body and echoes it as
+        #    X-CSRF-Token. Cross-origin: backend cookie is not JS-readable on
+        #    the frontend domain (different subdomain on PSL'd zeabur.app),
+        #    so the previous "double-submit cookie" pattern can't work.
         csrf_header = request.headers.get("x-csrf-token")
-        csrf_cookie = request.cookies.get("csrf_token")
         if not csrf_header:
             return _error(
                 request,
@@ -83,9 +87,16 @@ class CsrfAndOriginMiddleware(BaseHTTPMiddleware):
                 ErrorCode.CSRF_TOKEN_MISSING,
                 "X-CSRF-Token header required",
             )
-        if not csrf_cookie or not hmac.compare_digest(
-            csrf_header.encode(), csrf_cookie.encode()
-        ):
+        session_id = request.cookies.get("session_id")
+        if not session_id:
+            return _error(
+                request,
+                403,
+                ErrorCode.CSRF_TOKEN_INVALID,
+                "CSRF token without session",
+            )
+        expected = derive_csrf_token(session_id)
+        if not hmac.compare_digest(csrf_header.encode(), expected.encode()):
             return _error(
                 request,
                 403,

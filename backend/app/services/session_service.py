@@ -1,3 +1,5 @@
+import hashlib
+import hmac
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -8,6 +10,21 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.core.security import generate_token, hash_token
 from app.models.session import Session as SessionRow
+
+
+def derive_csrf_token(session_token: str) -> str:
+    """Derive CSRF token from session token via HMAC-SHA256.
+
+    This avoids needing to store the CSRF token separately and avoids
+    the cross-origin cookie-read problem (frontend on a different
+    subdomain cannot read cookies set by the backend). Frontend gets
+    the token from /me response body and echoes it as X-CSRF-Token.
+    """
+    return hmac.new(
+        settings.session_secret.encode("utf-8"),
+        session_token.encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
 
 
 @dataclass

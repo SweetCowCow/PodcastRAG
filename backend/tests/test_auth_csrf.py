@@ -56,7 +56,8 @@ async def test_post_missing_csrf_header_rejected():
 
 
 @pytest.mark.asyncio
-async def test_post_csrf_header_mismatch_rejected():
+async def test_post_csrf_without_session_rejected():
+    """CSRF header present but no session_id cookie → invalid (cannot derive)."""
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         resp = await client.post(
@@ -65,16 +66,35 @@ async def test_post_csrf_header_mismatch_rejected():
                 "Origin": "http://localhost:8080",
                 "X-CSRF-Token": "bogus",
             },
-            cookies={"csrf_token": "different-value"},
         )
         assert resp.status_code == 403
         assert resp.json()["detail"]["error_code"] == "csrf_token_invalid"
 
 
 @pytest.mark.asyncio
-async def test_post_csrf_match_passes_to_auth_check():
-    """When CSRF matches, the request reaches require_admin which then
-    rejects unauthenticated → 401 not_authenticated (proves CSRF passed)."""
+async def test_post_csrf_wrong_value_rejected():
+    """Session cookie present but X-CSRF-Token doesn't match HMAC derivation."""
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.post(
+            "/admin/users",
+            headers={
+                "Origin": "http://localhost:8080",
+                "X-CSRF-Token": "wrong-token",
+            },
+            cookies={"session_id": "some-session-token"},
+        )
+        assert resp.status_code == 403
+        assert resp.json()["detail"]["error_code"] == "csrf_token_invalid"
+
+
+@pytest.mark.asyncio
+async def test_post_csrf_correct_derivation_passes_to_auth_check():
+    """When CSRF derived from session_id matches header, middleware passes;
+    require_admin then 401s on the (synthetic) session_id with no DB row."""
+    from app.services.session_service import derive_csrf_token
+    fake_session = "synthetic-session-token-for-test"
+    csrf = derive_csrf_token(fake_session)
     fake_id = "00000000-0000-0000-0000-000000000000"
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -82,9 +102,9 @@ async def test_post_csrf_match_passes_to_auth_check():
             f"/admin/users/{fake_id}",
             headers={
                 "Origin": "http://localhost:8080",
-                "X-CSRF-Token": "matching-token",
+                "X-CSRF-Token": csrf,
             },
-            cookies={"csrf_token": "matching-token"},
+            cookies={"session_id": fake_session},
             json={"role": "member"},
         )
         assert resp.status_code == 401

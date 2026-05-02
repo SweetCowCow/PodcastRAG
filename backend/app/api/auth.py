@@ -176,5 +176,14 @@ async def logout(
 
 
 @me_router.get("/me", response_model=UserOut)
-async def me(user: User = Depends(require_authenticated_user)) -> UserOut:
-    return UserOut.model_validate(user)
+async def me(
+    request: Request,
+    user: User = Depends(require_authenticated_user),
+) -> UserOut:
+    from app.services.session_service import derive_csrf_token
+
+    out = UserOut.model_validate(user)
+    session_id = request.cookies.get(SESSION_COOKIE)
+    if session_id:
+        out = out.model_copy(update={"csrf_token": derive_csrf_token(session_id)})
+    return out
