@@ -6,8 +6,8 @@
 // Numbers from prod backend GET /shows on 2026-05-01.
 // transcript_chunks count is estimated (~50 chunks/episode); zeabur-service-exec
 // hits Cloudflare 524 timeout so direct DB query was unreliable.
-const STATS_AS_OF = '2026-05-01';
-const STATS_CHANGES_COUNT = 25;
+const STATS_AS_OF = '2026-05-02';
+const STATS_CHANGES_COUNT = 26;
 const STATS_EPISODES_COUNT = 137;        // transcripts.status = 'completed'
 const STATS_VECTORS_COUNT = 6850;        // ~estimate: 137 × ~50 chunks/ep
 
@@ -24,10 +24,24 @@ const MILESTONE_LABELS = {
   'v0.2': { zh: 'v0.2 — 後台管理與排程',           en: 'v0.2 — Admin & Schedule' },
   'v0.3': { zh: 'v0.3 — 真實 Cron 與平行轉錄',     en: 'v0.3 — Real Cron & Parallel Queue' },
   'v0.4': { zh: 'v0.4 — 手機版與友善錯誤',         en: 'v0.4 — Mobile & Friendly Errors' },
+  'v0.5': { zh: 'v0.5 — 帳號驗證與查詢額度',       en: 'v0.5 — Auth & Query Quota' },
 };
 
 // Entries — newest milestone first; within each milestone newest date first.
 const RELEASE_LOG = [
+  // ─── v0.5 — Auth & Query Quota (5/02) ───
+  {
+    date: '2026-05-02', slug: 'authentication-system', milestone: 'v0.5', tag: 'feature',
+    title: {
+      zh: '帳號驗證系統 + 查詢額度',
+      en: 'Authentication System + Query Quota',
+    },
+    summary: {
+      zh: '砍掉寫死的 admin 帳密 modal,改成 Google 登入。一般使用者預設 100 次查詢額度,後台可加值;管理員權限只開放給 ADMIN_EMAILS env 白名單裡的 email。所有後台 API 都加 admin gate,跨站請求被 CSRF token + Origin 檢查擋下。',
+      en: 'Replaces the hardcoded admin login modal with Google SSO. Members get 100 queries/account by default (admin can top up); admin role auto-granted only for emails in the ADMIN_EMAILS env allowlist. All admin endpoints require admin role; cross-site requests blocked by CSRF token + Origin check.',
+    },
+  },
+
   // ─── v0.4 — Mobile & Friendly Errors (5/01, 4/30) ───
   {
     date: '2026-05-01', slug: 'release-log-and-presentation', milestone: 'v0.4', tag: 'feature',
