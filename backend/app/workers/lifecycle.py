@@ -88,19 +88,34 @@ def _inspect_active_task_ids() -> tuple[set[str], bool]:
 
 
 async def _revert_orphan_rows_async(
-    active_task_ids: set[str], inspect_succeeded: bool
+    active_task_ids: set[str],
+    inspect_succeeded: bool,
+    min_started_at_age_seconds: int = 0,
 ) -> int:
+    """Scan running rows, revert orphans to pending. Returns revert count.
+
+    ``min_started_at_age_seconds`` skips rows whose ``started_at`` is more
+    recent than the threshold — prevents racing with newly-dispatched
+    tasks that haven't appeared in ``inspect.active()`` yet.
+    """
+    from datetime import datetime, timedelta, timezone
+
     engine = create_async_engine(settings.database_url, poolclass=NullPool)
     reverted = 0
     try:
         async with async_sessionmaker(engine, expire_on_commit=False)() as session:
-            rows = (
-                await session.execute(
-                    select(TranscriptionQueue).where(
-                        TranscriptionQueue.status == QueueStatus.running
-                    )
+            stmt = select(TranscriptionQueue).where(
+                TranscriptionQueue.status == QueueStatus.running
+            )
+            if min_started_at_age_seconds > 0:
+                cutoff = datetime.now(timezone.utc) - timedelta(
+                    seconds=min_started_at_age_seconds
                 )
-            ).scalars().all()
+                stmt = stmt.where(
+                    TranscriptionQueue.started_at.is_(None)
+                    | (TranscriptionQueue.started_at < cutoff)
+                )
+            rows = (await session.execute(stmt)).scalars().all()
             for row in rows:
                 if not inspect_succeeded:
                     if row.celery_task_id is not None:
@@ -131,18 +146,15 @@ async def _revert_orphan_rows_async(
 
 
 def _revert_orphan_rows(
-    active_task_ids: set[str], inspect_succeeded: bool
+    active_task_ids: set[str],
+    inspect_succeeded: bool,
+    min_started_at_age_seconds: int = 0,
 ) -> int:
-    """Scan running rows, revert orphans to pending. Returns revert count.
-
-    Orphan rule:
-    - inspect_succeeded=True: row is orphan if ``celery_task_id`` is NULL
-      or not in ``active_task_ids``.
-    - inspect_succeeded=False: conservative — only NULL task id rows are
-      reverted; non-null rows are left for stale-running detection.
-    """
+    """Sync wrapper; see ``_revert_orphan_rows_async`` for semantics."""
     return asyncio.run(
-        _revert_orphan_rows_async(active_task_ids, inspect_succeeded)
+        _revert_orphan_rows_async(
+            active_task_ids, inspect_succeeded, min_started_at_age_seconds
+        )
     )
 
 

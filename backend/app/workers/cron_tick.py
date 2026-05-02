@@ -42,6 +42,11 @@ REFRESH_MESSAGE_MAX_LEN = 500
 STALE_THRESHOLD_MINUTES = 30
 STALE_ERROR_MESSAGE = "Stale task — worker message lost"
 INSPECT_TIMEOUT_SECONDS = 5
+# Orphan revert: rows whose started_at is older than this AND whose
+# celery_task_id is no longer in inspect.active() get pushed back to
+# pending so the dispatcher re-enqueues them. Catches deploy-restart
+# orphans within ~1-3 min instead of waiting 30 min for stale failure.
+ORPHAN_MIN_AGE_SECONDS = 180
 
 
 @celery_app.task(name="app.workers.cron_tick.cron_tick")
@@ -61,8 +66,31 @@ async def _run_tick() -> dict:
     processed = 0
     enqueued = 0
     stale_marked = 0
+    orphans_reverted = 0
 
     try:
+        try:
+            from app.workers.lifecycle import (
+                _inspect_active_task_ids,
+                _revert_orphan_rows_async,
+            )
+
+            active_ids, inspect_ok = _inspect_active_task_ids()
+            orphans_reverted = await _revert_orphan_rows_async(
+                active_ids,
+                inspect_ok,
+                min_started_at_age_seconds=ORPHAN_MIN_AGE_SECONDS,
+            )
+            if orphans_reverted:
+                logger.info(
+                    "cron_tick: orphan revert reverted %d rows", orphans_reverted
+                )
+        except Exception:
+            logger.warning(
+                "cron_tick: orphan revert raised — skipping",
+                exc_info=True,
+            )
+
         try:
             stale_marked = await _detect_stale_running(Session)
         except Exception:
@@ -128,6 +156,7 @@ async def _run_tick() -> dict:
         "processed": processed,
         "enqueued": enqueued,
         "stale_marked": stale_marked,
+        "orphans_reverted": orphans_reverted,
     }
 
 
