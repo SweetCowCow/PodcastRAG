@@ -450,6 +450,21 @@ const AiStepSection = ({ step, draft, keys, keysByProvider, providerOfKey, setDr
 
       {!isLocalWhisper && (
         <>
+          <div style={{ marginBottom: 14 }}>
+            <label style={{ display: 'block', color: TOKEN.textMuted, fontSize: 12, marginBottom: 6 }}>
+              {t ? '供應商' : 'Provider'} {step.step_key === 'embedding' && (
+                <span style={{ color: TOKEN.textMuted }}>{t ? '（必須是 openai provider 的金鑰）' : '(must be an openai-provider key)'}</span>
+              )}
+            </label>
+            <select value={draft.api_key_id || ''}
+              onChange={e => setDraft({ api_key_id: e.target.value || '' })}
+              style={{ width: '100%', background: TOKEN.surfaceRaised, border: `1px solid ${TOKEN.surfaceBorder}`, borderRadius: 8, padding: '9px 12px', color: TOKEN.text, fontSize: 14, outline: 'none', fontFamily: 'inherit' }}>
+              <option value="">{t ? '— 未選擇 —' : '— none —'}</option>
+              {visibleKeys.map(k => (
+                <option key={k.id} value={k.id}>{k.provider} · {k.label} ({k.api_key_masked})</option>
+              ))}
+            </select>
+          </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
             <div>
               <label style={{ display: 'block', color: TOKEN.textMuted, fontSize: 12, marginBottom: 6 }}>Base URL</label>
@@ -469,21 +484,6 @@ const AiStepSection = ({ step, draft, keys, keysByProvider, providerOfKey, setDr
                 {modelPresets.map(m => <option key={m} value={m} />)}
               </datalist>
             </div>
-          </div>
-          <div style={{ marginBottom: 14 }}>
-            <label style={{ display: 'block', color: TOKEN.textMuted, fontSize: 12, marginBottom: 6 }}>
-              API Key {step.step_key === 'embedding' && (
-                <span style={{ color: TOKEN.textMuted }}>{t ? '（必須是 openai provider 的金鑰）' : '(must be an openai-provider key)'}</span>
-              )}
-            </label>
-            <select value={draft.api_key_id || ''}
-              onChange={e => setDraft({ api_key_id: e.target.value || '' })}
-              style={{ width: '100%', background: TOKEN.surfaceRaised, border: `1px solid ${TOKEN.surfaceBorder}`, borderRadius: 8, padding: '9px 12px', color: TOKEN.text, fontSize: 14, outline: 'none', fontFamily: 'inherit' }}>
-              <option value="">{t ? '— 未選擇 —' : '— none —'}</option>
-              {visibleKeys.map(k => (
-                <option key={k.id} value={k.id}>{k.provider} · {k.label} ({k.api_key_masked})</option>
-              ))}
-            </select>
           </div>
         </>
       )}
