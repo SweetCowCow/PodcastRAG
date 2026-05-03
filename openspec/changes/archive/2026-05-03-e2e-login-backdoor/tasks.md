@@ -48,14 +48,14 @@
 
 ## 7. 部署驗證
 
-- [ ] 7.1 push 到 main → Zeabur 自動 build；先**不設** `E2E_LOGIN_TOKEN` 部署一次
-- [ ] 7.2 `curl -i https://podcastrag-api.zeabur.app/auth/_e2e_login?token=anything` 確認回 404
-- [ ] 7.3 用 zeabur-variables skill 在 backend / worker / dispatcher / beat 4 個 service 設 `E2E_LOGIN_TOKEN=<openssl rand -hex 32 產生的 64 字元>`
-- [ ] 7.4 等 redeploy 完成（Zeabur 介面看 deployment status）
-- [ ] 7.5 `curl -i ".../auth/_e2e_login"` 不帶 token → 401
-- [ ] 7.6 `curl -i ".../auth/_e2e_login?token=<正確>"` → 302 + Set-Cookie；用 cookie call `/admin/users` 確認 admin 權限拿得到
-- [ ] 7.7 連續 6 次錯誤 token → 第 6 次回 429
-- [ ] 7.8 把 token 寫入 `~/.config/podcastrag/e2e-token`，`chmod 600`
+- [x] 7.1 push 到 main → Zeabur 自動 build；先**不設** `E2E_LOGIN_TOKEN` 部署一次
+- [x] 7.2 `curl -i https://podcastrag-api.zeabur.app/auth/_e2e_login?token=anything` 確認回 404
+- [x] 7.3 用 zeabur-variables skill 在 backend / worker / dispatcher / beat 4 個 service 設 `E2E_LOGIN_TOKEN=<openssl rand -hex 32 產生的 64 字元>`
+- [x] 7.4 等 redeploy 完成（Zeabur 介面看 deployment status）
+- [x] 7.5 `curl -i ".../auth/_e2e_login"` 不帶 token → 401
+- [x] 7.6 `curl -i ".../auth/_e2e_login?token=<正確>"` → 302 + Set-Cookie；用 cookie call `/admin/users` 確認 admin 權限拿得到
+- [x] 7.7 連續 6 次錯誤 token → 第 6 次回 429
+- [x] 7.8 把 token 寫入 `~/.config/podcastrag/e2e-token`，`chmod 600`
 
 ## 8. 文件 / 記憶更新
 
