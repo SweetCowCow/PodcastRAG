@@ -23,6 +23,7 @@ class QueueRowOut(BaseModel):
     celery_task_id: str | None = None
     episode_title: str | None = None
     show_title: str | None = None
+    ai_summary_status: str | None = None
 
 
 class CancelQueueRowOut(QueueRowOut):

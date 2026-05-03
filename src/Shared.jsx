@@ -491,4 +491,30 @@ const formatRelativeTime = (tsMs, lang) => {
   return t ? `${d} 天前` : `${d} day${d === 1 ? '' : 's'} ago`;
 };
 
-Object.assign(window, { API_BASE, TOKEN, Icon, Badge, Btn, Input, TopNav, ConfirmModal, FormModal, OverflowMenu, ProgressCounts, categoryToBadge, formatRelativeTime, useViewport });
+// Episode blurb — AI summary preferred, fallback to RSS description.
+// Failure (`pending` / `running` / `failed`) is invisible to users — they
+// just see the original RSS description (D3 in episode-ai-summary design).
+const EpisodeBlurb = ({ episode, lang, style }) => {
+  if (!episode) return null;
+  const useAi = episode.ai_summary_status === 'done' && episode.ai_summary;
+  const text = useAi ? episode.ai_summary : (episode.description || '');
+  if (!text) return null;
+  const baseStyle = {
+    color: TOKEN.textSecondary,
+    fontSize: 12,
+    lineHeight: 1.55,
+    margin: 0,
+    overflow: 'hidden',
+    display: '-webkit-box',
+    WebkitBoxOrient: 'vertical',
+    WebkitLineClamp: 3,
+    ...(style || {}),
+  };
+  // RSS description often contains HTML; AI summary is plain text.
+  if (useAi) {
+    return <p style={baseStyle}>{text}</p>;
+  }
+  return <p style={baseStyle} dangerouslySetInnerHTML={{ __html: text }} />;
+};
+
+Object.assign(window, { API_BASE, TOKEN, Icon, Badge, Btn, Input, TopNav, ConfirmModal, FormModal, OverflowMenu, ProgressCounts, categoryToBadge, formatRelativeTime, useViewport, EpisodeBlurb });

@@ -473,6 +473,7 @@ const EpisodeCard = ({ ep, lang, selected, onClick }) => {
             <span style={{ color: TOKEN.textMuted, fontSize: 11, display: 'flex', alignItems: 'center', gap: 2 }}><Icon name="clock" size={10} />{durStr}</span>
             {done ? <Badge variant="success">{t ? '已轉錄' : 'Done'}</Badge> : <Badge variant="muted">{t ? '待轉錄' : 'Pending'}</Badge>}
           </div>
+          <EpisodeBlurb episode={ep} lang={lang} style={{ marginTop: 6, fontSize: 11, WebkitLineClamp: 2 }} />
         </div>
         {done && <Icon name="chevronRight" size={14} color={selected ? TOKEN.accent : TOKEN.textMuted} style={{ flexShrink: 0, marginTop: 3 }} />}
       </div>

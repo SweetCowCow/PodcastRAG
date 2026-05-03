@@ -39,6 +39,7 @@ async def list_queue(db: AsyncSession = Depends(get_db)) -> QueueListOut:
             TranscriptionQueue,
             Episode.title.label("episode_title"),
             Show.title.label("show_title"),
+            Episode.ai_summary_status.label("ai_summary_status"),
         )
         .join(Episode, Episode.id == TranscriptionQueue.episode_id, isouter=True)
         .join(Show, Show.id == TranscriptionQueue.show_id, isouter=True)
@@ -56,10 +57,11 @@ async def list_queue(db: AsyncSession = Depends(get_db)) -> QueueListOut:
         QueueStatus.failed: [],
         QueueStatus.cancelled: [],
     }
-    for queue_row, ep_title, sh_title in result:
+    for queue_row, ep_title, sh_title, ai_status in result:
         out = QueueRowOut.model_validate(queue_row)
         out.episode_title = ep_title
         out.show_title = sh_title
+        out.ai_summary_status = ai_status
         grouped[queue_row.status].append(out)
 
     for key in (

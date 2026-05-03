@@ -1,3 +1,19 @@
+// Summary status badge — admin only. Hidden when transcript not yet completed.
+const SummaryBadge = ({ status, lang }) => {
+  if (!status) return null;
+  const t = lang === 'zh';
+  if (status === 'pending' || status === 'running') {
+    return <Badge variant="default">{t ? '摘要中' : 'Summarising'}</Badge>;
+  }
+  if (status === 'done') {
+    return <Badge variant="success">{t ? '已摘要' : 'Summarised'}</Badge>;
+  }
+  if (status === 'failed') {
+    return <Badge variant="danger">{t ? '摘要失敗' : 'Summary failed'}</Badge>;
+  }
+  return null;
+};
+
 // Transcription Queue Tab — admin queue rows + max_concurrent input + drag reorder
 const QueueTab = ({ lang }) => {
   const t = lang === 'zh';
@@ -48,6 +64,50 @@ const QueueTab = ({ lang }) => {
       const qRes = await apiFetch(`/admin/queue`);
       if (qRes.ok) setQueue(await qRes.json());
     } catch {}
+  };
+
+  const [toast, setToast] = React.useState(null);
+  const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(null), 4000); };
+
+  const regenerateSummary = async (row) => {
+    clearActionErr(row.id);
+    try {
+      const res = await apiFetch(
+        `/admin/episodes/${row.episode_id}/regenerate-summary`,
+        { method: 'POST' }
+      );
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        setActionErr(row.id, body.detail || `HTTP ${res.status}`);
+        return;
+      }
+      // Optimistic UI: flip to summarising; refetch picks up real state on next poll.
+      row.ai_summary_status = 'pending';
+      await refetch();
+    } catch (e) {
+      setActionErr(row.id, e.message || String(e));
+    }
+  };
+
+  const [backfillBusy, setBackfillBusy] = React.useState(false);
+  const runBackfill = async () => {
+    if (backfillBusy) return;
+    setBackfillBusy(true);
+    try {
+      const res = await apiFetch(`/admin/episodes/backfill-summary`, { method: 'POST' });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        showToast((t ? '批次補摘要失敗：' : 'Backfill failed: ') + (body.detail || `HTTP ${res.status}`));
+        return;
+      }
+      const data = await res.json();
+      showToast(t ? `已排入 ${data.enqueued_count} 集` : `Queued ${data.enqueued_count} episodes`);
+      await refetch();
+    } catch (e) {
+      showToast((t ? '批次補摘要失敗：' : 'Backfill failed: ') + (e.message || String(e)));
+    } finally {
+      setBackfillBusy(false);
+    }
   };
 
   const setActionErr = (id, msg) => setActionError(e => ({ ...e, [id]: msg }));
@@ -325,6 +385,12 @@ const QueueTab = ({ lang }) => {
               {status}
             </Badge>
             {ignored && <Badge variant="muted">{t ? '已忽略' : 'Ignored'}</Badge>}
+            {status === 'completed' && <SummaryBadge status={row.ai_summary_status} lang={lang} />}
+            {status === 'completed' && row.ai_summary_status === 'failed' && (
+              <Btn size="sm" variant="ghost" icon="refresh" onClick={() => regenerateSummary(row)}>
+                {t ? '重跑摘要' : 'Regenerate'}
+              </Btn>
+            )}
           </div>
           <div style={{ color: TOKEN.textSecondary, fontSize: 12, display: 'flex', gap: 14, flexWrap: 'wrap' }}>
             <span>{t ? '排隊：' : 'Enqueued: '}{formatTs(row.enqueued_at)}</span>
@@ -429,7 +495,26 @@ const QueueTab = ({ lang }) => {
           {t ? `目前生效值：${settings.max_concurrent_transcriptions}` : `Currently in effect: ${settings.max_concurrent_transcriptions}`}
           {dragInFlight && <span style={{ marginLeft: 12, color: TOKEN.textMuted }}>{t ? '排序處理中…' : 'Reordering…'}</span>}
         </div>
+        <Btn variant="secondary" size="sm" icon="refresh" onClick={runBackfill} disabled={backfillBusy}>
+          {backfillBusy ? (t ? '排入中…' : 'Queueing…') : (t ? '批次補摘要' : 'Backfill Summaries')}
+        </Btn>
       </div>
+
+      {(() => {
+        const eligible = (queue.completed || []).filter(r => r.ai_summary_status === 'pending' || r.ai_summary_status === 'failed').length;
+        if (eligible === 0) return null;
+        return (
+          <div style={{ color: TOKEN.textMuted, fontSize: 12, marginBottom: 12, padding: '8px 12px', background: TOKEN.surface, border: `1px dashed ${TOKEN.surfaceBorder}`, borderRadius: 6 }}>
+            {t ? `有 ${eligible} 集待生成摘要，可點上方「批次補摘要」` : `${eligible} episodes awaiting summary — use Backfill Summaries above`}
+          </div>
+        );
+      })()}
+
+      {toast && (
+        <div style={{ position: 'fixed', bottom: 24, right: 24, background: TOKEN.surfaceRaised, border: `1px solid ${TOKEN.accent}55`, borderRadius: 8, padding: '10px 16px', color: TOKEN.text, fontSize: 13, zIndex: 1000, boxShadow: '0 4px 12px rgba(0,0,0,0.4)' }}>
+          {toast}
+        </div>
+      )}
 
       {error && (
         <div style={{ background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 8, padding: '9px 13px', color: '#f87171', fontSize: 13, marginBottom: 16 }}>

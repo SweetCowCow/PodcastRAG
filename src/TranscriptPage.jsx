@@ -81,6 +81,13 @@ const TranscriptPage = ({ lang, show, episode, onBack, initSearch, highlightTime
         {search && <span style={{ fontSize: 12, color: TOKEN.textMuted, whiteSpace: 'nowrap' }}>{matchCount} {t ? '個匹配' : 'matches'}</span>}
       </div>
 
+      {(episode.ai_summary_status === 'done' && episode.ai_summary) || episode.description ? (
+        <div style={{ padding: isMobile ? '10px 12px' : '12px 32px', borderBottom: `1px solid ${TOKEN.surfaceBorder}`, background: TOKEN.bg }}>
+          <div style={{ fontSize: 11, color: TOKEN.textMuted, fontWeight: 600, marginBottom: 4, letterSpacing: 0.5, textTransform: 'uppercase' }}>{t ? '本集摘要' : 'Episode summary'}</div>
+          <EpisodeBlurb episode={episode} lang={lang} style={{ fontSize: 13, WebkitLineClamp: 4 }} />
+        </div>
+      ) : null}
+
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
         {/* Left: Timeline (desktop only) */}
         {!isMobile && (
