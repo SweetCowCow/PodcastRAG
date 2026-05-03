@@ -8,80 +8,44 @@ TBD - created by archiving change 'transcription-pipeline'. Update Purpose after
 
 ### Requirement: Celery application setup
 
-The backend SHALL define a Celery application at `app.workers.celery_app` configured to use Redis as both broker and result backend, with `task_acks_late=True` and `worker_prefetch_multiplier=1`.
+The backend SHALL define a Celery application at `app.workers.celery_app` configured to use Redis as both broker and result backend, with `task_acks_late=True` and `worker_prefetch_multiplier=1`. The Celery application module SHALL also import `app.workers.lifecycle` so that the `worker_ready` and `worker_shutting_down` signal handlers (graceful shutdown + startup self-recovery) are registered when the worker process starts.
 
 #### Scenario: Celery app boots
 
 - **WHEN** the worker container starts with `CELERY_BROKER_URL` and `CELERY_RESULT_BACKEND` both set to a reachable Redis instance
-- **THEN** the Celery app SHALL import `app.workers.tasks` at startup and register all declared tasks without errors
+- **THEN** the Celery app SHALL import `app.workers.tasks` and `app.workers.lifecycle` at startup and register all declared tasks and signal handlers without errors
 
 #### Scenario: Missing broker rejected
 
 - **WHEN** the worker starts without `CELERY_BROKER_URL`
 - **THEN** the process SHALL exit with a configuration error before accepting any task
 
+#### Scenario: Lifecycle signals registered
 
-<!-- @trace
-source: transcription-pipeline
-updated: 2026-04-21
-code:
-  - backend/app/workers/celery_app.py
-  - backend/app/workers/__init__.py
-  - backend/app/workers/tasks.py
-  - backend/app/core/config.py
-  - backend/.env.example
-  - backend/requirements.txt
--->
+- **WHEN** the Celery app is imported
+- **THEN** at least one receiver SHALL be connected to `worker_ready` and at least one to `worker_shutting_down`
 
 
 <!-- @trace
-source: transcription-pipeline
-updated: 2026-04-21
+source: deploy-resilience
+updated: 2026-05-03
 code:
-  - backend/alembic.ini
-  - backend/app/workers/tasks.py
-  - backend/app/services/transcription/factory.py
-  - backend/app/models/transcript_segment.py
-  - backend/app/schemas/show.py
-  - backend/app/models/__init__.py
-  - backend/alembic/env.py
-  - backend/app/models/episode.py
-  - backend/app/services/storage.py
-  - backend/alembic/README
-  - backend/alembic/versions/91e48beb1237_initial_schema.py
-  - backend/app/core/config.py
-  - backend/app/api/shows.py
-  - backend/app/models/show.py
-  - backend/app/services/rss_parser.py
-  - backend/Dockerfile
-  - backend/app/workers/celery_app.py
-  - backend/.dockerignore
-  - backend/.env.example
-  - backend/app/api/transcripts.py
-  - backend/app/workers/__init__.py
-  - .spectra/spectra.db
-  - backend/app/schemas/episode.py
-  - backend/app/schemas/transcript.py
-  - backend/app/models/transcript.py
-  - backend/app/services/transcription/faster_whisper_provider.py
-  - backend/app/schemas/sync.py
   - backend/app/main.py
-  - backend/app/services/__init__.py
-  - backend/alembic/versions/a7b3c9d4e2f1_add_transcription_columns.py
-  - backend/app/api/__init__.py
-  - backend/app/services/transcription/openai_provider.py
-  - backend/docker-compose.yml
-  - backend/app/core/database.py
-  - backend/app/schemas/__init__.py
-  - backend/app/__init__.py
-  - backend/app/api/health.py
-  - backend/alembic/script.py.mako
-  - backend/app/services/transcription/base.py
-  - backend/app/workers/dispatch.py
-  - backend/app/services/transcription/__init__.py
-  - backend/app/api/episodes.py
-  - backend/requirements.txt
-  - backend/app/core/__init__.py
+  - backend/app/workers/cron_tick.py
+  - backend/app/workers/throttle.py
+  - backend/app/workers/celery_app.py
+  - backend/app/workers/tasks.py
+  - backend/app/workers/lifecycle.py
+  - backend/app/api/queue.py
+  - docs/case-studies/local-vs-prod-verification-violation.md
+  - docs/case-studies/transcription-queue-discussion.md
+  - backend/app/core/config.py
+tests:
+  - backend/tests/test_transcribe_task_celery_id.py
+  - backend/tests/test_worker_lifecycle.py
+  - backend/tests/test_web_service_env_validation.py
+  - backend/tests/test_force_cancel_throttle.py
+  - backend/tests/test_queue_cancel.py
 -->
 
 ---
@@ -441,4 +405,123 @@ updated: 2026-04-28
 code:
   - docs/case-studies/transcription-queue-discussion.md
   - docs/case-studies/local-vs-prod-verification-violation.md
+-->
+
+---
+### Requirement: Worker reverts running rows to pending on graceful shutdown
+
+The Celery worker SHALL register a `worker_shutting_down` signal handler that, when triggered (typically by SIGTERM during deploy), identifies all `transcription_queue` rows currently held by this worker (i.e., rows whose `id` matches an entry in `celery_app.control.inspect().active()` task arg list belonging to this worker, or rows whose `status='running'` and `celery_task_id` belongs to a task currently executing in this worker process). For each such row, the handler SHALL:
+
+1. Update the row to `status='pending'`, `started_at=NULL`, `celery_task_id=NULL`, `error_message=NULL`.
+2. Call `release_global_slot(<row_id_str>)` to free the throttle slot.
+
+The handler SHALL complete within the worker's SIGTERM grace window (default 30 seconds). If the handler raises an exception, it SHALL log the failure and proceed; the worker startup self-recovery requirement covers the residual case.
+
+#### Scenario: Graceful shutdown reverts a single running row
+
+- **GIVEN** the worker is currently executing a `transcribe_episode` task for queue row `R1` (status=running, started_at=now-2min, celery_task_id='task-abc')
+- **AND** `acquire_global_slot('<R1.id>')` was called and the throttle counter is 1
+- **WHEN** the worker receives SIGTERM
+- **THEN** the `worker_shutting_down` handler SHALL update row `R1` to `status='pending'`, `started_at=NULL`, `celery_task_id=NULL`
+- **AND** `release_global_slot('<R1.id>')` SHALL be called
+- **AND** the throttle counter SHALL become 0
+
+#### Scenario: Graceful shutdown handler exception does not crash worker exit
+
+- **GIVEN** the handler is registered and an unexpected exception is raised mid-routine (e.g., DB connection lost)
+- **WHEN** the handler executes
+- **THEN** the exception SHALL be logged
+- **AND** the worker process SHALL still exit cleanly without re-raising
+
+<!-- @trace
+source: deploy-resilience
+updated: 2026-05-02
+-->
+
+
+<!-- @trace
+source: deploy-resilience
+updated: 2026-05-03
+code:
+  - backend/app/main.py
+  - backend/app/workers/cron_tick.py
+  - backend/app/workers/throttle.py
+  - backend/app/workers/celery_app.py
+  - backend/app/workers/tasks.py
+  - backend/app/workers/lifecycle.py
+  - backend/app/api/queue.py
+  - docs/case-studies/local-vs-prod-verification-violation.md
+  - docs/case-studies/transcription-queue-discussion.md
+  - backend/app/core/config.py
+tests:
+  - backend/tests/test_transcribe_task_celery_id.py
+  - backend/tests/test_worker_lifecycle.py
+  - backend/tests/test_web_service_env_validation.py
+  - backend/tests/test_force_cancel_throttle.py
+  - backend/tests/test_queue_cancel.py
+-->
+
+---
+### Requirement: Worker reverts orphaned running rows to pending on startup
+
+The Celery worker SHALL run a self-recovery routine immediately after `worker_ready` signal fires and before processing the first new task. The routine SHALL query `transcription_queue` for all rows where `status='running'`. For each such row, the worker SHALL determine if the row is orphaned by checking:
+
+- If `celery_task_id IS NULL` → orphaned.
+- If `celery_task_id` is set but NOT present in `celery_app.control.inspect(timeout=5).active()` union `reserved()` task IDs → orphaned.
+
+For each orphaned row, the routine SHALL update the row to `status='pending'`, `started_at=NULL`, `celery_task_id=NULL`, `error_message=NULL` and call `release_global_slot(<row_id_str>)`. Rows whose `celery_task_id` is in the active/reserved set SHALL be left unchanged (covers the case of multiple worker replicas where another worker still owns the task).
+
+If `celery_app.control.inspect()` raises, returns empty dicts, or times out, the routine SHALL be conservative: only rows with `celery_task_id IS NULL` are reverted; rows with non-null `celery_task_id` SHALL be left untouched and rely on stale-running-detection (30-min cron) as the next safety net.
+
+#### Scenario: Orphan with NULL task id is reverted on startup
+
+- **GIVEN** a queue row `R1` with `status='running'`, `started_at=now-3min`, `celery_task_id=NULL` exists in the database when the worker starts
+- **WHEN** the worker's startup self-recovery routine runs
+- **THEN** `R1` SHALL be updated to `status='pending'`, `started_at=NULL`, `error_message=NULL`
+- **AND** `release_global_slot('<R1.id>')` SHALL be called
+
+#### Scenario: Orphan with task id not in active list is reverted on startup
+
+- **GIVEN** a queue row `R2` with `status='running'`, `celery_task_id='ghost-task'` and `inspect().active()` returns `{'worker-1': []}`, `reserved()` returns `{'worker-1': []}`
+- **WHEN** the worker's startup self-recovery routine runs
+- **THEN** `R2` SHALL be updated to `status='pending'`, `started_at=NULL`, `celery_task_id=NULL`
+
+#### Scenario: Running row with active task is preserved on startup
+
+- **GIVEN** a queue row `R3` with `status='running'`, `celery_task_id='live-task'` and `inspect().active()` returns `{'worker-1': [{'id': 'live-task'}]}`
+- **WHEN** the worker's startup self-recovery routine runs
+- **THEN** `R3` SHALL remain unchanged
+
+#### Scenario: Inspect failure leaves non-null task id rows unchanged
+
+- **GIVEN** a queue row `R4` with `status='running'`, `celery_task_id='unknown-task'` and `celery_app.control.inspect()` raises an exception
+- **WHEN** the worker's startup self-recovery routine runs
+- **THEN** `R4` SHALL remain unchanged
+- **AND** the routine SHALL log a warning indicating inspect failed
+
+<!-- @trace
+source: deploy-resilience
+updated: 2026-05-02
+-->
+
+<!-- @trace
+source: deploy-resilience
+updated: 2026-05-03
+code:
+  - backend/app/main.py
+  - backend/app/workers/cron_tick.py
+  - backend/app/workers/throttle.py
+  - backend/app/workers/celery_app.py
+  - backend/app/workers/tasks.py
+  - backend/app/workers/lifecycle.py
+  - backend/app/api/queue.py
+  - docs/case-studies/local-vs-prod-verification-violation.md
+  - docs/case-studies/transcription-queue-discussion.md
+  - backend/app/core/config.py
+tests:
+  - backend/tests/test_transcribe_task_celery_id.py
+  - backend/tests/test_worker_lifecycle.py
+  - backend/tests/test_web_service_env_validation.py
+  - backend/tests/test_force_cancel_throttle.py
+  - backend/tests/test_queue_cancel.py
 -->

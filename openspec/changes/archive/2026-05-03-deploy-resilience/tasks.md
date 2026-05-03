@@ -32,7 +32,7 @@
 
 ## 5. 部署 + 驗證
 
-- [ ] 5.1 commit + push 觸發 Zeabur build（backend / worker / dispatcher / beat 全部會重新 build）
-- [ ] 5.2 觀察 build：dispatcher + beat + worker 都應正常啟動（不再因 OAuth env 缺失炸掉，因 env 已設好但 code 也允許缺）
-- [ ] 5.3 prod 手動觀察：在後台觸發一筆轉錄、確認進入 running、人為從 Zeabur dashboard restart worker 服務、再確認該 row 自動回 pending 並由新 worker dispatch 接著跑（驗證 graceful shutdown + startup recovery）
-- [ ] 5.4 prod 手動測 force-cancel + null task_id 路徑：建一筆 running row（用 SQL 直插 status=running celery_task_id=NULL）、acquire slot、後台按強制取消、驗 throttle counter 歸零（用 zeabur-service-exec 看 redis）
+- [x] 5.1 commit + push 觸發 Zeabur build（backend / worker / dispatcher / beat 全部會重新 build）
+- [x] 5.2 觀察 build：dispatcher + beat + worker 都應正常啟動（不再因 OAuth env 缺失炸掉，因 env 已設好但 code 也允許缺）
+- [x] 5.3 prod 手動觀察：在後台觸發一筆轉錄、確認進入 running、人為從 Zeabur dashboard restart worker 服務、再確認該 row 自動回 pending 並由新 worker dispatch 接著跑（驗證 graceful shutdown + startup recovery）
+- [x] 5.4 prod 手動測 force-cancel + null task_id 路徑：建一筆 running row（用 SQL 直插 status=running celery_task_id=NULL）、acquire slot、後台按強制取消、驗 throttle counter 歸零（用 zeabur-service-exec 看 redis）
