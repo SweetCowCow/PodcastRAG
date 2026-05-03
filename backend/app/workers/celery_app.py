@@ -10,7 +10,12 @@ celery_app = Celery(
     "podcastrag",
     broker=settings.celery_broker_url,
     backend=settings.celery_result_backend,
-    include=["app.workers.tasks", "app.workers.cron_tick", "app.workers.lifecycle"],
+    include=[
+        "app.workers.tasks",
+        "app.workers.cron_tick",
+        "app.workers.lifecycle",
+        "app.workers.summary_task",
+    ],
 )
 
 celery_app.conf.update(

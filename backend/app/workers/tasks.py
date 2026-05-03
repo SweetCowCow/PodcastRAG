@@ -173,8 +173,13 @@ async def _is_queue_cancelled(session, ep_uuid: uuid.UUID) -> bool:
 async def _mark_queue_finished(
     ep_uuid: uuid.UUID, status: QueueStatus, error: str | None = None
 ) -> None:
-    """Write back terminal state to the queue row."""
+    """Write back terminal state to the queue row.
+
+    On successful transcription completion, chain-enqueue the AI summary task.
+    Summary failures must NOT write back to the transcription queue (D2).
+    """
     engine = create_async_engine(settings.database_url, poolclass=NullPool)
+    chain_summary = False
     try:
         async with async_sessionmaker(engine, expire_on_commit=False)() as session:
             row = (
@@ -192,8 +197,20 @@ async def _mark_queue_finished(
             row.finished_at = datetime.now(timezone.utc)
             row.error_message = error[:ERROR_MESSAGE_MAX_LEN] if error else None
             await session.commit()
+            chain_summary = status == QueueStatus.completed
     finally:
         await engine.dispose()
+
+    if chain_summary:
+        try:
+            from app.workers.summary_task import generate_episode_summary
+
+            generate_episode_summary.delay(str(ep_uuid))
+            logger.info("chained summary task enqueued for %s", ep_uuid)
+        except Exception:
+            logger.exception(
+                "failed to chain-enqueue summary for %s — non-fatal", ep_uuid
+            )
 
 
 async def _lookup_show_id(episode_id: str) -> str | None:
