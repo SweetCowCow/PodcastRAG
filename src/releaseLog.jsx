@@ -7,7 +7,7 @@
 // transcript_chunks count is estimated (~50 chunks/episode); zeabur-service-exec
 // hits Cloudflare 524 timeout so direct DB query was unreliable.
 const STATS_AS_OF = '2026-05-03';
-const STATS_CHANGES_COUNT = 30;
+const STATS_CHANGES_COUNT = 31;
 const STATS_EPISODES_COUNT = 137;        // transcripts.status = 'completed'
 const STATS_VECTORS_COUNT = 6850;        // ~estimate: 137 × ~50 chunks/ep
 
@@ -28,10 +28,24 @@ const MILESTONE_LABELS = {
   'v0.6': { zh: 'v0.6 — 部署不中斷正在跑的轉錄',   en: 'v0.6 — Deploys Without Interrupting Transcriptions' },
   'v0.7': { zh: 'v0.7 — AI 設定集中化',            en: 'v0.7 — AI Settings Consolidation' },
   'v0.8': { zh: 'v0.8 — 自動化驗證後門',           en: 'v0.8 — Automated Verification Backdoor' },
+  'v0.9': { zh: 'v0.9 — 每集 AI 摘要',             en: 'v0.9 — Per-Episode AI Summary' },
 };
 
 // Entries — newest milestone first; within each milestone newest date first.
 const RELEASE_LOG = [
+  // ─── v0.9 — Per-Episode AI Summary (5/03) ───
+  {
+    date: '2026-05-03', slug: 'episode-ai-summary', milestone: 'v0.9', tag: 'feature',
+    title: {
+      zh: '每集自動 AI 摘要',
+      en: 'Automatic Per-Episode AI Summary',
+    },
+    summary: {
+      zh: '節目 RSS 描述常常是行銷文案、廣告或來賓 IG，看不出這集到底在講什麼。新增每集自動產出 80-150 字繁中摘要：轉錄完成後鏈式觸發 Celery task，把逐字稿用 tiktoken 切成 12K token 的 chunks，map-reduce 兩階段（先列重點、再總結）由 admin 後台設定的 LLM step (預設 gpt-5-mini) 處理。結果存在 episodes 表新加的欄位（status: pending / running / done / failed），列表 / 查詢面板 / 逐字稿頁三處顯示，失敗對使用者完全透明（自動 fallback 顯示原 RSS 描述，不顯示 spinner / 錯誤訊息）。Admin 在轉錄序列頁多了 summary badge、單集重跑按鈕、以及一鍵「批次補摘要」處理既有 360 集（大約 $0.7 LLM 費用）。',
+      en: 'RSS descriptions are often marketing copy or sponsor links — they don\'t tell you what an episode is actually about. Each episode now auto-generates an 80-150 character Traditional Chinese summary: a Celery task chains off transcription completion, chunks the transcript with tiktoken at 12K tokens, then runs a map-reduce (extract bullets → reduce to summary) through whichever LLM step admins configure (default gpt-5-mini). Results live on the episodes table (status enum: pending / running / done / failed) and surface in the episode list, query panel, and transcript header. Failures are transparent — users see the original RSS description with no spinner or error. Admins gain a summary badge in the transcription queue, a single-episode regenerate button, and a one-click backfill for the 360 existing episodes (~$0.7 of LLM spend).',
+    },
+  },
+
   // ─── v0.8 — Automated Verification Backdoor (5/03) ───
   {
     date: '2026-05-03', slug: 'e2e-login-backdoor', milestone: 'v0.8', tag: 'enhancement',
