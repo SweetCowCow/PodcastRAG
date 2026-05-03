@@ -52,7 +52,7 @@ const ReleaseLogPage = ({ lang }) => {
         {/* Header */}
         <div style={{ marginBottom: 28 }}>
           <h1 style={{ color: TOKEN.text, fontSize: isMobile ? 24 : 30, fontWeight: 700, margin: '0 0 8px' }}>
-            {t ? '更新日誌' : 'Release Log'}
+            {t ? '更新日誌' : 'Change Log'}
           </h1>
           <p style={{ color: TOKEN.textSecondary, fontSize: 14, margin: 0, lineHeight: 1.6 }}>
             {t

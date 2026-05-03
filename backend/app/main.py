@@ -125,6 +125,14 @@ app.include_router(settings_router)
 app.include_router(users_router)
 app.include_router(stats_router)
 
+if settings.e2e_login_token:
+    from app.api.auth_e2e import router as auth_e2e_router
+
+    app.include_router(auth_e2e_router)
+    logger.warning(
+        "E2E_LOGIN_TOKEN is set — /auth/_e2e_login backdoor is ACTIVE"
+    )
+
 
 @app.get("/")
 async def root() -> dict:

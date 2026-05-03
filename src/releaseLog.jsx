@@ -7,7 +7,7 @@
 // transcript_chunks count is estimated (~50 chunks/episode); zeabur-service-exec
 // hits Cloudflare 524 timeout so direct DB query was unreliable.
 const STATS_AS_OF = '2026-05-03';
-const STATS_CHANGES_COUNT = 29;
+const STATS_CHANGES_COUNT = 30;
 const STATS_EPISODES_COUNT = 137;        // transcripts.status = 'completed'
 const STATS_VECTORS_COUNT = 6850;        // ~estimate: 137 × ~50 chunks/ep
 
@@ -27,10 +27,24 @@ const MILESTONE_LABELS = {
   'v0.5': { zh: 'v0.5 — 帳號驗證與查詢額度',       en: 'v0.5 — Auth & Query Quota' },
   'v0.6': { zh: 'v0.6 — 部署不中斷正在跑的轉錄',   en: 'v0.6 — Deploys Without Interrupting Transcriptions' },
   'v0.7': { zh: 'v0.7 — AI 設定集中化',            en: 'v0.7 — AI Settings Consolidation' },
+  'v0.8': { zh: 'v0.8 — 自動化驗證後門',           en: 'v0.8 — Automated Verification Backdoor' },
 };
 
 // Entries — newest milestone first; within each milestone newest date first.
 const RELEASE_LOG = [
+  // ─── v0.8 — Automated Verification Backdoor (5/03) ───
+  {
+    date: '2026-05-03', slug: 'e2e-login-backdoor', milestone: 'v0.8', tag: 'enhancement',
+    title: {
+      zh: 'Claude 自動化驗證的 e2e 登入後門',
+      en: 'E2E Login Backdoor for Claude Verification',
+    },
+    summary: {
+      zh: '以前 Claude 用瀏覽器自動化驗證 prod 的時候，得仰賴一份 14 天就過期的 cookie 檔案，每次過期都得開發者手動重抓一次。新增一條受嚴格保護的後門 endpoint：只有設了 E2E_LOGIN_TOKEN 環境變數時才會註冊（沒設的部署連 404 都不會洩漏這條 path 存在），用 HMAC 比對 token 防 timing attack，發出來的 session 強制 15 分鐘過期，IP 連續 5 次失敗會被 60 秒 rate limit。整個流程只發給 ADMIN_EMAILS 第一個 email，所有成功失敗都寫 audit log。一般使用者完全感覺不到這個改動 — 純粹給自動化測試流程用。',
+      en: 'Claude\'s browser-automation verification used to rely on a stored cookie file that expired every 14 days, requiring a manual re-login. A tightly-scoped backdoor endpoint is now available: registered ONLY when E2E_LOGIN_TOKEN env is set (deployments without it return 404 indistinguishably from any unmapped path), HMAC token comparison resists timing attacks, issued sessions are capped at 15-minute TTL regardless of normal session config, and an IP gets a 60-second rate-limit after 5 failed attempts. The endpoint always issues a session for ADMIN_EMAILS[0]; every success and failure goes through audit logging. Invisible to end users — purely a verification-pipeline tool.',
+    },
+  },
+
   // ─── v0.7 — AI Settings Consolidation (5/03) ───
   {
     date: '2026-05-03', slug: 'admin-llm-step-config', milestone: 'v0.7', tag: 'enhancement',

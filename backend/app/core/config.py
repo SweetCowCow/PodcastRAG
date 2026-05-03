@@ -1,3 +1,4 @@
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -38,6 +39,17 @@ class Settings(BaseSettings):
     session_secret: str | None = None
     admin_emails: str = ""
     session_ttl_days: int = 14
+
+    e2e_login_token: str | None = None
+
+    @field_validator("e2e_login_token")
+    @classmethod
+    def _validate_e2e_login_token(cls, v: str | None) -> str | None:
+        if v is None or v == "":
+            return None
+        if len(v) < 32:
+            raise ValueError("E2E_LOGIN_TOKEN must be at least 32 chars")
+        return v
 
     model_config = SettingsConfigDict(
         env_file=".env",

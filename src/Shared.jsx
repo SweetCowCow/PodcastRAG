@@ -153,7 +153,7 @@ const TopNav = ({ lang, page, setPage, onToggleLang, onAdminClick, user, onSignI
 
   const mainItems = [
     { id: 'select', icon: 'podcast', label: t ? '節目選擇' : 'Shows' },
-    { id: 'release-log', icon: 'fileText', label: t ? '更新日誌' : 'Release Log' },
+    { id: 'release-log', icon: 'fileText', label: t ? '更新日誌' : 'Change Log' },
     { id: 'admin', icon: 'settings', label: t ? '後台管理' : 'Admin' },
   ];
   const adminItems = [

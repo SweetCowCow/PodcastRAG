@@ -42,11 +42,12 @@ async def create_session(
     user_id: uuid.UUID,
     ip: str | None = None,
     user_agent: str | None = None,
+    ttl_override: timedelta | None = None,
 ) -> IssuedSession:
     session_token = generate_token(32)
     csrf_token = generate_token(32)
     now = datetime.now(timezone.utc)
-    expires_at = now + timedelta(days=settings.session_ttl_days)
+    expires_at = now + (ttl_override or timedelta(days=settings.session_ttl_days))
 
     row = SessionRow(
         user_id=user_id,
