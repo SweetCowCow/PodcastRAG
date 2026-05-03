@@ -14,9 +14,9 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.auth import _set_session_cookies
 from app.core.config import settings
 from app.core.database import get_db
+from app.core.security import CSRF_COOKIE, SESSION_COOKIE
 from app.models.user import User
 from app.services.session_service import create_session
 
@@ -124,6 +124,16 @@ async def e2e_login(
         },
     )
 
+    # Cookie max-age tracks the DB session TTL (15 min) so the browser
+    # discards the cookie at the same time the server-side session expires.
+    cookie_max_age = int(E2E_SESSION_TTL.total_seconds())
     resp = RedirectResponse(url="/", status_code=302)
-    _set_session_cookies(resp, issued.session_token, issued.csrf_token)
+    resp.set_cookie(
+        SESSION_COOKIE, issued.session_token,
+        max_age=cookie_max_age, httponly=True, secure=True, samesite="none", path="/",
+    )
+    resp.set_cookie(
+        CSRF_COOKIE, issued.csrf_token,
+        max_age=cookie_max_age, httponly=False, secure=True, samesite="none", path="/",
+    )
     return resp

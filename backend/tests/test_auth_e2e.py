@@ -206,6 +206,15 @@ async def test_valid_token_issues_session(monkeypatch, db_session, admin_user):
     assert "session_id" in r.cookies
     assert "csrf_token" in r.cookies
 
+    # Cookie Max-Age must mirror the 15-min DB session TTL — not the default
+    # SESSION_TTL_DAYS — so the browser drops the cookie when the row expires.
+    set_cookie_headers = r.headers.get_list("set-cookie")
+    for header in set_cookie_headers:
+        if "session_id=" in header or "csrf_token=" in header:
+            assert "Max-Age=900" in header, (
+                f"e2e cookie max-age must be 900s (15 min), got: {header}"
+            )
+
     from app.core.security import hash_token
     from app.models.session import Session as SessionRow
 
