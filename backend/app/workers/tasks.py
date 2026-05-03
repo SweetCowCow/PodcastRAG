@@ -20,6 +20,7 @@ from app.models.transcript_segment import TranscriptSegment
 from app.models.transcription_queue import QueueStatus, TranscriptionQueue
 from app.services import storage
 from app.services.chunking import build_chunks
+from app.services.ai_step_resolver import get_step_config
 from app.services.embedding import embed_texts
 from app.services.rss_parser import RssParseError
 from app.services.storage import StorageError
@@ -263,7 +264,9 @@ async def _run(episode_id: str) -> dict:
 
             temp_audio_path = storage.download_to_temp(audio_storage_key)
 
-            provider = get_provider()
+            async with Session() as session:
+                transcription_cfg = await get_step_config(session, "transcription")
+            provider = get_provider(transcription_cfg)
             result = await provider.transcribe(temp_audio_path, language=show_language)
 
             async with Session() as session:
@@ -298,13 +301,15 @@ async def _run(episode_id: str) -> dict:
                 await session.flush()
 
                 chunk_drafts = build_chunks(segment_rows)
-                embeddings = (
-                    await asyncio.to_thread(
-                        embed_texts, [c.text for c in chunk_drafts]
+                if chunk_drafts:
+                    embedding_cfg = await get_step_config(session, "embedding")
+                    embeddings = await asyncio.to_thread(
+                        embed_texts,
+                        [c.text for c in chunk_drafts],
+                        embedding_cfg,
                     )
-                    if chunk_drafts
-                    else []
-                )
+                else:
+                    embeddings = []
                 for idx, (draft, vector) in enumerate(zip(chunk_drafts, embeddings)):
                     session.add(
                         TranscriptChunk(

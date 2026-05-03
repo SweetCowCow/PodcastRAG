@@ -95,11 +95,11 @@
 
 | Change | Archive 路徑 | 摘要 |
 |--------|-------------|------|
+| `admin-llm-step-config` | `openspec/changes/archive/2026-05-03-admin-llm-step-config/` | 重構 admin AI 設定：`api_keys` 表（集中金鑰管理）+ `ai_steps` 表（5 個固定步驟 answer/rewrite/summary/embedding/transcription，每步驟挑 provider+model+key）。Migration 從 `llm_config` + `OPENAI_API_KEY` env 自動匯入，Rev A 保留舊表、Rev B 才 drop（雙寫過渡）。Embedding 強制 OpenAI provider；transcription 可 admin 切換 openai/faster-whisper 不用 redeploy。Release log v0.7。鋪好下一個 `episode-ai-summary` 變更要用的 summary step 位子。|
 | `deploy-resilience` | `openspec/changes/archive/2026-05-03-deploy-resilience/` | 部署重啟後 1-3 min 內自動把卡住的轉錄推回 pending；force-cancel 即使 celery_task_id null 也釋放 throttle slot；OAuth env 改 Optional + backend startup 才強制驗。Release log v0.6 |
 | `authentication-system` | `openspec/changes/archive/2026-05-02-authentication-system/` | Google SSO + RBAC + 查詢額度 + Phase 1 gate（後台 + query）。中途修了 cross-subdomain CSRF cookie bug。Release log v0.5 |
 | `release-log-and-presentation` | `openspec/changes/archive/2026-05-01-release-log-and-presentation/` | 「更新日誌」頁 + 簡報頁（13 slides）+ pptxgenjs 產 .pptx |
 | `friendly-external-api-errors` | `openspec/changes/archive/2026-05-01-friendly-external-api-errors/` | 後端例外統一錯誤格式，前端雙語 `formatError()` |
-| `queue-tabs-and-schedule-cleanup` | `openspec/changes/archive/2026-04-30-queue-tabs-and-schedule-cleanup/` | QueueTab 5 status section → 3 sub-tab；Schedule 砍 hourly + 加 day_of_week |
 
 ---
 

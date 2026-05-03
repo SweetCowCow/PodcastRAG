@@ -3,7 +3,7 @@ const AdminPage = ({ lang, activePage, currentUser }) => {
   const t = lang === 'zh';
   const pages = {
     'admin-api': <ApiKeysTab lang={lang} />,
-    'admin-llm': <LLMTab lang={lang} />,
+    'admin-llm': <AiStepsTab lang={lang} />,
     'admin-rag': <RAGTab lang={lang} />,
     'admin-schedule': <ScheduleTab lang={lang} />,
     'admin-queue': <QueueTab lang={lang} />,
@@ -24,219 +24,501 @@ const AdminPage = ({ lang, activePage, currentUser }) => {
 };
 
 // ── API Keys Tab ──
+// Provider colour palette. Free-form provider strings fall back to TOKEN.accent.
+const PROVIDER_COLORS = {
+  openai: '#22c55e',
+  anthropic: '#f59e0b',
+  google: '#6366f1',
+  'zeabur-aihub': '#22d3ee',
+};
+const PROVIDER_PRESETS = ['openai', 'anthropic', 'google', 'zeabur-aihub'];
+
 const ApiKeysTab = ({ lang }) => {
   const t = lang === 'zh';
-  const [keys, setKeys] = React.useState([
-    { id: 1, provider: 'OpenAI', key: 'sk-proj-••••••••••••••••••••••••••••••XYZ1', active: true, model: 'gpt-4o', added: '2026-03-01' },
-    { id: 2, provider: 'Anthropic', key: 'sk-ant-api03-••••••••••••••••••••ABC2', active: true, model: 'claude-opus-4-5', added: '2026-03-15' },
-    { id: 3, provider: 'Google', key: 'AIza••••••••••••••••••••••••••••GHI3', active: false, model: 'gemini-2.5-pro', added: '2026-04-01' },
-    { id: 4, provider: 'AI Hub', key: 'hub-••••••••••••••••••••••••••••JKL4', active: true, model: 'zeabur-llm-v2', added: '2026-04-10' },
-  ]);
-  const [showKey, setShowKey] = React.useState({});
+  const [keys, setKeys] = React.useState(null);
+  const [error, setError] = React.useState(null);
   const [adding, setAdding] = React.useState(false);
-  const [newKey, setNewKey] = React.useState({ provider: 'OpenAI', key: '' });
+  const [editing, setEditing] = React.useState(null); // { id, label, api_key }
+  const [toast, setToast] = React.useState(null);
+  const [newKey, setNewKey] = React.useState({ provider: '', label: '', api_key: '' });
 
-  const providerColors = { OpenAI: '#22c55e', Anthropic: '#f59e0b', Google: '#6366f1', 'AI Hub': '#22d3ee' };
+  const reload = React.useCallback(async () => {
+    setError(null);
+    try {
+      const res = await apiFetch('/admin/api-keys');
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      setKeys(await res.json());
+    } catch (err) { setError(err.message); }
+  }, []);
+  React.useEffect(() => { reload(); }, [reload]);
+
+  const flashToast = (text, kind = 'success') => {
+    setToast({ text, kind });
+    setTimeout(() => setToast(null), 3500);
+  };
+
+  const handleCreate = async () => {
+    if (!newKey.provider.trim() || !newKey.label.trim() || !newKey.api_key.trim()) {
+      flashToast(t ? '請填寫完整欄位' : 'All fields required', 'error');
+      return;
+    }
+    try {
+      const res = await apiFetch('/admin/api-keys', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newKey),
+      });
+      if (res.status === 409) {
+        flashToast(t ? '同一供應商已有此 label' : 'Duplicate label for provider', 'error');
+        return;
+      }
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      setAdding(false);
+      setNewKey({ provider: '', label: '', api_key: '' });
+      flashToast(t ? '已新增' : 'Added');
+      await reload();
+    } catch (err) { flashToast((t ? '失敗：' : 'Failed: ') + err.message, 'error'); }
+  };
+
+  const handleUpdate = async () => {
+    const payload = {};
+    if (editing.label && editing.label.trim()) payload.label = editing.label.trim();
+    if (editing.api_key && editing.api_key.trim()) payload.api_key = editing.api_key.trim();
+    try {
+      const res = await apiFetch(`/admin/api-keys/${editing.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (res.status === 409) {
+        flashToast(t ? '同一供應商已有此 label' : 'Duplicate label for provider', 'error');
+        return;
+      }
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      setEditing(null);
+      flashToast(t ? '已更新' : 'Updated');
+      await reload();
+    } catch (err) { flashToast((t ? '失敗：' : 'Failed: ') + err.message, 'error'); }
+  };
+
+  const handleDelete = async (k) => {
+    if (!window.confirm(t ? `確定要刪除 ${k.provider}/${k.label}？` : `Delete ${k.provider}/${k.label}?`)) return;
+    try {
+      const res = await apiFetch(`/admin/api-keys/${k.id}`, { method: 'DELETE' });
+      if (res.status === 409) {
+        const body = await res.json().catch(() => ({}));
+        const refs = body?.detail?.referenced_by || [];
+        flashToast(
+          (t ? '無法刪除：仍被以下 step 使用 — ' : 'Cannot delete: still referenced by — ') + refs.join(', '),
+          'error',
+        );
+        return;
+      }
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      flashToast(t ? '已刪除' : 'Deleted');
+      await reload();
+    } catch (err) { flashToast((t ? '失敗：' : 'Failed: ') + err.message, 'error'); }
+  };
 
   return (
     <div style={{ maxWidth: 760 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-        <p style={{ margin: 0, color: TOKEN.textSecondary, fontSize: 14 }}>{t ? '管理各 LLM 供應商的 API 金鑰，金鑰以加密方式儲存。' : 'Manage API keys for LLM providers. Keys are stored encrypted.'}</p>
+        <p style={{ margin: 0, color: TOKEN.textSecondary, fontSize: 14 }}>
+          {t ? '管理各 LLM 供應商的 API 金鑰。AI 處理步驟設定頁會引用這裡的金鑰。' : 'Manage API keys per provider. Referenced by AI step config.'}
+        </p>
         <Btn icon="plus" onClick={() => setAdding(true)} size="sm">{t ? '新增金鑰' : 'Add Key'}</Btn>
       </div>
+
+      {error && (
+        <div style={{ padding: '9px 13px', borderRadius: 8, fontSize: 13, marginBottom: 12,
+          background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)', color: '#f87171' }}>
+          {(t ? '載入失敗：' : 'Load failed: ') + error}
+        </div>
+      )}
 
       {adding && (
         <div style={{ background: TOKEN.surface, border: `1px solid ${TOKEN.accent + '55'}`, borderRadius: 12, padding: 20, marginBottom: 20 }}>
           <p style={{ color: TOKEN.text, fontWeight: 600, fontSize: 14, margin: '0 0 14px' }}>{t ? '新增 API 金鑰' : 'Add API Key'}</p>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 12, marginBottom: 14 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
             <div>
               <label style={{ display: 'block', color: TOKEN.textMuted, fontSize: 12, marginBottom: 5 }}>{t ? '供應商' : 'Provider'}</label>
-              <select value={newKey.provider} onChange={e => setNewKey(k => ({ ...k, provider: e.target.value }))}
-                style={{ width: '100%', background: TOKEN.surfaceRaised, border: `1px solid ${TOKEN.surfaceBorder}`, borderRadius: 8, padding: '9px 12px', color: TOKEN.text, fontSize: 14, outline: 'none', fontFamily: 'inherit' }}>
-                {['OpenAI', 'Anthropic', 'Google', 'AI Hub'].map(p => <option key={p} value={p}>{p}</option>)}
-              </select>
+              <Input list="provider-presets" value={newKey.provider}
+                onChange={e => setNewKey(k => ({ ...k, provider: e.target.value }))}
+                placeholder="openai" />
+              <datalist id="provider-presets">
+                {PROVIDER_PRESETS.map(p => <option key={p} value={p} />)}
+              </datalist>
             </div>
             <div>
-              <label style={{ display: 'block', color: TOKEN.textMuted, fontSize: 12, marginBottom: 5 }}>{t ? 'API 金鑰' : 'API Key'}</label>
-              <Input value={newKey.key} onChange={e => setNewKey(k => ({ ...k, key: e.target.value }))} placeholder="sk-..." />
+              <label style={{ display: 'block', color: TOKEN.textMuted, fontSize: 12, marginBottom: 5 }}>Label</label>
+              <Input value={newKey.label} onChange={e => setNewKey(k => ({ ...k, label: e.target.value }))} placeholder="main" />
+            </div>
+          </div>
+          <div style={{ marginBottom: 14 }}>
+            <label style={{ display: 'block', color: TOKEN.textMuted, fontSize: 12, marginBottom: 5 }}>{t ? 'API 金鑰' : 'API Key'}</label>
+            <Input value={newKey.api_key} onChange={e => setNewKey(k => ({ ...k, api_key: e.target.value }))} placeholder="sk-..." type="password" />
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <Btn size="sm" onClick={handleCreate}>{t ? '儲存' : 'Save'}</Btn>
+            <Btn size="sm" variant="ghost" onClick={() => { setAdding(false); setNewKey({ provider: '', label: '', api_key: '' }); }}>{t ? '取消' : 'Cancel'}</Btn>
+          </div>
+        </div>
+      )}
+
+      {editing && (
+        <div style={{ background: TOKEN.surface, border: `1px solid ${TOKEN.accent + '55'}`, borderRadius: 12, padding: 20, marginBottom: 20 }}>
+          <p style={{ color: TOKEN.text, fontWeight: 600, fontSize: 14, margin: '0 0 14px' }}>
+            {t ? '編輯金鑰' : 'Edit API Key'} <span style={{ color: TOKEN.textMuted, fontWeight: 400 }}>· {editing.provider}</span>
+          </p>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 14 }}>
+            <div>
+              <label style={{ display: 'block', color: TOKEN.textMuted, fontSize: 12, marginBottom: 5 }}>Label</label>
+              <Input value={editing.label} onChange={e => setEditing(s => ({ ...s, label: e.target.value }))} />
+            </div>
+            <div>
+              <label style={{ display: 'block', color: TOKEN.textMuted, fontSize: 12, marginBottom: 5 }}>
+                {t ? '新 API 金鑰（留空保留原值）' : 'New API Key (empty = keep current)'}
+              </label>
+              <Input value={editing.api_key || ''} onChange={e => setEditing(s => ({ ...s, api_key: e.target.value }))} type="password" placeholder="sk-..." />
             </div>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
-            <Btn size="sm" onClick={() => { setKeys(ks => [...ks, { id: Date.now(), ...newKey, active: true, model: '-', added: '2026-04-19' }]); setAdding(false); setNewKey({ provider: 'OpenAI', key: '' }); }}>{t ? '儲存' : 'Save'}</Btn>
-            <Btn size="sm" variant="ghost" onClick={() => setAdding(false)}>{t ? '取消' : 'Cancel'}</Btn>
+            <Btn size="sm" onClick={handleUpdate}>{t ? '儲存' : 'Save'}</Btn>
+            <Btn size="sm" variant="ghost" onClick={() => setEditing(null)}>{t ? '取消' : 'Cancel'}</Btn>
           </div>
         </div>
       )}
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {keys.map(k => (
+        {keys === null ? (
+          <div style={{ color: TOKEN.textMuted, padding: '24px 0' }}>{t ? '載入中…' : 'Loading…'}</div>
+        ) : keys.length === 0 ? (
+          <div style={{ color: TOKEN.textMuted, padding: '24px 0' }}>{t ? '尚無金鑰' : 'No keys yet'}</div>
+        ) : keys.map(k => (
           <div key={k.id} style={{ background: TOKEN.surface, border: `1px solid ${TOKEN.surfaceBorder}`, borderRadius: 12, padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 16 }}>
-            <div style={{ width: 8, height: 8, borderRadius: '50%', background: k.active ? '#22c55e' : TOKEN.textMuted, flexShrink: 0 }} />
-            <div style={{ width: 72, fontSize: 13, fontWeight: 600, color: providerColors[k.provider] || TOKEN.accent }}>{k.provider}</div>
-            <div style={{ flex: 1, fontFamily: 'monospace', fontSize: 13, color: TOKEN.textSecondary }}>
-              {showKey[k.id] ? k.key : k.key.replace(/(?<=.{8}).(?=.{6})/g, '•')}
-            </div>
-            <div style={{ fontSize: 12, color: TOKEN.textMuted, minWidth: 110 }}>{k.model}</div>
-            <div style={{ fontSize: 12, color: TOKEN.textMuted, minWidth: 80 }}>{k.added}</div>
+            <div style={{ width: 110, fontSize: 13, fontWeight: 600, color: PROVIDER_COLORS[k.provider] || TOKEN.accent }}>{k.provider}</div>
+            <div style={{ flex: 1, fontSize: 14, color: TOKEN.text }}>{k.label}</div>
+            <div style={{ fontFamily: 'monospace', fontSize: 13, color: TOKEN.textSecondary, minWidth: 90 }}>{k.api_key_masked}</div>
             <div style={{ display: 'flex', gap: 6 }}>
-              <Btn size="sm" variant="ghost" icon={showKey[k.id] ? 'eyeOff' : 'eye'} onClick={() => setShowKey(s => ({ ...s, [k.id]: !s[k.id] }))} />
-              <Btn size="sm" variant="ghost" icon="trash" onClick={() => setKeys(ks => ks.filter(x => x.id !== k.id))} />
+              <Btn size="sm" variant="ghost" icon="edit" onClick={() => setEditing({ id: k.id, provider: k.provider, label: k.label, api_key: '' })} />
+              <Btn size="sm" variant="ghost" icon="trash" onClick={() => handleDelete(k)} />
             </div>
           </div>
         ))}
       </div>
-    </div>
-  );
-};
 
-// ── LLM Tab ──
-const MASKED_KEY = '***';
-
-const LLMTab = ({ lang }) => {
-  const t = lang === 'zh';
-  const [form, setForm] = React.useState({
-    answer_base_url: '', answer_api_key: '', answer_model: '',
-    rewrite_base_url: '', rewrite_api_key: '', rewrite_model: '',
-  });
-  const [apiKeyTouched, setApiKeyTouched] = React.useState({ answer_api_key: false, rewrite_api_key: false });
-  const [loading, setLoading] = React.useState(true);
-  const [saving, setSaving] = React.useState(false);
-  const [message, setMessage] = React.useState(null);
-
-  const loadConfig = React.useCallback(async () => {
-    setLoading(true);
-    setMessage(null);
-    try {
-      const res = await apiFetch(`/admin/llm-config`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      setForm({
-        answer_base_url: data.answer_base_url || '',
-        answer_api_key: data.answer_api_key || '',
-        answer_model: data.answer_model || '',
-        rewrite_base_url: data.rewrite_base_url || '',
-        rewrite_api_key: data.rewrite_api_key || '',
-        rewrite_model: data.rewrite_model || '',
-      });
-      setApiKeyTouched({ answer_api_key: false, rewrite_api_key: false });
-    } catch (err) {
-      setMessage({ kind: 'error', text: (t ? '載入失敗：' : 'Load failed: ') + err.message });
-    } finally {
-      setLoading(false);
-    }
-  }, [t]);
-
-  React.useEffect(() => { loadConfig(); }, [loadConfig]);
-
-  const setField = (key) => (e) => {
-    const value = e.target.value;
-    setForm(f => ({ ...f, [key]: value }));
-    if (key === 'answer_api_key' || key === 'rewrite_api_key') {
-      setApiKeyTouched(s => ({ ...s, [key]: true }));
-    }
-  };
-
-  const handleSave = async () => {
-    setSaving(true);
-    setMessage(null);
-    const payload = {
-      answer_base_url: form.answer_base_url,
-      answer_model: form.answer_model,
-      rewrite_base_url: form.rewrite_base_url,
-      rewrite_model: form.rewrite_model,
-    };
-    if (apiKeyTouched.answer_api_key && form.answer_api_key !== MASKED_KEY) {
-      payload.answer_api_key = form.answer_api_key;
-    }
-    if (apiKeyTouched.rewrite_api_key && form.rewrite_api_key !== MASKED_KEY) {
-      payload.rewrite_api_key = form.rewrite_api_key;
-    }
-    try {
-      const res = await apiFetch(`/admin/llm-config`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      if (!res.ok) {
-        const detail = await res.text();
-        throw new Error(detail || `HTTP ${res.status}`);
-      }
-      const data = await res.json();
-      setForm({
-        answer_base_url: data.answer_base_url || '',
-        answer_api_key: data.answer_api_key || '',
-        answer_model: data.answer_model || '',
-        rewrite_base_url: data.rewrite_base_url || '',
-        rewrite_api_key: data.rewrite_api_key || '',
-        rewrite_model: data.rewrite_model || '',
-      });
-      setApiKeyTouched({ answer_api_key: false, rewrite_api_key: false });
-      setMessage({ kind: 'success', text: t ? '已儲存' : 'Saved' });
-    } catch (err) {
-      setMessage({ kind: 'error', text: (t ? '儲存失敗：' : 'Save failed: ') + err.message });
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <div style={{ maxWidth: 760 }}>
-      <p style={{ margin: '0 0 18px', color: TOKEN.textSecondary, fontSize: 14 }}>
-        {t ? '設定 Answer 與 Rewrite 兩個 LLM，後台儲存於 llm_config 單列資料表。' : 'Configure the Answer and Rewrite LLMs (stored in the singleton llm_config row).'}
-      </p>
-
-      {loading ? (
-        <div style={{ color: TOKEN.textMuted, padding: '24px 0' }}>{t ? '載入中...' : 'Loading...'}</div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <LLMConfigSection title={t ? 'Answer 模型（回答）' : 'Answer Model'} lang={lang}
-            baseUrl={form.answer_base_url} onBaseUrl={setField('answer_base_url')}
-            apiKey={form.answer_api_key} onApiKey={setField('answer_api_key')}
-            model={form.answer_model} onModel={setField('answer_model')} />
-          <LLMConfigSection title={t ? 'Rewrite 模型（查詢改寫）' : 'Rewrite Model'} lang={lang}
-            baseUrl={form.rewrite_base_url} onBaseUrl={setField('rewrite_base_url')}
-            apiKey={form.rewrite_api_key} onApiKey={setField('rewrite_api_key')}
-            model={form.rewrite_model} onModel={setField('rewrite_model')} />
-
-          {message && (
-            <div style={{ padding: '9px 13px', borderRadius: 8, fontSize: 13,
-              background: message.kind === 'success' ? 'rgba(34,197,94,0.12)' : 'rgba(239,68,68,0.12)',
-              border: `1px solid ${message.kind === 'success' ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)'}`,
-              color: message.kind === 'success' ? '#4ade80' : '#f87171' }}>
-              {message.text}
-            </div>
-          )}
-
-          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-            <Btn variant="ghost" onClick={loadConfig} disabled={saving}>{t ? '重新載入' : 'Reload'}</Btn>
-            <Btn icon="check" onClick={handleSave} disabled={saving}>{saving ? (t ? '儲存中...' : 'Saving...') : (t ? '儲存設定' : 'Save Configuration')}</Btn>
-          </div>
-        </div>
+      {toast && (
+        <div style={{ position: 'fixed', bottom: 24, right: 24, padding: '11px 16px', borderRadius: 10, fontSize: 13,
+          background: toast.kind === 'success' ? 'rgba(34,197,94,0.18)' : 'rgba(239,68,68,0.18)',
+          border: `1px solid ${toast.kind === 'success' ? 'rgba(34,197,94,0.4)' : 'rgba(239,68,68,0.4)'}`,
+          color: toast.kind === 'success' ? '#4ade80' : '#f87171', zIndex: 50 }}>{toast.text}</div>
       )}
     </div>
   );
 };
 
-const LLMConfigSection = ({ title, lang, baseUrl, onBaseUrl, apiKey, onApiKey, model, onModel }) => {
+// ── AI Steps Tab (replaces LLMTab) ──
+
+const STEP_KEYS_ORDER = ['answer', 'rewrite', 'summary', 'embedding', 'transcription'];
+
+const STEP_LABELS = {
+  answer:        { zh: 'Answer 模型（RAG 答案）',    en: 'Answer (RAG)' },
+  rewrite:       { zh: 'Rewrite 模型（查詢改寫）',   en: 'Rewrite (query rewrite)' },
+  summary:       { zh: 'Summary 模型（每集摘要）',   en: 'Summary (per-episode)' },
+  embedding:     { zh: 'Embedding 模型（向量化）',   en: 'Embedding (vectorization)' },
+  transcription: { zh: 'Transcription（語音轉錄）',  en: 'Transcription (speech)' },
+};
+
+// Common base_url / model presets per provider (UI hints; admin can free-type).
+const BASE_URL_PRESETS_BY_PROVIDER = {
+  openai: ['https://api.openai.com/v1'],
+  anthropic: ['https://api.anthropic.com/v1'],
+  google: ['https://generativelanguage.googleapis.com/v1'],
+  'zeabur-aihub': ['https://hnd1.aihub.zeabur.ai/v1'],
+};
+const CHAT_MODEL_PRESETS_BY_PROVIDER = {
+  openai: ['gpt-4o', 'gpt-4o-mini', 'gpt-5-mini'],
+  anthropic: ['claude-opus-4-7', 'claude-sonnet-4-6', 'claude-haiku-4-5'],
+  google: ['gemini-2.5-pro'],
+  'zeabur-aihub': ['gpt-4o', 'gpt-4o-mini', 'gpt-5-mini'],
+};
+const EMBEDDING_MODEL_PRESETS = ['text-embedding-3-small', 'text-embedding-3-large'];
+const WHISPER_API_MODEL_PRESETS = ['whisper-1'];
+const WHISPER_LOCAL_MODEL_PRESETS = ['base', 'small', 'medium', 'large-v3'];
+
+const AiStepsTab = ({ lang }) => {
   const t = lang === 'zh';
+  const [steps, setSteps] = React.useState(null);
+  const [keys, setKeys] = React.useState(null);
+  const [drafts, setDrafts] = React.useState({});
+  const [savingKey, setSavingKey] = React.useState(null);
+  const [error, setError] = React.useState(null);
+  const [toast, setToast] = React.useState(null);
+
+  const flashToast = (text, kind = 'success') => {
+    setToast({ text, kind });
+    setTimeout(() => setToast(null), 3500);
+  };
+
+  const reload = React.useCallback(async () => {
+    setError(null);
+    try {
+      const [stepsRes, keysRes] = await Promise.all([
+        apiFetch('/admin/ai-steps'),
+        apiFetch('/admin/api-keys'),
+      ]);
+      if (!stepsRes.ok) throw new Error(`steps HTTP ${stepsRes.status}`);
+      if (!keysRes.ok) throw new Error(`keys HTTP ${keysRes.status}`);
+      const stepsData = await stepsRes.json();
+      const keysData = await keysRes.json();
+      setSteps(stepsData);
+      setKeys(keysData);
+      // seed drafts from server state so admin sees current values in inputs
+      const seeded = {};
+      for (const s of stepsData) {
+        seeded[s.step_key] = {
+          base_url: s.base_url || '',
+          model: s.model || '',
+          api_key_id: s.api_key_id || '',
+          extra_config: s.extra_config || {},
+        };
+      }
+      setDrafts(seeded);
+    } catch (err) { setError(err.message); }
+  }, []);
+  React.useEffect(() => { reload(); }, [reload]);
+
+  const setDraft = (step_key, patch) =>
+    setDrafts(d => ({ ...d, [step_key]: { ...d[step_key], ...patch } }));
+  const setExtra = (step_key, patch) =>
+    setDrafts(d => ({ ...d, [step_key]: { ...d[step_key], extra_config: { ...d[step_key].extra_config, ...patch } } }));
+
+  const keysByProvider = React.useMemo(() => {
+    if (!keys) return {};
+    const acc = {};
+    for (const k of keys) (acc[k.provider] = acc[k.provider] || []).push(k);
+    return acc;
+  }, [keys]);
+
+  const providerOfKey = React.useCallback((api_key_id) => {
+    if (!keys || !api_key_id) return null;
+    return keys.find(k => k.id === api_key_id)?.provider || null;
+  }, [keys]);
+
+  const save = async (step) => {
+    setSavingKey(step.step_key);
+    const draft = drafts[step.step_key];
+    let payload;
+    if (step.step_type === 'whisper') {
+      const provider = draft.extra_config?.provider;
+      if (provider === 'faster-whisper') {
+        payload = {
+          step_type: 'whisper',
+          base_url: null,
+          model: draft.model,
+          api_key_id: null,
+          extra_config: { provider: 'faster-whisper', model_dir: draft.extra_config?.model_dir || '' },
+        };
+      } else {
+        payload = {
+          step_type: 'whisper',
+          base_url: draft.base_url,
+          model: draft.model,
+          api_key_id: draft.api_key_id || null,
+          extra_config: { provider: 'openai' },
+        };
+      }
+    } else {
+      payload = {
+        step_type: step.step_type,
+        base_url: draft.base_url,
+        model: draft.model,
+        api_key_id: draft.api_key_id || null,
+        extra_config: draft.extra_config || {},
+      };
+    }
+    try {
+      const res = await apiFetch(`/admin/ai-steps/${step.step_key}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        const detail = typeof body.detail === 'string' ? body.detail : JSON.stringify(body.detail);
+        flashToast((t ? '儲存失敗：' : 'Save failed: ') + detail, 'error');
+        return;
+      }
+      flashToast(t ? `已儲存 ${step.step_key}` : `Saved ${step.step_key}`);
+      await reload();
+    } catch (err) { flashToast((t ? '失敗：' : 'Failed: ') + err.message, 'error'); }
+    finally { setSavingKey(null); }
+  };
+
+  if (steps === null) return <div style={{ color: TOKEN.textMuted, padding: '24px 0' }}>{t ? '載入中…' : 'Loading…'}</div>;
+  if (error) return <div style={{ color: '#f87171' }}>{(t ? '載入失敗：' : 'Load failed: ') + error}</div>;
+
+  const stepsByKey = Object.fromEntries(steps.map(s => [s.step_key, s]));
+
+  return (
+    <div style={{ maxWidth: 820 }}>
+      <p style={{ margin: '0 0 18px', color: TOKEN.textSecondary, fontSize: 14 }}>
+        {t ? '為每個 AI 處理步驟挑選 base_url、model 與 API 金鑰。金鑰請先到「API 金鑰管理」新增。' : 'Configure base_url, model, and api_key for each AI processing step. Add keys via "API Keys" tab first.'}
+      </p>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        {STEP_KEYS_ORDER.map(sk => {
+          const step = stepsByKey[sk];
+          if (!step) return null;
+          return (
+            <AiStepSection
+              key={sk}
+              step={step}
+              draft={drafts[sk] || { base_url: '', model: '', api_key_id: '', extra_config: {} }}
+              keys={keys || []}
+              keysByProvider={keysByProvider}
+              providerOfKey={providerOfKey}
+              setDraft={(patch) => setDraft(sk, patch)}
+              setExtra={(patch) => setExtra(sk, patch)}
+              onSave={() => save(step)}
+              saving={savingKey === sk}
+              lang={lang}
+            />
+          );
+        })}
+      </div>
+      {toast && (
+        <div style={{ position: 'fixed', bottom: 24, right: 24, padding: '11px 16px', borderRadius: 10, fontSize: 13,
+          background: toast.kind === 'success' ? 'rgba(34,197,94,0.18)' : 'rgba(239,68,68,0.18)',
+          border: `1px solid ${toast.kind === 'success' ? 'rgba(34,197,94,0.4)' : 'rgba(239,68,68,0.4)'}`,
+          color: toast.kind === 'success' ? '#4ade80' : '#f87171', zIndex: 50 }}>{toast.text}</div>
+      )}
+    </div>
+  );
+};
+
+const AiStepSection = ({ step, draft, keys, keysByProvider, providerOfKey, setDraft, setExtra, onSave, saving, lang }) => {
+  const t = lang === 'zh';
+  const isWhisper = step.step_type === 'whisper';
+  const whisperProvider = isWhisper ? (draft.extra_config?.provider || 'openai') : null;
+  const isLocalWhisper = isWhisper && whisperProvider === 'faster-whisper';
+
+  // Embedding step: filter api_keys to provider==openai only.
+  const visibleKeys = step.step_key === 'embedding'
+    ? (keysByProvider.openai || [])
+    : keys;
+
+  // Provider that drives presets is whichever provider the chosen api_key has.
+  const inferredProvider = providerOfKey(draft.api_key_id) || (step.step_key === 'embedding' ? 'openai' : null);
+
+  const baseUrlPresets = inferredProvider ? (BASE_URL_PRESETS_BY_PROVIDER[inferredProvider] || []) : [];
+  let modelPresets = [];
+  if (step.step_type === 'chat') {
+    modelPresets = inferredProvider ? (CHAT_MODEL_PRESETS_BY_PROVIDER[inferredProvider] || []) : [];
+  } else if (step.step_type === 'embedding') {
+    modelPresets = EMBEDDING_MODEL_PRESETS;
+  } else if (isWhisper && !isLocalWhisper) {
+    modelPresets = WHISPER_API_MODEL_PRESETS;
+  } else if (isLocalWhisper) {
+    modelPresets = WHISPER_LOCAL_MODEL_PRESETS;
+  }
+  const presetIdBase = `presets-${step.step_key}`;
+
+  // Embedding model change warning: compare draft.model vs server-side step.model
+  const embeddingModelChanged =
+    step.step_key === 'embedding' && draft.model && step.model && draft.model !== step.model;
+
   return (
     <div style={{ background: TOKEN.surface, border: `1px solid ${TOKEN.surfaceBorder}`, borderRadius: 12, padding: '18px 22px' }}>
-      <p style={{ color: TOKEN.text, fontWeight: 600, fontSize: 14, margin: '0 0 14px' }}>{title}</p>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
-        <div>
-          <label style={{ display: 'block', color: TOKEN.textMuted, fontSize: 12, marginBottom: 6 }}>Base URL</label>
-          <Input value={baseUrl} onChange={onBaseUrl} placeholder="https://hnd1.aihub.zeabur.ai/v1" />
-        </div>
-        <div>
-          <label style={{ display: 'block', color: TOKEN.textMuted, fontSize: 12, marginBottom: 6 }}>Model</label>
-          <Input value={model} onChange={onModel} placeholder="gpt-4o" />
-        </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 14 }}>
+        <p style={{ color: TOKEN.text, fontWeight: 600, fontSize: 14, margin: 0 }}>{STEP_LABELS[step.step_key][t ? 'zh' : 'en']}</p>
+        <span style={{ color: TOKEN.textMuted, fontSize: 11, fontFamily: 'monospace' }}>
+          {step.step_key} · {step.step_type}
+        </span>
       </div>
-      <div>
-        <label style={{ display: 'block', color: TOKEN.textMuted, fontSize: 12, marginBottom: 6 }}>
-          API Key <span style={{ color: TOKEN.textMuted }}>{t ? '（顯示 *** 時未修改則不送出）' : '(leave as *** to keep current)'}</span>
-        </label>
-        <Input value={apiKey} onChange={onApiKey} type="password" placeholder="sk-..." />
+
+      {isWhisper && (
+        <div style={{ marginBottom: 14 }}>
+          <label style={{ display: 'block', color: TOKEN.textMuted, fontSize: 12, marginBottom: 6 }}>{t ? '轉錄供應商' : 'Transcription Provider'}</label>
+          <select value={whisperProvider}
+            onChange={e => setExtra({ provider: e.target.value, ...(e.target.value === 'faster-whisper' ? { model_dir: draft.extra_config?.model_dir || '/models/faster-whisper' } : {}) })}
+            style={{ width: '100%', background: TOKEN.surfaceRaised, border: `1px solid ${TOKEN.surfaceBorder}`, borderRadius: 8, padding: '9px 12px', color: TOKEN.text, fontSize: 14, outline: 'none', fontFamily: 'inherit' }}>
+            <option value="openai">openai (Whisper API)</option>
+            <option value="faster-whisper">faster-whisper (local model)</option>
+          </select>
+        </div>
+      )}
+
+      {!isLocalWhisper && (
+        <>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
+            <div>
+              <label style={{ display: 'block', color: TOKEN.textMuted, fontSize: 12, marginBottom: 6 }}>Base URL</label>
+              <Input list={`${presetIdBase}-baseurl`} value={draft.base_url}
+                onChange={e => setDraft({ base_url: e.target.value })}
+                placeholder="https://api.openai.com/v1" />
+              <datalist id={`${presetIdBase}-baseurl`}>
+                {baseUrlPresets.map(u => <option key={u} value={u} />)}
+              </datalist>
+            </div>
+            <div>
+              <label style={{ display: 'block', color: TOKEN.textMuted, fontSize: 12, marginBottom: 6 }}>Model</label>
+              <Input list={`${presetIdBase}-model`} value={draft.model}
+                onChange={e => setDraft({ model: e.target.value })}
+                placeholder="gpt-4o" />
+              <datalist id={`${presetIdBase}-model`}>
+                {modelPresets.map(m => <option key={m} value={m} />)}
+              </datalist>
+            </div>
+          </div>
+          <div style={{ marginBottom: 14 }}>
+            <label style={{ display: 'block', color: TOKEN.textMuted, fontSize: 12, marginBottom: 6 }}>
+              API Key {step.step_key === 'embedding' && (
+                <span style={{ color: TOKEN.textMuted }}>{t ? '（必須是 openai provider 的金鑰）' : '(must be an openai-provider key)'}</span>
+              )}
+            </label>
+            <select value={draft.api_key_id || ''}
+              onChange={e => setDraft({ api_key_id: e.target.value || '' })}
+              style={{ width: '100%', background: TOKEN.surfaceRaised, border: `1px solid ${TOKEN.surfaceBorder}`, borderRadius: 8, padding: '9px 12px', color: TOKEN.text, fontSize: 14, outline: 'none', fontFamily: 'inherit' }}>
+              <option value="">{t ? '— 未選擇 —' : '— none —'}</option>
+              {visibleKeys.map(k => (
+                <option key={k.id} value={k.id}>{k.provider} · {k.label} ({k.api_key_masked})</option>
+              ))}
+            </select>
+          </div>
+        </>
+      )}
+
+      {isLocalWhisper && (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
+          <div>
+            <label style={{ display: 'block', color: TOKEN.textMuted, fontSize: 12, marginBottom: 6 }}>{t ? '模型 Size' : 'Model Size'}</label>
+            <Input list={`${presetIdBase}-model`} value={draft.model}
+              onChange={e => setDraft({ model: e.target.value })}
+              placeholder="base" />
+            <datalist id={`${presetIdBase}-model`}>
+              {WHISPER_LOCAL_MODEL_PRESETS.map(m => <option key={m} value={m} />)}
+            </datalist>
+          </div>
+          <div>
+            <label style={{ display: 'block', color: TOKEN.textMuted, fontSize: 12, marginBottom: 6 }}>Model Dir</label>
+            <Input value={draft.extra_config?.model_dir || ''}
+              onChange={e => setExtra({ model_dir: e.target.value })}
+              placeholder="/models/faster-whisper" />
+          </div>
+        </div>
+      )}
+
+      {embeddingModelChanged && (
+        <div style={{ padding: '9px 13px', borderRadius: 8, fontSize: 12, marginBottom: 12,
+          background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.4)', color: '#fbbf24' }}>
+          {t ? '⚠️ 改 model 會讓既有 vector 失效，需要 reindex。' : '⚠️ Changing the model invalidates existing vectors; reindex required.'}
+        </div>
+      )}
+
+      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+        <Btn icon="check" onClick={onSave} disabled={saving} size="sm">
+          {saving ? (t ? '儲存中…' : 'Saving…') : (t ? '儲存' : 'Save')}
+        </Btn>
       </div>
     </div>
   );

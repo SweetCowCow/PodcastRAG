@@ -3,43 +3,46 @@ import time
 
 from openai import OpenAI, RateLimitError
 
-from app.core.config import settings
 from app.services import api_health
+from app.services.ai_step_resolver import StepConfig
 
 logger = logging.getLogger(__name__)
 
-EMBEDDING_MODEL = "text-embedding-3-small"
 EMBEDDING_BATCH_SIZE = 64
 MAX_RETRIES = 3
 
 
-def embed_texts(texts: list[str]) -> list[list[float]]:
-    """Call OpenAI embeddings API in batches of 64, preserving input order.
+def embed_texts(texts: list[str], step_config: StepConfig) -> list[list[float]]:
+    """Embed via the configured `embedding` step.
 
-    Always hits the official OpenAI endpoint (not the Zeabur AI Hub),
-    since the hub only proxies chat/completions.
+    The caller is responsible for resolving the StepConfig (via
+    `services.ai_step_resolver.get_step_config('embedding')`) and passing
+    it in. Embedding always uses OpenAI official; the admin UI plus backend
+    validator (D4) keep the underlying api_key constrained to provider=openai.
     """
     if not texts:
         return []
 
-    client = OpenAI(api_key=settings.openai_api_key)
+    client = OpenAI(base_url=step_config.base_url, api_key=step_config.api_key)
     all_vectors: list[list[float]] = []
 
     for start in range(0, len(texts), EMBEDDING_BATCH_SIZE):
         batch = texts[start : start + EMBEDDING_BATCH_SIZE]
-        vectors = _embed_with_retry(client, batch)
+        vectors = _embed_with_retry(client, batch, step_config.model)
         all_vectors.extend(vectors)
 
     return all_vectors
 
 
-def _embed_with_retry(client: OpenAI, batch: list[str]) -> list[list[float]]:
+def _embed_with_retry(
+    client: OpenAI, batch: list[str], model: str
+) -> list[list[float]]:
     attempt = 0
     delay = 1.0
     while True:
         start_ns = time.monotonic_ns()
         try:
-            response = client.embeddings.create(model=EMBEDDING_MODEL, input=batch)
+            response = client.embeddings.create(model=model, input=batch)
         except Exception as exc:
             duration_ms = (time.monotonic_ns() - start_ns) // 1_000_000
             http_status = getattr(exc, "status_code", None)

@@ -1,4 +1,4 @@
-from app.services.llm_config import infer_provider_label
+from app.services.ai_step_resolver import infer_provider_label
 
 
 def test_none_base_url_returns_openai():

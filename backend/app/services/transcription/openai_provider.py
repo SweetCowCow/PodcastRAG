@@ -11,6 +11,7 @@ from openai import OpenAI
 
 from app.core.config import settings
 from app.services import api_health
+from app.services.ai_step_resolver import AiStepNotConfiguredError, StepConfig
 from app.services.transcription.base import (
     TranscriptionProvider,
     TranscriptionResult,
@@ -88,10 +89,15 @@ def _split_audio(
 class OpenAIWhisperProvider(TranscriptionProvider):
     name = "openai"
 
-    def __init__(self) -> None:
-        if not settings.openai_api_key:
-            raise RuntimeError("使用 openai provider 需要設定 OPENAI_API_KEY")
-        self._client = OpenAI(api_key=settings.openai_api_key)
+    def __init__(self, step_config: StepConfig) -> None:
+        if not step_config.api_key:
+            raise AiStepNotConfiguredError(
+                "openai whisper provider requires api_key on ai_steps.transcription"
+            )
+        self._client = OpenAI(
+            base_url=step_config.base_url, api_key=step_config.api_key
+        )
+        self._model = step_config.model or "whisper-1"
 
     async def transcribe(
         self, audio_path: str, language: str | None = None
@@ -102,7 +108,7 @@ class OpenAIWhisperProvider(TranscriptionProvider):
         self, audio_path: str, language: str | None
     ) -> TranscriptionResult:
         kwargs: dict = {
-            "model": "whisper-1",
+            "model": self._model,
             "response_format": "verbose_json",
         }
         lang = _normalise_language(language)

@@ -6,8 +6,8 @@
 // Numbers from prod backend GET /shows on 2026-05-01.
 // transcript_chunks count is estimated (~50 chunks/episode); zeabur-service-exec
 // hits Cloudflare 524 timeout so direct DB query was unreliable.
-const STATS_AS_OF = '2026-05-02';
-const STATS_CHANGES_COUNT = 28;
+const STATS_AS_OF = '2026-05-03';
+const STATS_CHANGES_COUNT = 29;
 const STATS_EPISODES_COUNT = 137;        // transcripts.status = 'completed'
 const STATS_VECTORS_COUNT = 6850;        // ~estimate: 137 × ~50 chunks/ep
 
@@ -26,10 +26,24 @@ const MILESTONE_LABELS = {
   'v0.4': { zh: 'v0.4 — 手機版與友善錯誤',         en: 'v0.4 — Mobile & Friendly Errors' },
   'v0.5': { zh: 'v0.5 — 帳號驗證與查詢額度',       en: 'v0.5 — Auth & Query Quota' },
   'v0.6': { zh: 'v0.6 — 部署不中斷正在跑的轉錄',   en: 'v0.6 — Deploys Without Interrupting Transcriptions' },
+  'v0.7': { zh: 'v0.7 — AI 設定集中化',            en: 'v0.7 — AI Settings Consolidation' },
 };
 
 // Entries — newest milestone first; within each milestone newest date first.
 const RELEASE_LOG = [
+  // ─── v0.7 — AI Settings Consolidation (5/03) ───
+  {
+    date: '2026-05-03', slug: 'admin-llm-step-config', milestone: 'v0.7', tag: 'enhancement',
+    title: {
+      zh: 'AI 設定集中化（API 金鑰 + 五種處理步驟）',
+      en: 'Centralised AI Settings (API Keys + Five Processing Steps)',
+    },
+    summary: {
+      zh: '原本的「LLM 模型設定」只支援回答 + 改寫兩個固定 LLM，金鑰寫死在 env，要切換轉錄供應商還得 redeploy。重構後 admin 後台多了兩張表：API 金鑰可集中管理（自由命名 provider + label，支援 OpenAI / Anthropic / Google / Zeabur AI Hub 預設下拉），以及 5 個 AI 處理步驟（answer / rewrite / summary / embedding / transcription），每個步驟挑一把已建立的金鑰、自選 base_url / model。embedding 步驟強制只能挑 OpenAI 金鑰（因為 Zeabur Hub 不支援 embedding endpoint），改 model 時前端會警告會讓既有向量失效。轉錄步驟可在 OpenAI Whisper API 與本地 faster-whisper 之間切換，無需 redeploy。本變更不直接面對使用者，但鋪好了 v0.8「每集 AI 摘要」要用的 summary step 位子。',
+      en: 'The old "LLM Model Settings" only supported two fixed LLMs (answer + rewrite) with the api_key baked into env vars; switching the transcription provider required a redeploy. The admin tab is now backed by two tables: a centralised API Keys registry (free-form provider + label, with OpenAI / Anthropic / Google / Zeabur AI Hub presets) and five AI processing steps (answer / rewrite / summary / embedding / transcription), each picking a key and its own base_url / model. The embedding step enforces an OpenAI-provider key (Zeabur Hub does not proxy /v1/embeddings); changing the embedding model surfaces a warning that existing vectors will need reindexing. Transcription can be switched between OpenAI Whisper API and local faster-whisper from the UI, no redeploy. Not user-facing on its own, but lays the groundwork for v0.8\'s per-episode AI summary feature.',
+    },
+  },
+
   // ─── v0.6 — Deploys Without Interrupting Transcriptions (5/03) ───
   {
     date: '2026-05-03', slug: 'deploy-resilience', milestone: 'v0.6', tag: 'fix',

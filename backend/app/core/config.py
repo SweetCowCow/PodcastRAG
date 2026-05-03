@@ -12,6 +12,10 @@ class Settings(BaseSettings):
 
     max_concurrent_transcriptions: int = 1
 
+    # transcription_provider / openai_api_key / zeabur_api_key remain readable
+    # at runtime ONLY for the alembic Rev A migration that imports legacy data
+    # into the api_keys + ai_steps tables. Once Rev A has run, the application
+    # services read everything via services.ai_step_resolver instead.
     transcription_provider: str = "openai"
     openai_api_key: str | None = None
     zeabur_api_key: str | None = None

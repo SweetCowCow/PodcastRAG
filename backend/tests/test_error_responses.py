@@ -270,14 +270,12 @@ async def test_query_chat_zeabur_provider_label(client, show_id_for_query):
     """When chat answer model raises RateLimitError and answer_base_url is Zeabur,
     provider label MUST be "Zeabur AI Hub"."""
     from app.core.database import AsyncSessionFactory
-    from app.services.llm_config import get_config
+    from app.models.ai_step import AiStep
 
     async with AsyncSessionFactory() as db:
-        cfg = await get_config(db)
-        original = (cfg.answer_base_url, cfg.answer_api_key, cfg.rewrite_api_key)
-        cfg.answer_base_url = "https://aihub-test.zeabur.app/v1"
-        cfg.answer_api_key = "sk-test"
-        cfg.rewrite_api_key = "sk-test"
+        answer = await db.get(AiStep, "answer")
+        original_base_url = answer.base_url
+        answer.base_url = "https://aihub-test.zeabur.app/v1"
         await db.commit()
 
     try:
@@ -298,8 +296,8 @@ async def test_query_chat_zeabur_provider_label(client, show_id_for_query):
         assert body["error_code"] == ErrorCode.LLM_RATE_LIMITED
     finally:
         async with AsyncSessionFactory() as db:
-            cfg = await get_config(db)
-            cfg.answer_base_url, cfg.answer_api_key, cfg.rewrite_api_key = original
+            answer = await db.get(AiStep, "answer")
+            answer.base_url = original_base_url
             await db.commit()
 
 

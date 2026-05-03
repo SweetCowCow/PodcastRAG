@@ -17,16 +17,15 @@ from app.schemas.query import (
     QueryRequest,
     SearchResponse,
 )
+from openai import OpenAI
+
 from app.services import rag
-from app.services.embedding import embed_texts
-from app.services.llm_config import (
-    LLMNotConfigured,
-    get_answer_client,
-    get_config,
-    get_rewrite_client,
+from app.services.ai_step_resolver import (
+    AiStepNotConfiguredError,
+    get_step_config,
     infer_provider_label,
-    require_keys_present,
 )
+from app.services.embedding import embed_texts
 from app.services.rag import ChunkHit as RagHit
 
 router = APIRouter(tags=["query"])
@@ -125,9 +124,24 @@ async def query_show(
 
     history = [m.model_dump() for m in payload.messages[-rag.HISTORY_WINDOW:]]
 
+    # Embedding step is required for both search and chat modes.
+    try:
+        embedding_cfg = await get_step_config(db, "embedding")
+    except AiStepNotConfiguredError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=ErrorResponse(
+                error_code=ErrorCode.LLM_NOT_CONFIGURED,
+                provider=None,
+                detail=str(exc),
+            ).model_dump(),
+        ) from exc
+
     if payload.mode == "search":
         try:
-            query_embedding = await asyncio.to_thread(embed_texts, [payload.question])
+            query_embedding = await asyncio.to_thread(
+                embed_texts, [payload.question], embedding_cfg
+            )
         except (
             openai.RateLimitError,
             openai.AuthenticationError,
@@ -142,9 +156,9 @@ async def query_show(
         )
 
     try:
-        cfg = await get_config(db)
-        require_keys_present(cfg)
-    except LLMNotConfigured as exc:
+        rewrite_cfg = await get_step_config(db, "rewrite")
+        answer_cfg = await get_step_config(db, "answer")
+    except AiStepNotConfiguredError as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=ErrorResponse(
@@ -155,12 +169,14 @@ async def query_show(
         ) from exc
 
     if history:
-        rewrite_client, rewrite_model = get_rewrite_client(cfg)
+        rewrite_client = OpenAI(
+            base_url=rewrite_cfg.base_url, api_key=rewrite_cfg.api_key
+        )
         try:
             rewritten = await asyncio.to_thread(
                 rag.rewrite_question,
                 rewrite_client,
-                rewrite_model,
+                rewrite_cfg.model,
                 history,
                 payload.question,
             )
@@ -170,12 +186,14 @@ async def query_show(
             openai.APIConnectionError,
             openai.APITimeoutError,
         ) as exc:
-            _raise_openai_http_error(exc, infer_provider_label(cfg.rewrite_base_url))
+            _raise_openai_http_error(exc, infer_provider_label(rewrite_cfg.base_url))
     else:
         rewritten = payload.question
 
     try:
-        query_embedding = await asyncio.to_thread(embed_texts, [rewritten])
+        query_embedding = await asyncio.to_thread(
+            embed_texts, [rewritten], embedding_cfg
+        )
     except (
         openai.RateLimitError,
         openai.AuthenticationError,
@@ -185,12 +203,14 @@ async def query_show(
         _raise_openai_http_error(exc, "OpenAI")
     hits = await rag.retrieve(db, show_id, query_embedding[0])
 
-    answer_client, answer_model = get_answer_client(cfg)
+    answer_client = OpenAI(
+        base_url=answer_cfg.base_url, api_key=answer_cfg.api_key
+    )
     try:
         answer_text, used_ids = await asyncio.to_thread(
             rag.answer_with_chunks,
             answer_client,
-            answer_model,
+            answer_cfg.model,
             history,
             payload.question,
             hits,
@@ -201,7 +221,7 @@ async def query_show(
         openai.APIConnectionError,
         openai.APITimeoutError,
     ) as exc:
-        _raise_openai_http_error(exc, infer_provider_label(cfg.answer_base_url))
+        _raise_openai_http_error(exc, infer_provider_label(answer_cfg.base_url))
 
     if used_ids:
         used_set = set(used_ids)

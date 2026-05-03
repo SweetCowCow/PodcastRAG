@@ -20,7 +20,6 @@ from app.api.shows import rss_preview_router
 from app.api.stats import router as stats_router
 from app.api.transcripts import router as transcripts_router
 from app.api.users import router as users_router
-from app.core.bootstrap import seed_llm_config_from_env
 from app.core.config import settings
 from app.core.csrf import CsrfAndOriginMiddleware
 
@@ -53,7 +52,6 @@ def _validate_web_env() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     _validate_web_env()
-    await seed_llm_config_from_env()
     yield
 
 
