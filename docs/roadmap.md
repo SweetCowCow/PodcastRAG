@@ -1,0 +1,108 @@
+# PodcastRAG 路線圖
+
+> 最後更新：2026-05-03
+
+本文件記錄 PodcastRAG 後續開發的優先順序與規劃。依 Phase 排序，**Phase A 阻擋公開最先**，再做評測基線，再優化 RAG，最後商業化。
+
+---
+
+## Phase A — 公開準備
+
+| 代號 | 項目 | 狀態 |
+|------|------|------|
+| — | 競品分析（3 站：sear.newfolderla.com / findtt.top / whatmkreallysaid.com） | ✅ 已完成（產出在 `docs/research/`，未進 commit） |
+| **T3** | 每集 AI 摘要 | 🆕 下一個要做 |
+| **U1** | 全站登入 gate + 註冊流程細化 | 待開 |
+| **O1** | 自有網域 + SameSite=Lax | 待開 |
+
+### T3：每集 AI 摘要（NEW，源自競品分析 A1）
+- 批次跑 LLM 寫每集 80–150 字摘要 + display_title
+- DB 加 `episodes.ai_summary / ai_display_title / ai_summary_generated_at / ai_summary_model`
+- 轉錄完成後 Celery task 觸發；模型用 gpt-4o-mini 或 haiku
+- UI 在 PodcastSelect / QueryPage / TranscriptPage 三處顯示
+- 規模 ~25 tasks，成本 < $1，效果立竿見影
+
+### U1：全站登入 gate + 註冊流程細化
+- approval queue / pending status / email 驗證
+- Phase 2 把 select / query / transcript 也綁登入
+
+### O1：自有網域 + SameSite=Lax
+- 買 podcastrag.app 之類，前後端綁 app./api.，cookie 切回 Lax 多一層 CSRF 防禦
+
+---
+
+## Phase B — 品質基線
+
+| 代號 | 項目 | 說明 |
+|------|------|------|
+| **R1** | RAG 評測框架 | golden set + recall@K + regression。**必做**，否則 R2/R3 矇著眼改 |
+| **U3** | 使用量追蹤 Dashboard + 熱搜 chip | admin 看誰在燒額度，每人查詢趨勢；🆕 含 A3：QueryPage 空狀態顯示 7 日熱搜 chip 引導新使用者 |
+
+---
+
+## Phase C — RAG 真正優化
+
+| 代號 | 項目 | 依賴 | 說明 |
+|------|------|------|------|
+| **R3** | 混合檢索（語意 + 關鍵字 BM25） | R1 | ⚠️ **必須用 jieba/zh-tokenizer 分詞 + BM25 over tsvector**，不能走純 ILIKE / 字元 n-gram（競品 sear.newfolderla 「量子計算」回 458 集就是反例）。融合用 RRF |
+| **R2** | RAG 答案 prompt + citation + 段落呈現強化 | R1 | 🆕 含 A2：後端 sources 回應加 `before_text`/`after_text` 上下文；前端 `<SourceCard>` 加關鍵字高亮 + 「跳到這段聽」button（deep-link `TranscriptPage?t=秒`）+ 集數 AI 摘要連結 |
+| **R4** | RAG 結果 cache | — | Redis hash key on 問題 + show + top_k + model。🆕 回應附 `cache_hit: bool` flag 給前端（dev 模式可顯示，學自競品 findtt.top） |
+
+---
+
+## Phase D — 內容生態
+
+| 代號 | 項目 | 依賴 | 說明 |
+|------|------|------|------|
+| **T2** | 轉錄人工回報機制 | — | UI flag bad transcript + admin 看 report。⚠️ **輕量版**：段落右側 icon 三選一（轉錯/敏感/其他），不開放使用者直接改字（避免新資料庫站那種開放校對的維運成本 + 惡意風險） |
+| **T1** | 轉錄 LLM 潤飾（已完成集數重跑降錯字） | T2 | — |
+| **C1** | 持久化對話紀錄 | — | DB 表 + API + UI |
+
+---
+
+## Phase E — 商業化 / 進階
+
+| 代號 | 項目 | 依賴 | 說明 |
+|------|------|------|------|
+| **U2** | 點數系統 + 計價 + 自動每月補回 | U1 | — |
+| **C2** | 相關推薦機制（演算法 + UI） | C1 | — |
+| **C3** | 內容權限分級（付費 tier 才看某些功能） | U2 | — |
+| **A5** 🆕 | 整集對話入口（彩蛋級，源自競品分析） | R2 / R3 | TranscriptPage 浮動「問這集」按鈕，`/query` 多接 `episode_id` 限定向量檢索範圍 |
+| **R5** | 向量化地端實作（self-host embedding，省 OpenAI 錢） | — | ⚠️ **規模大 + 資源限制**：要起 model service、Linode SIN 2vCPU/4GB 跑 BGE-small 可以但慢；可能要升級 VPS 或上 GPU。等真的有成本壓力再做 |
+
+---
+
+## Phase F — Ops / 體驗微調（隨時可插）
+
+| 代號 | 項目 | 說明 |
+|------|------|------|
+| **O2** | Pre-built base image | build 從 10 分→30 秒 |
+| **O3** | pg_dump 定期備份 | — |
+| **A4** 🆕 | 明亮（淺色）主題（源自競品分析） | Shared.jsx TOKEN 拆 DARK/LIGHT + ThemeContext + localStorage。優先級低，等使用者反映再做 |
+
+---
+
+## 小修補（不開 Spectra change，下次順手做）
+
+1. Empty-state 的 `POST /shows` 提示改導向後台
+2. AdminPage ApiKeysTab 接後端（仍是 mock，可能要拉成獨立小 change）
+3. STATS_VECTORS_COUNT 估算值 → 加 `GET /admin/stats` endpoint 改 live fetch
+4. 既有 23 個 admin pytest 沒帶 auth fixture（authentication-system change 留下，calling /admin/* 都會 401）
+
+---
+
+## 已 archive 變更（最近 5 個）
+
+| Change | Archive 路徑 | 摘要 |
+|--------|-------------|------|
+| `deploy-resilience` | `openspec/changes/archive/2026-05-03-deploy-resilience/` | 部署重啟後 1-3 min 內自動把卡住的轉錄推回 pending；force-cancel 即使 celery_task_id null 也釋放 throttle slot；OAuth env 改 Optional + backend startup 才強制驗。Release log v0.6 |
+| `authentication-system` | `openspec/changes/archive/2026-05-02-authentication-system/` | Google SSO + RBAC + 查詢額度 + Phase 1 gate（後台 + query）。中途修了 cross-subdomain CSRF cookie bug。Release log v0.5 |
+| `release-log-and-presentation` | `openspec/changes/archive/2026-05-01-release-log-and-presentation/` | 「更新日誌」頁 + 簡報頁（13 slides）+ pptxgenjs 產 .pptx |
+| `friendly-external-api-errors` | `openspec/changes/archive/2026-05-01-friendly-external-api-errors/` | 後端例外統一錯誤格式，前端雙語 `formatError()` |
+| `queue-tabs-and-schedule-cleanup` | `openspec/changes/archive/2026-04-30-queue-tabs-and-schedule-cleanup/` | QueueTab 5 status section → 3 sub-tab；Schedule 砍 hourly + 加 day_of_week |
+
+---
+
+## 維護規則
+
+本文件與 Claude 的記憶檔案 `project_pending_changes.md` **互為鏡像**，更新時請同步維護兩邊。
