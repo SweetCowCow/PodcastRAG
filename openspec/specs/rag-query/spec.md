@@ -180,14 +180,32 @@ code:
 ---
 ### Requirement: Semantic search endpoint returns ranked chunks
 
-The backend SHALL expose `POST /shows/{show_id}/query` which SHALL be guarded by `require_authenticated_user` and SHALL atomically decrement the caller's `quota_remaining` (incrementing `total_queries`) before invoking any embedding or LLM call. When called by an authenticated user with `quota_remaining > 0`, with `mode="search"` and a non-empty `question`, the endpoint SHALL embed the question, run pgvector cosine similarity search against `transcript_chunks` filtered to `completed` transcripts belonging to the specified show, and return the top 8 chunks ordered by ascending cosine distance. The response payload SHALL include the user's updated `quota_remaining` value.
+The backend SHALL expose `POST /shows/{show_id}/search` which SHALL be guarded by the `optional_auth_with_ip_limit` dependency (see auth-system + ip-rate-limit capabilities). The endpoint accepts body `{"question": "<non-empty string>", "k": <optional int 1-50, default 8>}`. The endpoint SHALL embed the question using the configured embedding step, run pgvector cosine similarity search against `transcript_chunks` filtered to `completed` transcripts belonging to the specified show, and return the top-K chunks ordered by ascending cosine distance. The response SHALL NOT include any LLM-generated answer. The endpoint SHALL NOT decrement `quota_remaining` even for authenticated callers — the cost being controlled is the embedding API call only, and the IP rate limit (for anonymous) plus quota gating on the chat endpoint (for authenticated) are sufficient.
 
-#### Scenario: Search returns top-K chunks from the specified show
+#### Scenario: Anonymous request under rate limit returns top-K chunks
 
-- **WHEN** an authenticated user with `quota_remaining > 0` calls `POST /shows/{show_id}/query` with body `{"question": "...", "mode": "search"}` and the show has at least 8 chunks from completed transcripts
-- **THEN** the user's `quota_remaining` SHALL be decremented by 1 atomically before the embedding call
-- **AND** the endpoint SHALL return HTTP 200 with a JSON body containing a `results` array of exactly 8 items (each with `episode_id`, `episode_title`, `start_time`, `end_time`, `text`, `distance`) ordered by ascending `distance`
-- **AND** the response SHALL include the updated `quota_remaining`
+- **GIVEN** an unauthenticated visitor whose IP counter is 5 and `ip_search_rate_limit_per_day=20`
+- **WHEN** the visitor calls `POST /shows/{show_id}/search` with body `{"question": "歌單"}`
+- **THEN** the IP counter SHALL become 6
+- **AND** the embedding API SHALL be called once
+- **AND** the response SHALL be HTTP 200 with up to 8 ranked chunks (default k)
+- **AND** the response SHALL NOT contain an `answer` field
+
+#### Scenario: Anonymous request over rate limit is rejected without embedding call
+
+- **GIVEN** an unauthenticated visitor whose IP counter is at the limit
+- **WHEN** the visitor calls `POST /shows/{show_id}/search`
+- **THEN** the response SHALL be HTTP 429 with `error_code='ip_rate_limited'`
+- **AND** no embedding API call SHALL be made
+
+#### Scenario: Authenticated request bypasses IP limit
+
+- **GIVEN** an authenticated user from an IP whose counter is at the daily limit
+- **WHEN** the user calls `POST /shows/{show_id}/search`
+- **THEN** the request SHALL be processed
+- **AND** the IP counter SHALL NOT be incremented
+- **AND** the response SHALL be HTTP 200 with ranked chunks
+- **AND** the user's `quota_remaining` SHALL NOT be decremented
 
 #### Scenario: Search excludes other shows
 
@@ -199,41 +217,77 @@ The backend SHALL expose `POST /shows/{show_id}/query` which SHALL be guarded by
 - **WHEN** a search query is issued and one episode in the show has a transcript whose `status` is not `completed`
 - **THEN** the response SHALL NOT include any chunk from that incomplete transcript
 
-#### Scenario: Unauthenticated request is rejected
+#### Scenario: k parameter is clamped
 
-- **WHEN** a request to `POST /shows/{show_id}/query` arrives with no valid session cookie
-- **THEN** the response SHALL be HTTP 401 with error code `not_authenticated`
-- **AND** no embedding API SHALL be called
-
-#### Scenario: Quota-exhausted request is rejected before LLM call
-
-- **WHEN** an authenticated user with `quota_remaining=0` sends a query request
-- **THEN** the response SHALL be HTTP 429 with error code `quota_exhausted`
-- **AND** no embedding or LLM API SHALL be called
-- **AND** `total_queries` SHALL NOT be incremented
+- **WHEN** the body has `{"k": 100}`
+- **THEN** the response SHALL contain at most 50 chunks (the documented upper bound)
 
 
 <!-- @trace
-source: authentication-system
-updated: 2026-05-02
+source: freemium-onboarding
+updated: 2026-05-04
 code:
-  - docs/case-studies/transcription-queue-discussion.md
+  - docs/research/competitive-analysis.md
+  - backend/app/main.py
+  - backend/app/models/user.py
+  - backend/app/api/admin/__init__.py
+  - backend/app/services/zsend.py
+  - backend/app/services/user_service.py
+  - backend/app/models/__init__.py
   - docs/case-studies/local-vs-prod-verification-violation.md
+  - src/App.jsx
+  - backend/app/core/config.py
+  - src/AdminPage.jsx
+  - src/QueryPage.jsx
+  - backend/alembic/versions/p4e5f6a7b8c9_add_quota_requests.py
+  - backend/app/schemas/errors.py
+  - backend/app/api/query.py
+  - src/QuotaMeter.jsx
+  - backend/app/core/security.py
+  - src/Shared.jsx
+  - backend/.env.example
+  - backend/app/models/quota_request.py
+  - backend/app/workers/celery_app.py
+  - docs/case-studies/transcription-queue-discussion.md
+  - backend/app/core/rate_limit.py
+  - src/QuotaApplyModal.jsx
+  - backend/app/api/quota_requests.py
+  - backend/app/api/admin/quota_requests.py
+  - backend/app/schemas/query.py
+  - backend/app/workers/quota_digest.py
+  - src/QuotaRequestsTab.jsx
+  - backend/app/core/csrf.py
+  - backend/app/schemas/quota_request.py
+  - docs/case-studies/dual-write-migration-defeated-by-entrypoint.md
+  - docs/research/competitive-feature-plan.md
+  - aisteps-tab.png
+  - src/LandingPage.jsx
+  - index.html
+tests:
+  - backend/tests/test_public_search.py
+  - backend/tests/test_quota_requests_admin.py
+  - backend/tests/test_quota_requests_api.py
+  - backend/tests/test_auth_db.py
+  - backend/tests/test_ip_rate_limit.py
+  - backend/tests/test_optional_auth.py
+  - backend/tests/test_config.py
+  - backend/tests/test_zsend_client.py
+  - backend/tests/test_quota_digest_task.py
 -->
 
 ---
 ### Requirement: Chat endpoint answers with citations using Tier 2 RAG
 
-The backend SHALL expose `POST /shows/{show_id}/query` which, when called with `mode="chat"`, SHALL execute the Tier 2 RAG pipeline: (1) if the request includes a non-empty `messages` history, rewrite the question to a standalone form using the configured rewrite model; (2) embed the (rewritten) question; (3) retrieve top 8 chunks via pgvector; (4) generate an answer using the configured answer model with the retrieved chunks as grounding, requesting structured JSON output containing `answer` and `used_chunk_ids`; (5) return the answer together with only the citation chunks referenced in `used_chunk_ids`. If JSON parsing of the model output fails, the endpoint SHALL fall back to returning the raw text as `answer` with all retrieved chunks as `citations`.
+The backend SHALL expose `POST /shows/{show_id}/query` guarded by `require_authenticated_user` and atomic quota decrement (see user-quota). The endpoint SHALL execute the Tier 2 RAG pipeline: (1) if the request includes a non-empty `messages` history, rewrite the question to a standalone form using the configured rewrite model; (2) embed the (rewritten) question; (3) retrieve top 8 chunks via pgvector; (4) generate an answer using the configured answer model with the retrieved chunks as grounding, requesting structured JSON output containing `answer` and `used_chunk_ids`; (5) return the answer together with only the citation chunks referenced in `used_chunk_ids`. If JSON parsing of the model output fails, the endpoint SHALL fall back to returning the raw text as `answer` with all retrieved chunks as `citations`. This endpoint SHALL NOT accept anonymous callers and SHALL NOT consult the IP rate limit (the auth + quota gates are the cost control).
 
 #### Scenario: First turn skips rewrite
 
-- **WHEN** a client calls chat mode with an empty or missing `messages` array
+- **WHEN** a client calls `POST /shows/{show_id}/query` with an empty or missing `messages` array
 - **THEN** the endpoint SHALL NOT call the rewrite model, SHALL embed the original `question` directly, SHALL retrieve chunks, and SHALL return an answer from the answer model
 
 #### Scenario: Follow-up turn uses rewritten question for retrieval
 
-- **WHEN** a client calls chat mode with a non-empty `messages` history and a new `question` that contains a pronoun or implicit reference
+- **WHEN** a client calls with a non-empty `messages` history and a new `question` that contains a pronoun or implicit reference
 - **THEN** the endpoint SHALL call the rewrite model with the history and the new question, SHALL use the rewrite model's output as the retrieval query, and the answer model SHALL receive the original user messages plus the new question (not the rewritten form) as its conversation input
 
 #### Scenario: Response includes only used citations
@@ -251,22 +305,63 @@ The backend SHALL expose `POST /shows/{show_id}/query` which, when called with `
 - **WHEN** a client sends a `messages` array longer than 10 entries (5 user + 5 assistant)
 - **THEN** the endpoint SHALL use only the most recent 10 entries when building prompts for both rewrite and answer models
 
+#### Scenario: Anonymous request rejected with 401
+
+- **WHEN** an unauthenticated request reaches `POST /shows/{show_id}/query`
+- **THEN** the response SHALL be HTTP 401 with `error_code='not_authenticated'`
+- **AND** no embedding or LLM API SHALL be called
+
 
 <!-- @trace
-source: query-ux-improvements
-updated: 2026-04-24
+source: freemium-onboarding
+updated: 2026-05-04
 code:
+  - docs/research/competitive-analysis.md
+  - backend/app/main.py
+  - backend/app/models/user.py
+  - backend/app/api/admin/__init__.py
+  - backend/app/services/zsend.py
+  - backend/app/services/user_service.py
+  - backend/app/models/__init__.py
+  - docs/case-studies/local-vs-prod-verification-violation.md
   - src/App.jsx
-  - src/TranscriptPage.jsx
+  - backend/app/core/config.py
+  - src/AdminPage.jsx
   - src/QueryPage.jsx
-  - src/PodcastSelect.jsx
-  - backend/app/schemas/episode.py
-  - backend/app/api/shows.py
-  - backend/app/api/episodes.py
-  - backend/app/schemas/show.py
-  - backend/app/services/rag.py
+  - backend/alembic/versions/p4e5f6a7b8c9_add_quota_requests.py
+  - backend/app/schemas/errors.py
   - backend/app/api/query.py
-  - .mcp.json
+  - src/QuotaMeter.jsx
+  - backend/app/core/security.py
+  - src/Shared.jsx
+  - backend/.env.example
+  - backend/app/models/quota_request.py
+  - backend/app/workers/celery_app.py
+  - docs/case-studies/transcription-queue-discussion.md
+  - backend/app/core/rate_limit.py
+  - src/QuotaApplyModal.jsx
+  - backend/app/api/quota_requests.py
+  - backend/app/api/admin/quota_requests.py
+  - backend/app/schemas/query.py
+  - backend/app/workers/quota_digest.py
+  - src/QuotaRequestsTab.jsx
+  - backend/app/core/csrf.py
+  - backend/app/schemas/quota_request.py
+  - docs/case-studies/dual-write-migration-defeated-by-entrypoint.md
+  - docs/research/competitive-feature-plan.md
+  - aisteps-tab.png
+  - src/LandingPage.jsx
+  - index.html
+tests:
+  - backend/tests/test_public_search.py
+  - backend/tests/test_quota_requests_admin.py
+  - backend/tests/test_quota_requests_api.py
+  - backend/tests/test_auth_db.py
+  - backend/tests/test_ip_rate_limit.py
+  - backend/tests/test_optional_auth.py
+  - backend/tests/test_config.py
+  - backend/tests/test_zsend_client.py
+  - backend/tests/test_quota_digest_task.py
 -->
 
 ---

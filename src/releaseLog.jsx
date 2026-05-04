@@ -29,10 +29,24 @@ const MILESTONE_LABELS = {
   'v0.7': { zh: 'v0.7 — AI 設定集中化',            en: 'v0.7 — AI Settings Consolidation' },
   'v0.8': { zh: 'v0.8 — 自動化驗證後門',           en: 'v0.8 — Automated Verification Backdoor' },
   'v0.9': { zh: 'v0.9 — 每集 AI 摘要',             en: 'v0.9 — Per-Episode AI Summary' },
+  'v1.0': { zh: 'v1.0 — 公開上線：freemium 模式',   en: 'v1.0 — Public Launch: Freemium Mode' },
 };
 
 // Entries — newest milestone first; within each milestone newest date first.
 const RELEASE_LOG = [
+  // ─── v1.0 — Public Launch: Freemium Mode (5/04) ───
+  {
+    date: '2026-05-04', slug: 'freemium-onboarding', milestone: 'v1.0', tag: 'feature',
+    title: {
+      zh: '公開上線：freemium 模式',
+      en: 'Public Launch: Freemium Mode',
+    },
+    summary: {
+      zh: '從「全站登入才能用」改成「先讓人看到價值再要登入」。新的首頁直接秀出三個收錄節目（曼報、壹加壹電台、這又沒有很屌）+ 真實的索引統計（553 集、247 已轉錄）+ 一個馬上能用的搜尋框；瀏覽逐字稿、看相關段落都不用登入，每個 IP 每天 20 次免費搜尋打底（embedding 成本可控）。只有「請 AI 整段統整回答」要登入才解鎖，新使用者用 Google 一鍵登入立刻拿到 30 次免費 quota。Quota 用完不會自動補充，使用者主動透過 QueryPage 上方的「申請更多額度」按鈕送理由給 admin；admin 後台多了「Quota 申請」分頁可一鍵核准（自由設定加值數量）或拒絕。Beat 排程每天兩次（UTC 09:00 / 21:00）把 pending 申請彙整成一封 email 經 ZSend 寄給 admin（要先開通 ZSend，沒開通時 task 直接 no-op log）。對既有登入使用者完全相容（quota_remaining 不會被改）。',
+      en: 'Switched from "log in to use anything" to "see the value before signing up." The new home page surfaces all three indexed shows (曼報, 壹加壹電台, 這又沒有很屌), live indexing stats (553 episodes, 247 transcribed), and an immediately-usable search box. Browsing transcripts and seeing matched segments stays free — anonymous visitors get 20 free segment searches per IP per day (embedding cost stays bounded). Only the AI-generated summary answer requires login. New users sign in with Google in one click and get 30 free queries; quota does not auto-refill. When depleted, users hit "Request more quota" on QueryPage to send a reason to admin. The admin panel grows a "Quota Requests" tab for one-click approve (free-form amount) or reject. A beat task digests pending requests into one email twice daily (UTC 09:00 / 21:00) via ZSend (no-ops with a log when ZSend is not yet provisioned). Fully backwards-compatible with existing logged-in users — their quota_remaining is preserved.',
+    },
+  },
+
   // ─── v0.9 — Per-Episode AI Summary (5/04) — fix ───
   {
     date: '2026-05-04', slug: 'summary-stale-detection', milestone: 'v0.9', tag: 'fix',

@@ -33,7 +33,7 @@ The backend SHALL expose `GET /auth/google/callback?code=&state=` which SHALL: (
 #### Scenario: First-time login creates a member user with default quota
 
 - **WHEN** a user whose `email` is not in `ADMIN_EMAILS` and whose `google_sub` is not yet in the `users` table completes the Google OAuth flow
-- **THEN** a new `users` row SHALL be inserted with `role='member'`, `status='active'`, `quota_remaining=100`, `quota_initial=100`, `total_queries=0`, and the `email`, `name`, `avatar_url`, and `google_sub` populated from Google's userinfo response
+- **THEN** a new `users` row SHALL be inserted with `role='member'`, `status='active'`, `quota_remaining=settings.default_user_quota`, `quota_initial=settings.default_user_quota`, `total_queries=0`, and the `email`, `name`, `avatar_url`, and `google_sub` populated from Google's userinfo response
 
 #### Scenario: First-time login from ADMIN_EMAILS allowlist creates an admin user
 
@@ -64,13 +64,63 @@ The backend SHALL expose `GET /auth/google/callback?code=&state=` which SHALL: (
 - **WHEN** a user whose existing `users` row has `status='disabled'` completes the Google OAuth flow
 - **THEN** no session SHALL be created and the response SHALL be HTTP 403 with error code `account_disabled`
 
+#### Scenario: First-time login uses configured default quota when overridden
+
+- **GIVEN** `DEFAULT_USER_QUOTA=50` is set in the environment
+- **WHEN** a non-admin user completes Google login for the first time
+- **THEN** the inserted `users` row SHALL have `quota_remaining=50` and `quota_initial=50`
+
 
 <!-- @trace
-source: authentication-system
-updated: 2026-05-02
+source: freemium-onboarding
+updated: 2026-05-04
 code:
-  - docs/case-studies/transcription-queue-discussion.md
+  - docs/research/competitive-analysis.md
+  - backend/app/main.py
+  - backend/app/models/user.py
+  - backend/app/api/admin/__init__.py
+  - backend/app/services/zsend.py
+  - backend/app/services/user_service.py
+  - backend/app/models/__init__.py
   - docs/case-studies/local-vs-prod-verification-violation.md
+  - src/App.jsx
+  - backend/app/core/config.py
+  - src/AdminPage.jsx
+  - src/QueryPage.jsx
+  - backend/alembic/versions/p4e5f6a7b8c9_add_quota_requests.py
+  - backend/app/schemas/errors.py
+  - backend/app/api/query.py
+  - src/QuotaMeter.jsx
+  - backend/app/core/security.py
+  - src/Shared.jsx
+  - backend/.env.example
+  - backend/app/models/quota_request.py
+  - backend/app/workers/celery_app.py
+  - docs/case-studies/transcription-queue-discussion.md
+  - backend/app/core/rate_limit.py
+  - src/QuotaApplyModal.jsx
+  - backend/app/api/quota_requests.py
+  - backend/app/api/admin/quota_requests.py
+  - backend/app/schemas/query.py
+  - backend/app/workers/quota_digest.py
+  - src/QuotaRequestsTab.jsx
+  - backend/app/core/csrf.py
+  - backend/app/schemas/quota_request.py
+  - docs/case-studies/dual-write-migration-defeated-by-entrypoint.md
+  - docs/research/competitive-feature-plan.md
+  - aisteps-tab.png
+  - src/LandingPage.jsx
+  - index.html
+tests:
+  - backend/tests/test_public_search.py
+  - backend/tests/test_quota_requests_admin.py
+  - backend/tests/test_quota_requests_api.py
+  - backend/tests/test_auth_db.py
+  - backend/tests/test_ip_rate_limit.py
+  - backend/tests/test_optional_auth.py
+  - backend/tests/test_config.py
+  - backend/tests/test_zsend_client.py
+  - backend/tests/test_quota_digest_task.py
 -->
 
 ---
@@ -225,7 +275,7 @@ code:
 ---
 ### Requirement: Authentication dependencies gate protected endpoints
 
-The backend SHALL provide two FastAPI dependencies: `require_authenticated_user` SHALL resolve the current user from the session cookie and reject unauthenticated requests with HTTP 401 `not_authenticated`; `require_admin` SHALL additionally require the resolved user's `role='admin'` and `status='active'`, rejecting otherwise with HTTP 403 `forbidden`.
+The backend SHALL provide three FastAPI dependencies. `require_authenticated_user` SHALL resolve the current user from the session cookie and reject unauthenticated requests with HTTP 401 `not_authenticated`. `require_admin` SHALL additionally require the resolved user's `role='admin'` and `status='active'`, rejecting otherwise with HTTP 403 `forbidden`. `optional_auth_with_ip_limit` SHALL resolve to a `User` if a valid session cookie is present; if no valid session, SHALL apply the per-IP daily rate limit (specified by the `ip-rate-limit` capability) and return `None` if under the limit, or raise HTTP 429 with `error_code='ip_rate_limited'` if at or beyond.
 
 #### Scenario: Authenticated member calls admin endpoint
 
@@ -242,17 +292,75 @@ The backend SHALL provide two FastAPI dependencies: `require_authenticated_user`
 - **WHEN** an authenticated user with `role='admin'` and `status='active'` sends a request to an endpoint guarded by `require_admin`
 - **THEN** the request SHALL proceed to the route handler with the resolved `User` injected
 
-<!-- @trace
-source: authentication-system
-updated: 2026-05-02
--->
+#### Scenario: optional_auth_with_ip_limit returns user when authenticated
+
+- **WHEN** an authenticated request arrives at an endpoint guarded by `optional_auth_with_ip_limit`
+- **THEN** the dependency SHALL return the resolved `User`
+- **AND** the IP rate limit counter SHALL NOT be touched
+
+#### Scenario: optional_auth_with_ip_limit returns None for anonymous under limit
+
+- **WHEN** an unauthenticated request arrives at an endpoint guarded by `optional_auth_with_ip_limit` and the IP counter is below the configured limit
+- **THEN** the dependency SHALL return `None`
+- **AND** the IP counter SHALL be incremented by 1
+
+#### Scenario: optional_auth_with_ip_limit raises 429 when over limit
+
+- **WHEN** an unauthenticated request arrives at an endpoint guarded by `optional_auth_with_ip_limit` and the IP counter is at or above the configured limit
+- **THEN** the dependency SHALL raise `HTTPException(status_code=429)` with body containing `error_code='ip_rate_limited'`
+- **AND** the route handler SHALL NOT be invoked
+
 
 <!-- @trace
-source: authentication-system
-updated: 2026-05-02
+source: freemium-onboarding
+updated: 2026-05-04
 code:
-  - docs/case-studies/transcription-queue-discussion.md
+  - docs/research/competitive-analysis.md
+  - backend/app/main.py
+  - backend/app/models/user.py
+  - backend/app/api/admin/__init__.py
+  - backend/app/services/zsend.py
+  - backend/app/services/user_service.py
+  - backend/app/models/__init__.py
   - docs/case-studies/local-vs-prod-verification-violation.md
+  - src/App.jsx
+  - backend/app/core/config.py
+  - src/AdminPage.jsx
+  - src/QueryPage.jsx
+  - backend/alembic/versions/p4e5f6a7b8c9_add_quota_requests.py
+  - backend/app/schemas/errors.py
+  - backend/app/api/query.py
+  - src/QuotaMeter.jsx
+  - backend/app/core/security.py
+  - src/Shared.jsx
+  - backend/.env.example
+  - backend/app/models/quota_request.py
+  - backend/app/workers/celery_app.py
+  - docs/case-studies/transcription-queue-discussion.md
+  - backend/app/core/rate_limit.py
+  - src/QuotaApplyModal.jsx
+  - backend/app/api/quota_requests.py
+  - backend/app/api/admin/quota_requests.py
+  - backend/app/schemas/query.py
+  - backend/app/workers/quota_digest.py
+  - src/QuotaRequestsTab.jsx
+  - backend/app/core/csrf.py
+  - backend/app/schemas/quota_request.py
+  - docs/case-studies/dual-write-migration-defeated-by-entrypoint.md
+  - docs/research/competitive-feature-plan.md
+  - aisteps-tab.png
+  - src/LandingPage.jsx
+  - index.html
+tests:
+  - backend/tests/test_public_search.py
+  - backend/tests/test_quota_requests_admin.py
+  - backend/tests/test_quota_requests_api.py
+  - backend/tests/test_auth_db.py
+  - backend/tests/test_ip_rate_limit.py
+  - backend/tests/test_optional_auth.py
+  - backend/tests/test_config.py
+  - backend/tests/test_zsend_client.py
+  - backend/tests/test_quota_digest_task.py
 -->
 
 ---

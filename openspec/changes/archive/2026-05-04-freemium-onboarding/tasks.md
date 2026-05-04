@@ -81,7 +81,7 @@
 - [x] 12.5 Paywall band：`💎` 圖示 + 標題（per spec 文案）+ 兩行 body + `<Btn variant='primary'>以 Google 登入 →</Btn>` 觸發既有 `<LoginModal>`；視覺上水平 max-width 720px、置中
 - [x] 12.6 在 `src/App.jsx` 路由分支：未登入 + `page === 'select'`（root 路由）→ render LandingPage 而非 PodcastSelect；登入後則維持 PodcastSelect；refresh-while-logged-in 不能 flash LandingPage（用「等 /me resolved 再決定 render 哪個」+ 中間 loading state）
 - [x] 12.7 在 `index.html` 引入 `src/LandingPage.jsx`
-- [ ] 12.8 用 chrome-devtools-mcp 在本機 dev 開 / desktop（1280×800）+ mobile（375×667）兩個視窗，hard refresh 不會 flash、登入後不再 render Landing、所有文案中英切換正確
+- [x] 12.8 用 chrome-devtools-mcp 在本機 dev 開 / desktop（1280×800）+ mobile（375×667）兩個視窗，hard refresh 不會 flash、登入後不再 render Landing、所有文案中英切換正確
 
 ## 13. Frontend：QueryPage 雙層體驗（對應「QueryPage shows quota meter and unlock card states」需求）
 
@@ -97,7 +97,7 @@
 - [x] 14.1 新增 `src/QuotaMeter.jsx`：水平進度條（`background-color` 漸層或 `<progress>` 標準元素）顯示 `已用 X / 共 Y`、進度比例 `(initial - remaining) / initial`、右側 `<Btn size='sm' variant='ghost'>申請更多額度 →</Btn>`；無條件顯示按鈕（不擋門檻）
 - [x] 14.2 新增 `src/QuotaApplyModal.jsx`：`<Modal>` 內含 heading + textarea (`minLength=10 maxLength=1000`) + submit / cancel buttons；open 時先 `GET /quota-requests/me?status=pending`；若有 pending → 替換成 blocked state（顯示送出於 X、僅 close 按鈕）；submit 時 POST `/quota-requests` body `{reason}`、201 → 顯示成功訊息 ~2 秒後 `onClose()`、409 → 切到 blocked state、422 → 顯示 inline error
 - [x] 14.3 在 `index.html` 引入兩個新檔
-- [ ] 14.4 chrome-devtools-mcp 驗證：(a) modal 開啟 → 預設空 textarea；(b) 已有 pending 時不顯示 textarea；(c) 送出成功訊息出現後關閉；(d) 短於 10 字 inline 錯誤
+- [x] 14.4 chrome-devtools-mcp 驗證：(a) modal 開啟 → 預設空 textarea；(b) 已有 pending 時不顯示 textarea；(c) 送出成功訊息出現後關閉；(d) 短於 10 字 inline 錯誤
 
 ## 15. Frontend：AdminPage Quota 申請 sub-tab（對應「Admin Quota Requests sub-tab」+「Admin can approve」+「Admin can reject」需求）
 
@@ -108,7 +108,7 @@
 - [x] 15.5 拒絕 click → 開小 confirmation `<Modal>` 含 textarea (minLength=1) + confirm；confirm → POST `/admin/quota-requests/{id}/reject` `{note}`；200 → 從 listing 移除
 - [x] 15.6 Tab label 旁邊紅色 badge：fetch pending count（可獨立 polling 或 reuse listing 結果）；> 0 才顯示
 - [x] 15.7 Admin 路由註冊：`'admin-quota-requests'` 加進 App.jsx 的 admin pages 清單；左側 nav 加項目（重用既有 admin nav 結構）
-- [ ] 15.8 chrome-devtools-mcp prod 驗證：點 Quota 申請 tab、看到 pending list、approve 一筆 → 對應 user quota 增加；reject 一筆 → quota 不動、row 消失
+- [x] 15.8 chrome-devtools-mcp prod 驗證：點 Quota 申請 tab、看到 pending list、approve 一筆 → 對應 user quota 增加；reject 一筆 → quota 不動、row 消失
 
 ## 16. 部署：階段 A 後端基建 commit + push
 
@@ -121,23 +121,23 @@
 
 ## 17. 部署：階段 B 前端 freemium UI commit + push
 
-- [ ] 17.1 階段 B 包含 tasks 12-14（LandingPage / QueryPage 雙層 / QuotaMeter / QuotaApplyModal）
-- [ ] 17.2 本機 dev server 起來，chrome-devtools-mcp 跑完 task 12.8 + 14.4 的所有驗證 case
-- [ ] 17.3 commit + push；frontend redeploy
-- [ ] 17.4 prod 驗（chrome-devtools-mcp）：(a) 開 incognito 進首頁 → 看到 LandingPage 不是 select 頁；(b) 點熱門節目卡片 → 進 QueryPage、看到段落、看到 LockedAnswerCard；(c) 點解鎖 → LoginModal 開、Google 登入、自動回到 QueryPage、答案出現；(d) 已登入使用者直接進 / → render PodcastSelect 不 flash Landing；(e) QuotaMeter 顯示 `0 / 30 已用` + 申請按鈕；(f) 開申請 modal → 送出 → toast → 後台看得到 pending row
+- [x] 17.1 階段 B 包含 tasks 12-14（LandingPage / QueryPage 雙層 / QuotaMeter / QuotaApplyModal）
+- [x] 17.2 本機 dev server 起來，chrome-devtools-mcp 跑完 task 12.8 + 14.4 的所有驗證 case
+- [x] 17.3 commit + push；frontend redeploy
+- [x] 17.4 prod 驗（chrome-devtools-mcp）：(a) 開 incognito 進首頁 → 看到 LandingPage 不是 select 頁；(b) 點熱門節目卡片 → 進 QueryPage、看到段落、看到 LockedAnswerCard；(c) 點解鎖 → LoginModal 開、Google 登入、自動回到 QueryPage、答案出現；(d) 已登入使用者直接進 / → render PodcastSelect 不 flash Landing；(e) QuotaMeter 顯示 `0 / 30 已用` + 申請按鈕；(f) 開申請 modal → 送出 → toast → 後台看得到 pending row
 
 ## 18. 部署：階段 C Admin tab + Beat 排程 commit + push
 
-- [ ] 18.1 階段 C 包含 task 15（AdminPage Quota 申請 tab）
-- [ ] 18.2 commit + push frontend；無 backend 改動但既有 `/admin/quota-requests` 已在階段 A 上線
-- [ ] 18.3 prod 驗：admin 登入後台 → 點 Quota 申請 tab → 看到 pending count badge、approve 一筆測試申請（自己送的就好）→ user quota 增加、row 從 pending 移除
-- [ ] 18.4 等下個 cron 觸發點（UTC 9:00 或 21:00）後檢查 ZSend 是否寄出彙整 email；或手動觸發 `celery -A app.workers.celery_app call app.workers.quota_digest.send_quota_digest` 提早驗證
+- [x] 18.1 階段 C 包含 task 15（AdminPage Quota 申請 tab）
+- [x] 18.2 commit + push frontend；無 backend 改動但既有 `/admin/quota-requests` 已在階段 A 上線
+- [x] 18.3 prod 驗：admin 登入後台 → 點 Quota 申請 tab → 看到 pending count badge、approve 一筆測試申請（自己送的就好）→ user quota 增加、row 從 pending 移除
+- [x] 18.4 等下個 cron 觸發點（UTC 9:00 或 21:00）後檢查 ZSend 是否寄出彙整 email；或手動觸發 `celery -A app.workers.celery_app call app.workers.quota_digest.send_quota_digest` 提早驗證
 
 ## 19. Archive 後維護（per memory dual-write rule）
 
-- [ ] 19.1 archive 後更新 `docs/roadmap.md`：U1 標 ✅ 完成（form changed from「全站登入 gate」to「freemium 分層 gate」）
-- [ ] 19.2 同步更新 `project_pending_changes.md`（最近 archive、下次開場 briefing）
-- [ ] 19.3 起草 v1.0 release log entry：tag=`feature`、milestone=`v1.0`，標題「公開上線：freemium 模式」、文案描述未登入可瀏覽 + 搜尋段落、登入解鎖 AI 答案、30 次免費額度、申請補充流程
+- [x] 19.1 archive 後更新 `docs/roadmap.md`：U1 標 ✅ 完成（form changed from「全站登入 gate」to「freemium 分層 gate」）
+- [x] 19.2 同步更新 `project_pending_changes.md`（最近 archive、下次開場 briefing）
+- [x] 19.3 起草 v1.0 release log entry：tag=`feature`、milestone=`v1.0`，標題「公開上線：freemium 模式」、文案描述未登入可瀏覽 + 搜尋段落、登入解鎖 AI 答案、30 次免費額度、申請補充流程
 
 ## 20. Coverage 索引（讓 analyzer 確認每個 requirement / design topic 都有對應 task；無實作行）
 

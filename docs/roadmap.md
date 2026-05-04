@@ -1,6 +1,6 @@
 # PodcastRAG 路線圖
 
-> 最後更新：2026-05-04（summary-stale-detection archive 後）
+> 最後更新：2026-05-04（freemium-onboarding archive 後）
 
 本文件記錄 PodcastRAG 後續開發的優先順序與規劃。依 Phase 排序，**Phase A 阻擋公開最先**，再做評測基線，再優化 RAG，最後商業化。
 
@@ -15,8 +15,8 @@
 | — | `e2e-login-backdoor`（驗證流程基建）| ✅ 已 archive 並 deploy（2026-05-03，v0.8）— `/auth/_e2e_login` env-gated 後門讓 Claude MCP 自動驗證不再仰賴 14 天過期的 storage state |
 | **T3** | 每集 AI 摘要（`episode-ai-summary`）| ✅ 已 archive 並 deploy（2026-05-03，v0.9）— map-reduce + idempotent + admin backfill |
 | — | `summary-stale-detection`（T3 補強）| ✅ 已 archive 並 deploy（2026-05-04）— cron_tick 每分鐘掃 stale running summary、Celery on_failure handler、`ai_summary_started_at`/`ai_summary_error` 兩欄位 |
-| **U1** | 全站登入 gate + 註冊流程細化 | 🆕 下一個要做。Phase 2 把 select / query / transcript 也綁登入 |
-| **O1** | 自有網域 + SameSite=Lax | 待開 |
+| **U1** | freemium 分層 gate（取代「全站登入 gate」原計畫）| ✅ 已 archive 並 deploy（2026-05-04，v1.0）— LandingPage、公開段落搜尋（IP rate limit 20/day）、登入解鎖 LLM 答案、quota 申請流程 |
+| **O1** | 自有網域 + SameSite=Lax | 待開（先買網域；ZSend 也要先開通才能用 quota digest email）|
 
 ### T3：每集 AI 摘要（NEW，源自競品分析 A1）
 - 批次跑 LLM 寫每集 80–150 字摘要（**不**做 `ai_display_title`，討論決定）
@@ -27,9 +27,11 @@
 - Admin Queue Tab 加 summary badge + 失敗重跑 + 「批次補摘要」一鍵
 - 規模 32 tasks，成本一次性 657 集 < $1
 
-### U1：全站登入 gate + 註冊流程細化
-- approval queue / pending status / email 驗證
-- Phase 2 把 select / query / transcript 也綁登入
+### ~~U1：全站登入 gate + 註冊流程細化~~ → 已轉為 freemium 分層 gate（archive 2026-05-04）
+- 改採「先讓人看到價值再要登入」設計：select/transcript 完全公開、段落搜尋免登入（IP rate limit 20/day）、LLM 答案需登入消耗 quota
+- Google SSO 一鍵直接 active（無 pending / approval queue / email 驗證）
+- Quota 用完不自動補回，使用者主動透過「申請更多額度」按鈕送 quota_requests
+- Beat 每 12 小時彙整 pending 申請寄給 admin（待 ZSend 開通後生效；目前 no-op log）
 
 ### O1：自有網域 + SameSite=Lax
 - 買 podcastrag.app 之類，前後端綁 app./api.，cookie 切回 Lax 多一層 CSRF 防禦
