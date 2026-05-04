@@ -42,8 +42,8 @@
 ## 7. 部署與驗證
 
 - [x] 7.1 執行 `pytest backend/tests/` 全綠
-- [ ] 7.2 commit 並 push 到 main，觀察 Zeabur 4 service（backend / worker / dispatcher / beat）build & deploy 全綠；`backend` 的 entrypoint 會跑 `alembic upgrade head` 自動套用 migration
-- [ ] 7.3 prod 驗證 1：透過 e2e-login 後門登入，確認 `GET /admin/queue` 回應每筆都有 `ai_summary_error` 欄位（多數為 null）
-- [ ] 7.4 prod 驗證 2：手動製造一個 stale 情境（在 DB 把某筆 `ai_summary_status='done'` 的 row 改回 `running` 且 `ai_summary_started_at = now() - 700s`），等下一個 cron_tick（≤1 min），確認 row 被 reset 為 pending、`ai_summary_error` 寫入 recovered 訊息、Celery task 重跑後變回 done
-- [ ] 7.5 prod 驗證 3：把該 row 的 ai_summary 還原到原值（避免污染資料）
-- [ ] 7.6 更新 `docs/roadmap.md` 與 `project_pending_changes.md` 記憶（archive 後做）
+- [x] 7.2 commit 並 push 到 main，觀察 Zeabur 4 service（backend / worker / dispatcher / beat）build & deploy 全綠；`backend` 的 entrypoint 會跑 `alembic upgrade head` 自動套用 migration
+- [x] 7.3 prod 驗證 1：透過 e2e-login 後門登入，確認 `GET /admin/queue` 回應每筆都有 `ai_summary_error` 欄位（多數為 null）
+- [x] 7.4 prod 驗證 2：手動製造一個 stale 情境（在 DB 把某筆 `ai_summary_status='done'` 的 row 改回 `running` 且 `ai_summary_started_at = now() - 700s`），等下一個 cron_tick（≤1 min），確認 row 被 reset 為 pending、`ai_summary_error` 寫入 recovered 訊息、Celery task 重跑後變回 done
+- [x] 7.5 prod 驗證 3：把該 row 的 ai_summary 還原到原值（避免污染資料）
+- [x] 7.6 更新 `docs/roadmap.md` 與 `project_pending_changes.md` 記憶（archive 後做）

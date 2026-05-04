@@ -33,6 +33,19 @@ const MILESTONE_LABELS = {
 
 // Entries — newest milestone first; within each milestone newest date first.
 const RELEASE_LOG = [
+  // ─── v0.9 — Per-Episode AI Summary (5/04) — fix ───
+  {
+    date: '2026-05-04', slug: 'summary-stale-detection', milestone: 'v0.9', tag: 'fix',
+    title: {
+      zh: '摘要 task 卡住會自動回收',
+      en: 'Stuck Summary Tasks Auto-Recover',
+    },
+    summary: {
+      zh: '上週批次補摘要時遇到 3 集卡在「摘要中」一整天沒人救——worker 重啟、Celery task 消失、狀態沒人更新。改進：beat 每分鐘掃描 episodes 表，若摘要狀態 `running` 超過 10 分鐘（預設可由 env 調整），自動重置為 pending 並重新排隊；同時加上 Celery on_failure handler，worker 被 SIGKILL/OOM 殺掉時也會把 row 標為 failed 並寫入錯誤訊息。Admin 後台的摘要徽章 hover 上去現在會顯示具體錯誤訊息，方便排查。資料層加了兩個欄位記錄起跑時間和錯誤字串。一般使用者完全不會察覺，純粹是後台 reliability 補強。',
+      en: 'During last week\'s summary backfill, 3 episodes got stuck in "summarising" for a full day — worker restarted, Celery task vanished, nothing updated the row. Fix: beat scans the episodes table every minute and any row whose summary has been "running" longer than 10 min (env-configurable) is reset to pending and re-queued. A Celery on_failure handler also fires when a worker gets SIGKILL\'d (OOM, container restart) and marks the row failed with the exception text. The admin queue badge now reveals the underlying error on hover so debugging is straightforward. Adds two database fields for start-time and error-string tracking. End users see no change — purely an admin reliability improvement.',
+    },
+  },
+
   // ─── v0.9 — Per-Episode AI Summary (5/03) ───
   {
     date: '2026-05-03', slug: 'episode-ai-summary', milestone: 'v0.9', tag: 'feature',
