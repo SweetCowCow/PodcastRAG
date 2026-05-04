@@ -27,13 +27,14 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
 from app.core.config import settings
-from app.models.episode import Episode
+from app.models.episode import AiSummaryStatus, Episode
 from app.models.show_schedule import RefreshStatus, ShowSchedule
 from app.models.transcription_queue import QueueStatus, TranscriptionQueue
 from app.services.rss_parser import RssParseError
 from app.services.sync import sync_show_episodes
 from app.workers.celery_app import celery_app
 from app.workers.dispatch import enqueue_transcription
+from app.workers.summary_task import generate_episode_summary
 from app.workers.throttle import release_global_slot
 
 logger = logging.getLogger(__name__)
@@ -67,6 +68,7 @@ async def _run_tick() -> dict:
     enqueued = 0
     stale_marked = 0
     orphans_reverted = 0
+    stale_summary_recovered = 0
 
     try:
         try:
@@ -96,6 +98,14 @@ async def _run_tick() -> dict:
         except Exception:
             logger.warning(
                 "cron_tick: stale detection raised — skipping this tick",
+                exc_info=True,
+            )
+
+        try:
+            stale_summary_recovered = await _detect_stale_summary_running(Session)
+        except Exception:
+            logger.warning(
+                "cron_tick: stale summary detection raised — skipping this tick",
                 exc_info=True,
             )
 
@@ -157,6 +167,7 @@ async def _run_tick() -> dict:
         "enqueued": enqueued,
         "stale_marked": stale_marked,
         "orphans_reverted": orphans_reverted,
+        "stale_summary_recovered": stale_summary_recovered,
     }
 
 
@@ -224,6 +235,107 @@ async def _detect_stale_running(session_factory) -> int:
             logger.info("cron_tick: stale detected: %d rows", marked)
 
     return marked
+
+
+async def _detect_stale_summary_running(session_factory) -> int:
+    """Find episode rows whose ai_summary_status='running' has been alive
+    longer than ``settings.summary_stale_threshold_seconds`` and re-enqueue
+    them. Worker crashes (SIGKILL, OOM, container restart) leave summary
+    rows orphaned without firing on_failure; this is the safety net.
+
+    For each stale row:
+      1. UPDATE status=pending, started_at=NULL,
+         ai_summary_error='recovered from stale running after <Ns>'
+      2. enqueue ``generate_episode_summary.delay(<id>)``
+      3. on enqueue failure (broker unreachable, etc.) roll back that
+         row's UPDATE and continue with the next row.
+
+    Defensive branch: rows with status='running' but started_at IS NULL
+    are NOT auto-recovered — they indicate inconsistent state and a human
+    should investigate. The function logs a warning naming each such row.
+
+    Returns the count of rows successfully reset + re-enqueued.
+    """
+    threshold_seconds = settings.summary_stale_threshold_seconds
+    now = datetime.now(timezone.utc)
+    cutoff = now - timedelta(seconds=threshold_seconds)
+
+    recovered = 0
+
+    async with session_factory() as session:
+        # Defensive: warn about running-with-NULL-started_at rows.
+        null_started = (
+            await session.execute(
+                select(Episode.id).where(
+                    Episode.ai_summary_status == AiSummaryStatus.running.value,
+                    Episode.ai_summary_started_at.is_(None),
+                )
+            )
+        ).scalars().all()
+        for ep_id in null_started:
+            logger.warning(
+                "cron_tick: episode %s ai_summary_status=running but "
+                "started_at IS NULL — skipping auto-recovery, please inspect",
+                ep_id,
+            )
+
+        candidates = (
+            await session.execute(
+                select(Episode).where(
+                    Episode.ai_summary_status == AiSummaryStatus.running.value,
+                    Episode.ai_summary_started_at.is_not(None),
+                    Episode.ai_summary_started_at < cutoff,
+                )
+            )
+        ).scalars().all()
+
+        for ep in candidates:
+            # Snapshot original state for rollback if enqueue fails.
+            original_started_at = ep.ai_summary_started_at
+            original_error = ep.ai_summary_error
+            elapsed = int((now - ep.ai_summary_started_at).total_seconds())
+            ep.ai_summary_status = AiSummaryStatus.pending.value
+            ep.ai_summary_started_at = None
+            ep.ai_summary_error = (
+                f"recovered from stale running after {elapsed}s"
+            )
+            try:
+                await session.commit()
+            except Exception:
+                logger.exception(
+                    "cron_tick: failed to commit stale-summary reset for %s",
+                    ep.id,
+                )
+                await session.rollback()
+                continue
+
+            try:
+                generate_episode_summary.delay(str(ep.id))
+            except Exception:
+                logger.warning(
+                    "cron_tick: enqueue stale-summary recovery failed for %s "
+                    "— rolling back row state",
+                    ep.id,
+                    exc_info=True,
+                )
+                # Restore the row to its previous running state.
+                async with session_factory() as undo:
+                    row = await undo.get(Episode, ep.id)
+                    if row is not None:
+                        row.ai_summary_status = AiSummaryStatus.running.value
+                        row.ai_summary_started_at = original_started_at
+                        row.ai_summary_error = original_error
+                        await undo.commit()
+                continue
+
+            recovered += 1
+
+        if recovered:
+            logger.info(
+                "cron_tick: stale summary recovered: %d rows", recovered
+            )
+
+    return recovered
 
 
 def _is_due(schedule: ShowSchedule, current_hhmm: str, weekday: int) -> bool:

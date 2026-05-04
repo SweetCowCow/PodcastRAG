@@ -209,3 +209,92 @@ async def test_idempotency_skips_already_done(episode_with_transcript):
         result = await _run(fake_task, str(ep_id))
         assert result == {"skipped": "already_done"}
         mock_openai_cls.assert_not_called()
+
+
+@pytest.mark.skipif(not _postgres_reachable(), reason="postgres not reachable")
+@pytest.mark.asyncio
+async def test_started_at_written_on_running_and_preserved_on_done(
+    episode_with_transcript,
+):
+    show_id, ep_id = episode_with_transcript
+    summary_text = "這集 podcast 介紹了主題、討論並做了結尾預告，內容相當豐富。"
+
+    with patch(
+        "app.workers.summary_task.get_step_config",
+        new=AsyncMock(return_value=_mock_step_config()),
+    ), patch(
+        "app.services.summary_pipeline.AsyncOpenAI"
+    ) as mock_openai_cls:
+        mock_client = MagicMock()
+        mock_client.chat.completions.create = AsyncMock(
+            return_value=_mock_chat_response(summary_text)
+        )
+        mock_openai_cls.return_value = mock_client
+
+        from app.workers.summary_task import _run
+
+        fake_task = MagicMock()
+        fake_task.request.retries = 0
+        fake_task.max_retries = 3
+        await _run(fake_task, str(ep_id))
+
+    async with AsyncSessionFactory() as db:
+        ep = await db.get(Episode, ep_id)
+        assert ep.ai_summary_status == AiSummaryStatus.done.value
+        # started_at MUST be populated (set on entry) and preserved through done.
+        assert ep.ai_summary_started_at is not None
+        assert ep.ai_summary_error is None
+
+
+@pytest.mark.skipif(not _postgres_reachable(), reason="postgres not reachable")
+@pytest.mark.asyncio
+async def test_on_failure_marks_failed_with_error_string(episode_with_transcript):
+    """Simulate the Task.on_failure callback firing for a row stuck running."""
+    show_id, ep_id = episode_with_transcript
+
+    async with AsyncSessionFactory() as db:
+        ep = await db.get(Episode, ep_id)
+        ep.ai_summary_status = AiSummaryStatus.running.value
+        ep.ai_summary_started_at = datetime.now(timezone.utc)
+        await db.commit()
+
+    from app.workers.summary_task import _mark_failed_from_on_failure
+
+    exc = RuntimeError("worker SIGKILL surrogate")
+    await _mark_failed_from_on_failure(str(ep_id), exc)
+
+    async with AsyncSessionFactory() as db:
+        ep = await db.get(Episode, ep_id)
+        assert ep.ai_summary_status == AiSummaryStatus.failed.value
+        assert ep.ai_summary_error is not None
+        assert len(ep.ai_summary_error) <= 1000
+        assert "RuntimeError" in ep.ai_summary_error
+        assert ep.ai_summary_generated_at is not None
+
+
+@pytest.mark.skipif(not _postgres_reachable(), reason="postgres not reachable")
+@pytest.mark.asyncio
+async def test_on_failure_skips_already_done_row(episode_with_transcript):
+    """If the row is already done (e.g. earlier successful attempt), the
+    on_failure handler MUST NOT overwrite it."""
+    show_id, ep_id = episode_with_transcript
+    preset_summary = "已完成的摘要文字內容"
+
+    async with AsyncSessionFactory() as db:
+        ep = await db.get(Episode, ep_id)
+        ep.ai_summary = preset_summary
+        ep.ai_summary_status = AiSummaryStatus.done.value
+        ep.ai_summary_generated_at = datetime.now(timezone.utc)
+        ep.ai_summary_error = None
+        await db.commit()
+
+    from app.workers.summary_task import _mark_failed_from_on_failure
+
+    await _mark_failed_from_on_failure(str(ep_id), RuntimeError("late failure"))
+
+    async with AsyncSessionFactory() as db:
+        ep = await db.get(Episode, ep_id)
+        # Row MUST remain done with original summary.
+        assert ep.ai_summary_status == AiSummaryStatus.done.value
+        assert ep.ai_summary == preset_summary
+        assert ep.ai_summary_error is None

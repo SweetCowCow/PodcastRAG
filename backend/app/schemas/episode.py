@@ -26,3 +26,5 @@ class AdminEpisodeResponse(EpisodeResponse):
 
     ai_summary_generated_at: datetime | None = None
     ai_summary_model: str | None = None
+    ai_summary_started_at: datetime | None = None
+    ai_summary_error: str | None = None

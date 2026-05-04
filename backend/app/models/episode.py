@@ -54,6 +54,10 @@ class Episode(Base):
         DateTime(timezone=True), nullable=True
     )
     ai_summary_model: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    ai_summary_started_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    ai_summary_error: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     show: Mapped["Show"] = relationship(back_populates="episodes")
     transcript: Mapped["Transcript | None"] = relationship(back_populates="episode")

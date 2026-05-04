@@ -24,6 +24,7 @@ class QueueRowOut(BaseModel):
     episode_title: str | None = None
     show_title: str | None = None
     ai_summary_status: str | None = None
+    ai_summary_error: str | None = None
 
 
 class CancelQueueRowOut(QueueRowOut):

@@ -42,6 +42,11 @@ class Settings(BaseSettings):
 
     e2e_login_token: str | None = None
 
+    # Cron-tick stale-summary recovery: rows whose ai_summary_status='running'
+    # for longer than this many seconds get reset to pending and re-enqueued.
+    # 600s = 10 min — safely longer than the 30-90s a normal map-reduce takes.
+    summary_stale_threshold_seconds: int = 600
+
     @field_validator("e2e_login_token")
     @classmethod
     def _validate_e2e_login_token(cls, v: str | None) -> str | None:

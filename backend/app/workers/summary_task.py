@@ -37,8 +37,72 @@ SUMMARY_TRANSIENT_ERRORS = (
     ConnectionError,
 )
 
+SUMMARY_ERROR_MAX_LEN = 1000
+
+
+def _truncate_error(exc: BaseException) -> str:
+    return repr(exc)[:SUMMARY_ERROR_MAX_LEN]
+
+
+class SummaryTask(celery_app.Task):
+    """Custom Task class so on_failure fires even for non-autoretry exceptions
+    (programming errors, SIGKILL surrogate exceptions, etc.). Marks the row
+    failed + writes ai_summary_error so the admin queue tab + cron-tick
+    stale recovery have a clear signal."""
+
+    def on_failure(self, exc, task_id, args, kwargs, einfo):  # type: ignore[override]
+        episode_id = args[0] if args else kwargs.get("episode_id")
+        if not episode_id:
+            logger.warning(
+                "summary on_failure: no episode_id in args/kwargs — task_id=%s",
+                task_id,
+            )
+            return
+        try:
+            asyncio.run(_mark_failed_from_on_failure(episode_id, exc))
+        except Exception:
+            logger.exception(
+                "summary on_failure: handler crashed for episode %s",
+                episode_id,
+            )
+
+
+async def _mark_failed_from_on_failure(episode_id: str, exc: BaseException) -> None:
+    """Run by Task.on_failure to record terminal failure on the row.
+
+    Skips rows that are already 'done' (the failure was on a redundant retry
+    of an already-completed row, which can happen with at-least-once delivery).
+    """
+    try:
+        ep_uuid = uuid.UUID(episode_id)
+    except (ValueError, TypeError):
+        logger.warning(
+            "summary on_failure: bad episode_id %r — skipping", episode_id
+        )
+        return
+    engine = create_async_engine(settings.database_url, poolclass=NullPool)
+    Session = async_sessionmaker(engine, expire_on_commit=False)
+    try:
+        async with Session() as db:
+            ep = await db.get(Episode, ep_uuid)
+            if ep is None:
+                return
+            if ep.ai_summary_status == AiSummaryStatus.done.value:
+                logger.info(
+                    "summary on_failure: %s already done — leaving row alone",
+                    episode_id,
+                )
+                return
+            ep.ai_summary_status = AiSummaryStatus.failed.value
+            ep.ai_summary_generated_at = datetime.now(timezone.utc)
+            ep.ai_summary_error = _truncate_error(exc)
+            await db.commit()
+    finally:
+        await engine.dispose()
+
 
 @celery_app.task(
+    base=SummaryTask,
     name="app.workers.summary_task.generate_episode_summary",
     bind=True,
     autoretry_for=SUMMARY_TRANSIENT_ERRORS,
@@ -73,12 +137,20 @@ async def _run(task, episode_id: str) -> dict:
 
             if ep.ai_summary_status == AiSummaryStatus.running.value:
                 logger.warning(
-                    "summary task: %s already running, skipping", episode_id
+                    "summary task: %s already running (started_at=%s), skipping",
+                    episode_id,
+                    ep.ai_summary_started_at,
                 )
                 return {"skipped": "already_running"}
 
             ep.ai_summary_status = AiSummaryStatus.running.value
+            ep.ai_summary_started_at = datetime.now(timezone.utc)
             await db.commit()
+            logger.debug(
+                "summary task: %s entered running at %s",
+                episode_id,
+                ep.ai_summary_started_at,
+            )
 
         # Step 2: load transcript segments.
         async with Session() as db:
@@ -120,11 +192,12 @@ async def _run(task, episode_id: str) -> dict:
                 api_key=step.api_key,
                 model=step.model,
             )
-        except SUMMARY_TRANSIENT_ERRORS:
+        except SUMMARY_TRANSIENT_ERRORS as exc:
             # Re-raise so Celery autoretry triggers; only mark failed when
-            # retries are exhausted (handled in on_failure path below).
+            # retries are exhausted. (Task.on_failure also marks failed as a
+            # safety net for non-transient exceptions.)
             if task.request.retries >= task.max_retries:
-                await _mark_failed(Session, ep_uuid, model_name=step.model)
+                await _mark_failed(Session, ep_uuid, model_name=step.model, exc=exc)
             raise
 
         # Step 4: persist done.
@@ -136,6 +209,7 @@ async def _run(task, episode_id: str) -> dict:
             ep.ai_summary_status = AiSummaryStatus.done.value
             ep.ai_summary_generated_at = datetime.now(timezone.utc)
             ep.ai_summary_model = step.model
+            ep.ai_summary_error = None
             await db.commit()
 
         logger.info(
@@ -148,7 +222,7 @@ async def _run(task, episode_id: str) -> dict:
         # land here. Mark failed and don't retry.
         if not isinstance(exc, SUMMARY_TRANSIENT_ERRORS):
             try:
-                await _mark_failed(Session, ep_uuid, model_name=None)
+                await _mark_failed(Session, ep_uuid, model_name=None, exc=exc)
             except Exception:
                 logger.exception("summary task: failed to mark row failed")
         raise
@@ -156,7 +230,13 @@ async def _run(task, episode_id: str) -> dict:
         await engine.dispose()
 
 
-async def _mark_failed(Session, ep_uuid: uuid.UUID, *, model_name: str | None) -> None:
+async def _mark_failed(
+    Session,
+    ep_uuid: uuid.UUID,
+    *,
+    model_name: str | None,
+    exc: BaseException | None = None,
+) -> None:
     async with Session() as db:
         ep = await db.get(Episode, ep_uuid)
         if ep is None:
@@ -165,4 +245,6 @@ async def _mark_failed(Session, ep_uuid: uuid.UUID, *, model_name: str | None) -
         ep.ai_summary_generated_at = datetime.now(timezone.utc)
         if model_name is not None:
             ep.ai_summary_model = model_name
+        if exc is not None:
+            ep.ai_summary_error = _truncate_error(exc)
         await db.commit()

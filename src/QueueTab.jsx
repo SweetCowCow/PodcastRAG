@@ -1,5 +1,5 @@
 // Summary status badge — admin only. Hidden when transcript not yet completed.
-const SummaryBadge = ({ status, lang }) => {
+const SummaryBadge = ({ status, error, lang }) => {
   if (!status) return null;
   const t = lang === 'zh';
   if (status === 'pending' || status === 'running') {
@@ -9,7 +9,16 @@ const SummaryBadge = ({ status, lang }) => {
     return <Badge variant="success">{t ? '已摘要' : 'Summarised'}</Badge>;
   }
   if (status === 'failed') {
-    return <Badge variant="danger">{t ? '摘要失敗' : 'Summary failed'}</Badge>;
+    const fallback = t
+      ? '摘要失敗（未記錄錯誤訊息）'
+      : 'Summary task failed (no error message recorded)';
+    let tip = error && error.length > 0 ? error : fallback;
+    if (tip.length > 200) tip = tip.slice(0, 200) + '…';
+    return (
+      <span title={tip}>
+        <Badge variant="danger">{t ? '摘要失敗' : 'Summary failed'}</Badge>
+      </span>
+    );
   }
   return null;
 };
@@ -385,7 +394,7 @@ const QueueTab = ({ lang }) => {
               {status}
             </Badge>
             {ignored && <Badge variant="muted">{t ? '已忽略' : 'Ignored'}</Badge>}
-            {status === 'completed' && <SummaryBadge status={row.ai_summary_status} lang={lang} />}
+            {status === 'completed' && <SummaryBadge status={row.ai_summary_status} error={row.ai_summary_error} lang={lang} />}
             {status === 'completed' && row.ai_summary_status === 'failed' && (
               <Btn size="sm" variant="ghost" icon="refresh" onClick={() => regenerateSummary(row)}>
                 {t ? '重跑摘要' : 'Regenerate'}
