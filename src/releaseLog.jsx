@@ -34,6 +34,19 @@ const MILESTONE_LABELS = {
 
 // Entries — newest milestone first; within each milestone newest date first.
 const RELEASE_LOG = [
+  // ─── v1.0 — Public Launch: Freemium Mode (5/04) — infra ───
+  {
+    date: '2026-05-04', slug: 'custom-domain-and-zsend', milestone: 'v1.0', tag: 'enhancement',
+    title: {
+      zh: '搬到自有網域 podcastrag.app + 信件服務上線',
+      en: 'Custom Domain podcastrag.app + Email Notifications Live',
+    },
+    summary: {
+      zh: '從 zeabur.app 共享子域搬到自有網域：前端 app.podcastrag.app、後端 api.podcastrag.app（Let\'s Encrypt 自動 SSL）。網域透過 Zeabur registrar 直接購買（$14.99/年，自動續訂），DNS 由 Cloudflare 託管。同時開通 ZSend 信件服務並驗證 podcastrag.app 為 sending domain（SES 東京 region），quota 申請通知信現在會從 noreply@podcastrag.app 實際寄出（早上 5 點 + 下午 5 點各一次彙整）。舊 zeabur.app 子域仍保留可用，兩個網域並存讓既有書籤不會壞。實作中也順手修了一個 ZSend API URL 的 bug（之前是用猜的，實際應該是 api.zeabur.com/api/v1/zsend/emails 而不是 zsend.zeabur.app/api/v1/send）。',
+      en: 'Migrated off zeabur.app shared subdomains to a custom domain: frontend at app.podcastrag.app, backend at api.podcastrag.app (Let\'s Encrypt SSL auto-issued). Bought through Zeabur\'s registrar ($14.99/yr with auto-renew) with Cloudflare-managed DNS. Also onboarded ZSend with podcastrag.app as a verified sending domain (SES Tokyo region) — quota request digest emails now actually deliver from noreply@podcastrag.app (twice daily at 5am + 5pm Taipei time). Old zeabur.app subdomains remain functional so existing bookmarks keep working. Caught a ZSend API URL bug along the way (the URL was a guess: it\'s actually api.zeabur.com/api/v1/zsend/emails, not zsend.zeabur.app/api/v1/send).',
+    },
+  },
+
   // ─── v1.0 — Public Launch: Freemium Mode (5/04) ───
   {
     date: '2026-05-04', slug: 'freemium-onboarding', milestone: 'v1.0', tag: 'feature',

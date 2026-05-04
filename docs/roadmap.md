@@ -1,6 +1,6 @@
 # PodcastRAG 路線圖
 
-> 最後更新：2026-05-04（freemium-onboarding archive 後）
+> 最後更新：2026-05-04（自有網域 podcastrag.app + ZSend 上線後）
 
 本文件記錄 PodcastRAG 後續開發的優先順序與規劃。依 Phase 排序，**Phase A 阻擋公開最先**，再做評測基線，再優化 RAG，最後商業化。
 
@@ -16,7 +16,7 @@
 | **T3** | 每集 AI 摘要（`episode-ai-summary`）| ✅ 已 archive 並 deploy（2026-05-03，v0.9）— map-reduce + idempotent + admin backfill |
 | — | `summary-stale-detection`（T3 補強）| ✅ 已 archive 並 deploy（2026-05-04）— cron_tick 每分鐘掃 stale running summary、Celery on_failure handler、`ai_summary_started_at`/`ai_summary_error` 兩欄位 |
 | **U1** | freemium 分層 gate（取代「全站登入 gate」原計畫）| ✅ 已 archive 並 deploy（2026-05-04，v1.0）— LandingPage、公開段落搜尋（IP rate limit 20/day）、登入解鎖 LLM 答案、quota 申請流程 |
-| **O1** | 自有網域 + SameSite=Lax | 待開（先買網域；ZSend 也要先開通才能用 quota digest email）|
+| **O1** | 自有網域 + ZSend Email | ✅ 已上線（2026-05-04）— `podcastrag.app` 透過 Zeabur registrar 購買，前後端綁 `app./api.`，ZSend 整合 `noreply@podcastrag.app`。**SameSite=Lax 改動留為 polish change**（現 samesite=none 仍可運作；切 lax 需先廢棄 zeabur.app 子域）|
 
 ### T3：每集 AI 摘要（NEW，源自競品分析 A1）
 - 批次跑 LLM 寫每集 80–150 字摘要（**不**做 `ai_display_title`，討論決定）
@@ -31,10 +31,16 @@
 - 改採「先讓人看到價值再要登入」設計：select/transcript 完全公開、段落搜尋免登入（IP rate limit 20/day）、LLM 答案需登入消耗 quota
 - Google SSO 一鍵直接 active（無 pending / approval queue / email 驗證）
 - Quota 用完不自動補回，使用者主動透過「申請更多額度」按鈕送 quota_requests
-- Beat 每 12 小時彙整 pending 申請寄給 admin（待 ZSend 開通後生效；目前 no-op log）
+- Beat 每 12 小時彙整 pending 申請寄給 admin（ZSend 已開通，2026-05-04 起可實際寄信）
 
-### O1：自有網域 + SameSite=Lax
-- 買 podcastrag.app 之類，前後端綁 app./api.，cookie 切回 Lax 多一層 CSRF 防禦
+### ~~O1：自有網域 + SameSite=Lax~~ → 網域 + ZSend 上線（2026-05-04）；SameSite=Lax 留為 polish
+- ✅ 透過 Zeabur registrar 購買 `podcastrag.app`（$14.99/yr，自動 Cloudflare DNS，Let's Encrypt cert）
+- ✅ `app.podcastrag.app` 綁 frontend service、`api.podcastrag.app` 綁 backend service
+- ✅ Google OAuth Console 加 `https://api.podcastrag.app/auth/google/callback` redirect URI
+- ✅ 4 個後端 service env 更新：`FRONTEND_ORIGIN` 加新域、`GOOGLE_REDIRECT_URI` 切新域
+- ✅ ZSend 啟用 + 加 sending domain `podcastrag.app`（SES region ap-northeast-1）+ 6 DNS records (3 DKIM + MX + SPF + DMARC) + API key 產出 + env 部署完
+- ✅ ZSend URL bug 修正（commit `c0e88fc`：原本猜的 `zsend.zeabur.app/api/v1/send` 實際是 `api.zeabur.com/api/v1/zsend/emails`）
+- ⏳ **未做**：cookie SameSite=none → lax（需先廢棄 `*.zeabur.app` 子域才能切，否則跨網域 fetch 不會帶 cookie）
 
 ---
 
