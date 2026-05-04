@@ -75,3 +75,8 @@ class User(Base):
     sessions: Mapped[list["Session"]] = relationship(  # noqa: F821
         back_populates="user", cascade="all, delete-orphan"
     )
+    quota_requests: Mapped[list["QuotaRequest"]] = relationship(  # noqa: F821
+        back_populates="user",
+        cascade="all, delete-orphan",
+        foreign_keys="QuotaRequest.user_id",
+    )

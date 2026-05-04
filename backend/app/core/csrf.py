@@ -13,6 +13,7 @@ authenticated and have no session, so no CSRF protection is meaningful.
 """
 
 import hmac
+import re
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
@@ -30,6 +31,13 @@ EXEMPT_PATHS = {
     "/auth/google/start",
     "/auth/google/callback",
 }
+
+# Public endpoints that anonymous callers can hit. They have no session cookie
+# so no CSRF check is meaningful; the IP rate limit + Origin header are the
+# protections that remain.
+EXEMPT_PATH_PATTERNS = [
+    re.compile(r"^/shows/[0-9a-f-]{8,}/search/?$"),
+]
 
 
 def _error(request: Request, status_code: int, code: str, detail: str) -> JSONResponse:
@@ -55,6 +63,8 @@ class CsrfAndOriginMiddleware(BaseHTTPMiddleware):
         if request.method not in UNSAFE_METHODS:
             return await call_next(request)
         if request.url.path in EXEMPT_PATHS:
+            return await call_next(request)
+        if any(p.match(request.url.path) for p in EXEMPT_PATH_PATTERNS):
             return await call_next(request)
 
         # 1. Origin header check

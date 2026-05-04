@@ -8,6 +8,7 @@ from app.models.show_schedule import RefreshStatus, ShowSchedule
 from app.models.transcript import Transcript, TranscriptStatus
 from app.models.transcript_chunk import TranscriptChunk
 from app.models.transcript_segment import TranscriptSegment
+from app.models.quota_request import QuotaRequest, QuotaRequestStatus
 from app.models.transcription_queue import QueueStatus, TranscriptionQueue
 from app.models.user import User, UserRole, UserStatus
 
@@ -32,4 +33,6 @@ __all__ = [
     "UserRole",
     "UserStatus",
     "Session",
+    "QuotaRequest",
+    "QuotaRequestStatus",
 ]

@@ -7,13 +7,15 @@ from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.security import require_authenticated_user
+from app.core.security import optional_auth_with_ip_limit, require_authenticated_user
 from app.models.show import Show
 from app.models.user import User
 from app.schemas.errors import ErrorCode, ErrorResponse
 from app.schemas.query import (
     ChatResponse,
     ChunkHit,
+    PublicSearchRequest,
+    PublicSearchResponse,
     QueryRequest,
     SearchResponse,
 )
@@ -105,6 +107,52 @@ async def _atomic_decrement_quota(db: AsyncSession, user_id: uuid.UUID) -> int:
             ).model_dump(),
         )
     return int(new_remaining)
+
+
+@router.post("/shows/{show_id}/search", response_model=PublicSearchResponse)
+async def public_search_show(
+    show_id: uuid.UUID,
+    payload: PublicSearchRequest,
+    db: AsyncSession = Depends(get_db),
+    user: User | None = Depends(optional_auth_with_ip_limit),
+) -> PublicSearchResponse:
+    """Public-search endpoint: returns top-K matching segments only.
+
+    - Anonymous callers: gated by per-IP daily rate limit (raises 429 over).
+    - Authenticated callers: bypass the IP limit; do NOT decrement quota.
+    The cost ceiling is the per-call embedding spend; the IP limit caps anonymous,
+    and the chat endpoint's quota gate caps authenticated.
+    """
+    show = await db.get(Show, show_id)
+    if show is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Show 不存在")
+
+    try:
+        embedding_cfg = await get_step_config(db, "embedding")
+    except AiStepNotConfiguredError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=ErrorResponse(
+                error_code=ErrorCode.LLM_NOT_CONFIGURED,
+                provider=None,
+                detail=str(exc),
+            ).model_dump(),
+        ) from exc
+
+    try:
+        query_embedding = await asyncio.to_thread(
+            embed_texts, [payload.question], embedding_cfg
+        )
+    except (
+        openai.RateLimitError,
+        openai.AuthenticationError,
+        openai.APIConnectionError,
+        openai.APITimeoutError,
+    ) as exc:
+        _raise_openai_http_error(exc, "OpenAI")
+
+    hits = await rag.retrieve(db, show_id, query_embedding[0], k=payload.k)
+    return PublicSearchResponse(results=[_to_schema_hit(h) for h in hits])
 
 
 @router.post("/shows/{show_id}/query")

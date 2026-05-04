@@ -22,6 +22,9 @@ class ErrorCode:
     INVALID_OAUTH_STATE = "invalid_oauth_state"
     ACCOUNT_DISABLED = "account_disabled"
     QUOTA_EXHAUSTED = "quota_exhausted"
+    QUOTA_REQUEST_PENDING = "quota_request_pending"
+    QUOTA_REQUEST_ALREADY_PROCESSED = "already_processed"
+    IP_RATE_LIMITED = "ip_rate_limited"
 
 
 class ErrorResponse(BaseModel):

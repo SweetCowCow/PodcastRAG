@@ -77,9 +77,30 @@ async def test_first_login_member_default(db: AsyncSession, monkeypatch):
     user = await upsert_user_from_google(db, info)
     assert user.role == UserRole.member.value
     assert user.status == UserStatus.active.value
-    assert user.quota_remaining == 100
-    assert user.quota_initial == 100
+    # quota matches the runtime default (env or fallback 30)
+    assert user.quota_remaining == settings.default_user_quota
+    assert user.quota_initial == settings.default_user_quota
     assert user.total_queries == 0
+
+
+@db_required
+@pytest.mark.asyncio
+async def test_first_login_uses_default_quota_env_override(
+    db: AsyncSession, monkeypatch
+):
+    """Setting DEFAULT_USER_QUOTA=50 propagates to new users."""
+    monkeypatch.setattr(settings, "admin_emails", "")
+    monkeypatch.setattr(settings, "default_user_quota", 50)
+    info = GoogleUserInfo(
+        sub="test-sub-quota-50",
+        email="pytest-quota50@example.com",
+        name="Q50",
+        picture=None,
+        email_verified=True,
+    )
+    user = await upsert_user_from_google(db, info)
+    assert user.quota_remaining == 50
+    assert user.quota_initial == 50
 
 
 @db_required
@@ -376,7 +397,7 @@ async def test_me_returns_user_payload(db: AsyncSession, monkeypatch):
         body = resp.json()
         assert body["email"] == "pytest-me@example.com"
         assert body["role"] == "member"
-        assert body["quota_remaining"] == 100
+        assert body["quota_remaining"] == settings.default_user_quota
         assert "id" in body
 
 

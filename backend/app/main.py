@@ -124,6 +124,8 @@ app.include_router(queue_router)
 app.include_router(settings_router)
 app.include_router(users_router)
 app.include_router(stats_router)
+from app.api.quota_requests import router as quota_requests_router  # noqa: E402
+app.include_router(quota_requests_router)
 
 if settings.e2e_login_token:
     from app.api.auth_e2e import router as auth_e2e_router

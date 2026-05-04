@@ -47,6 +47,20 @@ class Settings(BaseSettings):
     # 600s = 10 min — safely longer than the 30-90s a normal map-reduce takes.
     summary_stale_threshold_seconds: int = 600
 
+    # Freemium onboarding (env-overridable):
+    # Default quota assigned to new users on first Google SSO login. Existing
+    # users keep their original quota_initial when this changes.
+    default_user_quota: int = 30
+    # Per-IP daily ceiling for the public segment-search endpoint. Anonymous
+    # callers exceeding this limit get 429 ip_rate_limited.
+    ip_search_rate_limit_per_day: int = 20
+    # ZSend email integration (used by the quota-digest beat task). All three
+    # are optional — when zsend_api_key is unset, the digest task no-ops with
+    # a log entry instead of erroring.
+    zsend_api_key: str | None = None
+    zsend_from_email: str | None = None
+    zsend_admin_to_email: str | None = None  # comma-separated for multiple recipients
+
     @field_validator("e2e_login_token")
     @classmethod
     def _validate_e2e_login_token(cls, v: str | None) -> str | None:

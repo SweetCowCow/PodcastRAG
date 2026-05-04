@@ -36,8 +36,8 @@ async def upsert_user_from_google(
             google_sub=info.sub,
             role=UserRole.admin.value if is_admin else UserRole.member.value,
             status=UserStatus.active.value,
-            quota_remaining=100,
-            quota_initial=100,
+            quota_remaining=settings.default_user_quota,
+            quota_initial=settings.default_user_quota,
             total_queries=0,
             last_login_at=now,
         )

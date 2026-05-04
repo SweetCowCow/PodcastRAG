@@ -86,3 +86,49 @@ async def require_admin(
             "Admin role required",
         )
     return user
+
+
+async def optional_auth_with_ip_limit(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    session_id: str | None = Cookie(default=None, alias=SESSION_COOKIE),
+) -> User | None:
+    """Resolve to a User if a valid session exists, else fall through to per-IP
+    daily rate limiting (returning None when under limit, raising 429 when over).
+
+    Used by public-search endpoints where the cost ceiling for anonymous
+    callers is the IP rate limit + the per-call embedding spend; authenticated
+    users skip the IP check entirely.
+    """
+    from app.core.config import settings
+    from app.core.rate_limit import (
+        check_ip_search_limit,
+        client_ip,
+        rate_limit_error_payload,
+    )
+    from app.services.session_service import resolve_session
+    from sqlalchemy import select
+
+    # First: try to resolve the session. Expired sessions or unknown cookies
+    # fall through to the IP path.
+    if session_id:
+        session_row = await resolve_session(db, session_id)
+        if session_row is not None:
+            result = await db.execute(
+                select(User).where(User.id == session_row.user_id)
+            )
+            user = result.scalar_one_or_none()
+            if user is not None and user.status != UserStatus.disabled.value:
+                request.state.current_user = user
+                return user
+
+    # Anonymous (or expired session): apply IP rate limit.
+    ip = client_ip(request)
+    limit = settings.ip_search_rate_limit_per_day
+    _count, exceeded = check_ip_search_limit(ip, limit=limit)
+    if exceeded:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=rate_limit_error_payload(limit),
+        )
+    return None

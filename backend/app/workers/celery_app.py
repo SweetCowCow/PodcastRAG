@@ -15,6 +15,7 @@ celery_app = Celery(
         "app.workers.cron_tick",
         "app.workers.lifecycle",
         "app.workers.summary_task",
+        "app.workers.quota_digest",
     ],
 )
 
@@ -32,6 +33,10 @@ celery_app.conf.update(
         "cron-tick": {
             "task": "app.workers.cron_tick.cron_tick",
             "schedule": crontab(minute="*"),
+        },
+        "quota-digest": {
+            "task": "app.workers.quota_digest.send_quota_digest",
+            "schedule": crontab(minute=0, hour="9,21"),
         },
     },
 )

@@ -33,3 +33,21 @@ class ChatResponse(BaseModel):
     answer: str
     citations: list[ChunkHit]
     quota_remaining: int
+
+
+class PublicSearchRequest(BaseModel):
+    """Body for the public-search endpoint (POST /shows/{id}/search).
+
+    Anonymous and authenticated callers share the same request shape.
+    """
+
+    question: str = Field(min_length=1, max_length=500)
+    k: int = Field(default=8, ge=1, le=50)
+
+
+class PublicSearchResponse(BaseModel):
+    """Public-search response: top-K segments with no LLM-generated answer.
+    Quota counters are not relevant here (no decrement) so the field is omitted.
+    """
+
+    results: list[ChunkHit]
