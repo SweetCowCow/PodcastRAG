@@ -163,6 +163,7 @@ const TopNav = ({ lang, page, setPage, onToggleLang, onAdminClick, user, onSignI
     { id: 'admin-schedule', icon: 'calendar', label: t ? '轉錄排程' : 'Transcription' },
     { id: 'admin-queue', icon: 'list', label: t ? '轉錄序列' : 'Queue' },
     { id: 'admin-users', icon: 'users', label: t ? '使用者' : 'Users' },
+    { id: 'admin-quota-requests', icon: 'fileText', label: t ? 'Quota 申請' : 'Quota Requests' },
     { id: 'admin-external-api', icon: 'globe', label: t ? '外部 API 狀態' : 'External API Status' },
   ];
 

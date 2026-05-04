@@ -15,6 +15,7 @@ const App = () => {
   const [highlightTime, setHighlightTime] = React.useState(null);
   const [tweaksVisible, setTweaksVisible] = React.useState(false);
   const [tweaks, setTweaks] = React.useState(TWEAK_DEFAULTS);
+  const [landingQuery, setLandingQuery] = React.useState('');
   const { user, loading: userLoading, refresh: refreshUser, logout: doLogout } = useCurrentUser();
   const isAdmin = user && user.role === 'admin' && user.status === 'active';
 
@@ -106,12 +107,29 @@ const App = () => {
 
       {/* Main content */}
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-        {page === 'select' && <PodcastSelect lang={lang} user={user} setPage={handleSetPage} onSelect={(show) => { setSelectedShow(show); setPage('query'); }} />}
+        {/* Landing for unauthenticated visitors at root. Avoid flash on hard
+            refresh while logged in by waiting for /me to resolve. */}
+        {page === 'select' && userLoading && (
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: TOKEN.textMuted }}>
+            ⏳
+          </div>
+        )}
+        {page === 'select' && !userLoading && !user && (
+          <LandingPage
+            lang={lang}
+            onSearch={(q) => setLandingQuery(q)}
+            onSelectShow={(show) => { setSelectedShow(show); setPage('query'); }}
+          />
+        )}
+        {page === 'select' && !userLoading && user && (
+          <PodcastSelect lang={lang} user={user} setPage={handleSetPage} initialQuery={landingQuery} onSelect={(show) => { setSelectedShow(show); setPage('query'); }} />
+        )}
         {selectedShow && (page === 'query' || page === 'transcript') && (
           <div style={{ display: page === 'query' ? 'flex' : 'none', flex: 1, overflow: 'hidden' }}>
             <QueryPage lang={lang} show={selectedShow} queryMode={tweaks.queryMode}
               user={user} onUserChange={refreshUser}
-              onBack={() => setPage('select')}
+              initialQuery={landingQuery}
+              onBack={() => { setLandingQuery(''); setPage('select'); }}
               onOpenEpisode={(ep, ht) => { setSelectedEpisode(ep); setInitSearch(''); setHighlightTime(typeof ht === 'number' ? ht : null); setPage('transcript'); }} />
           </div>
         )}

@@ -74,50 +74,50 @@
 
 ## 12. Frontend：LandingPage 元件（對應 landing-page 全部需求 + frontend-responsive-layout「Landing Page is responsive」需求）
 
-- [ ] 12.1 新增 `src/LandingPage.jsx`：root container + 三段：Hero、Collected Shows、Paywall band；最上面 TopNav（重用 Shared.jsx `<TopNav>`）+ 右上角 `<Btn variant='ghost' size='sm'>登入</Btn>`
-- [ ] 12.2 Hero 區：H1 + H2（用 lang 切換）、`<Input>` 搜尋框（placeholder per spec）、CTA `<Btn variant='primary'>找回靈光一閃</Btn>`；desktop 同列 + mobile 換行（用 useViewport hook）
-- [ ] 12.3 Hero 搜尋邏輯：onSubmit 直接 `setPage('select')` 並把 query 寫入既有的 query state 或 URL param；空字串就只 navigate（不報錯）
-- [ ] 12.4 Collected Shows 區：`useEffect` GET `/shows`，render 卡片 grid（desktop 3-col、mobile 1-col；用 inline style + useViewport）；卡片內容：title、description（zh 截 60 / en 截 100 + `…`）、總集數、轉錄完成度（從 episodes API 推算或新增 public stats endpoint；先簡單用 `/shows` 回傳的 episode_count）、`[瀏覽集數 →] <Btn>`；點擊把 `selectedShow` 設好並切到 query 頁
-- [ ] 12.5 Paywall band：`💎` 圖示 + 標題（per spec 文案）+ 兩行 body + `<Btn variant='primary'>以 Google 登入 →</Btn>` 觸發既有 `<LoginModal>`；視覺上水平 max-width 720px、置中
-- [ ] 12.6 在 `src/App.jsx` 路由分支：未登入 + `page === 'select'`（root 路由）→ render LandingPage 而非 PodcastSelect；登入後則維持 PodcastSelect；refresh-while-logged-in 不能 flash LandingPage（用「等 /me resolved 再決定 render 哪個」+ 中間 loading state）
-- [ ] 12.7 在 `index.html` 引入 `src/LandingPage.jsx`
+- [x] 12.1 新增 `src/LandingPage.jsx`：root container + 三段：Hero、Collected Shows、Paywall band；最上面 TopNav（重用 Shared.jsx `<TopNav>`）+ 右上角 `<Btn variant='ghost' size='sm'>登入</Btn>`
+- [x] 12.2 Hero 區：H1 + H2（用 lang 切換）、`<Input>` 搜尋框（placeholder per spec）、CTA `<Btn variant='primary'>找回靈光一閃</Btn>`；desktop 同列 + mobile 換行（用 useViewport hook）
+- [x] 12.3 Hero 搜尋邏輯：onSubmit 直接 `setPage('select')` 並把 query 寫入既有的 query state 或 URL param；空字串就只 navigate（不報錯）
+- [x] 12.4 Collected Shows 區：`useEffect` GET `/shows`，render 卡片 grid（desktop 3-col、mobile 1-col；用 inline style + useViewport）；卡片內容：title、description（zh 截 60 / en 截 100 + `…`）、總集數、轉錄完成度（從 episodes API 推算或新增 public stats endpoint；先簡單用 `/shows` 回傳的 episode_count）、`[瀏覽集數 →] <Btn>`；點擊把 `selectedShow` 設好並切到 query 頁
+- [x] 12.5 Paywall band：`💎` 圖示 + 標題（per spec 文案）+ 兩行 body + `<Btn variant='primary'>以 Google 登入 →</Btn>` 觸發既有 `<LoginModal>`；視覺上水平 max-width 720px、置中
+- [x] 12.6 在 `src/App.jsx` 路由分支：未登入 + `page === 'select'`（root 路由）→ render LandingPage 而非 PodcastSelect；登入後則維持 PodcastSelect；refresh-while-logged-in 不能 flash LandingPage（用「等 /me resolved 再決定 render 哪個」+ 中間 loading state）
+- [x] 12.7 在 `index.html` 引入 `src/LandingPage.jsx`
 - [ ] 12.8 用 chrome-devtools-mcp 在本機 dev 開 / desktop（1280×800）+ mobile（375×667）兩個視窗，hard refresh 不會 flash、登入後不再 render Landing、所有文案中英切換正確
 
 ## 13. Frontend：QueryPage 雙層體驗（對應「QueryPage shows quota meter and unlock card states」需求）
 
-- [ ] 13.1 在 `src/QueryPage.jsx` 上方狀態列：認證使用者 render `<QuotaMeter quota_remaining={u.quota_remaining} quota_initial={u.quota_initial} onApply={openModal} />`，匿名使用者 render null
-- [ ] 13.2 拆既有 query call：原 `POST /shows/{id}/query` `mode=search` → 改成新 `POST /shows/{id}/search`（不需 csrf 因為非 state-changing? 確認後端是否要 CSRF；既有 csrf middleware 對 GET 不檢查、POST 才檢查；search 是 POST → 仍需 CSRF；匿名使用者**沒 csrf cookie**怎辦？方案：search endpoint 從 csrf middleware exempt list 加進去，或改為 GET）；做出最終決定並實作
-- [ ] 13.3 確認後端 `csrf.py` middleware 對 `/shows/.+/search` 跳過 CSRF（IP rate limit + 不改 state、純讀取，安全 OK）；補測試 `backend/tests/test_public_search.py` case：匿名無 csrf cookie 仍能成功
-- [ ] 13.4 LLM 答案區：認證 → 既有行為（call `/query` chat endpoint）；匿名 → 不 call `/query`，直接 render `<LockedAnswerCard>` 元件（內嵌在 QueryPage 內定義）
-- [ ] 13.5 `<LockedAnswerCard>`：高度上限 200px、圖示 🔒、文案 per spec、`<Btn variant='primary'>以 Google 登入解鎖</Btn>` + 下方 secondary text `30 次免費`；按鈕觸發既有 LoginModal
-- [ ] 13.6 LoginModal 成功 callback 後 re-resolve auth state（既有 useAuth hook 應已處理）+ Locked card 自動消失 + 自動觸發既有 LLM 答案 call
+- [x] 13.1 在 `src/QueryPage.jsx` 上方狀態列：認證使用者 render `<QuotaMeter quota_remaining={u.quota_remaining} quota_initial={u.quota_initial} onApply={openModal} />`，匿名使用者 render null
+- [x] 13.2 拆既有 query call：原 `POST /shows/{id}/query` `mode=search` → 改成新 `POST /shows/{id}/search`（不需 csrf 因為非 state-changing? 確認後端是否要 CSRF；既有 csrf middleware 對 GET 不檢查、POST 才檢查；search 是 POST → 仍需 CSRF；匿名使用者**沒 csrf cookie**怎辦？方案：search endpoint 從 csrf middleware exempt list 加進去，或改為 GET）；做出最終決定並實作
+- [x] 13.3 確認後端 `csrf.py` middleware 對 `/shows/.+/search` 跳過 CSRF（IP rate limit + 不改 state、純讀取，安全 OK）；補測試 `backend/tests/test_public_search.py` case：匿名無 csrf cookie 仍能成功
+- [x] 13.4 LLM 答案區：認證 → 既有行為（call `/query` chat endpoint）；匿名 → 不 call `/query`，直接 render `<LockedAnswerCard>` 元件（內嵌在 QueryPage 內定義）
+- [x] 13.5 `<LockedAnswerCard>`：高度上限 200px、圖示 🔒、文案 per spec、`<Btn variant='primary'>以 Google 登入解鎖</Btn>` + 下方 secondary text `30 次免費`；按鈕觸發既有 LoginModal
+- [x] 13.6 LoginModal 成功 callback 後 re-resolve auth state（既有 useAuth hook 應已處理）+ Locked card 自動消失 + 自動觸發既有 LLM 答案 call
 
 ## 14. Frontend：QuotaMeter + QuotaApplyModal（對應「QuotaApplyModal collects and submits quota request」需求 + frontend QueryPage quota meter 部分）
 
-- [ ] 14.1 新增 `src/QuotaMeter.jsx`：水平進度條（`background-color` 漸層或 `<progress>` 標準元素）顯示 `已用 X / 共 Y`、進度比例 `(initial - remaining) / initial`、右側 `<Btn size='sm' variant='ghost'>申請更多額度 →</Btn>`；無條件顯示按鈕（不擋門檻）
-- [ ] 14.2 新增 `src/QuotaApplyModal.jsx`：`<Modal>` 內含 heading + textarea (`minLength=10 maxLength=1000`) + submit / cancel buttons；open 時先 `GET /quota-requests/me?status=pending`；若有 pending → 替換成 blocked state（顯示送出於 X、僅 close 按鈕）；submit 時 POST `/quota-requests` body `{reason}`、201 → 顯示成功訊息 ~2 秒後 `onClose()`、409 → 切到 blocked state、422 → 顯示 inline error
-- [ ] 14.3 在 `index.html` 引入兩個新檔
+- [x] 14.1 新增 `src/QuotaMeter.jsx`：水平進度條（`background-color` 漸層或 `<progress>` 標準元素）顯示 `已用 X / 共 Y`、進度比例 `(initial - remaining) / initial`、右側 `<Btn size='sm' variant='ghost'>申請更多額度 →</Btn>`；無條件顯示按鈕（不擋門檻）
+- [x] 14.2 新增 `src/QuotaApplyModal.jsx`：`<Modal>` 內含 heading + textarea (`minLength=10 maxLength=1000`) + submit / cancel buttons；open 時先 `GET /quota-requests/me?status=pending`；若有 pending → 替換成 blocked state（顯示送出於 X、僅 close 按鈕）；submit 時 POST `/quota-requests` body `{reason}`、201 → 顯示成功訊息 ~2 秒後 `onClose()`、409 → 切到 blocked state、422 → 顯示 inline error
+- [x] 14.3 在 `index.html` 引入兩個新檔
 - [ ] 14.4 chrome-devtools-mcp 驗證：(a) modal 開啟 → 預設空 textarea；(b) 已有 pending 時不顯示 textarea；(c) 送出成功訊息出現後關閉；(d) 短於 10 字 inline 錯誤
 
 ## 15. Frontend：AdminPage Quota 申請 sub-tab（對應「Admin Quota Requests sub-tab」+「Admin can approve」+「Admin can reject」需求）
 
-- [ ] 15.1 在 `src/AdminPage.jsx` 既有 Users tab 結構下，加新子 tab `Quota 申請`；對應 `page === 'admin-quota-requests'` 路由值
-- [ ] 15.2 子元件 `<QuotaRequestsTab>`：fetch `GET /admin/quota-requests?status=<filter>`；status filter chip（pending / approved / rejected）；table 欄位：requester email、reason（截斷+hover tooltip）、requested_at（相對時間 like `3 小時前`）、目前 quota_remaining、action area
-- [ ] 15.3 Action area for pending rows：inline `<input type='number' min=1 max=1000 default=30>` + `<Btn>核准 +N</Btn>`（label 隨 input 變動）+ secondary `<Btn>拒絕</Btn>`
-- [ ] 15.4 核准 click → POST `/admin/quota-requests/{id}/approve` `{amount}`；200 → 從 listing 移除 row + toast「已核准」；409 → toast 「此申請已被處理」+ refetch
-- [ ] 15.5 拒絕 click → 開小 confirmation `<Modal>` 含 textarea (minLength=1) + confirm；confirm → POST `/admin/quota-requests/{id}/reject` `{note}`；200 → 從 listing 移除
-- [ ] 15.6 Tab label 旁邊紅色 badge：fetch pending count（可獨立 polling 或 reuse listing 結果）；> 0 才顯示
-- [ ] 15.7 Admin 路由註冊：`'admin-quota-requests'` 加進 App.jsx 的 admin pages 清單；左側 nav 加項目（重用既有 admin nav 結構）
+- [x] 15.1 在 `src/AdminPage.jsx` 既有 Users tab 結構下，加新子 tab `Quota 申請`；對應 `page === 'admin-quota-requests'` 路由值
+- [x] 15.2 子元件 `<QuotaRequestsTab>`：fetch `GET /admin/quota-requests?status=<filter>`；status filter chip（pending / approved / rejected）；table 欄位：requester email、reason（截斷+hover tooltip）、requested_at（相對時間 like `3 小時前`）、目前 quota_remaining、action area
+- [x] 15.3 Action area for pending rows：inline `<input type='number' min=1 max=1000 default=30>` + `<Btn>核准 +N</Btn>`（label 隨 input 變動）+ secondary `<Btn>拒絕</Btn>`
+- [x] 15.4 核准 click → POST `/admin/quota-requests/{id}/approve` `{amount}`；200 → 從 listing 移除 row + toast「已核准」；409 → toast 「此申請已被處理」+ refetch
+- [x] 15.5 拒絕 click → 開小 confirmation `<Modal>` 含 textarea (minLength=1) + confirm；confirm → POST `/admin/quota-requests/{id}/reject` `{note}`；200 → 從 listing 移除
+- [x] 15.6 Tab label 旁邊紅色 badge：fetch pending count（可獨立 polling 或 reuse listing 結果）；> 0 才顯示
+- [x] 15.7 Admin 路由註冊：`'admin-quota-requests'` 加進 App.jsx 的 admin pages 清單；左側 nav 加項目（重用既有 admin nav 結構）
 - [ ] 15.8 chrome-devtools-mcp prod 驗證：點 Quota 申請 tab、看到 pending list、approve 一筆 → 對應 user quota 增加；reject 一筆 → quota 不動、row 消失
 
 ## 16. 部署：階段 A 後端基建 commit + push
 
-- [ ] 16.1 階段 A 包含 tasks 1-11（後端全部 + auth callback 改動），不含 frontend；本機跑 `pytest backend/tests/` 全綠
-- [ ] 16.2 commit + push；4 個 service redeploy；entrypoint 自動 alembic upgrade head
-- [ ] 16.3 prod 驗 1（curl + e2e-login）：新 endpoint `/shows/{show_id}/search` 已存在；匿名打 `POST /shows/{id}/search?question=test` 不被 401（IP limit 內 200 + 段落）
-- [ ] 16.4 prod 驗 2：`POST /quota-requests` 帶 session 能成功送出 pending；admin GET `/admin/quota-requests` 看得到
-- [ ] 16.5 prod 驗 3：在 Zeabur 4 service 設好 5 個新 env（DEFAULT_USER_QUOTA、IP_SEARCH_RATE_LIMIT_PER_DAY、ZSEND_API_KEY、ZSEND_FROM_EMAIL、ZSEND_ADMIN_TO_EMAIL）；觀察 startup log 沒有 missing env warning
-- [ ] 16.6 確認舊 frontend（v0.9）仍可正常運作（既有 query 仍登入後可用）
+- [x] 16.1 階段 A 包含 tasks 1-11（後端全部 + auth callback 改動），不含 frontend；本機跑 `pytest backend/tests/` 全綠
+- [x] 16.2 commit + push；4 個 service redeploy；entrypoint 自動 alembic upgrade head
+- [x] 16.3 prod 驗 1（curl + e2e-login）：新 endpoint `/shows/{show_id}/search` 已存在；匿名打 `POST /shows/{id}/search?question=test` 不被 401（IP limit 內 200 + 段落）
+- [x] 16.4 prod 驗 2：`POST /quota-requests` 帶 session 能成功送出 pending；admin GET `/admin/quota-requests` 看得到
+- [x] 16.5 prod 驗 3：在 Zeabur 4 service 設好 5 個新 env（DEFAULT_USER_QUOTA、IP_SEARCH_RATE_LIMIT_PER_DAY、ZSEND_API_KEY、ZSEND_FROM_EMAIL、ZSEND_ADMIN_TO_EMAIL）；觀察 startup log 沒有 missing env warning
+- [x] 16.6 確認舊 frontend（v0.9）仍可正常運作（既有 query 仍登入後可用）
 
 ## 17. 部署：階段 B 前端 freemium UI commit + push
 

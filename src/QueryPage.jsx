@@ -146,22 +146,84 @@ const ResizableLayout = ({ lang, leftContent, rightContent, epCount, epTotal, dr
 };
 
 // ── Main QueryPage ──
-const QueryPage = ({ lang, show, onBack, onOpenEpisode, queryMode, user, onUserChange }) => {
+// Locked card replacing the chat answer area for unauthenticated visitors.
+// Height-capped so segment results below stay visible without forced scrolling.
+const LockedAnswerCard = ({ lang }) => {
+  const t = lang === 'zh';
+  return (
+    <div style={{
+      flex: 1,
+      display: 'flex',
+      alignItems: 'flex-start',
+      justifyContent: 'center',
+      padding: '24px 24px 40px',
+      overflow: 'hidden',
+    }}>
+      <div style={{
+        maxWidth: 480,
+        width: '100%',
+        maxHeight: 200,
+        background: TOKEN.surface,
+        border: `1px solid ${TOKEN.surfaceBorder}`,
+        borderRadius: 12,
+        padding: '20px 24px',
+        textAlign: 'center',
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'center',
+        gap: 8,
+      }}>
+        <div style={{ fontSize: 24 }}>🔒</div>
+        <h3 style={{ margin: 0, color: TOKEN.text, fontSize: 16, fontWeight: 700 }}>
+          {t ? '想看 AI 整段統整？' : 'Want the AI summary?'}
+        </h3>
+        <p style={{ margin: 0, color: TOKEN.textSecondary, fontSize: 13 }}>
+          {t ? '不用一段段拼湊。' : 'Skip stitching segments together.'}
+        </p>
+        <div style={{ marginTop: 6 }}>
+          <Btn variant="primary" size="sm" onClick={() => { window.location.href = googleLoginUrl(); }}>
+            {t ? '以 Google 登入解鎖' : 'Sign in with Google to unlock'}
+          </Btn>
+        </div>
+        <div style={{ fontSize: 11, color: TOKEN.textMuted }}>
+          {t ? '30 次免費' : '30 free uses'}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const QueryPage = ({ lang, show, onBack, onOpenEpisode, queryMode, user, onUserChange, initialQuery }) => {
   const t = lang === 'zh';
   const quotaExhausted = user && user.quota_remaining === 0;
   const { isMobile } = useViewport();
   const [drawerOpen, setDrawerOpen] = React.useState(false);
-  const [activeTab, setActiveTab] = React.useState('chat');
+  // Anonymous visitors land on the search tab so they can use the free
+  // segment search; chat tab shows a locked card for them.
+  const [activeTab, setActiveTab] = React.useState(user ? 'chat' : 'search');
   const [chatInput, setChatInput] = React.useState('');
   const [messages, setMessages] = React.useState(MOCK_CHAT);
-  const [searchQ, setSearchQ] = React.useState('');
+  const [searchQ, setSearchQ] = React.useState(initialQuery || '');
   const [searching, setSearching] = React.useState(false);
   const [searchResults, setSearchResults] = React.useState(null);
   const [selectedEp, setSelectedEp] = React.useState(null);
   const [sending, setSending] = React.useState(false);
   const [episodes, setEpisodes] = React.useState(null);
   const [epError, setEpError] = React.useState(null);
+  const [quotaModalOpen, setQuotaModalOpen] = React.useState(false);
   const chatEndRef = React.useRef(null);
+
+  // If we arrived from LandingPage with a query, fire the search once on mount
+  const didAutoSearchRef = React.useRef(false);
+  React.useEffect(() => {
+    if (didAutoSearchRef.current) return;
+    if (initialQuery && initialQuery.trim()) {
+      didAutoSearchRef.current = true;
+      // Defer one tick so handleSearch sees the populated state
+      setTimeout(() => handleSearch(initialQuery.trim()), 0);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialQuery]);
 
   React.useEffect(() => {
     if (chatEndRef.current) chatEndRef.current.scrollTop = chatEndRef.current.scrollHeight;
@@ -220,18 +282,21 @@ const QueryPage = ({ lang, show, onBack, onOpenEpisode, queryMode, user, onUserC
     }
   };
 
-  const handleSearch = async () => {
-    const question = searchQ.trim();
+  const handleSearch = async (overrideQuestion) => {
+    const question = (overrideQuestion ?? searchQ).trim();
     if (!question || searching) return;
     setSearching(true);
     setSearchResults(null);
     try {
       let res;
       try {
-        res = await apiFetch(`/shows/${show.id}/query`, {
+        // New public-search endpoint: works for anonymous (IP rate-limited)
+        // and authenticated users (no quota decrement). Keeps the chat
+        // endpoint as the only LLM-cost path.
+        res = await apiFetch(`/shows/${show.id}/search`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ mode: 'search', question }),
+          body: JSON.stringify({ question }),
         });
       } catch (netErr) {
         throw new Error(networkErrorMessage(lang));
@@ -249,7 +314,6 @@ const QueryPage = ({ lang, show, onBack, onOpenEpisode, queryMode, user, onUserC
         text: r.text,
       }));
       setSearchResults(mapped);
-      if (typeof data.quota_remaining === 'number' && onUserChange) onUserChange();
     } catch (err) {
       setSearchResults({ error: err.message });
     } finally {
@@ -274,6 +338,10 @@ const QueryPage = ({ lang, show, onBack, onOpenEpisode, queryMode, user, onUserC
 
   const leftContent = (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      {/* Quota meter — authenticated only. Anon visitors see no meter (no
+          quota concept until they sign in). */}
+      {user && <QuotaMeter user={user} lang={lang} onApply={() => setQuotaModalOpen(true)} />}
+
       {/* Tab bar */}
       {effectiveTabs.length > 1 && (
         <div style={{ display: 'flex', gap: 0, borderBottom: `1px solid ${TOKEN.surfaceBorder}`, background: TOKEN.surface, flexShrink: 0 }}>
@@ -289,25 +357,29 @@ const QueryPage = ({ lang, show, onBack, onOpenEpisode, queryMode, user, onUserC
       {/* Chat */}
       {curTab === 'chat' && (
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-          <div ref={chatEndRef} style={{ flex: 1, overflowY: 'auto', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
-            {messages.map((msg, i) => <ChatBubble key={i} msg={msg} lang={lang} onCitationClick={onCitationClick} />)}
-            {sending && <TypingIndicator />}
-          </div>
-          <div style={{ padding: '14px 24px', borderTop: `1px solid ${TOKEN.surfaceBorder}`, background: TOKEN.surface, flexShrink: 0 }}>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <Input value={chatInput} onChange={e => setChatInput(e.target.value)}
-                placeholder={!user ? (t ? '請先登入再提問...' : 'Sign in to ask...') : (quotaExhausted ? (t ? '查詢額度已用完' : 'Quota exhausted') : (t ? '針對此節目內容提問...' : 'Ask anything about this show...'))}
-                onKeyDown={e => e.key === 'Enter' && handleSend()} />
-              <Btn onClick={handleSend} disabled={sending || !chatInput.trim() || !user || quotaExhausted} icon="send">{t ? '送出' : 'Send'}</Btn>
-            </div>
-            <p style={{ margin: '7px 0 0', fontSize: 12, color: quotaExhausted ? TOKEN.danger : TOKEN.textMuted }}>
-              {!user
-                ? (t ? '需登入才能查詢' : 'Sign in required')
-                : quotaExhausted
-                  ? (t ? '查詢額度已用完，請聯絡管理員加值' : 'Quota exhausted — contact admin to top up')
-                  : (t ? `RAG 範圍：${transcribedCount} 集逐字稿 · 剩餘 ${user.quota_remaining} 次` : `RAG scope: ${transcribedCount} transcripts · ${user.quota_remaining} queries left`)}
-            </p>
-          </div>
+          {!user ? (
+            <LockedAnswerCard lang={lang} />
+          ) : (
+            <>
+              <div ref={chatEndRef} style={{ flex: 1, overflowY: 'auto', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+                {messages.map((msg, i) => <ChatBubble key={i} msg={msg} lang={lang} onCitationClick={onCitationClick} />)}
+                {sending && <TypingIndicator />}
+              </div>
+              <div style={{ padding: '14px 24px', borderTop: `1px solid ${TOKEN.surfaceBorder}`, background: TOKEN.surface, flexShrink: 0 }}>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <Input value={chatInput} onChange={e => setChatInput(e.target.value)}
+                    placeholder={quotaExhausted ? (t ? '查詢額度已用完' : 'Quota exhausted') : (t ? '針對此節目內容提問...' : 'Ask anything about this show...')}
+                    onKeyDown={e => e.key === 'Enter' && handleSend()} />
+                  <Btn onClick={handleSend} disabled={sending || !chatInput.trim() || quotaExhausted} icon="send">{t ? '送出' : 'Send'}</Btn>
+                </div>
+                <p style={{ margin: '7px 0 0', fontSize: 12, color: quotaExhausted ? TOKEN.danger : TOKEN.textMuted }}>
+                  {quotaExhausted
+                    ? (t ? '查詢額度已用完，可從上方申請更多' : 'Quota exhausted — request more above')
+                    : (t ? `RAG 範圍：${transcribedCount} 集逐字稿 · 剩餘 ${user.quota_remaining} 次` : `RAG scope: ${transcribedCount} transcripts · ${user.quota_remaining} queries left`)}
+                </p>
+              </div>
+            </>
+          )}
         </div>
       )}
 
@@ -317,13 +389,15 @@ const QueryPage = ({ lang, show, onBack, onOpenEpisode, queryMode, user, onUserC
           <div style={{ padding: '16px 24px', borderBottom: `1px solid ${TOKEN.surfaceBorder}`, background: TOKEN.surface, flexShrink: 0 }}>
             <div style={{ display: 'flex', gap: 8 }}>
               <Input value={searchQ} onChange={e => setSearchQ(e.target.value)}
-                placeholder={!user ? (t ? '請先登入再搜尋...' : 'Sign in to search...') : (quotaExhausted ? (t ? '查詢額度已用完' : 'Quota exhausted') : (t ? '輸入關鍵字或語意搜尋...' : 'Keyword or semantic search...'))}
+                placeholder={t ? '輸入關鍵字或語意搜尋...' : 'Keyword or semantic search...'}
                 icon="search" onKeyDown={e => e.key === 'Enter' && handleSearch()} />
-              <Btn onClick={handleSearch} disabled={searching || !searchQ.trim() || !user || quotaExhausted}>{t ? '搜尋' : 'Search'}</Btn>
+              <Btn onClick={() => handleSearch()} disabled={searching || !searchQ.trim()}>{t ? '搜尋' : 'Search'}</Btn>
             </div>
-            {(quotaExhausted || !user) && (
-              <p style={{ margin: '7px 0 0', fontSize: 12, color: quotaExhausted ? TOKEN.danger : TOKEN.textMuted }}>
-                {!user ? (t ? '需登入才能查詢' : 'Sign in required') : (t ? '查詢額度已用完，請聯絡管理員加值' : 'Quota exhausted — contact admin to top up')}
+            {!user && (
+              <p style={{ margin: '7px 0 0', fontSize: 12, color: TOKEN.textMuted }}>
+                {t
+                  ? '段落搜尋免登入。想看 AI 整段統整？登入解鎖（30 次免費）'
+                  : 'Segment search is free. Want AI-summarized answers? Log in to unlock (30 free).'}
               </p>
             )}
           </div>
@@ -391,6 +465,8 @@ const QueryPage = ({ lang, show, onBack, onOpenEpisode, queryMode, user, onUserC
       </div>
 
       <ResizableLayout lang={lang} leftContent={leftContent} rightContent={rightContent} epCount={epCount} epTotal={show.episode_count || 0} drawerOpen={drawerOpen} setDrawerOpen={setDrawerOpen} />
+
+      <QuotaApplyModal open={quotaModalOpen} lang={lang} onClose={() => setQuotaModalOpen(false)} />
     </div>
   );
 };
