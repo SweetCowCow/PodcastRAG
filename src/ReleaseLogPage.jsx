@@ -16,7 +16,7 @@ const ReleaseLogPage = ({ lang }) => {
   const [stats, setStats] = React.useState(null);
   React.useEffect(() => {
     let cancelled = false;
-    apiFetch('/admin/stats').then(res => {
+    apiFetch('/stats').then(res => {
       if (cancelled || !res.ok) return;
       return res.json();
     }).then(body => {

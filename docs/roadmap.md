@@ -97,10 +97,11 @@
 
 ## 小修補（不開 Spectra change，下次順手做）
 
-1. Empty-state 的 `POST /shows` 提示改導向後台
-2. AdminPage ApiKeysTab 接後端（仍是 mock，可能要拉成獨立小 change）
-3. STATS_VECTORS_COUNT 估算值 → 加 `GET /admin/stats` endpoint 改 live fetch
-4. 既有 23 個 admin pytest 沒帶 auth fixture（authentication-system change 留下，calling /admin/* 都會 401）
+（2026-05-04 全部清完）
+- ~~Empty-state 的 `POST /shows` 提示改導向後台~~ ✅ 已做（PodcastSelect 已 routing 到 admin-rag）
+- ~~AdminPage ApiKeysTab 接後端~~ ✅ admin-llm-step-config 時已接好
+- ~~STATS_VECTORS_COUNT 估算值改 live fetch~~ ✅ 加公開 `GET /stats` endpoint，ReleaseLogPage + PresentationPage 都改 live-fetch
+- ~~既有 admin pytest 沒帶 auth fixture~~ ✅ 已隨 authentication-system 補齊（剩下 `test_admin_llm_step_migration.py` 不需要 — 它測 migration，不打 API）
 
 ---
 

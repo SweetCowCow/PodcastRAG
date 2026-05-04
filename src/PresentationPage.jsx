@@ -212,10 +212,25 @@ const SlideMilestone = ({ milestone }) => {
 
 // ── Slide 7: Stats ──
 const SlideStats = () => {
+  const [stats, setStats] = React.useState(null);
+  React.useEffect(() => {
+    let cancelled = false;
+    apiFetch('/stats').then(res => {
+      if (cancelled || !res.ok) return;
+      return res.json();
+    }).then(body => {
+      if (cancelled || !body) return;
+      setStats(body);
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+
+  const epCount = stats ? stats.episodes_completed : STATS_EPISODES_COUNT;
+  const chunkCount = stats ? stats.transcript_chunks : STATS_VECTORS_COUNT;
   const cards = [
     { value: STATS_CHANGES_COUNT, label: 'Archived Changes', sub: '從 4/19 到 5/01' },
-    { value: STATS_EPISODES_COUNT.toLocaleString(), label: '已轉錄集數', sub: '使用 OpenAI Whisper' },
-    { value: STATS_VECTORS_COUNT.toLocaleString(), label: '向量索引筆數', sub: 'pgvector 1536-dim' },
+    { value: epCount.toLocaleString(), label: '已轉錄集數', sub: '使用 OpenAI Whisper' },
+    { value: chunkCount.toLocaleString(), label: '向量索引筆數', sub: 'pgvector 1536-dim' },
   ];
   return (
     <div>

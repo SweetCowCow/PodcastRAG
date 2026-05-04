@@ -6,10 +6,13 @@
 // Numbers from prod backend GET /shows on 2026-05-01.
 // transcript_chunks count is estimated (~50 chunks/episode); zeabur-service-exec
 // hits Cloudflare 524 timeout so direct DB query was unreliable.
-const STATS_AS_OF = '2026-05-03';
-const STATS_CHANGES_COUNT = 31;
-const STATS_EPISODES_COUNT = 137;        // transcripts.status = 'completed'
-const STATS_VECTORS_COUNT = 6850;        // ~estimate: 137 × ~50 chunks/ep
+// These are fallbacks only — pages now live-fetch from GET /stats (public).
+// Numbers updated 2026-05-04 to current rough magnitude so the fallback isn't
+// dramatically off when the API call fails.
+const STATS_AS_OF = '2026-05-04';
+const STATS_CHANGES_COUNT = 35;
+const STATS_EPISODES_COUNT = 247;        // transcripts.status = 'completed'
+const STATS_VECTORS_COUNT = 113000;      // transcript_chunks rows
 
 // Tag labels (used by both pages).
 const TAG_LABELS = {
