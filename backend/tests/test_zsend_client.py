@@ -35,7 +35,7 @@ async def test_send_email_success(monkeypatch):
 
     await zsend.send_email("admin@test.local", "S", "B")
 
-    assert captured["url"].endswith("/api/v1/send")
+    assert captured["url"].endswith("/api/v1/zsend/emails")
     assert "Bearer test-key" in captured["headers"].get("authorization", "")
     assert "noreply@test.local" in captured["json"]
     assert "admin@test.local" in captured["json"]

@@ -15,10 +15,9 @@ from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
-# Per ZSend docs the send endpoint lives at this path. If the spec changes
-# we update this constant; nothing else needs to know.
-ZSEND_BASE_URL = "https://zsend.zeabur.app"
-ZSEND_SEND_PATH = "/api/v1/send"
+# Per Zeabur Email (ZSend) docs the send endpoint lives at this URL.
+ZSEND_BASE_URL = "https://api.zeabur.com"
+ZSEND_SEND_PATH = "/api/v1/zsend/emails"
 
 DEFAULT_TIMEOUT_SECONDS = 30.0
 
@@ -49,7 +48,7 @@ async def send_email(to: str, subject: str, body_text: str) -> None:
 
     payload = {
         "from": settings.zsend_from_email,
-        "to": to,
+        "to": [to],  # ZSend expects an array of recipients
         "subject": subject,
         "text": body_text,
     }
