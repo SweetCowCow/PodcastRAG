@@ -7,5 +7,5 @@
   const isLocal = host === 'localhost' || host === '127.0.0.1' || host === '';
   window.__API_BASE__ = isLocal
     ? 'http://localhost:8000'
-    : 'https://podcastrag-api.zeabur.app';
+    : 'https://api.podcastrag.app';
 })();
