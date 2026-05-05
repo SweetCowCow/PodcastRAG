@@ -32,6 +32,15 @@ EXEMPT_PATHS = {
     "/auth/google/callback",
 }
 
+# Paths that still enforce the Origin allowlist (so cross-origin abuse stays
+# blocked) but skip the CSRF double-submit check. sendBeacon and other
+# fire-and-forget channels cannot set custom headers like X-CSRF-Token, so
+# these endpoints rely on Origin + per-IP rate limit + strict payload
+# validation as their protections.
+ORIGIN_ONLY_PATHS = {
+    "/events",
+}
+
 # Public endpoints that anonymous callers can hit. They have no session cookie
 # so no CSRF check is meaningful; the IP rate limit + Origin header are the
 # protections that remain.
@@ -83,6 +92,10 @@ class CsrfAndOriginMiddleware(BaseHTTPMiddleware):
                 ErrorCode.ORIGIN_FORBIDDEN,
                 f"Origin {origin} is not allowed",
             )
+
+        # Origin-only paths (e.g. /events fire-and-forget beacon) skip CSRF.
+        if request.url.path in ORIGIN_ONLY_PATHS:
+            return await call_next(request)
 
         # 2. CSRF synchronizer-token (HMAC of session_id with SESSION_SECRET).
         #    Frontend gets the token from /me response body and echoes it as

@@ -54,7 +54,7 @@ def _payload():
 @db_required
 async def test_anonymous_insert_returns_202_and_user_id_null():
     transport = ASGITransport(app=app, raise_app_exceptions=False)
-    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+    async with AsyncClient(transport=transport, base_url="http://test", headers={"origin": "http://localhost:8080"}) as ac:
         res = await ac.post("/events", json=_payload())
     assert res.status_code == 202
 
@@ -91,7 +91,7 @@ async def test_logged_in_event_tagged_with_user_id(auth_member):
 @db_required
 async def test_unknown_event_type_returns_422_no_row():
     transport = ASGITransport(app=app, raise_app_exceptions=False)
-    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+    async with AsyncClient(transport=transport, base_url="http://test", headers={"origin": "http://localhost:8080"}) as ac:
         res = await ac.post(
             "/events",
             json={"event_type": "scroll_depth", "payload": {}},
@@ -106,7 +106,7 @@ async def test_unknown_event_type_returns_422_no_row():
 @db_required
 async def test_payload_missing_chunk_id_returns_422():
     transport = ASGITransport(app=app, raise_app_exceptions=False)
-    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+    async with AsyncClient(transport=transport, base_url="http://test", headers={"origin": "http://localhost:8080"}) as ac:
         res = await ac.post(
             "/events",
             json={
@@ -121,7 +121,7 @@ async def test_payload_missing_chunk_id_returns_422():
 async def test_per_ip_rate_limit_returns_429_after_60(monkeypatch):
     transport = ASGITransport(app=app, raise_app_exceptions=False)
     # Use a unique forwarded IP so this test isn't polluted by neighbors.
-    headers = {"x-forwarded-for": "203.0.113.42"}
+    headers = {"x-forwarded-for": "203.0.113.42", "origin": "http://localhost:8080"}
     async with AsyncClient(
         transport=transport, base_url="http://test", headers=headers
     ) as ac:
