@@ -33,10 +33,24 @@ const MILESTONE_LABELS = {
   'v0.8': { zh: 'v0.8 — 自動化驗證後門',           en: 'v0.8 — Automated Verification Backdoor' },
   'v0.9': { zh: 'v0.9 — 每集 AI 摘要',             en: 'v0.9 — Per-Episode AI Summary' },
   'v1.0': { zh: 'v1.0 — 公開上線：freemium 模式',   en: 'v1.0 — Public Launch: Freemium Mode' },
+  'v1.1': { zh: 'v1.1 — 收集回答品質回饋',         en: 'v1.1 — Collecting Answer Quality Feedback' },
 };
 
 // Entries — newest milestone first; within each milestone newest date first.
 const RELEASE_LOG = [
+  // ─── v1.1 — Collecting Answer Quality Feedback (5/05) ───
+  {
+    date: '2026-05-05', slug: 'r1-ui-feedback-infra', milestone: 'v1.1', tag: 'feature',
+    title: {
+      zh: '對 AI 回答給回饋',
+      en: 'Give Feedback on AI Answers',
+    },
+    summary: {
+      zh: '每則 AI 統整回答下方多了 👍 / 👎 兩個按鈕。覺得答對了給讚，覺得不準時點倒讚並留下你想說的話（可空白）。點開回答中引用的逐字稿片段時，系統也會偷偷記下來——這些訊號會用來幫我們找出 AI 容易答錯的問題類型，下一階段拿去做答題品質的回歸測試。順手調整：首頁節目卡片回到完整版本（封面、語言、進度條、RSS 連結都齊全），登入頁的文案也修得更直白——「瀏覽逐字稿、看相關段落都不用登入。只有請 AI 統整回答需要登入使用額度。」',
+      en: 'Each AI summary answer now has 👍 / 👎 buttons below it. Tap thumbs-up if it nailed the question; tap thumbs-down to optionally leave a note about what was wrong. The system also quietly records when you click into a citation transcript — these signals help us spot which kinds of questions the AI tends to fumble, so the next step (an automated answer-quality regression suite) has real cases to learn from. Bundled tweaks: the landing page show cards return to the full layout (cover art, language, progress bar, RSS link), and the login prompt copy is now plainer: "Browsing transcripts and matched segments needs no login. Only \'Ask AI to summarize\' requires login and uses your quota."',
+    },
+  },
+
   // ─── v1.0 — Public Launch: Freemium Mode (5/04) — infra ───
   {
     date: '2026-05-04', slug: 'custom-domain-and-zsend', milestone: 'v1.0', tag: 'enhancement',

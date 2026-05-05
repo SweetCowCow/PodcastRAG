@@ -655,3 +655,54 @@ tests:
   - backend/tests/conftest.py
   - backend/tests/test_error_responses.py
 -->
+
+---
+### Requirement: RAG query response includes stable query_id
+
+The `POST /query` endpoint SHALL include a `query_id` field (opaque string, max 64 chars, unique per response) in its JSON response. The frontend SHALL use this `query_id` when posting to `/qa-feedback` and `/events` so server-side rows can be correlated with the originating answer. The `query_id` SHALL be generated server-side (not by the client) and SHALL be present on all successful query responses regardless of whether RAG returned answers.
+
+#### Scenario: Successful query response includes query_id
+
+- **WHEN** a logged-in user calls `POST /query` with a valid question
+- **THEN** the JSON response SHALL contain a non-empty `query_id` string
+
+#### Scenario: query_id values are unique across responses
+
+- **GIVEN** the same user issues two consecutive `POST /query` requests with the same body
+- **THEN** the two responses SHALL contain different `query_id` values
+
+<!-- @trace
+source: r1-ui-feedback-infra
+updated: 2026-05-05
+code:
+  - src/LandingPage.jsx
+  - backend/alembic/versions/q5f6a7b8c9d0_add_qa_feedback_and_events.py
+  - src/QueryPage.jsx
+  - docs/case-studies/dual-write-migration-defeated-by-entrypoint.md
+  - docs/case-studies/zeabur-platform-case-study.md
+  - docs/research/competitive-analysis.md
+  - docs/case-studies/transcription-queue-discussion.md
+  - aisteps-tab.png
+  - backend/app/schemas/event.py
+  - docs/case-studies/local-vs-prod-verification-violation.md
+  - backend/app/api/events.py
+  - backend/app/api/qa_feedback.py
+  - backend/app/main.py
+  - backend/app/models/qa_feedback.py
+  - backend/app/core/csrf.py
+  - backend/app/schemas/query.py
+  - backend/app/schemas/qa_feedback.py
+  - docs/case-studies/build-zeabur-pptx.js
+  - backend/app/api/query.py
+  - src/PodcastSelect.jsx
+  - docs/research/competitive-feature-plan.md
+  - docs/research/r1-rag-eval-brief.md
+  - backend/app/models/event.py
+  - backend/app/core/rate_limit.py
+  - index.html
+  - backend/app/models/__init__.py
+tests:
+  - backend/tests/test_qa_feedback_api.py
+  - backend/tests/test_qa_feedback_stats.py
+  - backend/tests/test_events_api.py
+-->
