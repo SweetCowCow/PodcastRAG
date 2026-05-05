@@ -10,7 +10,9 @@ from app.api.auth import me_router as me_router
 from app.api.auth import router as auth_router
 from app.schemas.errors import ErrorCode, ErrorResponse
 from app.api.episodes import router as episodes_router
+from app.api.events import router as events_router
 from app.api.health import router as health_router
+from app.api.qa_feedback import router as qa_feedback_router
 from app.api.query import router as query_router
 from app.api.queue import router as queue_router
 from app.api.schedules import router as schedules_router
@@ -127,6 +129,8 @@ app.include_router(stats_router)
 app.include_router(public_stats_router)
 from app.api.quota_requests import router as quota_requests_router  # noqa: E402
 app.include_router(quota_requests_router)
+app.include_router(qa_feedback_router)
+app.include_router(events_router)
 
 if settings.e2e_login_token:
     from app.api.auth_e2e import router as auth_e2e_router

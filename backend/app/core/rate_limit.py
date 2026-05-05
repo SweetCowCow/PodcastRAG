@@ -66,6 +66,27 @@ def check_ip_search_limit(ip: str, limit: int | None = None) -> tuple[int, bool]
     return count, exceeded
 
 
+MINUTE_TTL_SECONDS = 60
+MINUTE_KEY_PREFIX = "rl:min:ip"
+
+
+def _minute_key(prefix: str, ip: str, now: datetime | None = None) -> str:
+    now = now or datetime.now(timezone.utc)
+    return f"{MINUTE_KEY_PREFIX}:{prefix}:{ip}:{now.strftime('%Y%m%d%H%M')}"
+
+
+def check_ip_minute_limit(
+    ip: str, *, prefix: str, limit: int
+) -> tuple[int, bool]:
+    """Per-minute INCR counter (60s TTL). Returns (count_after, exceeded)."""
+    r = _get_redis()
+    key = _minute_key(prefix, ip)
+    count = r.incr(key)
+    if count == 1:
+        r.expire(key, MINUTE_TTL_SECONDS)
+    return count, count > limit
+
+
 def rate_limit_error_payload(limit: int) -> dict:
     """Structured 429 body matching the ip-rate-limit spec."""
     return {

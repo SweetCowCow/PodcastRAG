@@ -283,6 +283,7 @@ async def query_show(
         cited_hits = hits
 
     return ChatResponse(
+        query_id=uuid.uuid4().hex[:32],
         answer=answer_text,
         citations=[_to_schema_hit(h) for h in cited_hits],
         quota_remaining=quota_remaining,

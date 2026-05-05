@@ -30,6 +30,7 @@ class SearchResponse(BaseModel):
 
 
 class ChatResponse(BaseModel):
+    query_id: str
     answer: str
     citations: list[ChunkHit]
     quota_remaining: int

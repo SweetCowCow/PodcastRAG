@@ -201,4 +201,4 @@ const ShowCard = ({ show, lang, hovered, onMouseEnter, onMouseLeave, onClick }) 
   );
 };
 
-Object.assign(window, { PodcastSelect, deriveColor });
+Object.assign(window, { PodcastSelect, ShowCard, deriveColor });

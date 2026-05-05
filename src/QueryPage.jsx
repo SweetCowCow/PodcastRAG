@@ -211,6 +211,12 @@ const QueryPage = ({ lang, show, onBack, onOpenEpisode, queryMode, user, onUserC
   const [episodes, setEpisodes] = React.useState(null);
   const [epError, setEpError] = React.useState(null);
   const [quotaModalOpen, setQuotaModalOpen] = React.useState(false);
+  // R1.1: thumbs vote state — keyed by query_id; value is 'up' | 'down'.
+  const [votes, setVotes] = React.useState({});
+  // R1.1: admin debug — 7-day rolling thumbs ratio. Fetched once per session
+  // when admin and at least one AI answer is present.
+  const [adminStats, setAdminStats] = React.useState(null);
+  const adminStatsFetchedRef = React.useRef(false);
   const chatEndRef = React.useRef(null);
 
   // If we arrived from LandingPage with a query, fire the search once on mount
@@ -273,7 +279,7 @@ const QueryPage = ({ lang, show, onBack, onOpenEpisode, queryMode, user, onUserC
         throw new Error(formatError(body, lang));
       }
       const data = await res.json();
-      setMessages(m => [...m, { role: 'assistant', text: data.answer, citations: data.citations || [] }]);
+      setMessages(m => [...m, { role: 'assistant', text: data.answer, citations: data.citations || [], query_id: data.query_id }]);
       if (typeof data.quota_remaining === 'number' && onUserChange) onUserChange();
     } catch (err) {
       setMessages(m => [...m, { role: 'assistant', text: err.message, citations: [] }]);
@@ -332,9 +338,71 @@ const QueryPage = ({ lang, show, onBack, onOpenEpisode, queryMode, user, onUserC
     ? episodes.filter(e => e.transcript_status === 'completed').length
     : transcribedCount;
 
-  const onCitationClick = (citation) => {
+  // R1.1: fire-and-forget citation_click event. sendBeacon if available,
+  // else fetch keepalive. Navigation always proceeds regardless.
+  const sendCitationBeacon = (query_id, chunk_id, position) => {
+    if (!query_id || !chunk_id) return;
+    const body = JSON.stringify({
+      event_type: 'citation_click',
+      payload: { query_id, chunk_id, position },
+    });
+    const url = `${API_BASE}/events`;
+    try {
+      if (navigator.sendBeacon) {
+        const blob = new Blob([body], { type: 'application/json' });
+        navigator.sendBeacon(url, blob);
+        return;
+      }
+    } catch (_) { /* fall through to fetch keepalive */ }
+    try {
+      fetch(url, {
+        method: 'POST',
+        keepalive: true,
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body,
+      }).catch(() => {});
+    } catch (_) { /* swallow — beacon is best-effort */ }
+  };
+
+  const onCitationClick = (citation, query_id, position) => {
+    const chunk_id = citation.episode_id != null && citation.start_time != null
+      ? `ep:${citation.episode_id}@${citation.start_time.toFixed(2)}`
+      : null;
+    sendCitationBeacon(query_id, chunk_id, position);
     onOpenEpisode({ id: citation.episode_id, title: citation.episode_title }, citation.start_time);
   };
+
+  // R1.1: thumbs vote handler. Fires POST /qa-feedback; on 201 updates local
+  // 'votes' state so the UI reflects the latest vote (re-vote allowed).
+  const submitVote = async (query_id, vote, comment) => {
+    if (!user || !query_id) return;
+    try {
+      const res = await apiFetch('/qa-feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query_id, vote, comment: comment || null }),
+      });
+      if (res.ok) {
+        setVotes(v => ({ ...v, [query_id]: vote }));
+      }
+    } catch (_) { /* network error: silently ignore; user can retry */ }
+  };
+
+  // R1.1: admin-only stats fetch — run once when an AI answer is present.
+  React.useEffect(() => {
+    if (adminStatsFetchedRef.current) return;
+    if (!user || user.role !== 'admin') return;
+    const hasAnswer = messages.some(m => m.role === 'assistant' && m.query_id);
+    if (!hasAnswer) return;
+    adminStatsFetchedRef.current = true;
+    (async () => {
+      try {
+        const res = await apiFetch('/qa-feedback/stats');
+        if (res.ok) setAdminStats(await res.json());
+      } catch (_) { /* ignore */ }
+    })();
+  }, [user, messages]);
 
   const leftContent = (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
@@ -362,7 +430,21 @@ const QueryPage = ({ lang, show, onBack, onOpenEpisode, queryMode, user, onUserC
           ) : (
             <>
               <div ref={chatEndRef} style={{ flex: 1, overflowY: 'auto', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
-                {messages.map((msg, i) => <ChatBubble key={i} msg={msg} lang={lang} onCitationClick={onCitationClick} />)}
+                {user && user.role === 'admin' && messages.some(m => m.role === 'assistant' && m.query_id) && (
+                  <div style={{ fontSize: 11, color: TOKEN.textMuted, fontFamily: 'monospace' }}>
+                    {adminStats == null
+                      ? '[admin] 7d thumbs: …'
+                      : adminStats.ratio == null
+                        ? '[admin] 7d thumbs: no data'
+                        : `[admin] 7d thumbs: ${adminStats.up_7d}↑ ${adminStats.down_7d}↓ (${Math.round(adminStats.ratio * 100)}%)`}
+                  </div>
+                )}
+                {messages.map((msg, i) => (
+                  <ChatBubble key={i} msg={msg} lang={lang} user={user}
+                    onCitationClick={onCitationClick}
+                    voted={msg.query_id ? votes[msg.query_id] : undefined}
+                    onVote={submitVote} />
+                ))}
                 {sending && <TypingIndicator />}
               </div>
               <div style={{ padding: '14px 24px', borderTop: `1px solid ${TOKEN.surfaceBorder}`, background: TOKEN.surface, flexShrink: 0 }}>
@@ -472,9 +554,48 @@ const QueryPage = ({ lang, show, onBack, onOpenEpisode, queryMode, user, onUserC
 };
 
 // ── Sub-components ──
-const ChatBubble = ({ msg, lang, onCitationClick }) => {
+const ChatBubble = ({ msg, lang, user, onCitationClick, voted, onVote }) => {
+  const t = lang === 'zh';
   const isUser = msg.role === 'user';
   const citations = msg.citations || [];
+  const queryId = msg.query_id;
+  const [showCommentBox, setShowCommentBox] = React.useState(false);
+  const [commentText, setCommentText] = React.useState('');
+  const [submitting, setSubmitting] = React.useState(false);
+
+  const canVote = !!user && !!queryId;
+  const upActive = voted === 'up';
+  const downActive = voted === 'down';
+
+  const handleUpClick = () => {
+    if (!canVote) return;
+    setShowCommentBox(false);
+    onVote && onVote(queryId, 'up', null);
+  };
+  const handleDownClick = () => {
+    if (!canVote) return;
+    setShowCommentBox(true);
+  };
+  const handleSendComment = async () => {
+    if (!canVote || submitting) return;
+    setSubmitting(true);
+    await (onVote && onVote(queryId, 'down', commentText.trim() || null));
+    setSubmitting(false);
+    setShowCommentBox(false);
+    setCommentText('');
+  };
+
+  const thumbBtnStyle = (active, disabled) => ({
+    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+    width: 28, height: 28, borderRadius: 6,
+    background: active ? TOKEN.accentDim : 'transparent',
+    border: `1px solid ${active ? TOKEN.accent : TOKEN.surfaceBorder}`,
+    color: active ? TOKEN.accent : (disabled ? TOKEN.textMuted : TOKEN.textSecondary),
+    cursor: disabled ? 'not-allowed' : 'pointer',
+    fontSize: 14, padding: 0,
+    transition: 'all 0.12s',
+  });
+
   return (
     <div style={{ display: 'flex', flexDirection: isUser ? 'row-reverse' : 'row', gap: 10, alignItems: 'flex-start' }}>
       <div style={{ width: 28, height: 28, borderRadius: '50%', background: isUser ? TOKEN.accentDim : TOKEN.surfaceRaised, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 11, fontWeight: 700, color: isUser ? TOKEN.accent : TOKEN.textSecondary }}>
@@ -485,7 +606,7 @@ const ChatBubble = ({ msg, lang, onCitationClick }) => {
         {citations.length > 0 && (
           <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
             {citations.map((c, i) => (
-              <span key={i} onClick={() => onCitationClick && onCitationClick(c)}
+              <span key={i} onClick={() => onCitationClick && onCitationClick(c, queryId, i)}
                 style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 8px', background: TOKEN.bg, border: `1px solid ${TOKEN.surfaceBorder}`, borderRadius: 6, color: TOKEN.accent, fontSize: 12, fontFamily: 'inherit', cursor: onCitationClick ? 'pointer' : 'default', transition: 'border-color 0.15s' }}
                 onMouseEnter={e => onCitationClick && (e.currentTarget.style.borderColor = TOKEN.accent)}
                 onMouseLeave={e => onCitationClick && (e.currentTarget.style.borderColor = TOKEN.surfaceBorder)}>
@@ -493,6 +614,41 @@ const ChatBubble = ({ msg, lang, onCitationClick }) => {
                 {(c.episode_title || '').slice(0, 24) || (lang === 'zh' ? '片段' : 'Clip')} @ {formatTimestamp(c.start_time)}
               </span>
             ))}
+          </div>
+        )}
+        {!isUser && queryId && (
+          <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+            <button type="button" onClick={handleUpClick} disabled={!canVote}
+              title={!canVote ? (t ? '登入後可投票' : 'Sign in to vote') : (t ? '有用' : 'Helpful')}
+              style={thumbBtnStyle(upActive, !canVote)}>👍</button>
+            <button type="button" onClick={handleDownClick} disabled={!canVote}
+              title={!canVote ? (t ? '登入後可投票' : 'Sign in to vote') : (t ? '不太準' : 'Not quite right')}
+              style={thumbBtnStyle(downActive, !canVote)}>👎</button>
+            {voted && (
+              <span style={{ fontSize: 11, color: TOKEN.textMuted, marginLeft: 4 }}>
+                {t ? '已收到 ✓' : 'Recorded ✓'}
+              </span>
+            )}
+          </div>
+        )}
+        {!isUser && queryId && showCommentBox && canVote && (
+          <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <textarea
+              value={commentText}
+              onChange={e => setCommentText(e.target.value)}
+              placeholder={t ? '想說什麼？(可空白)' : 'Anything to add? (optional)'}
+              maxLength={2000}
+              rows={2}
+              style={{ resize: 'vertical', padding: '6px 8px', fontSize: 12, fontFamily: 'inherit', color: TOKEN.text, background: TOKEN.bg, border: `1px solid ${TOKEN.surfaceBorder}`, borderRadius: 6 }}
+            />
+            <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+              <Btn variant="ghost" size="sm" onClick={() => { setShowCommentBox(false); setCommentText(''); }} disabled={submitting}>
+                {t ? '取消' : 'Cancel'}
+              </Btn>
+              <Btn variant="primary" size="sm" onClick={handleSendComment} disabled={submitting}>
+                {t ? '送出' : 'Send'}
+              </Btn>
+            </div>
           </div>
         )}
       </div>

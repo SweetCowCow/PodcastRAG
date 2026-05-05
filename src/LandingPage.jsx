@@ -7,6 +7,7 @@ const LandingPage = ({ lang, onSearch, onSelectShow }) => {
   const [shows, setShows] = React.useState(null);
   const [showsError, setShowsError] = React.useState(null);
   const [query, setQuery] = React.useState('');
+  const [hovered, setHovered] = React.useState(null);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -34,12 +35,6 @@ const LandingPage = ({ lang, onSearch, onSelectShow }) => {
     if (showsRef.current) {
       showsRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
-  };
-
-  const truncate = (str, max) => {
-    if (!str) return '';
-    const clean = str.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
-    return clean.length > max ? clean.slice(0, max) + '…' : clean;
   };
 
   const totalEpisodes = (shows || []).reduce(
@@ -170,65 +165,15 @@ const LandingPage = ({ lang, onSearch, onSelectShow }) => {
         {shows && shows.length > 0 && (
           <div style={{
             display: 'grid',
-            gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)',
+            gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fill, minmax(320px, 1fr))',
             gap: 20,
           }}>
-            {shows.map(show => {
-              const epCount = show.episode_count || 0;
-              const transcribed = show.transcribed_count || 0;
-              const ratio = epCount > 0 ? Math.round((transcribed / epCount) * 100) : 0;
-              return (
-                <div key={show.id}
-                  onClick={() => onSelectShow && onSelectShow(show)}
-                  style={{
-                    background: TOKEN.surface,
-                    border: `1px solid ${TOKEN.surfaceBorder}`,
-                    borderRadius: 12,
-                    padding: 20,
-                    cursor: 'pointer',
-                    transition: 'border-color 120ms, transform 120ms',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    minHeight: 220,
-                  }}
-                  onMouseEnter={(e) => { e.currentTarget.style.borderColor = TOKEN.accent; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.borderColor = TOKEN.surfaceBorder; }}
-                >
-                  <h3 style={{
-                    fontSize: 18,
-                    fontWeight: 700,
-                    margin: '0 0 12px',
-                    color: TOKEN.text,
-                  }}>
-                    🎧 {show.title}
-                  </h3>
-                  <p style={{
-                    flex: 1,
-                    fontSize: 13,
-                    color: TOKEN.textSecondary,
-                    lineHeight: 1.5,
-                    margin: '0 0 16px',
-                  }}>
-                    {truncate(show.description, t ? 60 : 100) || (t ? '（無描述）' : '(no description)')}
-                  </p>
-                  <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    gap: 8,
-                    fontSize: 12,
-                    color: TOKEN.textMuted,
-                    marginBottom: 12,
-                  }}>
-                    <span>{epCount} {t ? '集' : 'eps'}</span>
-                    <span>{ratio === 100 ? (t ? '✓ 已轉錄全部' : '✓ Fully transcribed') : `${ratio}% ${t ? '已轉錄' : 'transcribed'}`}</span>
-                  </div>
-                  <Btn variant="secondary" size="sm" onClick={(e) => { e.stopPropagation(); onSelectShow && onSelectShow(show); }}>
-                    {t ? '瀏覽集數 →' : 'Browse episodes →'}
-                  </Btn>
-                </div>
-              );
-            })}
+            {shows.map(show => (
+              <ShowCard key={show.id} show={show} lang={lang} hovered={hovered === show.id}
+                onMouseEnter={() => setHovered(show.id)}
+                onMouseLeave={() => setHovered(null)}
+                onClick={() => onSelectShow && onSelectShow(show)} />
+            ))}
           </div>
         )}
       </section>
@@ -256,8 +201,8 @@ const LandingPage = ({ lang, onSearch, onSelectShow }) => {
             lineHeight: 1.4,
           }}>
             {t
-              ? '登入解鎖：30 次 AI 統整回答（一次性免費額度，用完可申請補充）'
-              : 'Log in to unlock: 30 free AI summary answers (one-time, request more once depleted)'}
+              ? '登入解鎖：30 次 AI 統整回答'
+              : 'Log in to unlock: 30 free AI summary answers'}
           </h2>
           <p style={{
             fontSize: 14,
@@ -266,8 +211,8 @@ const LandingPage = ({ lang, onSearch, onSelectShow }) => {
             margin: '0 0 28px',
           }}>
             {t
-              ? '瀏覽逐字稿、看相關段落都不用登入。只有「請 AI 統整回答」會用到 quota。'
-              : 'Browsing transcripts and seeing matched segments stays free. Only AI-generated summaries use your quota.'}
+              ? '瀏覽逐字稿、看相關段落都不用登入。只有「請 AI 統整回答」需要登入使用額度。'
+              : 'Browsing transcripts and matched segments needs no login. Only "Ask AI to summarize" requires login and uses your quota.'}
           </p>
           <Btn variant="primary" size="lg" onClick={() => { window.location.href = googleLoginUrl(); }}>
             {t ? '以 Google 登入 →' : 'Sign in with Google →'}
