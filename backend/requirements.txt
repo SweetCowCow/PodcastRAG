@@ -17,6 +17,11 @@ cachetools==5.5.0
 authlib==1.3.2
 itsdangerous==2.2.0
 tiktoken==0.8.0
-# Eval framework deps (R1.2)
-deepeval==2.2.5
+# Schema validation (used by golden-set dataset tests)
 jsonschema==4.23.0
+# NOTE: deepeval is intentionally NOT in this file — it pulls in langchain +
+# chromadb + many heavy deps that timeout `pip install` in cold-cache GHA
+# (>10min). Install separately for eval / judge work:
+#   pip install -r requirements-eval.txt
+# The runner falls back to retrieval-only mode (--skip-judge) when deepeval
+# is missing, so backend tests + production worker don't need it.

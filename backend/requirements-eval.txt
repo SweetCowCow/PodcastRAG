@@ -1,0 +1,8 @@
+# Eval framework heavy deps — kept out of requirements.txt because they
+# timeout pip install in GHA (>10min). Install only when running:
+#   - judge bake-off (backend/eval/scripts/judge_bakeoff.py)
+#   - eval runner with judge enabled (backend/eval/runners/run.py without --skip-judge)
+#
+# Production workers + most CI flows skip these.
+
+deepeval==2.2.5

@@ -101,7 +101,7 @@ R3 拆三段做（每段都跑 eval baseline 對照升幅）：
 | 代號 | 項目 | 說明 |
 |------|------|------|
 | **O2** | Pre-built base image | build 從 10 分→30 秒 |
-| **O3** | pg_dump 定期備份 | — |
+| **O3 → db-backup** | ⭐ **superseded by `db-backup` change（已 propose + park 2026-05-07）** | 24h RPO / 30min RTO。每日 03:00 UTC pg_dump → age 加密 → Cloudflare R2 離站。月度 GHA 自動還原驗證。完整 design + spec + 36 tasks 已寫；下次開做直接 `/spectra-apply db-backup` |
 | **A4** 🆕 | 明亮（淺色）主題（源自競品分析） | Shared.jsx TOKEN 拆 DARK/LIGHT + ThemeContext + localStorage。優先級低，等使用者反映再做 |
 
 ---
