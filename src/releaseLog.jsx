@@ -34,10 +34,24 @@ const MILESTONE_LABELS = {
   'v0.9': { zh: 'v0.9 — 每集 AI 摘要',             en: 'v0.9 — Per-Episode AI Summary' },
   'v1.0': { zh: 'v1.0 — 公開上線：freemium 模式',   en: 'v1.0 — Public Launch: Freemium Mode' },
   'v1.1': { zh: 'v1.1 — 收集回答品質回饋',         en: 'v1.1 — Collecting Answer Quality Feedback' },
+  'v1.2': { zh: 'v1.2 — 量化 RAG 答題準確度基線',  en: 'v1.2 — RAG Accuracy Baseline, Measured' },
 };
 
 // Entries — newest milestone first; within each milestone newest date first.
 const RELEASE_LOG = [
+  // ─── v1.2 — RAG Accuracy Baseline (5/07) ───
+  {
+    date: '2026-05-07', slug: 'r1-eval-framework', milestone: 'v1.2', tag: 'enhancement',
+    title: {
+      zh: '現在我們知道 AI 答得多準（或多不準）',
+      en: 'We Now Know How Accurate the AI Actually Is (or Isn\'t)',
+    },
+    summary: {
+      zh: '我們上了一套自動化評測流程：手寫 10 個我們已經知道答案的「標準題」，再用 AI 配合人工審核生出 38 個延伸題，每次只要改了 RAG 邏輯，這 48 題就能跑一輪、量化告訴我們「答對片段的比率」是進步還是退步。第一輪 baseline 跑出 Recall@5 只有 2.4% ——意思是 AI 從這個節目 162 集裡，找到正確逐字稿片段的機率不到三十分之一。聽起來很糟，事實上也很糟，但這正是這套工具的價值：以前只能憑感覺說「不準」，現在拿到一個明確的數字可以追。下一步是把混合檢索（語意 + 中文分詞 BM25 關鍵字）做進去，做完之後我們可以直接告訴你進步了百分之幾。順手也加了後台「過去評測歷史」頁，跟一個每月發信的提醒任務，提醒哪些節目該重跑 baseline 了。',
+      en: 'We shipped an automated eval pipeline: 10 hand-written "we-know-the-answer" sentinel questions plus 38 LLM-generated + human-audited follow-ups. Every time we touch the RAG layer, this 48-question battery runs and tells us — in numbers — whether the AI got better or worse at finding the right transcript chunks. First baseline came back with Recall@5 = 2.4%: the AI surfaces the correct chunk less than 1 time in 30 across this 162-episode show. That\'s as bad as it sounds, but that\'s exactly the point of having the metric — before this we could only say it "felt inaccurate." Next up: hybrid retrieval (semantic + Chinese-tokenized BM25 keyword) goes in, and we\'ll be able to tell you the improvement in percent. Also bundled: an admin "past eval runs" tab and a monthly reminder email flagging which shows are due for a re-run.',
+    },
+  },
+
   // ─── v1.1 — Collecting Answer Quality Feedback (5/05) ───
   {
     date: '2026-05-05', slug: 'r1-ui-feedback-infra', milestone: 'v1.1', tag: 'feature',
