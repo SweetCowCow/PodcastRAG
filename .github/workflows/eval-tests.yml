@@ -41,12 +41,16 @@ jobs:
           cache-dependency-path: backend/requirements.txt
 
       - name: Install minimal deps
-        # Eval tests don't need the full backend stack — just pytest, jsonschema,
-        # and the metrics modules' stdlib-only deps. Install everything pinned
-        # to keep eval-test changes from depending on app/ refactors.
-        run: pip install -r requirements.txt
+        # Only what the listed eval tests import at module-load:
+        # pytest + jsonschema (dataset schema test) + httpx (mocked in runner test).
+        # Skipping `requirements.txt` install (DeepEval, FastAPI, SQLAlchemy)
+        # because none of these tests touch the app/ stack — that's covered by
+        # the full backend-tests workflow.
+        run: pip install pytest pytest-asyncio jsonschema httpx
 
       - name: Run eval unit tests
+        # Note: test_admin_eval_runs is excluded — it imports app.main and is
+        # covered by backend-tests.yml (with postgres + redis services).
         run: |
           python -m pytest \
             tests/test_eval_metrics.py \
