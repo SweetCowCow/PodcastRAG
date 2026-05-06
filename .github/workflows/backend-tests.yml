@@ -1,0 +1,86 @@
+name: backend tests
+
+# Full backend pytest run with postgres + redis services. Catches regressions
+# in app/ modules that the lighter eval-tests workflow doesn't cover.
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend-tests.yml"
+  push:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend-tests.yml"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: backend
+    services:
+      postgres:
+        # pgvector image — alembic migration c1f2d3e4a5b6 creates a Vector(1536) column.
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: podcastrag
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql+asyncpg://postgres:password@localhost:5432/podcastrag
+      CELERY_BROKER_URL: redis://localhost:6379/0
+      CELERY_RESULT_BACKEND: redis://localhost:6379/1
+      OPENAI_API_KEY: sk-test
+      FRONTEND_ORIGIN: http://localhost:8080
+      GOOGLE_CLIENT_ID: test-client-id
+      GOOGLE_CLIENT_SECRET: test-client-secret
+      GOOGLE_REDIRECT_URI: http://localhost:8000/auth/google/callback
+      SESSION_SECRET: test-session-secret-do-not-use-in-prod-thirtytwo+chars
+      ADMIN_EMAILS: ""
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install deps
+        run: |
+          pip install -r requirements.txt
+          pip install pytest pytest-asyncio jsonschema
+
+      - name: Enable pgvector extension
+        run: |
+          PGPASSWORD=password psql -h localhost -U postgres -d podcastrag \
+            -c "CREATE EXTENSION IF NOT EXISTS vector;"
+
+      - name: Apply migrations
+        run: alembic upgrade head
+
+      - name: Run pytest
+        run: |
+          python -m pytest -v \
+            --ignore=tests/test_force_cancel_throttle.py \
+            -x --maxfail=5

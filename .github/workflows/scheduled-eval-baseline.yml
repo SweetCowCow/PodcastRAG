@@ -1,0 +1,92 @@
+name: scheduled eval baseline
+
+# Weekly automated RAG-eval baseline against prod. The result JSON + markdown
+# summary are uploaded as a GitHub artifact (90-day retention).
+#
+# Required repository secrets:
+#   AIHUB_API_KEY    — Zeabur AI Hub bearer token (judge model + retrieval embed)
+#   E2E_LOGIN_TOKEN  — HMAC pre-shared secret (matches backend env E2E_LOGIN_TOKEN)
+#                       used to obtain a 15-min session cookie via /auth/_e2e_login
+#
+# Defaults to --skip-judge to keep the regular cadence cheap. Toggle the input
+# `with_judge=true` on a manual run to capture a full baseline.
+
+on:
+  workflow_dispatch:
+    inputs:
+      with_judge:
+        description: "Include LLM judge scoring (~$0.50, slower)"
+        type: boolean
+        default: false
+  schedule:
+    # Mondays 09:00 UTC = Tue 17:00 台北
+    - cron: "0 9 * * 1"
+
+jobs:
+  baseline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      BACKEND_URL: https://api.podcastrag.app
+      DATASET: backend/eval/datasets/this-not-that-cool.json
+      OPENAI_API_KEY: ${{ secrets.AIHUB_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install minimal eval deps
+        # Skip judge → no DeepEval needed. With judge → install DeepEval too.
+        run: |
+          pip install pytest jsonschema httpx
+          if [ "${{ inputs.with_judge }}" = "true" ]; then
+            pip install deepeval
+          fi
+
+      - name: Exchange HMAC for session cookie
+        run: |
+          set -eu
+          HMAC='${{ secrets.E2E_LOGIN_TOKEN }}'
+          if [ -z "$HMAC" ]; then
+            echo "::error::E2E_LOGIN_TOKEN secret missing — set via 'gh secret set E2E_LOGIN_TOKEN'"
+            exit 1
+          fi
+          # /auth/_e2e_login returns a 302 + Set-Cookie: session_id=...; capture it.
+          SESSION=$(curl -sS -i "$BACKEND_URL/auth/_e2e_login?token=$HMAC" \
+            | tr -d '\r' \
+            | grep -i "^set-cookie: session_id" \
+            | head -1 \
+            | sed -E 's/.*session_id=([^;]+).*/\1/')
+          if [ -z "$SESSION" ]; then
+            echo "::error::Failed to exchange HMAC for session cookie"
+            exit 1
+          fi
+          # Mask the cookie in logs and pass to next step via env file.
+          echo "::add-mask::$SESSION"
+          echo "EVAL_AUTH_TOKEN=$SESSION" >> "$GITHUB_ENV"
+
+      - name: Run eval baseline
+        run: |
+          ARGS="--dataset $DATASET --backend-url $BACKEND_URL --top-k 5 --out-dir backend/eval/results"
+          if [ "${{ inputs.with_judge }}" != "true" ]; then
+            ARGS="$ARGS --skip-judge"
+          fi
+          python -m backend.eval.runners.run $ARGS
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-baseline-${{ github.run_id }}
+          path: backend/eval/results/eval-*.json
+          retention-days: 90
+
+      - name: Print summary
+        if: always()
+        run: |
+          latest=$(ls -t backend/eval/results/eval-*.md 2>/dev/null | head -1)
+          if [ -n "$latest" ]; then
+            cat "$latest" >> "$GITHUB_STEP_SUMMARY"
+          fi

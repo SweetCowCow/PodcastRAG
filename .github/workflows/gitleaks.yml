@@ -1,0 +1,26 @@
+name: gitleaks
+
+# Block accidental secret leaks on every PR + push to main.
+# Public repo — secrets in commit history are forever, so catching at PR time
+# is the cheapest defence.
+
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # full history so push scans new commits
+
+      - name: Run gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          # GITLEAKS_LICENSE only required for org-level features; OSS scans work without.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
