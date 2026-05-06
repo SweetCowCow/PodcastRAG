@@ -55,11 +55,22 @@
 
 ## Phase C — RAG 真正優化
 
+⭐ **優先級拉到最前**（2026-05-07 review）：R1.2 baseline Recall@5 = **2.4%**，純語意檢索在 162 集 show 直接破功 — R3 是當前 product quality 最大瓶頸。
+
+R3 拆三段做（每段都跑 eval baseline 對照升幅）：
+
 | 代號 | 項目 | 依賴 | 說明 |
 |------|------|------|------|
-| **R3** | 混合檢索（語意 + 關鍵字 BM25） | R1 | ⚠️ **必須用 jieba/zh-tokenizer 分詞 + BM25 over tsvector**，不能走純 ILIKE / 字元 n-gram（競品 sear.newfolderla 「量子計算」回 458 集就是反例）。融合用 RRF |
+| **R3.1** | Hybrid retrieval 核心（~30 tasks）| R1 | (a) Chunk 重定義：30-60s 時間窗 / 5-10 segments，segment gap 切點，前後 overlap 1-2 seg；(b) jieba 分詞 + tsvector + 自訂節目詞典（迪拉胖、顏色、顏社、台通...）；(c) pgvector + tsvector RRF 融合（純 SQL 即可，不引 LlamaIndex）；(d) **Episode `description` 也進 BM25 索引** — RSS 已收錄全 162 集 description（節目主寫的高品質 entity-dense 文字，含餐廳 / 來賓 / 主題 bullets），這是純 transcript 檢索拿不到的。⚠️ 切點要對齊 chunk 邊界以免破壞 R1.2 dataset anchor |
+| **R3.2** | 兩層檢索 + topic segmentation（~25 tasks）| R3.1 | (a) **第一層 episode 篩選**：embed `description`（清過 HTML / 業配 boilerplate），先抓出 top-3-5 相關集，再進去找 chunk — RSS description 是現成 episode summary，不用再 LLM 重生（比 ai_summary 準）；(b) LLM topic segmentation per episode（gpt-4o-mini ~$0.01/集，全 show 一次性 backfill ~$2-3）標出 intro / 主題 / 業配 / outro，業配段檢索時降權；(c) per-segment topic tag 加進 metadata；(d) 三層 boost：episode 相關度 × topic 相關度 × chunk 相關度 |
+| **R3.3** | Metadata filter + 多欄位 weighting（~15 tasks）| R3.2 | (a) 從 episode title 正則抽 `Ft.`/`Feat.`/`feat.` 後的來賓名 → episodes 表加 `guests` 欄位；(b) 日期 / 主題 metadata filter（2024 那集/馬世芳那集）；(c) BM25 多欄位 weighting：title > description > chunk text；(d) speaker 暫不做（要重轉錄 360 集太貴，留 P2）|
 | **R2** | RAG 答案 prompt + citation + 段落呈現強化 | R1 | 🆕 含 A2：後端 sources 回應加 `before_text`/`after_text` 上下文；前端 `<SourceCard>` 加關鍵字高亮 + 「跳到這段聽」button（deep-link `TranscriptPage?t=秒`）+ 集數 AI 摘要連結 |
 | **R4** | RAG 結果 cache | — | Redis hash key on 問題 + show + top_k + model。🆕 回應附 `cache_hit: bool` flag 給前端（dev 模式可顯示，學自競品 findtt.top） |
+
+**故意排除（不放 R3）**：
+- LlamaIndex / LangChain — 抽象封裝過厚、效能黑盒、新依賴。pgvector + tsvector + RRF 純 SQL 即可
+- Whisper diarization speaker labels — 要重轉 360 集，影響 P2，暫緩
+- ASR 錯字後處理 — 屬於 input quality 問題（T1 範疇），R3 是 retrieval 端問題，分開做
 
 ---
 
