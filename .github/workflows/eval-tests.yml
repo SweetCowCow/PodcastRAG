@@ -10,6 +10,7 @@ name: eval tests
 # workflow when secrets are wired.
 
 on:
+  workflow_dispatch:
   pull_request:
     paths:
       - "backend/eval/**"
@@ -23,6 +24,8 @@ on:
       - "backend/eval/**"
       - "backend/tests/test_eval_*.py"
       - "backend/tests/test_golden_set_dataset.py"
+      - "backend/requirements.txt"
+      - ".github/workflows/eval-tests.yml"
 
 jobs:
   test:
