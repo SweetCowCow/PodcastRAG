@@ -54,8 +54,10 @@ jobs:
       - name: Run eval unit tests
         # Note: test_admin_eval_runs is excluded — it imports app.main and is
         # covered by backend-tests.yml (with postgres + redis services).
+        # --noconftest skips tests/conftest.py, which auto-imports sqlalchemy
+        # for the auth fixtures we don't use here.
         run: |
-          python -m pytest \
+          python -m pytest --noconftest \
             tests/test_eval_metrics.py \
             tests/test_eval_runner.py \
             tests/test_golden_set_dataset.py \
