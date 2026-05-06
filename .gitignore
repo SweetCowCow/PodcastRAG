@@ -37,3 +37,19 @@ openspec/.vector-search.db*
 
 # Generated presentation deck (not source-controlled)
 *.pptx
+
+# Eval framework — local results + DeepEval cache + judge mini-set (not source-controlled per project memory)
+backend/eval/results/
+backend/eval/datasets/_judge_minisset.json
+.deepeval/
+
+# Claude Code internal scheduling state
+.claude/scheduled_tasks.lock
+
+# Working notes / case studies (not source-controlled per project memory rules)
+docs/case-studies/
+docs/research/
+docs/roadmap.pdf
+
+# Random screenshots / scratch images at repo root
+aisteps-tab.png

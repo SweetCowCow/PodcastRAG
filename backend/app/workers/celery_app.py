@@ -16,6 +16,7 @@ celery_app = Celery(
         "app.workers.lifecycle",
         "app.workers.summary_task",
         "app.workers.quota_digest",
+        "app.workers.eval_reminder",
     ],
 )
 
@@ -37,6 +38,10 @@ celery_app.conf.update(
         "quota-digest": {
             "task": "app.workers.quota_digest.send_quota_digest",
             "schedule": crontab(minute=0, hour="9,21"),
+        },
+        "eval-reminder": {
+            "task": "app.workers.eval_reminder.send_eval_reminder",
+            "schedule": crontab(minute=0, hour=9, day_of_month=1),
         },
     },
 )

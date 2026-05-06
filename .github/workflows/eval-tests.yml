@@ -1,0 +1,55 @@
+name: eval tests
+
+# Runs the RAG-eval unit tests + dataset schema check on every PR/push that
+# touches the eval module or its tests. Pure offline tests — no network, no
+# secrets needed.
+#
+# A real-eval-baseline workflow (running run.py against staging) is intentionally
+# left out of this file: it needs AIHUB / e2e-login secrets and a long-lived
+# staging URL, neither of which is set up yet. Add later as a separate
+# workflow when secrets are wired.
+
+on:
+  pull_request:
+    paths:
+      - "backend/eval/**"
+      - "backend/tests/test_eval_*.py"
+      - "backend/tests/test_golden_set_dataset.py"
+      - "backend/requirements.txt"
+      - ".github/workflows/eval-tests.yml"
+  push:
+    branches: [main]
+    paths:
+      - "backend/eval/**"
+      - "backend/tests/test_eval_*.py"
+      - "backend/tests/test_golden_set_dataset.py"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install minimal deps
+        # Eval tests don't need the full backend stack — just pytest, jsonschema,
+        # and the metrics modules' stdlib-only deps. Install everything pinned
+        # to keep eval-test changes from depending on app/ refactors.
+        run: pip install -r requirements.txt
+
+      - name: Run eval unit tests
+        run: |
+          python -m pytest \
+            tests/test_eval_metrics.py \
+            tests/test_eval_runner.py \
+            tests/test_golden_set_dataset.py \
+            -v

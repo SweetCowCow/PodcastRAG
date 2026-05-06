@@ -1,0 +1,77 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://podcastrag.app/schemas/golden-set.json",
+  "title": "Golden Set",
+  "description": "Per-show golden set of questions with ground-truth chunk IDs for RAG evaluation.",
+  "type": "object",
+  "required": ["show_slug", "show_id", "version", "created_at", "items"],
+  "properties": {
+    "show_slug": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+      "description": "Lowercase ASCII hyphenated slug; matches the dataset filename."
+    },
+    "show_id": {
+      "type": "string",
+      "description": "Show UUID from the database."
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^v[0-9]+$"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date"
+    },
+    "items": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/Item" }
+    }
+  },
+  "definitions": {
+    "Item": {
+      "type": "object",
+      "required": [
+        "id",
+        "type",
+        "question",
+        "expected_answer_keywords",
+        "ground_truth_chunk_ids",
+        "sentinel",
+        "source_episode_id"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]+$"
+        },
+        "type": {
+          "enum": ["fact", "comprehension", "cross-episode", "negative", "code-switch"]
+        },
+        "question": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "expected_answer_keywords": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1, "maxLength": 40 },
+          "minItems": 0,
+          "maxItems": 10
+        },
+        "ground_truth_chunk_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^ep:[0-9a-f-]+@[0-9]+\\.[0-9]{2}$"
+          }
+        },
+        "sentinel": { "type": "boolean" },
+        "source_episode_id": {
+          "type": "string",
+          "description": "Primary episode UUID this item is anchored to."
+        }
+      }
+    }
+  }
+}

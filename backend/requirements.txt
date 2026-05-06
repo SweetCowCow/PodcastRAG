@@ -17,3 +17,6 @@ cachetools==5.5.0
 authlib==1.3.2
 itsdangerous==2.2.0
 tiktoken==0.8.0
+# Eval framework deps (R1.2)
+deepeval==2.2.5
+jsonschema==4.23.0
