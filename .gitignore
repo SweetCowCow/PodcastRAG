@@ -50,6 +50,7 @@ backend/eval/datasets/_judge_minisset.json
 docs/case-studies/
 docs/research/
 docs/roadmap.pdf
+docs/bills/
 
 # Random screenshots / scratch images at repo root
 aisteps-tab.png
