@@ -299,3 +299,27 @@ def test_libpq_url_strips_asyncpg_suffix():
         backup_mod._libpq_url("postgresql://u:p@h:5432/d")
         == "postgresql://u:p@h:5432/d"
     )
+
+
+def test_pg_dump_argv_keeps_password_out_of_cmdline():
+    """Password must be passed via PGPASSWORD env, never on argv."""
+    argv, env = backup_mod._pg_dump_argv_and_env(
+        "postgresql+asyncpg://root:s3cret-pa$$@db.host:5432/zeabur"
+    )
+    # No flag carries the password; argv has only host/port/user/dbname.
+    assert "s3cret-pa$$" not in " ".join(argv)
+    assert argv[-1] == "zeabur"
+    assert "-h" in argv and "db.host" in argv
+    assert "-p" in argv and "5432" in argv
+    assert "-U" in argv and "root" in argv
+    assert env["PGPASSWORD"] == "s3cret-pa$$"
+
+
+def test_pg_dump_argv_url_decodes_password():
+    """URL-encoded special chars in the password are decoded for PGPASSWORD."""
+    # Password contains @ which must be %40 in the URL.
+    argv, env = backup_mod._pg_dump_argv_and_env(
+        "postgresql://u:p%40ss%2Fword@h/d"
+    )
+    assert env["PGPASSWORD"] == "p@ss/word"
+    assert "p@ss/word" not in " ".join(argv)

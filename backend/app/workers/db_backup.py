@@ -18,9 +18,11 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import subprocess
 import time
 from datetime import datetime, timedelta, timezone
+from urllib.parse import unquote, urlparse
 
 import httpx
 from botocore.exceptions import BotoCoreError, ClientError
@@ -155,22 +157,19 @@ def _stream_backup_to_r2(
 
     No plaintext is ever written to disk — the dump bytes flow pg_dump.stdout
     → age.stdin → age.stdout → boto3 multipart upload buffer.
+
+    Auth is passed via PGPASSWORD env (not the connection URL on argv) so the
+    password does not leak into the worker container's `/proc/<pid>/cmdline`.
     """
-    db_url = _libpq_url(settings.database_url)
+    pg_args, pg_env = _pg_dump_argv_and_env(settings.database_url)
 
     age_cmd = ["age", "--encrypt"]
     for pk in public_keys:
         age_cmd.extend(["--recipient", pk])
 
     pg_dump = subprocess.Popen(
-        [
-            "pg_dump",
-            "--format=custom",
-            "--compress=9",
-            "--no-acl",
-            "--no-owner",
-            db_url,
-        ],
+        pg_args,
+        env=pg_env,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
     )
@@ -283,6 +282,39 @@ async def _alert(subject: str, body: str) -> None:
 def _libpq_url(url: str) -> str:
     """Strip the asyncpg driver suffix so pg_dump can parse the URL."""
     return url.replace("postgresql+asyncpg://", "postgresql://", 1)
+
+
+def _pg_dump_argv_and_env(database_url: str) -> tuple[list[str], dict[str, str]]:
+    """Build pg_dump argv + env that keeps the password out of /proc/cmdline.
+
+    pg_dump is invoked with split flags (-h / -p / -U / dbname) and the
+    password is exported via PGPASSWORD in a fresh env, so any reader of
+    `/proc/<pid>/cmdline` sees the host/user but never the secret.
+    """
+    parsed = urlparse(_libpq_url(database_url))
+    host = parsed.hostname or "localhost"
+    port = str(parsed.port) if parsed.port else "5432"
+    user = unquote(parsed.username) if parsed.username else ""
+    password = unquote(parsed.password) if parsed.password else ""
+    dbname = parsed.path.lstrip("/") or "postgres"
+
+    argv = [
+        "pg_dump",
+        "--format=custom",
+        "--compress=9",
+        "--no-acl",
+        "--no-owner",
+        "-h", host,
+        "-p", port,
+    ]
+    if user:
+        argv.extend(["-U", user])
+    argv.append(dbname)
+
+    env = os.environ.copy()
+    if password:
+        env["PGPASSWORD"] = password
+    return argv, env
 
 
 class _ByteCountingReader:
