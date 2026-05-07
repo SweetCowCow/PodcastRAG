@@ -35,10 +35,11 @@ The verification workflow SHALL execute a fixed set of SQL queries against the r
 #### Scenario: Row count check
 
 - **GIVEN** the restored database
-- **WHEN** the workflow runs `SELECT count(*) FROM episodes`, `SELECT count(*) FROM transcript_chunks`, `SELECT count(*) FROM users`
+- **WHEN** the workflow runs `SELECT count(*) FROM episodes WHERE status='transcribed'`, `SELECT count(*) FROM transcript_chunks`, `SELECT count(*) FROM users`
 - **THEN** each count MUST be ≥ 1 (a totally empty restore is a failure)
-- **AND** each count SHOULD be within ±10% of the prod value reported by the public `GET /stats` endpoint at the time of verification
-- **AND** if any count is 0 or outside ±25%, the verification fails
+- **AND** the episodes (transcribed) and transcript_chunks counts SHOULD be within ±10% of the prod values reported by `GET /stats` (`episodes_completed`, `transcript_chunks`)
+- **AND** if any count is 0, or transcribed-episodes / transcript_chunks is outside ±25%, the verification fails
+- **AND** users count is asserted ≥ 1 only — the public `/stats` endpoint omits user count for privacy, so a tolerance check is not feasible
 
 ##### Example: Acceptable variance
 

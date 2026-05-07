@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: pgvector/pgvector:pg16
+        image: pgvector/pgvector:pg18
         env:
           POSTGRES_PASSWORD: postgres
           POSTGRES_DB: podcastrag_verify
@@ -92,10 +92,12 @@ jobs:
             exit 1
           fi
 
-          EP=$($PSQL "SELECT count(*) FROM episodes")
+          # Match prod /stats slicing — episodes_completed filters by status,
+          # not total row count, so we compare apples to apples.
+          EP=$($PSQL "SELECT count(*) FROM episodes WHERE status='transcribed'")
           CH=$($PSQL "SELECT count(*) FROM transcript_chunks")
           US=$($PSQL "SELECT count(*) FROM users")
-          echo "Restored counts: episodes=$EP transcript_chunks=$CH users=$US"
+          echo "Restored counts: episodes(transcribed)=$EP transcript_chunks=$CH users=$US"
 
           if [ "$EP" -lt 1 ] || [ "$CH" -lt 1 ] || [ "$US" -lt 1 ]; then
             echo "FAIL: at least one table is empty"
@@ -123,9 +125,7 @@ jobs:
             fi
             echo "OK: $label restored=$restored within ±25% of prod=$prod"
           }
-          # Restored episodes count includes all rows; prod /stats counts only
-          # status=transcribed — restored will typically be slightly higher.
-          check_within episodes "$EP" "$PROD_EP"
+          check_within episodes_transcribed "$EP" "$PROD_EP"
           check_within transcript_chunks "$CH" "$PROD_CH"
 
           {
