@@ -86,6 +86,16 @@ async def _run() -> dict:
     try:
         size_bytes = _stream_backup_to_r2(client, bucket, today_key, public_keys)
     except BaseException as exc:  # noqa: BLE001 — surface every failure
+        # The streaming pipeline may have already uploaded a partial / empty
+        # artifact (e.g. pg_dump failed AFTER age wrote its 200-byte header
+        # and the upload completed). Delete it so we don't leave a corrupt
+        # file shadowing yesterday's healthy backup.
+        try:
+            client.delete_object(Bucket=bucket, Key=today_key)
+            logger.info("db_backup: deleted partial artifact %s", today_key)
+        except Exception:  # noqa: BLE001
+            logger.exception("db_backup: failed to delete partial artifact")
+
         body = (
             f"DB backup failed on {today.isoformat()}.\n\n"
             f"Error: {type(exc).__name__}: {str(exc)[:STDERR_TRUNCATE_CHARS]}"

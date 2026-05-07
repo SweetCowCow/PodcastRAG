@@ -189,8 +189,11 @@ def test_pg_dump_failure_alerts_and_raises(monkeypatch, configured_backup):
     assert len(sent) == 1
     assert sent[0][0] == "admin@example.com"
     assert sent[0][1] == "[PodcastRAG] DB backup FAILED 2026-05-13"
-    # Upload should not have completed successfully — but we don't assert
-    # on whether boto3 was called; the contract is "alert + raise".
+    # Partial artifact must be deleted so a corrupt file doesn't shadow
+    # yesterday's healthy backup (the 298-byte age-header-only case).
+    mock_client.delete_object.assert_called_once_with(
+        Bucket="podcastrag-backup", Key="daily/2026-05-13.dump.age"
+    )
 
 
 def test_size_anomaly_uploads_and_alerts(monkeypatch, configured_backup):
