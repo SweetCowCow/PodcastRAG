@@ -1,0 +1,184 @@
+name: restore verification
+
+on:
+  workflow_dispatch:
+  schedule:
+    # 1st of every month at 12:00 UTC
+    - cron: "0 12 1 * *"
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: podcastrag_verify
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.R2_READONLY_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_READONLY_SECRET }}
+      AWS_DEFAULT_REGION: auto
+      R2_ENDPOINT: ${{ secrets.R2_BACKUP_ENDPOINT_URL }}
+      R2_BUCKET: ${{ secrets.R2_BACKUP_BUCKET }}
+      PGPASSWORD: postgres
+      ZSEND_API_KEY: ${{ secrets.ZSEND_API_KEY }}
+      ZSEND_FROM_EMAIL: ${{ secrets.ZSEND_FROM_EMAIL }}
+      ZSEND_ADMIN_TO_EMAIL: ${{ secrets.ZSEND_ADMIN_TO_EMAIL }}
+
+    steps:
+      - name: Install age + postgresql-client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y age postgresql-client jq
+
+      - name: Locate latest monthly backup
+        id: pick
+        run: |
+          set -euo pipefail
+          aws s3 ls "s3://${R2_BUCKET}/monthly/" --endpoint-url="${R2_ENDPOINT}" \
+            | awk '{print $4}' | sort | tail -n 1 > latest.txt
+          KEY=$(cat latest.txt)
+          if [ -z "$KEY" ]; then
+            echo "No monthly backup found in s3://${R2_BUCKET}/monthly/"
+            exit 1
+          fi
+          echo "key=$KEY" >> "$GITHUB_OUTPUT"
+          echo "Selected: monthly/$KEY"
+
+      - name: Download artifact
+        run: |
+          set -euo pipefail
+          aws s3 cp "s3://${R2_BUCKET}/monthly/${{ steps.pick.outputs.key }}" \
+            ./backup.dump.age --endpoint-url="${R2_ENDPOINT}"
+
+      - name: Decrypt backup
+        id: decrypt
+        run: |
+          set -euo pipefail
+          printf '%s' "${{ secrets.BACKUP_AGE_PRIVATE_KEY_GHA }}" > /tmp/age.key
+          chmod 600 /tmp/age.key
+          age --decrypt -i /tmp/age.key -o ./backup.dump ./backup.dump.age
+          rm -f /tmp/age.key
+
+      - name: Restore into ephemeral postgres
+        id: restore
+        run: |
+          set -euo pipefail
+          pg_restore --no-owner --no-acl \
+            -h localhost -p 5432 -U postgres -d podcastrag_verify \
+            ./backup.dump
+
+      - name: Sanity SQL — row counts vs prod /stats
+        id: sanity
+        run: |
+          set -euo pipefail
+          PSQL="psql -h localhost -U postgres -d podcastrag_verify -At -c"
+
+          # pgvector extension must be present
+          HAS_VECTOR=$($PSQL "SELECT 1 FROM pg_extension WHERE extname='vector'" || echo "")
+          if [ "$HAS_VECTOR" != "1" ]; then
+            echo "FAIL: pgvector extension missing in restored DB"
+            exit 1
+          fi
+
+          EP=$($PSQL "SELECT count(*) FROM episodes")
+          CH=$($PSQL "SELECT count(*) FROM transcript_chunks")
+          US=$($PSQL "SELECT count(*) FROM users")
+          echo "Restored counts: episodes=$EP transcript_chunks=$CH users=$US"
+
+          if [ "$EP" -lt 1 ] || [ "$CH" -lt 1 ] || [ "$US" -lt 1 ]; then
+            echo "FAIL: at least one table is empty"
+            exit 1
+          fi
+
+          STATS=$(curl -fsS https://api.podcastrag.app/stats)
+          PROD_EP=$(echo "$STATS" | jq -r '.episodes_completed // empty')
+          PROD_CH=$(echo "$STATS" | jq -r '.transcript_chunks // empty')
+          echo "Prod /stats: episodes_completed=$PROD_EP transcript_chunks=$PROD_CH"
+          # users is admin-only; we only assert ≥1 above (public /stats omits it).
+
+          # ±25% tolerance per spec.
+          check_within() {
+            local label="$1" restored="$2" prod="$3"
+            if [ -z "$prod" ] || [ "$prod" = "null" ]; then
+              echo "WARN: prod /stats did not provide $label — skipping tolerance check"
+              return 0
+            fi
+            local low=$(( prod * 75 / 100 ))
+            local high=$(( prod * 125 / 100 ))
+            if [ "$restored" -lt "$low" ] || [ "$restored" -gt "$high" ]; then
+              echo "FAIL: $label restored=$restored outside ±25% of prod=$prod ([$low,$high])"
+              return 1
+            fi
+            echo "OK: $label restored=$restored within ±25% of prod=$prod"
+          }
+          # Restored episodes count includes all rows; prod /stats counts only
+          # status=transcribed — restored will typically be slightly higher.
+          check_within episodes "$EP" "$PROD_EP"
+          check_within transcript_chunks "$CH" "$PROD_CH"
+
+          {
+            echo "month=$(date -u +%Y-%m)"
+            echo "episodes=$EP"
+            echo "chunks=$CH"
+            echo "users=$US"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Notify result via ZSend
+        if: always()
+        env:
+          OUTCOME: ${{ job.status }}
+          DECRYPT_OUTCOME: ${{ steps.decrypt.outcome }}
+          RESTORE_OUTCOME: ${{ steps.restore.outcome }}
+          SANITY_OUTCOME: ${{ steps.sanity.outcome }}
+          MONTH: ${{ steps.sanity.outputs.month }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          if [ -z "${ZSEND_API_KEY:-}" ] || [ -z "${ZSEND_ADMIN_TO_EMAIL:-}" ]; then
+            echo "ZSend not configured — skipping notification"
+            exit 0
+          fi
+
+          if [ "$OUTCOME" = "success" ]; then
+            SUBJECT="[PodcastRAG] Backup verification OK ${MONTH:-$(date -u +%Y-%m)}"
+            BODY="Monthly restore verification passed. Run: ${RUN_URL}"
+          else
+            STEP="unknown"
+            if [ "$DECRYPT_OUTCOME" = "failure" ]; then
+              STEP="decrypt"
+            elif [ "$RESTORE_OUTCOME" = "failure" ]; then
+              STEP="restore"
+            elif [ "$SANITY_OUTCOME" = "failure" ]; then
+              STEP="sanity-sql"
+            fi
+            SUBJECT="[PodcastRAG] Backup verification FAILED — ${STEP}"
+            BODY="Monthly restore verification failed at step: ${STEP}.\nRun: ${RUN_URL}"
+          fi
+
+          # ZSend admin recipients are comma-separated.
+          IFS=',' read -ra TO_LIST <<< "$ZSEND_ADMIN_TO_EMAIL"
+          for TO in "${TO_LIST[@]}"; do
+            TO=$(echo "$TO" | xargs)  # trim whitespace
+            [ -z "$TO" ] && continue
+            curl -fsS -X POST "https://api.zeabur.com/api/v1/zsend/emails" \
+              -H "Authorization: Bearer ${ZSEND_API_KEY}" \
+              -H "Content-Type: application/json" \
+              -d "$(jq -n \
+                    --arg from "${ZSEND_FROM_EMAIL}" \
+                    --arg to "$TO" \
+                    --arg subject "$SUBJECT" \
+                    --arg text "$BODY" \
+                    '{from: $from, to: [$to], subject: $subject, text: $text}')"
+          done

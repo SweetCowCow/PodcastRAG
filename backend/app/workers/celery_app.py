@@ -17,6 +17,7 @@ celery_app = Celery(
         "app.workers.summary_task",
         "app.workers.quota_digest",
         "app.workers.eval_reminder",
+        "app.workers.db_backup",
     ],
 )
 
@@ -42,6 +43,10 @@ celery_app.conf.update(
         "eval-reminder": {
             "task": "app.workers.eval_reminder.send_eval_reminder",
             "schedule": crontab(minute=0, hour=9, day_of_month=1),
+        },
+        "db-backup": {
+            "task": "app.workers.db_backup.run_db_backup",
+            "schedule": crontab(minute=0, hour=3),
         },
     },
 )

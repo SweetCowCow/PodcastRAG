@@ -33,6 +33,16 @@ class Settings(BaseSettings):
     r2_bucket: str | None = None
     r2_endpoint: str | None = None
 
+    # Off-site DB backup bucket (separate from audio bucket above to keep token
+    # blast radius + lifecycle policies isolated). All optional so env-not-
+    # configured local dev still boots.
+    r2_backup_endpoint_url: str | None = None
+    r2_backup_access_key_id: str | None = None
+    r2_backup_secret_access_key: str | None = None
+    r2_backup_bucket: str | None = None
+    # Comma-separated age public keys (admin recipient + GHA recipient).
+    backup_age_public_key: str | None = None
+
     google_client_id: str | None = None
     google_client_secret: str | None = None
     google_redirect_uri: str | None = None
