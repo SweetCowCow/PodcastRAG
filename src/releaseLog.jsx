@@ -35,10 +35,24 @@ const MILESTONE_LABELS = {
   'v1.0': { zh: 'v1.0 — 公開上線：freemium 模式',   en: 'v1.0 — Public Launch: Freemium Mode' },
   'v1.1': { zh: 'v1.1 — 收集回答品質回饋',         en: 'v1.1 — Collecting Answer Quality Feedback' },
   'v1.2': { zh: 'v1.2 — 量化 RAG 答題準確度基線',  en: 'v1.2 — RAG Accuracy Baseline, Measured' },
+  'v1.3': { zh: 'v1.3 — 把資料背在保險上',         en: 'v1.3 — Putting Your Data on Insurance' },
 };
 
 // Entries — newest milestone first; within each milestone newest date first.
 const RELEASE_LOG = [
+  // ─── v1.3 — Off-site Encrypted Backup (5/07) ───
+  {
+    date: '2026-05-07', slug: 'db-backup', milestone: 'v1.3', tag: 'enhancement',
+    title: {
+      zh: '每天自動備份，異地離線、加密、月度自動驗證',
+      en: 'Daily Encrypted Off-site Backup, Auto-Verified Monthly',
+    },
+    summary: {
+      zh: '到目前為止，整套系統的安全網就是「Zeabur 那邊的資料庫不要壞」。從今天開始，每天凌晨會自動把整個資料庫拉出來、用公鑰加密，再上傳到另一家雲端（Cloudflare R2，跟 Zeabur 解耦）。每月 1 號 GitHub Actions 自己會拉最新一份月度備份做還原測試 + 跑健康檢查 SQL，過了寄成功信、沒過寄警告信——「沒測過的備份等於沒備份」。保留策略：最近 7 天每日 + 最近 4 週每週日 + 最近 12 個月每月一份，總共約 23 份在線。私鑰雙地保管（管理員本機 + 密碼管理器）；GitHub Actions 用獨立 keypair，本機萬一被攻陷不會波及。月成本約 $1。完整還原 runbook 寫在 docs/disaster-recovery.md，凌晨被叫起來照做即可，承諾 24 小時內的資料可救（RPO ≤ 24h）、30 分鐘內可救完（RTO ≤ 30 min）。順手修了個資安問題：原本 pg_dump 把資料庫密碼放在指令參數，會出現在 worker container 的 /proc/cmdline——改用 PGPASSWORD 環境變數，並 rotate 了 prod 密碼。',
+      en: 'Until today, the entire safety net was "Zeabur\'s managed Postgres better not break." Starting now, the whole database gets pulled, public-key encrypted, and uploaded to a different cloud provider (Cloudflare R2, decoupled from Zeabur) every morning at 03:00 UTC. On the 1st of each month, GitHub Actions automatically pulls the latest monthly backup, runs a real pg_restore into an ephemeral DB, and runs sanity SQL — pass = OK email, fail = alert email. "Untested backups are broken backups." Retention: 7 daily + 4 Sundays + 12 monthly = ~23 versions live. Private key kept in two places (admin laptop + password manager); GitHub Actions uses a separate keypair so a laptop compromise doesn\'t leak prod backups. Monthly cost ≈ $1. Full restore runbook lives in docs/disaster-recovery.md. Commitments: RPO ≤ 24h, RTO ≤ 30 min. Bundled fix: pg_dump used to leak the DB password through process argv (visible in worker /proc/cmdline) — switched to PGPASSWORD env, and rotated the prod password.',
+    },
+  },
+
   // ─── v1.2 — RAG Accuracy Baseline (5/07) ───
   {
     date: '2026-05-07', slug: 'r1-eval-framework', milestone: 'v1.2', tag: 'enhancement',

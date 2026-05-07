@@ -76,14 +76,14 @@ Implements: spec Requirement "Disaster Recovery Documentation"
 
 ## 9. Manual end-to-end smoke
 
-- [ ] 9.1 Manually trigger `run_db_backup` (one-off Celery call): verify R2 has artifact at `daily/{today}.dump.age`
-- [ ] 9.2 Pull artifact locally, decrypt with administrator private key, `pg_restore` into local PG, run sanity SQL: episodes count matches prod ±10%
-- [ ] 9.3 Manually trigger `restore-verification.yml` (`gh workflow run "restore verification"`); verify ZSend OK email arrives
-- [ ] 9.4 Pause beat schedule briefly, simulate failure (set `BACKUP_AGE_PUBLIC_KEY=""` temporarily) → resume → verify ALERT email arrives → restore valid env
+- [x] 9.1 Manually trigger `run_db_backup` (one-off Celery call): verify R2 has artifact at `daily/{today}.dump.age`
+- [x] 9.2 Pull artifact locally, decrypt with administrator private key, `pg_restore` into local PG, run sanity SQL: episodes count matches prod ±10%
+- [x] 9.3 Manually trigger `restore-verification.yml` (`gh workflow run "restore verification"`); verify ZSend OK email arrives
+- [x] 9.4 Pause beat schedule briefly, simulate failure (set `BACKUP_AGE_PUBLIC_KEY=""` temporarily) → resume → verify ALERT email arrives → restore valid env
 
 ## 10. Stage gate / archive
 
-- [ ] 10.1 Run full backend pytest: 100% pre-existing tests pass + new `test_db_backup.py` + `test_r2_client.py` green
+- [x] 10.1 Run full backend pytest: 100% pre-existing tests pass + new `test_db_backup.py` + `test_r2_client.py` green
 - [x] 10.2 Lint / format pass on new modules
-- [ ] 10.3 Commit + push (gitleaks pre-check). Change goes through PR for self-review
-- [ ] 10.4 Wait for first scheduled (not manual) beat run + first scheduled GHA verification → both green → archive db-backup with release log v1.3 entry "離線備份上線 — 24h RPO / 30min RTO"
+- [x] 10.3 Commit + push (gitleaks pre-check). Change goes through PR for self-review
+- [x] 10.4 Wait for first scheduled (not manual) beat run + first scheduled GHA verification → both green → archive db-backup with release log v1.3 entry "離線備份上線 — 24h RPO / 30min RTO"
