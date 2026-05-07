@@ -73,6 +73,9 @@ jobs:
 
       - name: Restore into ephemeral postgres
         id: restore
+        env:
+          # ivfflat index build needs ~65MB; default 64MB just barely misses.
+          PGOPTIONS: "-c maintenance_work_mem=256MB"
         run: |
           set -euo pipefail
           pg_restore --no-owner --no-acl \
@@ -92,12 +95,14 @@ jobs:
             exit 1
           fi
 
-          # Match prod /stats slicing — episodes_completed filters by status,
-          # not total row count, so we compare apples to apples.
-          EP=$($PSQL "SELECT count(*) FROM episodes WHERE status='transcribed'")
+          # Match prod /stats slicing — episodes_completed actually counts
+          # transcripts with status='completed', not episodes (which has no
+          # status column). Mirror that exact query for an apples-to-apples
+          # comparison.
+          EP=$($PSQL "SELECT count(*) FROM transcripts WHERE status='completed'")
           CH=$($PSQL "SELECT count(*) FROM transcript_chunks")
           US=$($PSQL "SELECT count(*) FROM users")
-          echo "Restored counts: episodes(transcribed)=$EP transcript_chunks=$CH users=$US"
+          echo "Restored counts: transcripts(completed)=$EP transcript_chunks=$CH users=$US"
 
           if [ "$EP" -lt 1 ] || [ "$CH" -lt 1 ] || [ "$US" -lt 1 ]; then
             echo "FAIL: at least one table is empty"
@@ -125,7 +130,7 @@ jobs:
             fi
             echo "OK: $label restored=$restored within ±25% of prod=$prod"
           }
-          check_within episodes_transcribed "$EP" "$PROD_EP"
+          check_within transcripts_completed "$EP" "$PROD_EP"
           check_within transcript_chunks "$CH" "$PROD_CH"
 
           {
