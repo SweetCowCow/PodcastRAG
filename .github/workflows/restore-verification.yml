@@ -37,10 +37,16 @@ jobs:
       ZSEND_ADMIN_TO_EMAIL: ${{ secrets.ZSEND_ADMIN_TO_EMAIL }}
 
     steps:
-      - name: Install age + postgresql-client
+      - name: Install age + postgresql-client-18 (PGDG)
         run: |
+          set -euo pipefail
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+            -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list
           sudo apt-get update
-          sudo apt-get install -y age postgresql-client jq
+          sudo apt-get install -y age postgresql-client-18 jq
 
       - name: Locate latest monthly backup
         id: pick
