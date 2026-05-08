@@ -12,10 +12,17 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 import uuid
 from typing import Any
 
-from openai import OpenAI
+from openai import (
+    APIConnectionError,
+    APIStatusError,
+    APITimeoutError,
+    OpenAI,
+    RateLimitError,
+)
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -50,6 +57,85 @@ UNIVERSAL_LABEL_DESCRIPTIONS = {
 }
 
 SHORT_SEGMENT_THRESHOLD = 5.0  # seconds
+
+# Per-call segment batch size. Chosen so input stays under gpt-4o-mini's
+# 128K context limit even for 30-min talky episodes (~3000 chars each batch
+# × 1.5 chars/token ≈ 4500 tokens) with plenty of headroom.
+SEGMENTS_PER_BATCH = 60
+
+CHAT_RETRY_ATTEMPTS = 5
+CHAT_RETRY_INITIAL_DELAY_S = 2.0
+CHAT_RETRY_MAX_DELAY_S = 60.0
+
+_RATE_LIMIT_HEADERS = (
+    "x-ratelimit-limit-requests",
+    "x-ratelimit-remaining-requests",
+    "x-ratelimit-reset-requests",
+    "x-ratelimit-limit-tokens",
+    "x-ratelimit-remaining-tokens",
+    "x-ratelimit-reset-tokens",
+    "retry-after",
+)
+
+
+def _is_retryable(exc: Exception) -> bool:
+    if isinstance(exc, (RateLimitError, APITimeoutError, APIConnectionError)):
+        return True
+    if isinstance(exc, APIStatusError) and 500 <= getattr(exc, "status_code", 0) <= 599:
+        return True
+    return False
+
+
+def _call_chat_with_retry(
+    client: OpenAI,
+    *,
+    model: str,
+    messages: list[dict[str, Any]],
+    response_format: dict[str, Any] | None = None,
+    max_attempts: int = CHAT_RETRY_ATTEMPTS,
+) -> Any:
+    """Chat completion with exponential-backoff retry + rate-limit header logs.
+
+    Retries on RateLimitError / APITimeoutError / APIConnectionError /
+    5xx APIStatusError. Logs rate-limit headers (when the proxy/server
+    sends them) at WARNING on retry, INFO on final success.
+    """
+    delay = CHAT_RETRY_INITIAL_DELAY_S
+    last_exc: Exception | None = None
+    for attempt in range(max_attempts):
+        try:
+            raw_resp = client.chat.completions.with_raw_response.create(
+                model=model,
+                messages=messages,
+                response_format=response_format or {"type": "text"},
+            )
+            headers = getattr(raw_resp, "headers", {}) or {}
+            interesting = {
+                h: headers.get(h) for h in _RATE_LIMIT_HEADERS if h in headers
+            }
+            if interesting:
+                logger.info("chat completion rate-limit headers: %s", interesting)
+            return raw_resp.parse()
+        except Exception as exc:  # noqa: BLE001
+            last_exc = exc
+            if not _is_retryable(exc) or attempt >= max_attempts - 1:
+                raise
+            headers = getattr(getattr(exc, "response", None), "headers", {}) or {}
+            interesting = {
+                h: headers.get(h) for h in _RATE_LIMIT_HEADERS if h in headers
+            }
+            logger.warning(
+                "chat call attempt %d/%d failed (%s); backing off %.1fs; rate-limit-headers=%s",
+                attempt + 1,
+                max_attempts,
+                type(exc).__name__,
+                delay,
+                interesting or "n/a",
+            )
+            time.sleep(delay)
+            delay = min(delay * 2, CHAT_RETRY_MAX_DELAY_S)
+    assert last_exc is not None
+    raise last_exc
 
 
 def build_classification_prompt(
@@ -159,40 +245,58 @@ async def classify_episode(
         client = OpenAI(base_url=step_config.base_url, api_key=step_config.api_key)
         model = step_config.model
 
-    system_prompt, user_payload = build_classification_prompt(show, segments)
-
-    resp = client.chat.completions.create(
-        model=model,
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": json.dumps({"segments": user_payload}, ensure_ascii=False)},
-        ],
-        response_format={"type": "json_object"},
-    )
-    raw = resp.choices[0].message.content or "{}"
-    try:
-        data = json.loads(raw)
-    except ValueError:
-        logger.exception("episode %s: LLM returned invalid JSON", episode_id)
-        return {}
-
     allowed = _allowed_label_set(show)
     label_map: dict[uuid.UUID, str] = {}
-    for item in data.get("labels", []):
+
+    # Process segments in batches to stay under model context length.
+    # Long episodes (>2hr talky podcast) can have 1500+ segments / 200K+
+    # input tokens — beyond gpt-4o-mini's 128K limit. Splitting per-batch
+    # gives independent classification calls; the system_prompt is
+    # re-sent each batch (a few-hundred token overhead per batch).
+    for batch_start in range(0, len(segments), SEGMENTS_PER_BATCH):
+        batch = segments[batch_start : batch_start + SEGMENTS_PER_BATCH]
+        system_prompt, user_payload = build_classification_prompt(show, batch)
+
+        resp = _call_chat_with_retry(
+            client,
+            model=model,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {
+                    "role": "user",
+                    "content": json.dumps(
+                        {"segments": user_payload}, ensure_ascii=False
+                    ),
+                },
+            ],
+            response_format={"type": "json_object"},
+        )
+        raw = resp.choices[0].message.content or "{}"
         try:
-            sid = uuid.UUID(str(item["id"]))
-            label = str(item["label"]).strip()
-        except (KeyError, ValueError):
-            continue
-        if label not in allowed:
-            logger.warning(
-                "episode %s segment %s: unknown label %r → topic_main fallback",
+            data = json.loads(raw)
+        except ValueError:
+            logger.exception(
+                "episode %s batch %d: LLM returned invalid JSON",
                 episode_id,
-                sid,
-                label,
+                batch_start // SEGMENTS_PER_BATCH,
             )
-            label = "topic_main"
-        label_map[sid] = label
+            continue
+
+        for item in data.get("labels", []):
+            try:
+                sid = uuid.UUID(str(item["id"]))
+                label = str(item["label"]).strip()
+            except (KeyError, ValueError):
+                continue
+            if label not in allowed:
+                logger.warning(
+                    "episode %s segment %s: unknown label %r → topic_main fallback",
+                    episode_id,
+                    sid,
+                    label,
+                )
+                label = "topic_main"
+            label_map[sid] = label
 
     # Short-segment fallback: < 5s segments without a label inherit the previous segment's label.
     prev_label = "topic_main"
