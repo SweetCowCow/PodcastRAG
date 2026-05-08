@@ -109,3 +109,11 @@ def test_trailing_partial_flushed():
 
 def test_empty_input_returns_empty():
     assert build_chunks([]) == []
+
+
+def test_whitespace_only_segments_drop_chunk():
+    # Some Whisper transcripts contain segments with empty/whitespace text.
+    # These would produce a chunk whose text is empty, which OpenAI rejects.
+    segs = [_seg(i * 3.0, (i + 1) * 3.0, "   ") for i in range(7)]
+    chunks = build_chunks(segs)
+    assert chunks == [], "all-whitespace segments must not produce a chunk"

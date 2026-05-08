@@ -76,7 +76,11 @@ def build_chunks(segments: Iterable[TranscriptSegment]) -> list[ChunkDraft]:
 
             middle_end += 1
 
-        drafts.append(_build(seg_list, middle_start, middle_end))
+        draft = _build(seg_list, middle_start, middle_end)
+        # Skip whitespace-only chunks: OpenAI embedding API rejects empty
+        # strings, and an empty chunk has no information to index either.
+        if draft.text.strip():
+            drafts.append(draft)
         middle_start = middle_end + 1
 
     return drafts
@@ -89,7 +93,9 @@ def _build(
     text_start = max(0, middle_start - OVERLAP_BEFORE)
     text_end = min(len(seg_list) - 1, middle_end + OVERLAP_AFTER)
 
-    text_pieces = [s.text for s in seg_list[text_start : text_end + 1]]
+    text_pieces = [
+        (s.text or "").strip() for s in seg_list[text_start : text_end + 1]
+    ]
     return ChunkDraft(
         start_time=seg_list[middle_start].start_time,
         end_time=seg_list[middle_end].end_time,
