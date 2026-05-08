@@ -199,6 +199,23 @@ def _allowed_label_set(show: Show) -> set[str]:
     return set(UNIVERSAL_LABELS) | extensions
 
 
+async def classify_episode_no_persist(
+    db: AsyncSession,
+    episode_id: uuid.UUID,
+    *,
+    client: OpenAI | None = None,
+    model: str | None = None,
+) -> dict[uuid.UUID, str]:
+    """Same as classify_episode but does NOT write to DB.
+
+    Used by A/B comparison runs where we want to evaluate a different model
+    without overwriting prod labels.
+    """
+    return await _classify_episode_impl(
+        db, episode_id, client=client, model=model, persist=False
+    )
+
+
 async def classify_episode(
     db: AsyncSession,
     episode_id: uuid.UUID,
@@ -212,6 +229,19 @@ async def classify_episode(
     `summary` step config). This lets backfill scripts route around the
     Zeabur AI Hub when it's throttling.
     """
+    return await _classify_episode_impl(
+        db, episode_id, client=client, model=model, persist=True
+    )
+
+
+async def _classify_episode_impl(
+    db: AsyncSession,
+    episode_id: uuid.UUID,
+    *,
+    client: OpenAI | None,
+    model: str | None,
+    persist: bool,
+) -> dict[uuid.UUID, str]:
     episode = await db.get(Episode, episode_id)
     if episode is None:
         logger.warning("episode %s not found", episode_id)
@@ -314,12 +344,13 @@ async def classify_episode(
             label_map[s.id] = prev_label
 
     # Persist
-    for sid, label in label_map.items():
-        await db.execute(
-            update(TranscriptSegment)
-            .where(TranscriptSegment.id == sid)
-            .values(topic_label=label)
-        )
-    await db.commit()
+    if persist:
+        for sid, label in label_map.items():
+            await db.execute(
+                update(TranscriptSegment)
+                .where(TranscriptSegment.id == sid)
+                .values(topic_label=label)
+            )
+        await db.commit()
 
     return label_map
