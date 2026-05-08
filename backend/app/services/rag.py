@@ -89,12 +89,20 @@ def _build_ts_query(question: str) -> str | None:
         cleaned.append(tok)
     if not cleaned:
         return None
-    # AND-join across multi-char tokens. Eval bake-off:
-    #   ` & ` raw (with 1-char):  Recall@5 4.76% (lexical CTE often empty)
-    #   ` | ` raw (with 1-char):  Recall@5 3.57% (too noisy, comprehension→0)
-    #   ` & ` after 1-char drop:  expected to outperform both — noise-words
-    #     gone so AND of 2-3 entity tokens is achievable in real chunks.
-    return " & ".join(cleaned)
+    # OR-join across multi-char tokens. Eval bake-off (this-not-that-cool, k=5,
+    # window=30s, 48 items):
+    #   v1 ` & ` keep 1-char:  Recall@5 4.76% — lexical CTE empty (collapsed
+    #                          to pure semantic baseline)
+    #   v2 ` | ` keep 1-char:  Recall@5 3.57% — particles flood lexical pool,
+    #                          comprehension drops to 0%, latency 5.5s
+    #   v3 ` & ` drop 1-char:  Recall@5 4.76% — STILL lexical-empty: a podcast
+    #                          chunk rarely contains all question entities
+    #                          simultaneously (instrumented: 0 chunks match
+    #                          `節目名 & 這又沒有很屌 & 怎麼` AND query)
+    #   v4 ` | ` drop 1-char:  this version — OR over multi-char tokens lets
+    #                          lexical actually contribute; ts_rank weighs
+    #                          rare matches so entity-dense chunks lift.
+    return " | ".join(cleaned)
 
 
 _TRANSCRIPT_RRF_SQL = """
