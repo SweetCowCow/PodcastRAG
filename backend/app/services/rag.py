@@ -86,7 +86,11 @@ def _build_ts_query(question: str) -> str | None:
         cleaned.append(tok)
     if not cleaned:
         return None
-    return " & ".join(cleaned)
+    # OR-join: requiring every token to appear (AND) is too strict for natural
+    # questions with 5+ tokens — lexical hits drop to ~zero and the RRF blend
+    # collapses to semantic-only. ts_rank already weighs rare matches higher,
+    # which gives entity-dense candidates the lift they need.
+    return " | ".join(cleaned)
 
 
 _TRANSCRIPT_RRF_SQL = """
