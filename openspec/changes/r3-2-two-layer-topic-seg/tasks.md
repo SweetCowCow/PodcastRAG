@@ -59,10 +59,10 @@
 
 ## 7. Stage 2 — deploy + carry-over data
 
-- [ ] 7.1 Push所有 code 到 main，redeploy backend / worker / dispatcher / beat
-- [ ] 7.2 SQL UPDATE prod：`UPDATE shows SET segment_categories = '[{"name":"playlist_segment","desc":"介紹歌曲、歌單環節"},{"name":"live_performance","desc":"來賓現場演唱"}]' WHERE title LIKE '%這又沒有很屌%'`
-- [ ] 7.3 SQL UPDATE prod：把 dict 中已知節目名 / 大主題詞 flag is_show_name=true（候選：「這又沒有很屌」「大嘻哈時代」「異世界美食家」「呱吉」要看是節目主還是節目名再決定）
-- [ ] 7.4 Verify prod schema：`transcript_segments.topic_label` exists nullable；`shows.segment_categories` 「這又沒有很屌」row 已寫入；`tokenizer_custom_terms` is_show_name 標記正確
+- [x] 7.1 Push所有 code 到 main，redeploy backend / worker / dispatcher / beat
+- [x] 7.2 SQL UPDATE prod：`UPDATE shows SET segment_categories = '[{"name":"playlist_segment","desc":"介紹歌曲、歌單環節"},{"name":"live_performance","desc":"來賓現場演唱"}]' WHERE title LIKE '%這又沒有很屌%'`
+- [x] 7.3 SQL UPDATE prod：把 dict 中已知節目名 / 大主題詞 flag is_show_name=true（候選：「這又沒有很屌」「大嘻哈時代」「異世界美食家」「呱吉」要看是節目主還是節目名再決定）
+- [x] 7.4 Verify prod schema：`transcript_segments.topic_label` exists nullable；`shows.segment_categories` 「這又沒有很屌」row 已寫入；`tokenizer_custom_terms` is_show_name 標記正確
 
 ## 8. Stage 3 — topic seg backfill
 

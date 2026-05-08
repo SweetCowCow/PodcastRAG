@@ -25,6 +25,7 @@ import os
 import time
 import uuid
 from collections import Counter
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from openai import OpenAI
@@ -218,8 +219,13 @@ def main() -> int:
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
     started = time.monotonic()
-    eps, segs, errs = asyncio.run(
-        run(
+
+    async def _runner() -> tuple[int, int, int]:
+        loop = asyncio.get_running_loop()
+        loop.set_default_executor(
+            ThreadPoolExecutor(max_workers=args.concurrency + 5)
+        )
+        return await run(
             all_=args.all,
             episode_id=args.episode_id,
             concurrency=args.concurrency,
@@ -231,7 +237,8 @@ def main() -> int:
             dry_run=args.dry_run,
             out_path=args.out,
         )
-    )
+
+    eps, segs, errs = asyncio.run(_runner())
     elapsed = time.monotonic() - started
     print(
         f"summary: episodes={eps} segments={segs} errors={errs} elapsed={elapsed:.1f}s",

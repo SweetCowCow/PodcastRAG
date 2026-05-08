@@ -59,10 +59,11 @@ UNIVERSAL_LABEL_DESCRIPTIONS = {
 
 SHORT_SEGMENT_THRESHOLD = 5.0  # seconds
 
-# Per-call segment batch size. Chosen so input stays under gpt-4o-mini's
-# 128K context limit even for 30-min talky episodes (~3000 chars each batch
-# × 1.5 chars/token ≈ 4500 tokens) with plenty of headroom.
-SEGMENTS_PER_BATCH = 60
+# Per-call segment batch size. 60 caused output truncation on talky episodes —
+# JSON unterminated at char ~31400 hitting gpt-4o-mini's 16K output cap.
+# Halved to 30 + explicit max_completion_tokens=8000 for safety margin.
+SEGMENTS_PER_BATCH = 30
+CHAT_MAX_OUTPUT_TOKENS = 8000
 
 CHAT_RETRY_ATTEMPTS = 5
 CHAT_RETRY_INITIAL_DELAY_S = 2.0
@@ -109,6 +110,7 @@ def _call_chat_with_retry(
                 model=model,
                 messages=messages,
                 response_format=response_format or {"type": "text"},
+                max_completion_tokens=CHAT_MAX_OUTPUT_TOKENS,
             )
             headers = getattr(raw_resp, "headers", {}) or {}
             interesting = {
