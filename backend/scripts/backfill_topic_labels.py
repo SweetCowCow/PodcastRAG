@@ -60,7 +60,14 @@ async def run(
         )
     client = OpenAI(api_key=api_key)  # base_url defaults to OpenAI direct
 
-    engine = create_async_engine(settings.database_url)
+    # Bigger pool to support `--concurrency` episodes each holding a session
+    # while running multiple LLM batch calls per episode.
+    engine = create_async_engine(
+        settings.database_url,
+        pool_size=concurrency + 5,
+        max_overflow=10,
+        pool_pre_ping=True,
+    )
     Session = async_sessionmaker(engine, expire_on_commit=False)
 
     async with Session() as session:
@@ -103,7 +110,7 @@ def main() -> int:
     g = parser.add_mutually_exclusive_group(required=True)
     g.add_argument("--all", action="store_true")
     g.add_argument("--episode-id", type=uuid.UUID)
-    parser.add_argument("--concurrency", type=int, default=20)
+    parser.add_argument("--concurrency", type=int, default=10)
     parser.add_argument("--model", default="gpt-4o-mini")
     args = parser.parse_args()
 
