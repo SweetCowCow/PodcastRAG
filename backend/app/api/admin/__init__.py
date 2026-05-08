@@ -27,6 +27,7 @@ from app.api.admin.eval_runs import router as eval_runs_router  # noqa: E402
 from app.api.admin.summary_ops import router as summary_ops_router  # noqa: E402
 from app.api.admin.quota_requests import router as quota_requests_router  # noqa: E402
 from app.api.admin.tokenizer import router as tokenizer_router  # noqa: E402
+from app.api.admin.topic_seg import router as topic_seg_router  # noqa: E402
 
 router.include_router(api_keys_router)
 router.include_router(ai_steps_router)
@@ -34,6 +35,7 @@ router.include_router(summary_ops_router)
 router.include_router(quota_requests_router)
 router.include_router(eval_runs_router)
 router.include_router(tokenizer_router)
+router.include_router(topic_seg_router)
 
 
 @router.get("/queue-status", response_model=QueueStatusResponse)

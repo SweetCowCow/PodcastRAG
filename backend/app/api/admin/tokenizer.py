@@ -9,7 +9,11 @@ from app.core.database import get_db
 from app.core.security import require_admin
 from app.models.tokenizer_term import TokenizerCustomTerm
 from app.models.user import User
-from app.schemas.tokenizer import TokenizerTermCreate, TokenizerTermResponse
+from app.schemas.tokenizer import (
+    TokenizerTermCreate,
+    TokenizerTermPatch,
+    TokenizerTermResponse,
+)
 from app.services import tokenizer
 
 router = APIRouter(prefix="/tokenizer", tags=["admin", "tokenizer"])
@@ -43,6 +47,7 @@ async def create_term(
         term=payload.term.strip(),
         weight=payload.weight,
         source="manual",
+        is_show_name=payload.is_show_name,
         created_by_user_id=user.id if user else None,
     )
     db.add(row)
@@ -54,6 +59,22 @@ async def create_term(
             status_code=status.HTTP_409_CONFLICT,
             detail={"error_code": "duplicate_term", "term": payload.term},
         )
+    await db.refresh(row)
+    return TokenizerTermResponse.model_validate(row, from_attributes=True)
+
+
+@router.patch("/terms/{term_id}", response_model=TokenizerTermResponse)
+async def patch_term(
+    term_id: uuid.UUID,
+    payload: TokenizerTermPatch,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_admin),
+) -> TokenizerTermResponse:
+    row = await db.get(TokenizerCustomTerm, term_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="term not found")
+    row.is_show_name = payload.is_show_name
+    await db.commit()
     await db.refresh(row)
     return TokenizerTermResponse.model_validate(row, from_attributes=True)
 

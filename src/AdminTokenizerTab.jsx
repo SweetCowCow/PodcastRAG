@@ -5,6 +5,7 @@ const AdminTokenizerTab = ({ lang }) => {
   const [error, setError] = React.useState(null);
   const [toast, setToast] = React.useState(null);
   const [newTerm, setNewTerm] = React.useState('');
+  const [newIsShowName, setNewIsShowName] = React.useState(false);
   const [adding, setAdding] = React.useState(false);
   const [reloading, setReloading] = React.useState(false);
 
@@ -33,7 +34,7 @@ const AdminTokenizerTab = ({ lang }) => {
       const res = await apiFetch('/admin/tokenizer/terms', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ term: newTerm.trim() }),
+        body: JSON.stringify({ term: newTerm.trim(), is_show_name: newIsShowName }),
       });
       if (res.status === 409) {
         showToast(t ? '詞已存在' : 'Term already exists', 'warn');
@@ -41,6 +42,7 @@ const AdminTokenizerTab = ({ lang }) => {
       }
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       setNewTerm('');
+      setNewIsShowName(false);
       showToast(t ? '已新增' : 'Added');
       await reload();
     } catch (err) {
@@ -58,6 +60,21 @@ const AdminTokenizerTab = ({ lang }) => {
       });
       if (!res.ok && res.status !== 204) throw new Error(`HTTP ${res.status}`);
       showToast(t ? '已刪除' : 'Deleted');
+      await reload();
+    } catch (err) {
+      showToast(err.message || String(err), 'error');
+    }
+  };
+
+  const handleToggleShowName = async (id, term, current) => {
+    try {
+      const res = await apiFetch(`/admin/tokenizer/terms/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_show_name: !current }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      showToast(t ? `已更新「${term}」` : `Updated "${term}"`);
       await reload();
     } catch (err) {
       showToast(err.message || String(err), 'error');
@@ -91,6 +108,14 @@ const AdminTokenizerTab = ({ lang }) => {
           placeholder={t ? '新增詞，例：迪拉胖' : 'New term, e.g. 迪拉胖'}
           style={{ flex: 1, maxWidth: 320 }}
         />
+        <label style={{ display: 'flex', alignItems: 'center', gap: 4, color: TOKEN.textSecondary, fontSize: 13 }}>
+          <input
+            type="checkbox"
+            checked={newIsShowName}
+            onChange={(e) => setNewIsShowName(e.target.checked)}
+          />
+          {t ? '節目名（不進關鍵字檢索）' : 'Show name (lexical-excluded)'}
+        </label>
         <Btn type="submit" variant="primary" disabled={!newTerm.trim() || adding}>
           {adding ? (t ? '新增中…' : 'Adding…') : (t ? '新增' : 'Add')}
         </Btn>
@@ -117,6 +142,7 @@ const AdminTokenizerTab = ({ lang }) => {
               <th style={{ padding: '10px 8px', fontWeight: 600 }}>{t ? '詞' : 'Term'}</th>
               <th style={{ padding: '10px 8px', fontWeight: 600 }}>{t ? '權重' : 'Weight'}</th>
               <th style={{ padding: '10px 8px', fontWeight: 600 }}>{t ? '來源' : 'Source'}</th>
+              <th style={{ padding: '10px 8px', fontWeight: 600 }}>{t ? '節目名' : 'Show name'}</th>
               <th style={{ padding: '10px 8px', fontWeight: 600 }}>{t ? '建立時間' : 'Created'}</th>
               <th style={{ padding: '10px 8px', fontWeight: 600 }}></th>
             </tr>
@@ -128,6 +154,13 @@ const AdminTokenizerTab = ({ lang }) => {
                 <td style={{ padding: '10px 8px' }}>{r.weight}</td>
                 <td style={{ padding: '10px 8px' }}>
                   <Badge variant={r.source === 'manual' ? 'default' : 'muted'}>{r.source}</Badge>
+                </td>
+                <td style={{ padding: '10px 8px' }}>
+                  <input
+                    type="checkbox"
+                    checked={!!r.is_show_name}
+                    onChange={() => handleToggleShowName(r.id, r.term, r.is_show_name)}
+                  />
                 </td>
                 <td style={{ padding: '10px 8px', color: TOKEN.textMuted, fontSize: 12 }}>
                   {r.created_at ? new Date(r.created_at).toLocaleString() : ''}

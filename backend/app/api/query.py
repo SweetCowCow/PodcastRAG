@@ -151,8 +151,18 @@ async def public_search_show(
     ) as exc:
         _raise_openai_http_error(exc, "OpenAI")
 
+    routed_eps = (
+        None
+        if rag._should_skip_routing(payload.question)
+        else await rag.route_episodes(db, show_id, query_embedding[0])
+    )
     hits = await rag.retrieve_hybrid(
-        db, show_id, query_embedding[0], payload.question, k=payload.k
+        db,
+        show_id,
+        query_embedding[0],
+        payload.question,
+        k=payload.k,
+        episode_id_filter=routed_eps,
     )
     return PublicSearchResponse(results=[_to_schema_hit(h) for h in hits])
 
@@ -199,8 +209,17 @@ async def query_show(
             openai.APITimeoutError,
         ) as exc:
             _raise_openai_http_error(exc, "OpenAI")
+        routed_eps = (
+            None
+            if rag._should_skip_routing(payload.question)
+            else await rag.route_episodes(db, show_id, query_embedding[0])
+        )
         hits = await rag.retrieve_hybrid(
-            db, show_id, query_embedding[0], payload.question
+            db,
+            show_id,
+            query_embedding[0],
+            payload.question,
+            episode_id_filter=routed_eps,
         )
         return SearchResponse(
             results=[_to_schema_hit(h) for h in hits],
@@ -253,7 +272,18 @@ async def query_show(
         openai.APITimeoutError,
     ) as exc:
         _raise_openai_http_error(exc, "OpenAI")
-    hits = await rag.retrieve_hybrid(db, show_id, query_embedding[0], rewritten)
+    routed_eps = (
+        None
+        if rag._should_skip_routing(rewritten)
+        else await rag.route_episodes(db, show_id, query_embedding[0])
+    )
+    hits = await rag.retrieve_hybrid(
+        db,
+        show_id,
+        query_embedding[0],
+        rewritten,
+        episode_id_filter=routed_eps,
+    )
 
     answer_client = OpenAI(
         base_url=answer_cfg.base_url, api_key=answer_cfg.api_key

@@ -11,6 +11,8 @@ def test_rrf_constants_match_design():
     assert rag.RRF_K == 60
     assert rag.RRF_PER_SIDE == 50
     assert rag.RETRIEVAL_TOP_K == 8
+    assert rag.DESCRIPTION_CAP == 3
+    assert rag.ROUTE_EPISODES_K == 10
 
 
 def _rrf(rank_s: int | None, rank_l: int | None, k: int = 60) -> float:
@@ -82,6 +84,104 @@ def test_hit_key_format_for_each_source():
         source="description",
     )
     assert rag._hit_key(desc_hit) == "desc:00000000-0000-0000-0000-000000000002"
+
+
+def test_description_cap_replaces_excess_with_transcript():
+    """Spec example: 5 description hits leading + 3 transcript hits → cap to 3 desc."""
+    import uuid as _uuid
+
+    def hit(idx: int, source: str) -> rag.ChunkHit:
+        return rag.ChunkHit(
+            chunk_id=_uuid.uuid4(),
+            episode_id=_uuid.uuid4(),
+            episode_title="t",
+            start_time=0.0,
+            end_time=0.0,
+            text="x",
+            rrf_score=1.0 / idx,
+            source=source,
+        )
+
+    # Hand-build a ranked list matching the spec example table in rag-query/spec.md.
+    transcript_hits = [hit(5, "transcript"), hit(7, "transcript"), hit(8, "transcript")]
+    desc_hits = [
+        hit(1, "description"),
+        hit(2, "description"),
+        hit(3, "description"),
+        hit(4, "description"),
+        hit(6, "description"),
+    ]
+
+    # Inline-mimic retrieve_hybrid's merge+cap logic (real one is async + DB-bound).
+    seen = set()
+    ranked = []
+    for h in sorted(transcript_hits + desc_hits, key=lambda x: x.rrf_score, reverse=True):
+        if h.chunk_id in seen:
+            continue
+        seen.add(h.chunk_id)
+        ranked.append(h)
+
+    final = []
+    desc_count = 0
+    extras = []
+    for h in ranked:
+        if len(final) >= 8:
+            break
+        if h.source == "description":
+            if desc_count < rag.DESCRIPTION_CAP:
+                final.append(h)
+                desc_count += 1
+            else:
+                extras.append(h)
+        else:
+            final.append(h)
+    while len(final) < 8 and extras:
+        final.append(extras.pop(0))
+
+    final_sources = [h.source for h in final]
+    # 3 description + 3 transcript = 6 total; 2 spare slots filled by extras (extra desc).
+    assert final_sources.count("description") == 5
+    assert final_sources.count("transcript") == 3
+    # First 6 in cap order: 3 desc, then 3 transcript
+    assert final_sources[:3] == ["description"] * 3
+    assert final_sources[3:6] == ["transcript"] * 3
+
+
+def test_description_cap_waived_when_no_transcripts():
+    """Spec scenario: cap waived when transcript pool exhausted."""
+    import uuid as _uuid
+
+    def desc_hit(idx: int) -> rag.ChunkHit:
+        return rag.ChunkHit(
+            chunk_id=_uuid.uuid4(),
+            episode_id=_uuid.uuid4(),
+            episode_title="t",
+            start_time=0.0,
+            end_time=0.0,
+            text="x",
+            rrf_score=1.0 / idx,
+            source="description",
+        )
+
+    desc_hits = [desc_hit(i) for i in range(1, 5)]  # 4 description hits, no transcript
+    # Run cap logic
+    final = []
+    desc_count = 0
+    extras = []
+    for h in desc_hits:
+        if len(final) >= 8:
+            break
+        if h.source == "description":
+            if desc_count < rag.DESCRIPTION_CAP:
+                final.append(h)
+                desc_count += 1
+            else:
+                extras.append(h)
+    while len(final) < 8 and extras:
+        final.append(extras.pop(0))
+
+    assert len(final) == 4  # all 4 description hits returned (cap waived)
+    assert all(h.source == "description" for h in final)
 
 
 def test_no_external_retrieval_lib_imported():

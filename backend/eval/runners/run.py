@@ -184,7 +184,7 @@ def _markdown_report(report: dict) -> str:
         "",
         "| metric | value |",
         "|---|---|",
-        f"| Recall@{report['top_k']} | {m['overall']['recall_at_k_mean']} |",
+        f"| Recall@{report['top_k']} ({report.get('metric_level','chunk')}) | {m['overall']['recall_at_k_mean']} |",
         f"| MRR | {m['overall']['mrr']} |",
         f"| Judge mean (1-5) | {m['overall']['judge_score_mean']} |",
         f"| Latency P95 (ms) | {m['overall']['latency_p95_ms']} |",
@@ -206,6 +206,20 @@ def _markdown_report(report: dict) -> str:
 # Main
 # ────────────────────────────────────────────────────────────────────
 
+def _to_episode_ids(chunk_ids: list[str]) -> list[str]:
+    """Extract just the episode_id portion of `ep:<uuid>@<time>` strings."""
+    out = []
+    for cid in chunk_ids:
+        head = cid.split("@", 1)[0]
+        if head.startswith("ep:"):
+            out.append(head[3:])
+        elif head.startswith("desc:"):
+            out.append(head[5:])
+        else:
+            out.append(head)
+    return out
+
+
 def run_eval(
     dataset_path: Path,
     backend_url: str,
@@ -214,6 +228,7 @@ def run_eval(
     skip_judge: bool,
     out_dir: Path,
     match_window_s: float = DEFAULT_MATCH_WINDOW_S,
+    metric_level: str = "episode",
 ) -> dict:
     """Execute eval; return report dict + write JSON/MD to out_dir."""
     data = json.loads(dataset_path.read_text(encoding="utf-8"))
@@ -242,12 +257,17 @@ def run_eval(
             backend_url, show_id, item["question"], top_k, token,
         )
         gt = item.get("ground_truth_chunk_ids", [])
-        # Lenient match: convert both lists to (episode, time_bucket) so a
-        # retrieved chunk that contains the anchor segment counts as a hit.
-        retrieved_lenient = _to_lenient_ids(chunk_ids, match_window_s)
-        gt_lenient = _to_lenient_ids(gt, match_window_s)
-        rec = recall_at_k(retrieved_lenient, gt_lenient, k=top_k)
-        rr = reciprocal_rank(retrieved_lenient, gt_lenient) if gt_lenient else None
+        if metric_level == "episode":
+            # Episode-level match: hit if any retrieved chunk shares episode_id
+            # with any anchor (ignores start_time and `match_window_s`).
+            retrieved_match = _to_episode_ids(chunk_ids)
+            gt_match = _to_episode_ids(gt)
+        else:
+            # Chunk-level (legacy R1.2 / R3.1 behaviour) — bucket by window.
+            retrieved_match = _to_lenient_ids(chunk_ids, match_window_s)
+            gt_match = _to_lenient_ids(gt, match_window_s)
+        rec = recall_at_k(retrieved_match, gt_match, k=top_k)
+        rr = reciprocal_rank(retrieved_match, gt_match) if gt_match else None
 
         judge_val: float | None = None
         if judge_fn is not None:
@@ -280,6 +300,7 @@ def run_eval(
         "backend": backend_url,
         "judge_model": judge_model,
         "top_k": top_k,
+        "metric_level": metric_level,
         "n_items": len(items),
         "metrics": metrics,
         "items": out_items,
@@ -312,6 +333,14 @@ def main(argv: Iterable[str] | None = None) -> int:
         help="Seconds. A retrieved chunk counts as a hit if its start_time is within "
         "this window of an anchor's start_time (same episode). Default 10s.",
     )
+    parser.add_argument(
+        "--metric-level",
+        choices=["episode", "chunk"],
+        default="episode",
+        help="`episode`: hit if retrieved chunk's episode_id matches any anchor "
+        "episode_id (R3.2 default, fair to description hits). `chunk`: legacy "
+        "R1.2/R3.1 behaviour using start_time bucketing.",
+    )
     parser.add_argument("--skip-judge", action="store_true", help="Retrieval metrics only")
     parser.add_argument(
         "--out-dir",
@@ -332,6 +361,7 @@ def main(argv: Iterable[str] | None = None) -> int:
         skip_judge=args.skip_judge,
         out_dir=args.out_dir,
         match_window_s=args.match_window_s,
+        metric_level=args.metric_level,
     )
     return 0
 

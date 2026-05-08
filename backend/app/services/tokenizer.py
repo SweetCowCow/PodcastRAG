@@ -25,8 +25,18 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 _loaded_terms: set[str] = set()
+_show_name_terms: set[str] = set()
 _loaded: bool = False
 _lock = threading.Lock()
+
+
+def get_show_name_terms() -> set[str]:
+    """Return the set of terms flagged `is_show_name=true`.
+
+    Used by `rag._build_ts_query` to drop show-name tokens from the
+    lexical query side (embedding side is not affected).
+    """
+    return _show_name_terms.copy()
 
 
 def tokenize(text: str) -> list[str]:
@@ -65,6 +75,7 @@ async def reload_dictionary(db: AsyncSession) -> int:
         for term in list(_loaded_terms):
             jieba.del_word(term)
         _loaded_terms.clear()
+        _show_name_terms.clear()
         await _register_from_db(db)
         _loaded = True
     return len(_loaded_terms)
@@ -72,10 +83,17 @@ async def reload_dictionary(db: AsyncSession) -> int:
 
 async def _register_from_db(db: AsyncSession) -> None:
     rows = (await db.execute(select(TokenizerCustomTerm))).scalars().all()
+    _show_name_terms.clear()
     for row in rows:
         jieba.add_word(row.term, freq=row.weight)
         _loaded_terms.add(row.term)
-    logger.info("tokenizer dictionary loaded: %d terms", len(_loaded_terms))
+        if getattr(row, "is_show_name", False):
+            _show_name_terms.add(row.term)
+    logger.info(
+        "tokenizer dictionary loaded: %d terms (%d show-name)",
+        len(_loaded_terms),
+        len(_show_name_terms),
+    )
 
 
 def _lazy_sync_load() -> None:
@@ -96,9 +114,12 @@ def _lazy_sync_load() -> None:
             engine = create_engine(sync_url, future=True)
             with Session(engine) as session:
                 rows = session.execute(select(TokenizerCustomTerm)).scalars().all()
+                _show_name_terms.clear()
                 for row in rows:
                     jieba.add_word(row.term, freq=row.weight)
                     _loaded_terms.add(row.term)
+                    if getattr(row, "is_show_name", False):
+                        _show_name_terms.add(row.term)
             engine.dispose()
             logger.info(
                 "tokenizer dictionary lazy-loaded (sync): %d terms",
@@ -116,4 +137,5 @@ def reset_for_tests() -> None:
         for term in list(_loaded_terms):
             jieba.del_word(term)
         _loaded_terms.clear()
+        _show_name_terms.clear()
         _loaded = False

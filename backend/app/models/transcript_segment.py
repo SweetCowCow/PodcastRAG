@@ -22,5 +22,6 @@ class TranscriptSegment(Base):
     end_time: Mapped[float] = mapped_column(Float, nullable=False)
     text: Mapped[str] = mapped_column(Text, nullable=False)
     speaker: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    topic_label: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
     transcript: Mapped["Transcript"] = relationship(back_populates="segments")

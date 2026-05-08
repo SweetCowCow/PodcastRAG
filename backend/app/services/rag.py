@@ -22,6 +22,8 @@ from app.services import api_health, tokenizer
 RETRIEVAL_TOP_K = 8
 RRF_K = 60
 RRF_PER_SIDE = 50
+DESCRIPTION_CAP = 3
+ROUTE_EPISODES_K = 10
 HISTORY_WINDOW = 10
 
 REWRITE_SYSTEM_PROMPT = (
@@ -70,6 +72,7 @@ def _build_ts_query(question: str) -> str | None:
     remaining tokens with ` & `. Returns None when nothing usable is left.
     """
     tokens = tokenizer.tokenize(question)
+    show_name_terms = tokenizer.get_show_name_terms()
     cleaned: list[str] = []
     for tok in tokens:
         tok = tok.strip()
@@ -77,14 +80,16 @@ def _build_ts_query(question: str) -> str | None:
             continue
         if re.fullmatch(r"\W+", tok):
             continue
-        # Drop single-character tokens regardless of script: stop-particles
-        # (是/的/了) and stray Latin chars are pure noise in tsquery and
-        # dominate either ` & ` (over-restrict) or ` | ` (over-noise).
-        if len(tok) < 2:
-            continue
         # tsquery operators: escape `&|!()<:>`
         tok = re.sub(r"[&|!()<:>\\]", " ", tok).strip()
         if not tok:
+            continue
+        # Drop tokens flagged as show-name in tokenizer_custom_terms — these
+        # are too generic to discriminate (e.g. show name appears across
+        # every casual mention episode, drowning the actual answer chunk).
+        # Embedding side gets the full question text so semantic signal is
+        # preserved.
+        if tok in show_name_terms:
             continue
         cleaned.append(tok)
     if not cleaned:
@@ -117,6 +122,7 @@ WITH semantic AS (
     WHERE e.show_id = :show_id
       AND t.status = 'completed'
       AND c.embedding IS NOT NULL
+      {episode_filter}
     LIMIT :per_side
 ),
 lexical AS (
@@ -131,6 +137,7 @@ lexical AS (
       AND t.status = 'completed'
       AND c.text_tsvector IS NOT NULL
       AND c.text_tsvector @@ to_tsquery('simple', :ts_query)
+      {episode_filter}
     LIMIT :per_side
 ),
 combined AS (
@@ -169,6 +176,7 @@ JOIN episodes e ON e.id = t.episode_id
 WHERE e.show_id = :show_id
   AND t.status = 'completed'
   AND c.embedding IS NOT NULL
+  {episode_filter}
 ORDER BY distance
 LIMIT :k
 """
@@ -183,6 +191,7 @@ WITH semantic AS (
     JOIN episodes e ON e.id = d.episode_id
     WHERE e.show_id = :show_id
       AND d.embedding IS NOT NULL
+      {episode_filter}
     LIMIT :per_side
 ),
 lexical AS (
@@ -195,6 +204,7 @@ lexical AS (
     WHERE e.show_id = :show_id
       AND d.text_tsvector IS NOT NULL
       AND d.text_tsvector @@ to_tsquery('simple', :ts_query)
+      {episode_filter}
     LIMIT :per_side
 ),
 combined AS (
@@ -226,9 +236,28 @@ FROM episode_description_chunks d
 JOIN episodes e ON e.id = d.episode_id
 WHERE e.show_id = :show_id
   AND d.embedding IS NOT NULL
+  {episode_filter}
 ORDER BY distance
 LIMIT :k
 """
+
+_ROUTE_EPISODES_SQL = """
+SELECT e.id AS episode_id
+FROM episode_description_chunks d
+JOIN episodes e ON e.id = d.episode_id
+WHERE e.show_id = :show_id
+  AND d.embedding IS NOT NULL
+ORDER BY d.embedding <=> CAST(:query_embedding AS vector)
+LIMIT :k
+"""
+
+
+def _episode_filter_clause(table_alias: str, params: dict, eps: list[uuid.UUID] | None) -> str:
+    """Build the optional `AND <alias>.id = ANY(:episode_ids)` clause and bind."""
+    if not eps:
+        return ""
+    params["episode_ids"] = [str(e) for e in eps]
+    return f"AND {table_alias}.id = ANY(CAST(:episode_ids AS uuid[]))"
 
 
 async def retrieve(
@@ -237,28 +266,30 @@ async def retrieve(
     query_embedding: list[float],
     question: str = "",
     k: int = RETRIEVAL_TOP_K,
+    episode_id_filter: list[uuid.UUID] | None = None,
 ) -> list[ChunkHit]:
     """Hybrid (RRF) retrieval over `transcript_chunks` for one show.
 
     If the question yields no usable lexical query, falls back to
-    semantic-only ranking — which keeps callers passing pre-computed
-    embeddings working even when jieba returns no tokens.
+    semantic-only ranking. Optional `episode_id_filter` restricts both
+    semantic and lexical CTEs to the given episode set (used by the
+    R3.2 two-layer routing flow).
     """
     ts_query = _build_ts_query(question) if question else None
 
+    base_params: dict = {
+        "query_embedding": _vector_literal(query_embedding),
+        "show_id": show_id,
+        "k": k,
+    }
+    ep_filter = _episode_filter_clause("e", base_params, episode_id_filter)
+
     if ts_query:
-        sql = text(_TRANSCRIPT_RRF_SQL)
-        result = await db.execute(
-            sql,
-            {
-                "query_embedding": _vector_literal(query_embedding),
-                "show_id": show_id,
-                "ts_query": ts_query,
-                "k": k,
-                "per_side": RRF_PER_SIDE,
-                "rrf_k": RRF_K,
-            },
-        )
+        sql = text(_TRANSCRIPT_RRF_SQL.format(episode_filter=ep_filter))
+        base_params["ts_query"] = ts_query
+        base_params["per_side"] = RRF_PER_SIDE
+        base_params["rrf_k"] = RRF_K
+        result = await db.execute(sql, base_params)
         return [
             ChunkHit(
                 chunk_id=row["chunk_id"],
@@ -274,15 +305,8 @@ async def retrieve(
         ]
 
     # No lexical signal — fall back to pure semantic.
-    sql = text(_TRANSCRIPT_SEMANTIC_ONLY_SQL)
-    result = await db.execute(
-        sql,
-        {
-            "query_embedding": _vector_literal(query_embedding),
-            "show_id": show_id,
-            "k": k,
-        },
-    )
+    sql = text(_TRANSCRIPT_SEMANTIC_ONLY_SQL.format(episode_filter=ep_filter))
+    result = await db.execute(sql, base_params)
     return [
         ChunkHit(
             chunk_id=row["chunk_id"],
@@ -304,6 +328,7 @@ async def retrieve_descriptions(
     query_embedding: list[float],
     question: str = "",
     k: int = RETRIEVAL_TOP_K,
+    episode_id_filter: list[uuid.UUID] | None = None,
 ) -> list[ChunkHit]:
     """Hybrid (RRF) retrieval over `episode_description_chunks` for one show.
 
@@ -312,19 +337,19 @@ async def retrieve_descriptions(
     """
     ts_query = _build_ts_query(question) if question else None
 
+    base_params: dict = {
+        "query_embedding": _vector_literal(query_embedding),
+        "show_id": show_id,
+        "k": k,
+    }
+    ep_filter = _episode_filter_clause("e", base_params, episode_id_filter)
+
     if ts_query:
-        sql = text(_DESC_RRF_SQL)
-        result = await db.execute(
-            sql,
-            {
-                "query_embedding": _vector_literal(query_embedding),
-                "show_id": show_id,
-                "ts_query": ts_query,
-                "k": k,
-                "per_side": RRF_PER_SIDE,
-                "rrf_k": RRF_K,
-            },
-        )
+        sql = text(_DESC_RRF_SQL.format(episode_filter=ep_filter))
+        base_params["ts_query"] = ts_query
+        base_params["per_side"] = RRF_PER_SIDE
+        base_params["rrf_k"] = RRF_K
+        result = await db.execute(sql, base_params)
         return [
             ChunkHit(
                 chunk_id=row["chunk_id"],
@@ -339,15 +364,8 @@ async def retrieve_descriptions(
             for row in result.mappings()
         ]
 
-    sql = text(_DESC_SEMANTIC_ONLY_SQL)
-    result = await db.execute(
-        sql,
-        {
-            "query_embedding": _vector_literal(query_embedding),
-            "show_id": show_id,
-            "k": k,
-        },
-    )
+    sql = text(_DESC_SEMANTIC_ONLY_SQL.format(episode_filter=ep_filter))
+    result = await db.execute(sql, base_params)
     return [
         ChunkHit(
             chunk_id=row["chunk_id"],
@@ -363,21 +381,63 @@ async def retrieve_descriptions(
     ]
 
 
+def _should_skip_routing(question: str) -> bool:
+    """True when the question is too short to route reliably.
+
+    Routing relies on description embedding similarity. Questions with
+    fewer than 2 multi-char (length>=2) jieba tokens (e.g. just '迪拉胖')
+    yield poor embedding signal — we'd rather search the whole show.
+    """
+    if not question or not question.strip():
+        return True
+    tokens = tokenizer.tokenize(question)
+    multi_char = [t for t in tokens if len(t) >= 2]
+    return len(multi_char) < 2
+
+
+async def route_episodes(
+    db: AsyncSession,
+    show_id: uuid.UUID,
+    query_embedding: list[float],
+    k: int = ROUTE_EPISODES_K,
+) -> list[uuid.UUID]:
+    """First-layer routing: top-k episode_id by description embedding cosine."""
+    sql = text(_ROUTE_EPISODES_SQL)
+    result = await db.execute(
+        sql,
+        {
+            "query_embedding": _vector_literal(query_embedding),
+            "show_id": show_id,
+            "k": k,
+        },
+    )
+    return [row["episode_id"] for row in result.mappings()]
+
+
 async def retrieve_hybrid(
     db: AsyncSession,
     show_id: uuid.UUID,
     query_embedding: list[float],
     question: str = "",
     k: int = RETRIEVAL_TOP_K,
+    episode_id_filter: list[uuid.UUID] | None = None,
 ) -> list[ChunkHit]:
-    """Run transcript + description retrieval and merge by RRF score."""
-    transcript_hits = await retrieve(db, show_id, query_embedding, question, k=k)
+    """Run transcript + description retrieval and merge by RRF score.
+
+    Applies DESCRIPTION_CAP: at most `DESCRIPTION_CAP` description hits in
+    the returned top-K. Excess description hits are replaced (in rank
+    order) by the next-best transcript hits if any are available.
+    """
+    transcript_hits = await retrieve(
+        db, show_id, query_embedding, question, k=k, episode_id_filter=episode_id_filter
+    )
     desc_hits = await retrieve_descriptions(
-        db, show_id, query_embedding, question, k=k
+        db, show_id, query_embedding, question, k=k, episode_id_filter=episode_id_filter
     )
 
+    # Merge by RRF score (existing behaviour).
     seen: set[uuid.UUID] = set()
-    merged: list[ChunkHit] = []
+    ranked: list[ChunkHit] = []
     for h in sorted(
         transcript_hits + desc_hits,
         key=lambda x: (x.rrf_score, -(x.distance or 0.0)),
@@ -387,10 +447,29 @@ async def retrieve_hybrid(
             continue
         if h.chunk_id:
             seen.add(h.chunk_id)
-        merged.append(h)
-        if len(merged) >= k:
+        ranked.append(h)
+
+    # Apply DESCRIPTION_CAP: at most N description hits, prefer transcript
+    # to fill the rest. If transcripts run out, fall back to filling with
+    # extra description hits (cap waived).
+    final: list[ChunkHit] = []
+    desc_count = 0
+    extras: list[ChunkHit] = []
+    for h in ranked:
+        if len(final) >= k:
             break
-    return merged
+        if h.source == "description":
+            if desc_count < DESCRIPTION_CAP:
+                final.append(h)
+                desc_count += 1
+            else:
+                extras.append(h)
+        else:
+            final.append(h)
+    # If we have spare slots and only extras left, use them (cap waiver).
+    while len(final) < k and extras:
+        final.append(extras.pop(0))
+    return final
 
 
 def _chat_with_tracker(client: OpenAI, **kwargs):
