@@ -116,28 +116,28 @@ Supports design Decision 5 migration plan. Drives Requirement "Bulk indexer comm
 - [x] 7.3 Unit test in `backend/tests/test_rebuild_chunks.py` against a fixture transcript: assert old chunks deleted, new chunks have non-null text_tsvector, embeddings filled
 - [x] 7.4 Manual prod run prep: review script invocations + estimate runtime + confirm openai key budget < $1
 - [x] 7.5 Run `python -m backend.scripts.import_jieba_seed --csv <curated>.csv` against prod (after § 2.7-2.8 produces curated CSV)
-- [ ] 7.6 Run `python -m backend.scripts.rebuild_chunks --all` against prod (zeabur service exec)
+- [x] 7.6 Run `python -m backend.scripts.rebuild_chunks --all` against prod (zeabur service exec)
 - [x] 7.7 Run `python -m backend.scripts.build_description_index --all` against prod
-- [ ] 7.8 Verify counts: `transcript_chunks` row count is plausible (expect ~300K-450K with the new chunking); `episode_description_chunks` count equals episodes-with-non-empty-description count
+- [x] 7.8 Verify counts: `transcript_chunks` row count is plausible (expect ~300K-450K with the new chunking); `episode_description_chunks` count equals episodes-with-non-empty-description count
 
 ## 8. Eval — three rounds + iterate
 
 Supports design Decision 7. Validates that the new RRF retrieval (rag-query MODIFIED + ADDED) and description index (episode-description-index ADDED) produce the goal Recall@5 lift over the R1.2 baseline of 2.4%.
 
-- [ ] 8.1 Run R1.2 eval baseline against prod BEFORE deploying R3.1 (sanity recheck of 2.4% Recall@5; saves to `backend/eval/runs/r31-pre.jsonl`)
-- [ ] 8.2 Deploy R3.1 (sections 1-7 done) to prod via `git push` + redeploy 4 services
-- [ ] 8.3 Run R1.2 eval after deploy (no further dict curation): `backend/eval/runs/r31-post.jsonl`
-- [ ] 8.4 Inspect failure cases: for each Recall@5 = 0 question, check whether retrieval returned the expected chunk in any rank. Identify which OOV terms (if any) the question depends on
+- [x] 8.1 Run R1.2 eval baseline against prod BEFORE deploying R3.1 (sanity recheck of 2.4% Recall@5; saves to `backend/eval/runs/r31-pre.jsonl`)
+- [x] 8.2 Deploy R3.1 (sections 1-7 done) to prod via `git push` + redeploy 4 services
+- [x] 8.3 Run R1.2 eval after deploy (no further dict curation): `backend/eval/runs/r31-post.jsonl`
+- [x] 8.4 Inspect failure cases: for each Recall@5 = 0 question, check whether retrieval returned the expected chunk in any rank. Identify which OOV terms (if any) the question depends on
 - [ ] 8.5 Curate ~10-30 additional dict terms based on §8.4, import + reload, then re-tokenize affected chunks (subset of `rebuild_chunks` scoped to those transcripts)
-- [ ] 8.6 Run R1.2 eval third time: `backend/eval/runs/r31-post-dict-iter.jsonl`
-- [ ] 8.7 Compare three runs: produce a diff report (counts, deltas, per-category breakdown) saved to `docs/research/r31-eval-results.md` (not committed per case-studies-no-commit rule but referenced from release log)
+- [x] 8.6 Run R1.2 eval third time: `backend/eval/runs/r31-post-dict-iter.jsonl`
+- [x] 8.7 Compare three runs: produce a diff report (counts, deltas, per-category breakdown) saved to `docs/research/r31-eval-results.md` (not committed per case-studies-no-commit rule but referenced from release log)
 
 ## 9. Stage gate / archive
 
-- [ ] 9.1 `cd backend && python -m pytest tests/test_tokenizer.py tests/test_chunking_overlap.py tests/test_rag_rrf.py tests/test_description_indexer.py tests/test_admin_tokenizer.py tests/test_rebuild_chunks.py tests/test_jieba_seed_scripts.py -v` all green
-- [ ] 9.2 Full backend pytest 全綠 (existing tests not broken by chunking signature change)
-- [ ] 9.3 Lint / format pass on new modules
-- [ ] 9.4 Gitleaks pre-check + commit + push to `main`
-- [ ] 9.5 Backend-tests CI workflow + gitleaks CI green
-- [ ] 9.6 Add release log v1.4 entry「混合檢索上線：抓到節目主寫的 entity」, summarise eval delta from §8.7
+- [x] 9.1 `cd backend && python -m pytest tests/test_tokenizer.py tests/test_chunking_overlap.py tests/test_rag_rrf.py tests/test_description_indexer.py tests/test_admin_tokenizer.py tests/test_rebuild_chunks.py tests/test_jieba_seed_scripts.py -v` all green
+- [x] 9.2 Full backend pytest 全綠 (existing tests not broken by chunking signature change)
+- [x] 9.3 Lint / format pass on new modules
+- [x] 9.4 Gitleaks pre-check + commit + push to `main`
+- [x] 9.5 Backend-tests CI workflow + gitleaks CI green
+- [x] 9.6 Add release log v1.4 entry「混合檢索上線：抓到節目主寫的 entity」, summarise eval delta from §8.7
 - [ ] 9.7 Archive `r3-1-hybrid-retrieval` via `spectra archive`; specs synced into `openspec/specs/`
