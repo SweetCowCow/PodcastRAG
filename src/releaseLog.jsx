@@ -36,10 +36,24 @@ const MILESTONE_LABELS = {
   'v1.1': { zh: 'v1.1 — 收集回答品質回饋',         en: 'v1.1 — Collecting Answer Quality Feedback' },
   'v1.2': { zh: 'v1.2 — 量化 RAG 答題準確度基線',  en: 'v1.2 — RAG Accuracy Baseline, Measured' },
   'v1.3': { zh: 'v1.3 — 把資料背在保險上',         en: 'v1.3 — Putting Your Data on Insurance' },
+  'v1.4': { zh: 'v1.4 — 混合檢索：找到節目主寫的關鍵字', en: 'v1.4 — Hybrid Retrieval: Catching the Host\'s Own Keywords' },
 };
 
 // Entries — newest milestone first; within each milestone newest date first.
 const RELEASE_LOG = [
+  // ─── v1.4 — Hybrid Retrieval (5/08) ───
+  {
+    date: '2026-05-08', slug: 'r3-1-hybrid-retrieval', milestone: 'v1.4', tag: 'enhancement',
+    title: {
+      zh: '搜尋變雙保險：embedding + 關鍵字 + 節目簡介都進來找',
+      en: 'Search Now Has Three Sources: Embeddings + Keywords + Show Notes',
+    },
+    summary: {
+      zh: '原本問問題只靠 embedding（語意相似度），中文短詞訊號弱、節目主自創的字（迪拉胖、顏社、蘴月食堂）幾乎抓不到。從這版開始，搜尋同時跑語意 + 關鍵字（jieba 中文分詞 + Postgres tsvector），用 RRF 演算法把兩邊融合排序——關鍵字認得「迪拉胖」是一個整體不會被切成「迪/拉/胖」。順帶把節目主在 RSS 寫的每集簡介也丟進索引（餐廳列表、來賓名、主題 bullets），entity 密度比逐字稿還高，有時還比較準（EP143 逐字稿被 Whisper 聽成「楓月食堂」，簡介寫對「蘴月食堂」）。後台多了個分詞詞典管理介面，admin 可以隨時加詞 → 按 Reload 後 backend / worker / dispatcher / beat 4 個 service 同步生效。實機 eval 在 48 題 golden set 上，episode-level 命中率從 2.4% 拉到 23.8%（10 倍），Recall@20 從基本沒有拉到 62%——意思是答案大多在前 20 名裡，下一步 R3.2 要解決的就是怎麼把對的集數排到前 5 名。順手修了 chunk 重切時對 Whisper 空白段落造成的 OpenAI API 400 errors，重切完所有 transcript_chunks 都有關鍵字索引（98K 筆 100% coverage）。',
+      en: 'Search used to be embedding-only (semantic similarity). Short Chinese tokens have weak embedding signal, and the host\'s coined names (迪拉胖, 顏社, 蘴月食堂) were almost untouchable. Starting this release, every query runs semantic AND lexical (jieba Chinese tokeniser + Postgres tsvector) and fuses the two via RRF — the lexical side recognises "迪拉胖" as one token, not three characters. Bonus: each episode\'s RSS show notes (restaurant lists, guest names, topic bullets) now feeds a separate index — entity-dense, sometimes more accurate than the transcript itself (Whisper mishears EP143\'s 蘴月食堂 as 楓月食堂; the show notes have the correct character). Admin gets a tokenizer dictionary tab — add a term, click Reload, and backend / worker / dispatcher / beat all pick it up live. On the 48-item golden set, episode-level Recall@5 jumped from 2.4% to 23.8% (10×), and Recall@20 = 62% — so the right episode is almost always in the retrieval pool. R3.2\'s job is getting it into the top 5. Bundled fix: rebuild_chunks now drops whitespace-only chunks (Whisper sometimes emits empty segments) that were rejecting the entire embedding batch. All 98K transcript chunks now have lexical index coverage.',
+    },
+  },
+
   // ─── v1.3 — Off-site Encrypted Backup (5/07) ───
   {
     date: '2026-05-07', slug: 'db-backup', milestone: 'v1.3', tag: 'enhancement',
