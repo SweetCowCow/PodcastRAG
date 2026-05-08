@@ -51,9 +51,13 @@ async def _cleanup_qa_feedback():
 
 @db_required
 async def test_anonymous_returns_401():
+    # Origin header required so CSRF middleware doesn't 403 first; the
+    # endpoint's require_authenticated_user dep is what we're asserting.
     transport = ASGITransport(app=app, raise_app_exceptions=False)
     async with AsyncClient(
-        transport=transport, base_url="http://test"
+        transport=transport,
+        base_url="http://test",
+        headers={"origin": "http://localhost:8080"},
     ) as ac:
         res = await ac.post(
             "/qa-feedback",

@@ -279,9 +279,15 @@ async def test_query_chat_zeabur_provider_label(client, show_id_for_query):
         await db.commit()
 
     try:
-        # mock so embed succeeds, retrieve returns [], answer raises RateLimitError
+        # mock so embed succeeds, routing+retrieval bypassed, answer raises RateLimitError.
+        # R3.1 renamed retrieve→retrieve_hybrid and added route_episodes; both must be
+        # patched or CI hits real DB queries on incomplete schema seed → 400.
         with patch("app.api.query.embed_texts", return_value=[[0.0] * 1536]), patch(
-            "app.api.query.rag.retrieve", return_value=[]
+            "app.api.query.rag.retrieve_hybrid", return_value=[]
+        ), patch(
+            "app.api.query.rag.route_episodes", return_value=None
+        ), patch(
+            "app.api.query.rag._should_skip_routing", return_value=True
         ), patch(
             "app.api.query.rag.answer_with_chunks",
             side_effect=_make_rate_limit_exc(insufficient_quota=False),

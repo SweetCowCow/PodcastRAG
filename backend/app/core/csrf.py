@@ -97,6 +97,12 @@ class CsrfAndOriginMiddleware(BaseHTTPMiddleware):
         if request.url.path in ORIGIN_ONLY_PATHS:
             return await call_next(request)
 
+        # Fully anonymous requests (no session cookie) have nothing for CSRF
+        # to protect — let the route's auth dependency surface a 401 instead
+        # of a misleading 403 from us.
+        if not request.cookies.get("session_id"):
+            return await call_next(request)
+
         # 2. CSRF synchronizer-token (HMAC of session_id with SESSION_SECRET).
         #    Frontend gets the token from /me response body and echoes it as
         #    X-CSRF-Token. Cross-origin: backend cookie is not JS-readable on
