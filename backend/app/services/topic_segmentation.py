@@ -113,9 +113,18 @@ def _allowed_label_set(show: Show) -> set[str]:
 
 
 async def classify_episode(
-    db: AsyncSession, episode_id: uuid.UUID
+    db: AsyncSession,
+    episode_id: uuid.UUID,
+    *,
+    client: OpenAI | None = None,
+    model: str | None = None,
 ) -> dict[uuid.UUID, str]:
-    """Classify every segment of one episode via LLM. Returns id→label map."""
+    """Classify every segment of one episode via LLM. Returns id→label map.
+
+    If `client` and `model` are provided, use them directly (bypass the
+    `summary` step config). This lets backfill scripts route around the
+    Zeabur AI Hub when it's throttling.
+    """
     episode = await db.get(Episode, episode_id)
     if episode is None:
         logger.warning("episode %s not found", episode_id)
@@ -145,12 +154,15 @@ async def classify_episode(
     if not segments:
         return {}
 
-    step_config = await get_step_config(db, "summary")
-    client = OpenAI(base_url=step_config.base_url, api_key=step_config.api_key)
+    if client is None or model is None:
+        step_config = await get_step_config(db, "summary")
+        client = OpenAI(base_url=step_config.base_url, api_key=step_config.api_key)
+        model = step_config.model
+
     system_prompt, user_payload = build_classification_prompt(show, segments)
 
     resp = client.chat.completions.create(
-        model=step_config.model,
+        model=model,
         messages=[
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": json.dumps({"segments": user_payload}, ensure_ascii=False)},
