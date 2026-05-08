@@ -14,17 +14,13 @@ import asyncio
 import csv
 import logging
 import re
-from collections import Counter, defaultdict
 from pathlib import Path
 
 import jieba
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy import text as sa_text
+from sqlalchemy.ext.asyncio import create_async_engine
 
 from app.core.config import settings
-from app.models.episode import Episode
-from app.models.transcript import Transcript
-from app.models.transcript_segment import TranscriptSegment
 
 logger = logging.getLogger(__name__)
 
@@ -47,40 +43,55 @@ def _splits_in_default_jieba(term: str) -> bool:
 async def collect_candidates(
     out_path: Path, min_occurrences: int = MIN_OCCURRENCES
 ) -> int:
+    """Enumerate + count + filter substrings inside Postgres (memory-bounded)."""
     engine = create_async_engine(settings.database_url)
-    Session = async_sessionmaker(engine, expire_on_commit=False)
 
-    counter: Counter[str] = Counter()
-    sample_titles: dict[str, set[str]] = defaultdict(set)
+    # Aggregation pushed down to PG. Memory is bounded by the number of
+    # surviving groups (terms that meet the regex + min-count), not by the
+    # raw 2-5 char windows over the whole corpus.
+    sql = """
+    WITH bounds AS (
+        SELECT s.text AS body, e.title
+        FROM transcript_segments s
+        JOIN transcripts t ON t.id = s.transcript_id
+        JOIN episodes e ON e.id = t.episode_id
+        WHERE s.text IS NOT NULL AND length(s.text) >= 2
+    ),
+    expanded AS (
+        SELECT substring(b.body FROM i FOR l) AS sub, b.title
+        FROM bounds b
+        CROSS JOIN generate_series(2, 5) AS l
+        CROSS JOIN LATERAL generate_series(1, GREATEST(length(b.body) - l + 1, 0)) AS i
+    ),
+    cjk_only AS (
+        SELECT sub, title
+        FROM expanded
+        WHERE sub ~ '^[一-鿿]+$'
+    )
+    SELECT sub,
+           COUNT(*) AS occurrences,
+           (array_agg(DISTINCT title))[1:3] AS sample_titles
+    FROM cjk_only
+    GROUP BY sub
+    HAVING COUNT(*) >= :min_occurrences
+    ORDER BY COUNT(*) DESC
+    """
 
-    async with Session() as session:
-        result = await session.execute(
-            select(TranscriptSegment.text, Episode.title)
-            .join(Transcript, TranscriptSegment.transcript_id == Transcript.id)
-            .join(Episode, Transcript.episode_id == Episode.id)
+    rows: list[tuple[str, int, list[str]]] = []
+    async with engine.connect() as conn:
+        result = await conn.execute(
+            sa_text(sql), {"min_occurrences": min_occurrences}
         )
-        for text, episode_title in result.all():
-            if not text:
-                continue
-            for length in range(MIN_LEN, MAX_LEN + 1):
-                for i in range(len(text) - length + 1):
-                    sub = text[i : i + length]
-                    if not _is_cjk_only(sub):
-                        continue
-                    counter[sub] += 1
-                    if len(sample_titles[sub]) < 3 and episode_title:
-                        sample_titles[sub].add(episode_title)
-
+        for row in result.all():
+            rows.append((row[0], int(row[1]), list(row[2] or [])))
     await engine.dispose()
 
-    # Filter: keep only those that (a) >= min_occurrences and (b) split by stock jieba
+    # Apply the jieba-splits filter on the (much smaller) candidate list.
     candidates = []
-    for term, count in counter.most_common():
-        if count < min_occurrences:
-            break
+    for term, count, titles in rows:
         if not _splits_in_default_jieba(term):
             continue
-        candidates.append((term, count, sorted(sample_titles[term])))
+        candidates.append((term, count, titles))
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     with out_path.open("w", encoding="utf-8", newline="") as f:

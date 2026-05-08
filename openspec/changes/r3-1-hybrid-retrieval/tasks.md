@@ -111,13 +111,13 @@ Implements Requirement "Admin CRUD endpoints for tokenizer_custom_terms" (tokeni
 
 Supports design Decision 5 migration plan. Drives Requirement "Bulk indexer command processes all episodes" (episode-description-index ADDED) end-to-end against prod and prepares the new "Semantic search endpoint returns ranked chunks" / "Chat endpoint answers with citations using Tier 2 RAG" runtime path (rag-query MODIFIED).
 
-- [ ] 7.1 `backend/scripts/rebuild_chunks.py`: CLI accepts `--all` (every transcript) or `--transcript-id <UUID>`. For each transcript: read segments → run new chunking algorithm → DELETE existing chunks for that transcript_id → INSERT new chunks (with text_tsvector populated via tokenizer) inside one transaction → batch embed (64 chunks/call) and UPDATE embeddings
-- [ ] 7.2 Print batch progress + final `transcripts=N chunks_deleted=A chunks_inserted=B chunks_embedded=C errors=E`. Resilient to partial failure: log error and continue to next transcript
-- [ ] 7.3 Unit test in `backend/tests/test_rebuild_chunks.py` against a fixture transcript: assert old chunks deleted, new chunks have non-null text_tsvector, embeddings filled
-- [ ] 7.4 Manual prod run prep: review script invocations + estimate runtime + confirm openai key budget < $1
-- [ ] 7.5 Run `python -m backend.scripts.import_jieba_seed --csv <curated>.csv` against prod (after § 2.7-2.8 produces curated CSV)
+- [x] 7.1 `backend/scripts/rebuild_chunks.py`: CLI accepts `--all` (every transcript) or `--transcript-id <UUID>`. For each transcript: read segments → run new chunking algorithm → DELETE existing chunks for that transcript_id → INSERT new chunks (with text_tsvector populated via tokenizer) inside one transaction → batch embed (64 chunks/call) and UPDATE embeddings
+- [x] 7.2 Print batch progress + final `transcripts=N chunks_deleted=A chunks_inserted=B chunks_embedded=C errors=E`. Resilient to partial failure: log error and continue to next transcript
+- [x] 7.3 Unit test in `backend/tests/test_rebuild_chunks.py` against a fixture transcript: assert old chunks deleted, new chunks have non-null text_tsvector, embeddings filled
+- [x] 7.4 Manual prod run prep: review script invocations + estimate runtime + confirm openai key budget < $1
+- [x] 7.5 Run `python -m backend.scripts.import_jieba_seed --csv <curated>.csv` against prod (after § 2.7-2.8 produces curated CSV)
 - [ ] 7.6 Run `python -m backend.scripts.rebuild_chunks --all` against prod (zeabur service exec)
-- [ ] 7.7 Run `python -m backend.scripts.build_description_index --all` against prod
+- [x] 7.7 Run `python -m backend.scripts.build_description_index --all` against prod
 - [ ] 7.8 Verify counts: `transcript_chunks` row count is plausible (expect ~300K-450K with the new chunking); `episode_description_chunks` count equals episodes-with-non-empty-description count
 
 ## 8. Eval — three rounds + iterate
