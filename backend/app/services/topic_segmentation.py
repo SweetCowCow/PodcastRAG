@@ -10,6 +10,7 @@ Public API:
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import time
@@ -257,7 +258,12 @@ async def classify_episode(
         batch = segments[batch_start : batch_start + SEGMENTS_PER_BATCH]
         system_prompt, user_payload = build_classification_prompt(show, batch)
 
-        resp = _call_chat_with_retry(
+        # Run the sync OpenAI call in a thread so asyncio.gather over many
+        # episodes actually parallelises (otherwise the sync HTTP block
+        # serialises every call inside the event loop, defeating
+        # `--concurrency` in the backfill script).
+        resp = await asyncio.to_thread(
+            _call_chat_with_retry,
             client,
             model=model,
             messages=[

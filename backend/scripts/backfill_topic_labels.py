@@ -103,7 +103,7 @@ def main() -> int:
     g = parser.add_mutually_exclusive_group(required=True)
     g.add_argument("--all", action="store_true")
     g.add_argument("--episode-id", type=uuid.UUID)
-    parser.add_argument("--concurrency", type=int, default=5)
+    parser.add_argument("--concurrency", type=int, default=20)
     parser.add_argument("--model", default="gpt-4o-mini")
     args = parser.parse_args()
 
