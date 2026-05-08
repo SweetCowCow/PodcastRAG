@@ -18,6 +18,7 @@ celery_app = Celery(
         "app.workers.quota_digest",
         "app.workers.eval_reminder",
         "app.workers.db_backup",
+        "app.workers.tokenizer_reload",
     ],
 )
 

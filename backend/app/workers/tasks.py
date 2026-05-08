@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 
 import httpx
 import openai
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.orm import selectinload
 from sqlalchemy.pool import NullPool
@@ -19,6 +19,7 @@ from app.models.transcript_chunk import TranscriptChunk
 from app.models.transcript_segment import TranscriptSegment
 from app.models.transcription_queue import QueueStatus, TranscriptionQueue
 from app.services import storage
+from app.services import tokenizer
 from app.services.chunking import build_chunks
 from app.services.ai_step_resolver import get_step_config
 from app.services.embedding import embed_texts
@@ -327,18 +328,23 @@ async def _run(episode_id: str) -> dict:
                     )
                 else:
                     embeddings = []
+                if chunk_drafts:
+                    await tokenizer.load_dictionary(session)
                 for idx, (draft, vector) in enumerate(zip(chunk_drafts, embeddings)):
-                    session.add(
-                        TranscriptChunk(
-                            transcript_id=transcript_id,
-                            chunk_index=idx,
-                            start_time=draft.start_time,
-                            end_time=draft.end_time,
-                            text=draft.text,
-                            embedding=vector,
-                            segment_ids=draft.segment_ids,
-                        )
+                    tokens = tokenizer.tokenize(draft.text)
+                    chunk = TranscriptChunk(
+                        transcript_id=transcript_id,
+                        chunk_index=idx,
+                        start_time=draft.start_time,
+                        end_time=draft.end_time,
+                        text=draft.text,
+                        embedding=vector,
+                        segment_ids=draft.segment_ids,
                     )
+                    chunk.text_tsvector = func.to_tsvector(
+                        "simple", " ".join(tokens)
+                    )
+                    session.add(chunk)
 
                 t = await session.get(Transcript, transcript_id)
                 if t is not None:

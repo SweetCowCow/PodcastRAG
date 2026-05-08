@@ -61,3 +61,8 @@ class Episode(Base):
 
     show: Mapped["Show"] = relationship(back_populates="episodes")
     transcript: Mapped["Transcript | None"] = relationship(back_populates="episode")
+    description_chunk: Mapped["EpisodeDescriptionChunk | None"] = relationship(
+        back_populates="episode",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )

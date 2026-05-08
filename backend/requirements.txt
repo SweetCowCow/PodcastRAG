@@ -17,6 +17,7 @@ cachetools==5.5.0
 authlib==1.3.2
 itsdangerous==2.2.0
 tiktoken==0.8.0
+jieba==0.42.1
 # Schema validation (used by golden-set dataset tests)
 jsonschema==4.23.0
 # NOTE: deepeval is intentionally NOT in this file — it pulls in langchain +

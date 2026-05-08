@@ -1,0 +1,169 @@
+"""Build the per-episode RSS description index.
+
+For each episode with a non-empty `description`:
+  1. Strip HTML (stdlib `html.parser`).
+  2. Strip boilerplate lines via `BOILERPLATE_PATTERNS` (case-insensitive,
+     line-level).
+  3. Skip + delete-existing-row when nothing useful remains.
+  4. Otherwise: jieba-tokenise, OpenAI-embed, UPSERT one row keyed by
+     `episode_id`.
+"""
+from __future__ import annotations
+
+import logging
+import re
+import uuid
+from html.parser import HTMLParser
+
+from sqlalchemy import delete, func, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.models.episode import Episode
+from app.models.episode_description_chunk import EpisodeDescriptionChunk
+from app.services import tokenizer
+from app.services.ai_step_resolver import get_step_config
+from app.services.embedding import embed_texts
+
+logger = logging.getLogger(__name__)
+
+# Regex patterns matched per-line (case-insensitive). A matching line is
+# removed entirely. Conservative seed list — anything more aggressive should
+# wait for an admin-managed table (out of R3.1 scope).
+BOILERPLATE_PATTERNS: list[str] = [
+    r".*鼓勵.*贊助.*",
+    r".*按讚訂閱.*",
+    r".*歡迎收聽下集.*",
+]
+
+_BOILERPLATE_RE = [re.compile(p, re.IGNORECASE) for p in BOILERPLATE_PATTERNS]
+
+
+class _Stripper(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__()
+        self._parts: list[str] = []
+        self._skip_depth = 0
+
+    def handle_starttag(self, tag, attrs):  # noqa: ANN001 (stdlib signature)
+        if tag in ("script", "style"):
+            self._skip_depth += 1
+
+    def handle_endtag(self, tag):  # noqa: ANN001
+        if tag in ("script", "style") and self._skip_depth:
+            self._skip_depth -= 1
+
+    def handle_data(self, data):  # noqa: ANN001
+        if self._skip_depth:
+            return
+        self._parts.append(data)
+
+    def get_text(self) -> str:
+        return "".join(self._parts)
+
+
+def _strip_html(s: str) -> str:
+    p = _Stripper()
+    p.feed(s)
+    p.close()
+    text = p.get_text()
+    # Collapse runs of whitespace within a line, preserve newlines
+    lines = [re.sub(r"[\t ]+", " ", ln).strip() for ln in text.splitlines()]
+    return "\n".join(lines).strip()
+
+
+def _strip_boilerplate(s: str) -> str:
+    kept: list[str] = []
+    for line in s.splitlines():
+        if any(rx.match(line) for rx in _BOILERPLATE_RE):
+            continue
+        kept.append(line)
+    return "\n".join(kept).strip()
+
+
+def clean_description(raw: str | None) -> str:
+    if not raw:
+        return ""
+    return _strip_boilerplate(_strip_html(raw))
+
+
+async def build_description_index_for_episode(
+    db: AsyncSession, episode_id: uuid.UUID
+) -> str:
+    """Build/UPSERT the description chunk for one episode.
+
+    Returns: 'inserted' | 'updated' | 'skipped' | 'deleted_empty'
+    """
+    episode = await db.get(Episode, episode_id)
+    if episode is None:
+        logger.warning("episode %s not found; skip", episode_id)
+        return "skipped"
+
+    raw = episode.description or ""
+    raw_len = len(raw)
+    cleaned = clean_description(raw)
+    cleaned_len = len(cleaned)
+
+    if raw_len > 0 and cleaned_len < raw_len * 0.5:
+        logger.warning(
+            "description strip > 50%%: episode=%s raw=%d cleaned=%d",
+            episode_id,
+            raw_len,
+            cleaned_len,
+        )
+
+    if not cleaned:
+        # Delete any existing row for this episode.
+        existing = (
+            await db.execute(
+                select(EpisodeDescriptionChunk).where(
+                    EpisodeDescriptionChunk.episode_id == episode_id
+                )
+            )
+        ).scalar_one_or_none()
+        if existing is not None:
+            await db.execute(
+                delete(EpisodeDescriptionChunk).where(
+                    EpisodeDescriptionChunk.episode_id == episode_id
+                )
+            )
+            await db.commit()
+            return "deleted_empty"
+        return "skipped"
+
+    # Build embedding via the embedding step (always OpenAI).
+    embedding_cfg = await get_step_config(db, "embedding")
+    vectors = embed_texts([cleaned], embedding_cfg)
+    embedding = vectors[0] if vectors else None
+
+    # Tokenise; tsvector populated server-side via `to_tsvector('simple', ...)`.
+    await tokenizer.load_dictionary(db)
+    tokens = tokenizer.tokenize(cleaned)
+    tsv_text = " ".join(tokens)
+
+    existing = (
+        await db.execute(
+            select(EpisodeDescriptionChunk).where(
+                EpisodeDescriptionChunk.episode_id == episode_id
+            )
+        )
+    ).scalar_one_or_none()
+
+    stmt = pg_insert(EpisodeDescriptionChunk.__table__).values(
+        episode_id=episode_id,
+        text=cleaned,
+        embedding=embedding,
+        text_tsvector=func.to_tsvector("simple", tsv_text),
+    )
+    stmt = stmt.on_conflict_do_update(
+        index_elements=[EpisodeDescriptionChunk.episode_id],
+        set_={
+            "text": stmt.excluded.text,
+            "embedding": stmt.excluded.embedding,
+            "text_tsvector": stmt.excluded.text_tsvector,
+            "updated_at": func.now(),
+        },
+    )
+    await db.execute(stmt)
+    await db.commit()
+    return "updated" if existing is not None else "inserted"

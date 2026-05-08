@@ -22,6 +22,7 @@ class ChunkHit(BaseModel):
     end_time: float
     text: str
     distance: float | None = None
+    source: Literal["transcript", "description"] = "transcript"
 
 
 class SearchResponse(BaseModel):

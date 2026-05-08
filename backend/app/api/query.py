@@ -151,7 +151,9 @@ async def public_search_show(
     ) as exc:
         _raise_openai_http_error(exc, "OpenAI")
 
-    hits = await rag.retrieve(db, show_id, query_embedding[0], k=payload.k)
+    hits = await rag.retrieve_hybrid(
+        db, show_id, query_embedding[0], payload.question, k=payload.k
+    )
     return PublicSearchResponse(results=[_to_schema_hit(h) for h in hits])
 
 
@@ -197,7 +199,9 @@ async def query_show(
             openai.APITimeoutError,
         ) as exc:
             _raise_openai_http_error(exc, "OpenAI")
-        hits = await rag.retrieve(db, show_id, query_embedding[0])
+        hits = await rag.retrieve_hybrid(
+            db, show_id, query_embedding[0], payload.question
+        )
         return SearchResponse(
             results=[_to_schema_hit(h) for h in hits],
             quota_remaining=quota_remaining,
@@ -249,7 +253,7 @@ async def query_show(
         openai.APITimeoutError,
     ) as exc:
         _raise_openai_http_error(exc, "OpenAI")
-    hits = await rag.retrieve(db, show_id, query_embedding[0])
+    hits = await rag.retrieve_hybrid(db, show_id, query_embedding[0], rewritten)
 
     answer_client = OpenAI(
         base_url=answer_cfg.base_url, api_key=answer_cfg.api_key
@@ -273,10 +277,7 @@ async def query_show(
 
     if used_ids:
         used_set = set(used_ids)
-        cited_hits = [
-            h for h in hits
-            if f"ep:{h.episode_id}@{h.start_time:.2f}" in used_set
-        ]
+        cited_hits = [h for h in hits if rag._hit_key(h) in used_set]
         if not cited_hits:
             cited_hits = hits
     else:
@@ -298,4 +299,5 @@ def _to_schema_hit(hit: RagHit) -> ChunkHit:
         end_time=hit.end_time,
         text=hit.text,
         distance=hit.distance,
+        source=hit.source,
     )
