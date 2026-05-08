@@ -44,7 +44,7 @@ def test_build_ts_query_filters_punctuation_and_short():
     # should drop punctuation-only and single-character non-CJK tokens.
     out = rag._build_ts_query("hello world! 你好嗎")
     assert out is not None
-    assert "|" in out
+    assert "&" in out
     # No bare punctuation
     assert "!" not in out
 

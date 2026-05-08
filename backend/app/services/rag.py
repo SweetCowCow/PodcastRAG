@@ -77,7 +77,10 @@ def _build_ts_query(question: str) -> str | None:
             continue
         if re.fullmatch(r"\W+", tok):
             continue
-        if len(tok) == 1 and not re.match(r"[一-鿿]", tok):
+        # Drop single-character tokens regardless of script: stop-particles
+        # (是/的/了) and stray Latin chars are pure noise in tsquery and
+        # dominate either ` & ` (over-restrict) or ` | ` (over-noise).
+        if len(tok) < 2:
             continue
         # tsquery operators: escape `&|!()<:>`
         tok = re.sub(r"[&|!()<:>\\]", " ", tok).strip()
@@ -86,11 +89,12 @@ def _build_ts_query(question: str) -> str | None:
         cleaned.append(tok)
     if not cleaned:
         return None
-    # OR-join: requiring every token to appear (AND) is too strict for natural
-    # questions with 5+ tokens — lexical hits drop to ~zero and the RRF blend
-    # collapses to semantic-only. ts_rank already weighs rare matches higher,
-    # which gives entity-dense candidates the lift they need.
-    return " | ".join(cleaned)
+    # AND-join across multi-char tokens. Eval bake-off:
+    #   ` & ` raw (with 1-char):  Recall@5 4.76% (lexical CTE often empty)
+    #   ` | ` raw (with 1-char):  Recall@5 3.57% (too noisy, comprehension→0)
+    #   ` & ` after 1-char drop:  expected to outperform both — noise-words
+    #     gone so AND of 2-3 entity tokens is achievable in real chunks.
+    return " & ".join(cleaned)
 
 
 _TRANSCRIPT_RRF_SQL = """
