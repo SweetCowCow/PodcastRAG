@@ -26,6 +26,39 @@ const ReleaseLogPage = ({ lang }) => {
     return () => { cancelled = true; };
   }, []);
 
+  // Per-entry expanded state — Set of slugs currently expanded.
+  // Default: empty (all collapsed). Hash like #<slug> auto-expands matching entry on mount.
+  const [expandedSlugs, setExpandedSlugs] = React.useState(() => new Set());
+
+  React.useEffect(() => {
+    const raw = (typeof window !== 'undefined' && window.location && window.location.hash) || '';
+    const slug = raw.startsWith('#') ? raw.slice(1) : raw;
+    if (!slug) return;
+    const known = RELEASE_LOG.some(e => e.slug === slug);
+    if (!known) return;
+    setExpandedSlugs(prev => {
+      const next = new Set(prev);
+      next.add(slug);
+      return next;
+    });
+    // Defer scroll until after the entry has rendered with its expanded body.
+    setTimeout(() => {
+      const node = document.getElementById(slug);
+      if (node && typeof node.scrollIntoView === 'function') {
+        node.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 0);
+  }, []);
+
+  const toggleSlug = React.useCallback((slug) => {
+    setExpandedSlugs(prev => {
+      const next = new Set(prev);
+      if (next.has(slug)) next.delete(slug);
+      else next.add(slug);
+      return next;
+    });
+  }, []);
+
   // All entries sorted by date DESC across all milestones.
   const sortedEntries = RELEASE_LOG.slice().sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
 
@@ -84,7 +117,9 @@ const ReleaseLogPage = ({ lang }) => {
                   milestone={it.milestone} lang={lang} isMobile={isMobile}
                   lineLeft={LINE_LEFT} markerSize={MARKER_SIZE} />
               : <TimelineEntry key={it.entry.slug} entry={it.entry} lang={lang} t={t} isMobile={isMobile}
-                  lineLeft={LINE_LEFT} nodeSize={NODE_SIZE} />
+                  lineLeft={LINE_LEFT} nodeSize={NODE_SIZE}
+                  expanded={expandedSlugs.has(it.entry.slug)}
+                  onToggle={() => toggleSlug(it.entry.slug)} />
             )}
           </div>
         </div>
@@ -169,11 +204,18 @@ const TimelineMarker = ({ milestone, lang, isMobile, lineLeft, markerSize }) => 
   );
 };
 
-const TimelineEntry = ({ entry, lang, t, isMobile, lineLeft, nodeSize }) => {
+const TimelineEntry = ({ entry, lang, t, isMobile, lineLeft, nodeSize, expanded, onToggle }) => {
   const tagLabel = TAG_LABELS[entry.tag] ? TAG_LABELS[entry.tag][lang] : entry.tag;
   const tagVariant = TAG_VARIANT[entry.tag] || 'default';
+  const [hovered, setHovered] = React.useState(false);
+  const [focused, setFocused] = React.useState(false);
+  const bullets = entry.summaryBullets && Array.isArray(entry.summaryBullets[lang])
+    ? entry.summaryBullets[lang]
+    : null;
+  const hasBullets = bullets && bullets.length > 0;
+
   return (
-    <div style={{ position: 'relative', paddingLeft: lineLeft + 24 }}>
+    <div id={entry.slug} style={{ position: 'relative', paddingLeft: lineLeft + 24, scrollMarginTop: 24 }}>
       {/* node */}
       <div style={{
         position: 'absolute',
@@ -203,25 +245,95 @@ const TimelineEntry = ({ entry, lang, t, isMobile, lineLeft, nodeSize }) => {
       )}
       {/* card */}
       <div style={{
-        background: TOKEN.surface,
+        background: hovered ? TOKEN.surfaceRaised : TOKEN.surface,
         border: `1px solid ${TOKEN.surfaceBorder}`,
         borderRadius: 12,
-        padding: isMobile ? '12px 14px' : '14px 18px',
+        overflow: 'hidden',
+        outline: focused ? `2px solid ${TOKEN.accent}` : 'none',
+        outlineOffset: focused ? 2 : 0,
+        transition: 'background 0.15s',
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6, flexWrap: 'wrap' }}>
-          {isMobile && (
-            <span style={{ color: TOKEN.textMuted, fontSize: 11, fontVariantNumeric: 'tabular-nums' }}>
-              {entry.date}
-            </span>
-          )}
-          <Badge variant={tagVariant}>{tagLabel}</Badge>
-        </div>
-        <div style={{ color: TOKEN.text, fontSize: isMobile ? 15 : 16, fontWeight: 600, marginBottom: 5, lineHeight: 1.4 }}>
-          {entry.title[lang] || entry.title.en}
-        </div>
-        <div style={{ color: TOKEN.textSecondary, fontSize: 13, lineHeight: 1.7 }}>
-          {entry.summary[lang] || entry.summary.en}
-        </div>
+        {/* Header — button so it's keyboard-focusable + Enter/Space toggles */}
+        <button
+          type="button"
+          onClick={onToggle}
+          onMouseEnter={() => setHovered(true)}
+          onMouseLeave={() => setHovered(false)}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
+          aria-expanded={expanded}
+          aria-controls={`${entry.slug}-body`}
+          style={{
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: 10,
+            width: '100%',
+            textAlign: 'left',
+            background: 'transparent',
+            border: 'none',
+            padding: isMobile ? '12px 14px' : '14px 18px',
+            cursor: 'pointer',
+            color: 'inherit',
+            font: 'inherit',
+            outline: 'none',
+          }}
+        >
+          <div style={{ flex: 1, minWidth: 0 }}>
+            {/* date (mobile) + tag Badge */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6, flexWrap: 'wrap' }}>
+              {isMobile && (
+                <span style={{ color: TOKEN.textMuted, fontSize: 11, fontVariantNumeric: 'tabular-nums' }}>
+                  {entry.date}
+                </span>
+              )}
+              <Badge variant={tagVariant}>{tagLabel}</Badge>
+            </div>
+            {/* title */}
+            <div style={{ color: TOKEN.text, fontSize: isMobile ? 15 : 16, fontWeight: 600, lineHeight: 1.4 }}>
+              {entry.title[lang] || entry.title.en}
+            </div>
+            {/* summary bullets (only when entry provides them) */}
+            {hasBullets && (
+              <ul style={{
+                margin: '8px 0 0',
+                padding: '0 0 0 18px',
+                color: TOKEN.textSecondary,
+                fontSize: 13,
+                lineHeight: 1.6,
+              }}>
+                {bullets.map((b, i) => (
+                  <li key={i} style={{ marginBottom: i === bullets.length - 1 ? 0 : 4 }}>{b}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+          {/* chevron — rotates 90° when expanded */}
+          <span style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            marginTop: 2,
+            color: TOKEN.textMuted,
+            transform: expanded ? 'rotate(90deg)' : 'rotate(0deg)',
+            transition: 'transform 0.15s',
+            flexShrink: 0,
+          }}>
+            <Icon name="chevronRight" size={18} color="currentColor" />
+          </span>
+        </button>
+        {/* Body — only rendered when expanded */}
+        {expanded && (
+          <div id={`${entry.slug}-body`} style={{
+            padding: isMobile ? '0 14px 14px' : '0 18px 16px',
+            color: TOKEN.textSecondary,
+            fontSize: 13,
+            lineHeight: 1.7,
+            borderTop: `1px solid ${TOKEN.surfaceBorder}`,
+            paddingTop: isMobile ? 12 : 14,
+          }}>
+            {entry.summary[lang] || entry.summary.en}
+          </div>
+        )}
       </div>
     </div>
   );

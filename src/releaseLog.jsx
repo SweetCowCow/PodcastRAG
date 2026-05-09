@@ -1,5 +1,10 @@
 // Release Log entries — single source of truth for both ReleaseLogPage and PresentationPage.
-// Each entry: { date, slug, milestone, tag, title:{zh,en}, summary:{zh,en} }
+// Each entry: {
+//   date, slug, milestone, tag,
+//   title:{zh,en},
+//   summary:{zh,en},
+//   summaryBullets?: { zh: string[], en: string[] },  // optional, 2–4 short bullets per language
+// }
 // Tag → Badge variant (in ReleaseLogPage): feature→success, fix→warning, enhancement→default, ui→muted
 
 // Stats snapshot — manually updated when generating the presentation.
@@ -52,6 +57,18 @@ const RELEASE_LOG = [
       zh: '原本問問題只靠 embedding（語意相似度），中文短詞訊號弱、節目主自創的字（迪拉胖、顏社、蘴月食堂）幾乎抓不到。從這版開始，搜尋同時跑語意 + 關鍵字（jieba 中文分詞 + Postgres tsvector），用 RRF 演算法把兩邊融合排序——關鍵字認得「迪拉胖」是一個整體不會被切成「迪/拉/胖」。順帶把節目主在 RSS 寫的每集簡介也丟進索引（餐廳列表、來賓名、主題 bullets），entity 密度比逐字稿還高，有時還比較準（EP143 逐字稿被 Whisper 聽成「楓月食堂」，簡介寫對「蘴月食堂」）。後台多了個分詞詞典管理介面，admin 可以隨時加詞 → 按 Reload 後 backend / worker / dispatcher / beat 4 個 service 同步生效。實機 eval 在 48 題 golden set 上，episode-level 命中率從 2.4% 拉到 23.8%（10 倍），Recall@20 從基本沒有拉到 62%——意思是答案大多在前 20 名裡，下一步 R3.2 要解決的就是怎麼把對的集數排到前 5 名。順手修了 chunk 重切時對 Whisper 空白段落造成的 OpenAI API 400 errors，重切完所有 transcript_chunks 都有關鍵字索引（98K 筆 100% coverage）。',
       en: 'Search used to be embedding-only (semantic similarity). Short Chinese tokens have weak embedding signal, and the host\'s coined names (迪拉胖, 顏社, 蘴月食堂) were almost untouchable. Starting this release, every query runs semantic AND lexical (jieba Chinese tokeniser + Postgres tsvector) and fuses the two via RRF — the lexical side recognises "迪拉胖" as one token, not three characters. Bonus: each episode\'s RSS show notes (restaurant lists, guest names, topic bullets) now feeds a separate index — entity-dense, sometimes more accurate than the transcript itself (Whisper mishears EP143\'s 蘴月食堂 as 楓月食堂; the show notes have the correct character). Admin gets a tokenizer dictionary tab — add a term, click Reload, and backend / worker / dispatcher / beat all pick it up live. On the 48-item golden set, episode-level Recall@5 jumped from 2.4% to 23.8% (10×), and Recall@20 = 62% — so the right episode is almost always in the retrieval pool. R3.2\'s job is getting it into the top 5. Bundled fix: rebuild_chunks now drops whitespace-only chunks (Whisper sometimes emits empty segments) that were rejecting the entire embedding batch. All 98K transcript chunks now have lexical index coverage.',
     },
+    summaryBullets: {
+      zh: [
+        '搜尋同時跑語意 + 中文分詞關鍵字，節目主自創字（迪拉胖、蘴月食堂）抓得到了',
+        '節目主寫的每集簡介也納入索引，entity 密度高、有時比逐字稿還準',
+        '48 題 golden set Recall@5 從 2.4% 拉到 23.8%（10×），Recall@20 = 62%',
+      ],
+      en: [
+        'Every query now runs semantic + Chinese-tokenised keyword search, fused via RRF — host-coined names finally findable',
+        'Per-episode RSS show notes feed a separate entity-dense index, sometimes beating the transcript itself',
+        'Episode-level Recall@5 jumped 2.4% → 23.8% (10×) on the 48-item golden set; Recall@20 = 62%',
+      ],
+    },
   },
 
   // ─── v1.3 — Off-site Encrypted Backup (5/07) ───
@@ -64,6 +81,20 @@ const RELEASE_LOG = [
     summary: {
       zh: '到目前為止，整套系統的安全網就是「Zeabur 那邊的資料庫不要壞」。從今天開始，每天凌晨會自動把整個資料庫拉出來、用公鑰加密，再上傳到另一家雲端（Cloudflare R2，跟 Zeabur 解耦）。每月 1 號 GitHub Actions 自己會拉最新一份月度備份做還原測試 + 跑健康檢查 SQL，過了寄成功信、沒過寄警告信——「沒測過的備份等於沒備份」。保留策略：最近 7 天每日 + 最近 4 週每週日 + 最近 12 個月每月一份，總共約 23 份在線。私鑰雙地保管（管理員本機 + 密碼管理器）；GitHub Actions 用獨立 keypair，本機萬一被攻陷不會波及。月成本約 $1。完整還原 runbook 寫在 docs/disaster-recovery.md，凌晨被叫起來照做即可，承諾 24 小時內的資料可救（RPO ≤ 24h）、30 分鐘內可救完（RTO ≤ 30 min）。順手修了個資安問題：原本 pg_dump 把資料庫密碼放在指令參數，會出現在 worker container 的 /proc/cmdline——改用 PGPASSWORD 環境變數，並 rotate 了 prod 密碼。',
       en: 'Until today, the entire safety net was "Zeabur\'s managed Postgres better not break." Starting now, the whole database gets pulled, public-key encrypted, and uploaded to a different cloud provider (Cloudflare R2, decoupled from Zeabur) every morning at 03:00 UTC. On the 1st of each month, GitHub Actions automatically pulls the latest monthly backup, runs a real pg_restore into an ephemeral DB, and runs sanity SQL — pass = OK email, fail = alert email. "Untested backups are broken backups." Retention: 7 daily + 4 Sundays + 12 monthly = ~23 versions live. Private key kept in two places (admin laptop + password manager); GitHub Actions uses a separate keypair so a laptop compromise doesn\'t leak prod backups. Monthly cost ≈ $1. Full restore runbook lives in docs/disaster-recovery.md. Commitments: RPO ≤ 24h, RTO ≤ 30 min. Bundled fix: pg_dump used to leak the DB password through process argv (visible in worker /proc/cmdline) — switched to PGPASSWORD env, and rotated the prod password.',
+    },
+    summaryBullets: {
+      zh: [
+        '每日加密備份上傳到 Cloudflare R2，跟 Zeabur 解耦異地保管',
+        '每月 1 號自動還原 + 健康檢查，沒測過的備份等於沒備份',
+        'RPO ≤ 24 小時、RTO ≤ 30 分鐘，月成本約 $1',
+        '順手修掉 pg_dump 密碼洩漏到 /proc/cmdline 的資安問題',
+      ],
+      en: [
+        'Daily encrypted snapshots ship to Cloudflare R2, decoupled from Zeabur',
+        'Monthly auto-restore + sanity SQL — untested backups are broken backups',
+        'RPO ≤ 24h, RTO ≤ 30 min, ~$1/month all in',
+        'Bundled fix: pg_dump password no longer leaks via /proc/cmdline',
+      ],
     },
   },
 
@@ -78,6 +109,18 @@ const RELEASE_LOG = [
       zh: '我們上了一套自動化評測流程：手寫 10 個我們已經知道答案的「標準題」，再用 AI 配合人工審核生出 38 個延伸題，每次只要改了 RAG 邏輯，這 48 題就能跑一輪、量化告訴我們「答對片段的比率」是進步還是退步。第一輪 baseline 跑出 Recall@5 只有 2.4% ——意思是 AI 從這個節目 162 集裡，找到正確逐字稿片段的機率不到三十分之一。聽起來很糟，事實上也很糟，但這正是這套工具的價值：以前只能憑感覺說「不準」，現在拿到一個明確的數字可以追。下一步是把混合檢索（語意 + 中文分詞 BM25 關鍵字）做進去，做完之後我們可以直接告訴你進步了百分之幾。順手也加了後台「過去評測歷史」頁，跟一個每月發信的提醒任務，提醒哪些節目該重跑 baseline 了。',
       en: 'We shipped an automated eval pipeline: 10 hand-written "we-know-the-answer" sentinel questions plus 38 LLM-generated + human-audited follow-ups. Every time we touch the RAG layer, this 48-question battery runs and tells us — in numbers — whether the AI got better or worse at finding the right transcript chunks. First baseline came back with Recall@5 = 2.4%: the AI surfaces the correct chunk less than 1 time in 30 across this 162-episode show. That\'s as bad as it sounds, but that\'s exactly the point of having the metric — before this we could only say it "felt inaccurate." Next up: hybrid retrieval (semantic + Chinese-tokenized BM25 keyword) goes in, and we\'ll be able to tell you the improvement in percent. Also bundled: an admin "past eval runs" tab and a monthly reminder email flagging which shows are due for a re-run.',
     },
+    summaryBullets: {
+      zh: [
+        '建立 48 題 golden set，每次改 RAG 都能跑分量化進步',
+        'Baseline Recall@5 = 2.4%，從「感覺不準」變成有明確數字可追',
+        '後台多了過去評測歷史頁 + 每月重跑提醒信',
+      ],
+      en: [
+        '48-question golden set scores every RAG change in numbers',
+        'Baseline Recall@5 = 2.4% — "feels inaccurate" now has a real metric',
+        'Admin gets eval history tab + monthly re-run reminder email',
+      ],
+    },
   },
 
   // ─── v1.1 — Collecting Answer Quality Feedback (5/05) ───
@@ -90,6 +133,18 @@ const RELEASE_LOG = [
     summary: {
       zh: '每則 AI 統整回答下方多了 👍 / 👎 兩個按鈕。覺得答對了給讚，覺得不準時點倒讚並留下你想說的話（可空白）。點開回答中引用的逐字稿片段時，系統也會偷偷記下來——這些訊號會用來幫我們找出 AI 容易答錯的問題類型，下一階段拿去做答題品質的回歸測試。順手調整：首頁節目卡片回到完整版本（封面、語言、進度條、RSS 連結都齊全），登入頁的文案也修得更直白——「瀏覽逐字稿、看相關段落都不用登入。只有請 AI 統整回答需要登入使用額度。」',
       en: 'Each AI summary answer now has 👍 / 👎 buttons below it. Tap thumbs-up if it nailed the question; tap thumbs-down to optionally leave a note about what was wrong. The system also quietly records when you click into a citation transcript — these signals help us spot which kinds of questions the AI tends to fumble, so the next step (an automated answer-quality regression suite) has real cases to learn from. Bundled tweaks: the landing page show cards return to the full layout (cover art, language, progress bar, RSS link), and the login prompt copy is now plainer: "Browsing transcripts and matched segments needs no login. Only \'Ask AI to summarize\' requires login and uses your quota."',
+    },
+    summaryBullets: {
+      zh: [
+        '每則 AI 回答可按 👍 / 👎，倒讚可留言說哪裡不準',
+        '點開引用片段也會被默默記錄，作為下一步答題品質回歸的素材',
+        '首頁節目卡片回到完整版（封面、語言、進度條、RSS）',
+      ],
+      en: [
+        'Thumbs-up / thumbs-down on every AI answer, with optional note on misses',
+        'Citation clicks logged quietly to feed the upcoming answer-quality regression suite',
+        'Landing show cards restored to the full layout (cover, language, progress, RSS)',
+      ],
     },
   },
 
@@ -104,6 +159,18 @@ const RELEASE_LOG = [
       zh: '從 zeabur.app 共享子域搬到自有網域：前端 app.podcastrag.app、後端 api.podcastrag.app（Let\'s Encrypt 自動 SSL）。網域透過 Zeabur registrar 直接購買（$14.99/年，自動續訂），DNS 由 Cloudflare 託管。同時開通 ZSend 信件服務並驗證 podcastrag.app 為 sending domain（SES 東京 region），quota 申請通知信現在會從 noreply@podcastrag.app 實際寄出（早上 5 點 + 下午 5 點各一次彙整）。舊 zeabur.app 子域仍保留可用，兩個網域並存讓既有書籤不會壞。實作中也順手修了一個 ZSend API URL 的 bug（之前是用猜的，實際應該是 api.zeabur.com/api/v1/zsend/emails 而不是 zsend.zeabur.app/api/v1/send）。',
       en: 'Migrated off zeabur.app shared subdomains to a custom domain: frontend at app.podcastrag.app, backend at api.podcastrag.app (Let\'s Encrypt SSL auto-issued). Bought through Zeabur\'s registrar ($14.99/yr with auto-renew) with Cloudflare-managed DNS. Also onboarded ZSend with podcastrag.app as a verified sending domain (SES Tokyo region) — quota request digest emails now actually deliver from noreply@podcastrag.app (twice daily at 5am + 5pm Taipei time). Old zeabur.app subdomains remain functional so existing bookmarks keep working. Caught a ZSend API URL bug along the way (the URL was a guess: it\'s actually api.zeabur.com/api/v1/zsend/emails, not zsend.zeabur.app/api/v1/send).',
     },
+    summaryBullets: {
+      zh: [
+        '搬到自有網域 app.podcastrag.app / api.podcastrag.app（Let\'s Encrypt SSL）',
+        'ZSend 信件服務上線，quota 申請通知信實際從 noreply@podcastrag.app 寄出',
+        '舊 zeabur.app 子域並存保留，既有書籤不會壞',
+      ],
+      en: [
+        'Live on custom domain: app.podcastrag.app / api.podcastrag.app with auto SSL',
+        'ZSend onboarded — quota digest emails now actually deliver from noreply@podcastrag.app',
+        'Old zeabur.app URLs still work, so no bookmarks break',
+      ],
+    },
   },
 
   // ─── v1.0 — Public Launch: Freemium Mode (5/04) ───
@@ -116,6 +183,20 @@ const RELEASE_LOG = [
     summary: {
       zh: '從「全站登入才能用」改成「先讓人看到價值再要登入」。新的首頁直接秀出三個收錄節目（曼報、壹加壹電台、這又沒有很屌）+ 真實的索引統計（553 集、247 已轉錄）+ 一個馬上能用的搜尋框；瀏覽逐字稿、看相關段落都不用登入，每個 IP 每天 20 次免費搜尋打底（embedding 成本可控）。只有「請 AI 整段統整回答」要登入才解鎖，新使用者用 Google 一鍵登入立刻拿到 30 次免費 quota。Quota 用完不會自動補充，使用者主動透過 QueryPage 上方的「申請更多額度」按鈕送理由給 admin；admin 後台多了「Quota 申請」分頁可一鍵核准（自由設定加值數量）或拒絕。Beat 排程每天兩次（UTC 09:00 / 21:00）把 pending 申請彙整成一封 email 經 ZSend 寄給 admin（要先開通 ZSend，沒開通時 task 直接 no-op log）。對既有登入使用者完全相容（quota_remaining 不會被改）。',
       en: 'Switched from "log in to use anything" to "see the value before signing up." The new home page surfaces all three indexed shows (曼報, 壹加壹電台, 這又沒有很屌), live indexing stats (553 episodes, 247 transcribed), and an immediately-usable search box. Browsing transcripts and seeing matched segments stays free — anonymous visitors get 20 free segment searches per IP per day (embedding cost stays bounded). Only the AI-generated summary answer requires login. New users sign in with Google in one click and get 30 free queries; quota does not auto-refill. When depleted, users hit "Request more quota" on QueryPage to send a reason to admin. The admin panel grows a "Quota Requests" tab for one-click approve (free-form amount) or reject. A beat task digests pending requests into one email twice daily (UTC 09:00 / 21:00) via ZSend (no-ops with a log when ZSend is not yet provisioned). Fully backwards-compatible with existing logged-in users — their quota_remaining is preserved.',
+    },
+    summaryBullets: {
+      zh: [
+        '訪客不用登入即可瀏覽逐字稿、看相關段落（每 IP 每天 20 次免費搜尋）',
+        '只有「請 AI 統整回答」要登入，新使用者 Google 一鍵登入拿 30 次 quota',
+        'Quota 用完可送理由申請更多，admin 後台一鍵核准或拒絕',
+        '每天兩次彙整 pending 申請成一封信寄給 admin（透過 ZSend）',
+      ],
+      en: [
+        'Anonymous visitors can browse transcripts and segments (20 free searches per IP/day)',
+        'Only the AI summary answer needs login — Google sign-in gives new users 30 free queries',
+        'Out of quota? Send a reason; admin approves or rejects in one click',
+        'Pending requests digest into one email twice daily via ZSend',
+      ],
     },
   },
 
@@ -130,6 +211,18 @@ const RELEASE_LOG = [
       zh: '上週批次補摘要時遇到 3 集卡在「摘要中」一整天沒人救——worker 重啟、Celery task 消失、狀態沒人更新。改進：beat 每分鐘掃描 episodes 表，若摘要狀態 `running` 超過 10 分鐘（預設可由 env 調整），自動重置為 pending 並重新排隊；同時加上 Celery on_failure handler，worker 被 SIGKILL/OOM 殺掉時也會把 row 標為 failed 並寫入錯誤訊息。Admin 後台的摘要徽章 hover 上去現在會顯示具體錯誤訊息，方便排查。資料層加了兩個欄位記錄起跑時間和錯誤字串。一般使用者完全不會察覺，純粹是後台 reliability 補強。',
       en: 'During last week\'s summary backfill, 3 episodes got stuck in "summarising" for a full day — worker restarted, Celery task vanished, nothing updated the row. Fix: beat scans the episodes table every minute and any row whose summary has been "running" longer than 10 min (env-configurable) is reset to pending and re-queued. A Celery on_failure handler also fires when a worker gets SIGKILL\'d (OOM, container restart) and marks the row failed with the exception text. The admin queue badge now reveals the underlying error on hover so debugging is straightforward. Adds two database fields for start-time and error-string tracking. End users see no change — purely an admin reliability improvement.',
     },
+    summaryBullets: {
+      zh: [
+        '摘要任務卡超過 10 分鐘自動重置 + 重新排隊，不再卡整天',
+        'Worker 被 SIGKILL/OOM 也會把 row 標 failed 並寫錯誤訊息',
+        '後台徽章 hover 顯示具體錯誤，排查更直接',
+      ],
+      en: [
+        'Stuck "running" summaries auto-reset and re-queue after 10 min',
+        'Worker SIGKILL / OOM now marks the row failed with the exception text',
+        'Admin badge reveals the underlying error on hover for fast debugging',
+      ],
+    },
   },
 
   // ─── v0.9 — Per-Episode AI Summary (5/03) ───
@@ -142,6 +235,18 @@ const RELEASE_LOG = [
     summary: {
       zh: '節目 RSS 描述常常是行銷文案、廣告或來賓 IG，看不出這集到底在講什麼。新增每集自動產出 80-150 字繁中摘要：轉錄完成後鏈式觸發 Celery task，把逐字稿用 tiktoken 切成 12K token 的 chunks，map-reduce 兩階段（先列重點、再總結）由 admin 後台設定的 LLM step (預設 gpt-5-mini) 處理。結果存在 episodes 表新加的欄位（status: pending / running / done / failed），列表 / 查詢面板 / 逐字稿頁三處顯示，失敗對使用者完全透明（自動 fallback 顯示原 RSS 描述，不顯示 spinner / 錯誤訊息）。Admin 在轉錄序列頁多了 summary badge、單集重跑按鈕、以及一鍵「批次補摘要」處理既有 360 集（大約 $0.7 LLM 費用）。',
       en: 'RSS descriptions are often marketing copy or sponsor links — they don\'t tell you what an episode is actually about. Each episode now auto-generates an 80-150 character Traditional Chinese summary: a Celery task chains off transcription completion, chunks the transcript with tiktoken at 12K tokens, then runs a map-reduce (extract bullets → reduce to summary) through whichever LLM step admins configure (default gpt-5-mini). Results live on the episodes table (status enum: pending / running / done / failed) and surface in the episode list, query panel, and transcript header. Failures are transparent — users see the original RSS description with no spinner or error. Admins gain a summary badge in the transcription queue, a single-episode regenerate button, and a one-click backfill for the 360 existing episodes (~$0.7 of LLM spend).',
+    },
+    summaryBullets: {
+      zh: [
+        '每集自動產 80-150 字繁中摘要，取代 RSS 廣告文案',
+        '失敗對使用者完全透明，自動 fallback 顯示原 RSS 描述',
+        'Admin 可單集重跑 + 一鍵批次補摘要既有 360 集（約 $0.7）',
+      ],
+      en: [
+        'Every episode auto-generates an 80-150 char summary, replacing RSS marketing copy',
+        'Failures fall back silently to the RSS description — no spinner, no error',
+        'Admin gets per-episode regenerate + one-click backfill for the 360-episode catalog (~$0.7)',
+      ],
     },
   },
 
@@ -156,6 +261,18 @@ const RELEASE_LOG = [
       zh: '以前 Claude 用瀏覽器自動化驗證 prod 的時候，得仰賴一份 14 天就過期的 cookie 檔案，每次過期都得開發者手動重抓一次。新增一條受嚴格保護的後門 endpoint：只有設了 E2E_LOGIN_TOKEN 環境變數時才會註冊（沒設的部署連 404 都不會洩漏這條 path 存在），用 HMAC 比對 token 防 timing attack，發出來的 session 強制 15 分鐘過期，IP 連續 5 次失敗會被 60 秒 rate limit。整個流程只發給 ADMIN_EMAILS 第一個 email，所有成功失敗都寫 audit log。一般使用者完全感覺不到這個改動 — 純粹給自動化測試流程用。',
       en: 'Claude\'s browser-automation verification used to rely on a stored cookie file that expired every 14 days, requiring a manual re-login. A tightly-scoped backdoor endpoint is now available: registered ONLY when E2E_LOGIN_TOKEN env is set (deployments without it return 404 indistinguishably from any unmapped path), HMAC token comparison resists timing attacks, issued sessions are capped at 15-minute TTL regardless of normal session config, and an IP gets a 60-second rate-limit after 5 failed attempts. The endpoint always issues a session for ADMIN_EMAILS[0]; every success and failure goes through audit logging. Invisible to end users — purely a verification-pipeline tool.',
     },
+    summaryBullets: {
+      zh: [
+        '取代 14 天就過期的 cookie 檔案，自動化驗證不用再手動重抓',
+        '只有設了 token env 才會註冊，沒設的部署連 404 都不洩漏',
+        'HMAC 比對 + 15 分鐘 session + IP 失敗率限，audit log 全紀錄',
+      ],
+      en: [
+        'Replaces the 14-day cookie file — no more manual re-login for E2E verification',
+        'Endpoint only exists when E2E_LOGIN_TOKEN is set; otherwise a normal 404',
+        'HMAC compare + 15-min session cap + per-IP rate-limit, fully audit-logged',
+      ],
+    },
   },
 
   // ─── v0.7 — AI Settings Consolidation (5/03) ───
@@ -168,6 +285,18 @@ const RELEASE_LOG = [
     summary: {
       zh: '原本的「LLM 模型設定」只支援回答 + 改寫兩個固定 LLM，金鑰寫死在 env，要切換轉錄供應商還得 redeploy。重構後 admin 後台多了兩張表：API 金鑰可集中管理（自由命名 provider + label，支援 OpenAI / Anthropic / Google / Zeabur AI Hub 預設下拉），以及 5 個 AI 處理步驟（answer / rewrite / summary / embedding / transcription），每個步驟挑一把已建立的金鑰、自選 base_url / model。embedding 步驟強制只能挑 OpenAI 金鑰（因為 Zeabur Hub 不支援 embedding endpoint），改 model 時前端會警告會讓既有向量失效。轉錄步驟可在 OpenAI Whisper API 與本地 faster-whisper 之間切換，無需 redeploy。本變更不直接面對使用者，但鋪好了 v0.8「每集 AI 摘要」要用的 summary step 位子。',
       en: 'The old "LLM Model Settings" only supported two fixed LLMs (answer + rewrite) with the api_key baked into env vars; switching the transcription provider required a redeploy. The admin tab is now backed by two tables: a centralised API Keys registry (free-form provider + label, with OpenAI / Anthropic / Google / Zeabur AI Hub presets) and five AI processing steps (answer / rewrite / summary / embedding / transcription), each picking a key and its own base_url / model. The embedding step enforces an OpenAI-provider key (Zeabur Hub does not proxy /v1/embeddings); changing the embedding model surfaces a warning that existing vectors will need reindexing. Transcription can be switched between OpenAI Whisper API and local faster-whisper from the UI, no redeploy. Not user-facing on its own, but lays the groundwork for v0.8\'s per-episode AI summary feature.',
+    },
+    summaryBullets: {
+      zh: [
+        'API 金鑰集中管理，5 個 AI 處理步驟各自挑 key + model',
+        '轉錄供應商可在 OpenAI Whisper 與本地 faster-whisper 間切換，不用 redeploy',
+        '為下一版「每集 AI 摘要」鋪好 summary step 的位子',
+      ],
+      en: [
+        'Centralised API key registry; five AI steps each pick their own key + model',
+        'Switch transcription provider (OpenAI Whisper vs local faster-whisper) from UI, no redeploy',
+        'Lays the summary-step groundwork for the upcoming per-episode AI summary',
+      ],
     },
   },
 
@@ -182,6 +311,18 @@ const RELEASE_LOG = [
       zh: '以前每次重新部署，正在跑的轉錄會卡在「進行中」狀態，要等 30 分鐘系統才會自動把它清掉重跑。現在改成 worker 重啟後 1～3 分鐘內就會自動把卡住的集數推回排隊，由新 worker 接手繼續轉。順手修了強制取消的隱藏 bug（某些狀況下排隊額度會卡死）。dispatcher 跟 beat 兩個背景服務也不會再因為缺登入相關設定就啟動失敗。',
       en: 'Previously a redeploy would leave any in-flight transcription stuck in "running" for 30 min before the stale-detection cron would re-queue it. Now stuck rows are pushed back to the pending queue within 1–3 min after a worker restart, so a new worker can pick up where the dead one left off. Also fixed a hidden bug in force-cancel that could leave a transcription throttle slot occupied; and dispatcher/beat services no longer crash on startup when auth-only env vars are unset.',
     },
+    summaryBullets: {
+      zh: [
+        'Redeploy 後 1-3 分鐘內就把卡住的轉錄推回排隊，不用等 30 分鐘',
+        '修掉強制取消會卡住排隊額度的隱藏 bug',
+        'dispatcher / beat 不會再因為缺登入 env 啟動失敗',
+      ],
+      en: [
+        'Stuck transcriptions re-queue within 1-3 min of redeploy instead of 30 min',
+        'Fixed hidden force-cancel bug that left a throttle slot occupied',
+        'Dispatcher / beat no longer crash on startup when auth env vars are unset',
+      ],
+    },
   },
 
   // ─── v0.5 — Auth & Query Quota (5/02) ───
@@ -195,6 +336,18 @@ const RELEASE_LOG = [
       zh: '更新日誌頁改成單條垂直時間軸（最新在上）；轉錄佇列「進行中」分頁改成 running 在上、pending 帶 1/2/3 排隊編號；空節目時 admin 可一鍵跳後台。後端新增 GET /admin/stats 讓更新日誌的數字即時顯示。順手把 23 個既有 admin pytest 補上 auth fixture。',
       en: 'Release Log redesigned as a vertical timeline (newest first); Transcription Queue active sub-tab puts running rows on top with 1/2/3 position badges on pending; empty PodcastSelect routes admins to admin show management. New GET /admin/stats lets the Release Log show live numbers; 23 admin pytest cases got the missing auth fixture.',
     },
+    summaryBullets: {
+      zh: [
+        '更新日誌改成單條垂直時間軸，最新在上',
+        '佇列「進行中」分頁 running 在上，pending 帶 1/2/3 排隊編號',
+        '空節目時 admin 一鍵跳後台節目管理',
+      ],
+      en: [
+        'Release Log redesigned as a vertical timeline, newest first',
+        'Active queue tab puts running rows on top with 1/2/3 position badges',
+        'Empty PodcastSelect routes admins straight to show management',
+      ],
+    },
   },
   {
     date: '2026-05-02', slug: 'authentication-system', milestone: 'v0.5', tag: 'feature',
@@ -205,6 +358,18 @@ const RELEASE_LOG = [
     summary: {
       zh: '砍掉寫死的 admin 帳密 modal,改成 Google 登入。一般使用者預設 100 次查詢額度,後台可加值;管理員權限只開放給 ADMIN_EMAILS env 白名單裡的 email。所有後台 API 都加 admin gate,跨站請求被 CSRF token + Origin 檢查擋下。',
       en: 'Replaces the hardcoded admin login modal with Google SSO. Members get 100 queries/account by default (admin can top up); admin role auto-granted only for emails in the ADMIN_EMAILS env allowlist. All admin endpoints require admin role; cross-site requests blocked by CSRF token + Origin check.',
+    },
+    summaryBullets: {
+      zh: [
+        '砍掉寫死帳密 modal，改成 Google 一鍵登入',
+        '一般使用者 100 次預設 quota，後台可加值',
+        'Admin 權限只給 ADMIN_EMAILS 白名單，跨站請求 CSRF + Origin 雙保險',
+      ],
+      en: [
+        'Hardcoded admin modal replaced with Google SSO sign-in',
+        'Members get 100 queries by default; admin can top up',
+        'Admin role only for ADMIN_EMAILS allowlist; CSRF + Origin block cross-site requests',
+      ],
     },
   },
 
@@ -219,6 +384,18 @@ const RELEASE_LOG = [
       zh: '前端加入「更新日誌」分頁,把過去 24 個 archived changes 翻成白話雙語條目按里程碑分組。獨立的 #presentation 簡報頁 13 張 slide 介紹系統演進,可同步產出 .pptx。',
       en: 'Adds a Release Log tab translating 24 historic archived changes into plain bilingual entries grouped by milestone, plus a standalone #presentation deck (13 slides) that can also export as .pptx.',
     },
+    summaryBullets: {
+      zh: [
+        '新增「更新日誌」分頁，過去 archived changes 翻成白話雙語條目',
+        '按里程碑分組，一眼看出系統的演進軌跡',
+        '獨立簡報頁 13 張 slide，可同步產出 .pptx',
+      ],
+      en: [
+        'New Release Log tab translates archived changes into plain bilingual entries',
+        'Grouped by milestone for at-a-glance system evolution',
+        'Standalone 13-slide presentation page, exportable as .pptx',
+      ],
+    },
   },
   {
     date: '2026-05-01', slug: 'responsive-mobile-layout', milestone: 'v0.4', tag: 'ui',
@@ -229,6 +406,16 @@ const RELEASE_LOG = [
     summary: {
       zh: '加入 768px 兩段斷點,手機版改成漢堡選單、單欄表單、抽屜式集數面板,後台佇列拖曳排序改用上下箭頭按鈕。',
       en: 'Two-tier breakpoint at 768px: hamburger menu, single-column forms, drawer episode panel; queue reorder uses up/down buttons on mobile.',
+    },
+    summaryBullets: {
+      zh: [
+        '768px 斷點：手機版漢堡選單、單欄表單、抽屜式集數面板',
+        '後台佇列拖曳排序在手機改用上下箭頭按鈕',
+      ],
+      en: [
+        '768px breakpoint adds hamburger menu, single-column forms, drawer episode panel',
+        'Queue reorder switches to up/down buttons on mobile',
+      ],
     },
   },
   {
@@ -241,6 +428,16 @@ const RELEASE_LOG = [
       zh: 'OpenAI / Zeabur AI Hub 失敗時不再顯示「Failed to fetch」,改成「Zeabur AI Hub 配額不足,請檢查餘額」這類具體中文訊息,並修正 CORS 在 unhandled exception 下的 header 漏寫。',
       en: 'No more "Failed to fetch" — surfaces specific localized messages like "Zeabur AI Hub quota exceeded". Also fixes missing CORS headers on unhandled exceptions.',
     },
+    summaryBullets: {
+      zh: [
+        '外部 API 失敗顯示具體中文訊息，不再丟「Failed to fetch」',
+        '修正 unhandled exception 下 CORS header 漏寫的問題',
+      ],
+      en: [
+        'External API failures now show specific localized messages, not "Failed to fetch"',
+        'Fixes missing CORS headers on unhandled exceptions',
+      ],
+    },
   },
   {
     date: '2026-04-30', slug: 'queue-tabs-and-schedule-cleanup', milestone: 'v0.4', tag: 'ui',
@@ -251,6 +448,16 @@ const RELEASE_LOG = [
     summary: {
       zh: '佇列頁面切成「排隊中+執行中 / 完成 / 失敗+取消」三個子分頁。排程下拉砍掉 hourly,週排程可選星期幾,modal 動態顯示「每週X 09:30 觸發」。',
       en: 'Queue split into three sub-tabs (active / done / closed). Schedule dropdown drops hourly; weekly schedules now pick a day-of-week with a live preview hint.',
+    },
+    summaryBullets: {
+      zh: [
+        '佇列分成三個子分頁：排隊中+執行中 / 完成 / 失敗+取消',
+        '排程砍掉 hourly，週排程可選星期幾並即時顯示「每週X 觸發」',
+      ],
+      en: [
+        'Queue split into three sub-tabs: active / done / closed',
+        'Hourly removed; weekly schedules pick a day-of-week with live preview hint',
+      ],
     },
   },
 
@@ -265,6 +472,18 @@ const RELEASE_LOG = [
       zh: '後台多一個分頁可看每筆轉錄任務的狀態,支援取消 / 強制取消 / 重試 / 忽略,並可拖曳調整排隊順序、設定平行上限。',
       en: 'New admin tab listing every queue row by status; supports cancel, force-cancel, retry, ignore, drag-reorder, and concurrency cap input.',
     },
+    summaryBullets: {
+      zh: [
+        '後台新增「轉錄序列」分頁，逐筆看每個任務狀態',
+        '支援取消 / 強制取消 / 重試 / 忽略 / 拖曳調整排隊順序',
+        '可設定平行轉錄上限',
+      ],
+      en: [
+        'New admin tab lists every queue row by status',
+        'Cancel, force-cancel, retry, ignore, and drag-reorder per row',
+        'Configurable concurrency cap',
+      ],
+    },
   },
   {
     date: '2026-04-28', slug: 'stale-running-detection', milestone: 'v0.3', tag: 'fix',
@@ -275,6 +494,16 @@ const RELEASE_LOG = [
     summary: {
       zh: 'Worker 重新部署時若有 task 訊息遺失,佇列會永遠卡在 running。新增每分鐘掃描,執行超過 30 分鐘且 worker 沒在跑的 row 自動標 failed 並釋放槽位。',
       en: 'Worker redeploys could lose task messages and freeze the queue. A per-minute sweep marks rows running > 30min without a live worker as failed and frees the slot.',
+    },
+    summaryBullets: {
+      zh: [
+        '每分鐘掃描卡死的轉錄任務，超過 30 分鐘自動標 failed',
+        '釋放排隊槽位，避免 worker redeploy 後佇列永遠塞住',
+      ],
+      en: [
+        'Per-minute sweep marks transcriptions stuck > 30 min as failed',
+        'Frees the slot so a worker redeploy never permanently freezes the queue',
+      ],
     },
   },
   {
@@ -287,6 +516,16 @@ const RELEASE_LOG = [
       zh: 'Worker 升為 concurrency=3 達成真平行;新增「強制取消」可中止已啟動的轉錄任務。',
       en: 'Worker now runs concurrency=3 for true parallelism; force-cancel can terminate running transcriptions.',
     },
+    summaryBullets: {
+      zh: [
+        'Worker 改 concurrency=3，可同時跑 3 集真平行轉錄',
+        '新增「強制取消」按鈕，能中止已啟動的轉錄任務',
+      ],
+      en: [
+        'Worker concurrency=3 — three episodes transcribe in true parallel',
+        'New "force cancel" button can terminate already-running transcriptions',
+      ],
+    },
   },
   {
     date: '2026-04-28', slug: 'db-driven-queue-and-real-cron', milestone: 'v0.3', tag: 'feature',
@@ -297,6 +536,18 @@ const RELEASE_LOG = [
     summary: {
       zh: '排程設定從「死資料」變成真正的 cron:Celery Beat 每分鐘掃排程表,到時間自動拉新集數入隊。佇列改由 DB 表驅動,所有操作可原子化記錄。',
       en: 'Schedules transition from static config to real cron: Celery Beat scans the table every minute, pulls new episodes, and enqueues them. Queue is now DB-driven for atomic operations.',
+    },
+    summaryBullets: {
+      zh: [
+        '排程從「死資料」變成真 cron，到時間自動拉新集數入隊',
+        'Celery Beat 每分鐘掃排程表，佇列改由 DB 表驅動',
+        '所有操作可原子化記錄，狀態不再不一致',
+      ],
+      en: [
+        'Schedules become real cron — Beat scans every minute and enqueues new episodes',
+        'Queue is now DB-driven for atomic state transitions',
+        'No more state drift between schedule config and actual runs',
+      ],
     },
   },
 
@@ -310,6 +561,18 @@ const RELEASE_LOG = [
     summary: {
       zh: '排程頁卡片可展開看每集 pending/processing/completed/failed 數;新增「外部 API 狀態」分頁顯示 OpenAI Whisper/Chat/Embedding 三者最近呼叫狀態與錯誤分類。',
       en: 'Expandable per-show progress (pending/processing/completed/failed); new "External API Status" tab tracks OpenAI Whisper / Chat / Embedding health with categorized errors.',
+    },
+    summaryBullets: {
+      zh: [
+        '排程頁卡片可展開看每集 pending / processing / completed / failed 數',
+        '新增「外部 API 狀態」分頁，OpenAI Whisper / Chat / Embedding 健康一目了然',
+        '錯誤分類顯示，問題追查更快',
+      ],
+      en: [
+        'Per-show cards expand to show pending / processing / completed / failed counts',
+        'New "External API Status" tab tracks OpenAI Whisper / Chat / Embedding health',
+        'Errors are categorized so root cause is obvious',
+      ],
     },
   },
   {
@@ -333,6 +596,16 @@ const RELEASE_LOG = [
       zh: '抓 RSS 時硬寫死「最多 200 集」,壹加壹電台真實有 251 集,DB 卻只有 200 集。改成預設不截斷,使用者按「更新節目集數」就會補回缺失的集數。',
       en: 'RSS parser hard-coded a 200-episode cap, dropping 51 episodes from a 251-episode feed. Default removed; clicking "Update episodes" backfills the missing entries.',
     },
+    summaryBullets: {
+      zh: [
+        '砍掉 RSS 寫死 200 集上限，預設不再截斷',
+        '按「更新節目集數」即可補回壹加壹電台缺失的 51 集',
+      ],
+      en: [
+        'Hardcoded 200-episode RSS cap removed; default no longer truncates',
+        '"Update episodes" backfills the 51 missing entries from 壹加壹電台',
+      ],
+    },
   },
   {
     date: '2026-04-25', slug: 'schedule-editing-and-run-now', milestone: 'v0.2', tag: 'feature',
@@ -343,6 +616,16 @@ const RELEASE_LOG = [
     summary: {
       zh: '排程不再只能刪除重建,新增「編輯」modal 可改頻率/時間/Whisper 模型/上限。新增「立刻執行」按鈕,只轉最新 N 集而非全部。',
       en: 'Schedules now have an Edit modal (frequency / time / model / cap) and a per-show Run-Now button that transcribes only the latest N episodes instead of the full backlog.',
+    },
+    summaryBullets: {
+      zh: [
+        '排程不再只能刪除重建，新增「編輯」modal 可改頻率 / 時間 / 模型 / 上限',
+        '「立刻執行」按鈕只轉最新 N 集，不會誤觸全部 backlog',
+      ],
+      en: [
+        'Schedules now editable in a modal — change frequency, time, model, or cap',
+        '"Run now" button transcribes only the latest N episodes, not the full backlog',
+      ],
     },
   },
   {
@@ -355,6 +638,18 @@ const RELEASE_LOG = [
       zh: '「同步集數」(只抓 RSS)和「同步所有」(會燒 OpenAI 額度)語意混在一起。改名為「更新節目集數」/「轉錄未完成集數」並加入 Gmail 風 checkbox 批次選取,批次轉錄前跳一次確認。',
       en: '"Sync" was overloaded — covering both RSS-only refresh and OpenAI-spending batch jobs. Renamed to clearer verbs, added Gmail-style checkbox selection, and a confirm before batch transcription.',
     },
+    summaryBullets: {
+      zh: [
+        '「同步集數」/「同步所有」改名為「更新節目集數」/「轉錄未完成集數」，意圖更明確',
+        '加入 Gmail 風 checkbox 批次選取',
+        '批次轉錄前跳一次確認，避免誤觸燒錢',
+      ],
+      en: [
+        '"Sync" verbs renamed for clarity — RSS refresh vs transcription is now obvious',
+        'Gmail-style checkbox selection for batch operations',
+        'Batch transcription now requires explicit confirm before spending OpenAI credit',
+      ],
+    },
   },
   {
     date: '2026-04-25', slug: 'concurrency-control-and-retry', milestone: 'v0.2', tag: 'enhancement',
@@ -365,6 +660,16 @@ const RELEASE_LOG = [
     summary: {
       zh: 'OpenAI 5xx / 網路中斷 / rate limit 等暫時錯誤改自動重試 3 次(10s→60s→300s 退避)。新增 Redis-based 全域並發限制,避免「同步所有」一次塞爆 worker。',
       en: 'Transient errors (5xx, rate limit, timeouts) now auto-retry 3× with exponential backoff. Redis-based global concurrency cap prevents "sync all" from overloading the worker.',
+    },
+    summaryBullets: {
+      zh: [
+        '暫時錯誤（5xx、rate limit、timeout）自動重試 3 次，10s → 60s → 300s 退避',
+        'Redis 全域並發限制，避免「同步所有」一次塞爆 worker',
+      ],
+      en: [
+        'Transient errors auto-retry 3× with 10s → 60s → 300s exponential backoff',
+        'Redis-based global concurrency cap prevents "sync all" from overloading the worker',
+      ],
     },
   },
   {
@@ -388,6 +693,18 @@ const RELEASE_LOG = [
       zh: '右側集數列表接上真實 API。RAG 回答改用結構化輸出,只顯示實際被引用的片段;點擊引用 Badge 跳到逐字稿並高亮對應時間段。',
       en: 'Episode panel now shows real episodes. RAG responses use structured output to surface only actually-cited chunks; clicking a citation jumps to the transcript and highlights the timestamp.',
     },
+    summaryBullets: {
+      zh: [
+        '右側集數列表接上真實 API，不再是 mock 資料',
+        'RAG 改用結構化輸出，只顯示實際被引用的片段',
+        '點擊引用 Badge 跳到逐字稿並高亮對應時間段',
+      ],
+      en: [
+        'Episode panel wired to real API instead of mock data',
+        'RAG structured output surfaces only actually-cited chunks',
+        'Click a citation to jump to the transcript with the timestamp highlighted',
+      ],
+    },
   },
   {
     date: '2026-04-24', slug: 'fix-split-audio-memory', milestone: 'v0.2', tag: 'fix',
@@ -399,6 +716,16 @@ const RELEASE_LOG = [
       zh: '轉錄超過 1 小時的 podcast 時記憶體飆到 1.5–2 GB,觸發 OOM 重啟。改用 ffmpeg stream copy 切段,記憶體常數,Zeabur 4GB plan 穩定運行。',
       en: 'Long podcasts spiked memory to 1.5–2 GB, OOM-killing the worker. Switched to ffmpeg stream-copy chunking — constant memory, stable on Zeabur 4GB plan.',
     },
+    summaryBullets: {
+      zh: [
+        '超過 1 小時的 podcast 不再讓 worker 記憶體飆到 1.5-2 GB 被 OOM 殺掉',
+        '改用 ffmpeg stream copy 切段，記憶體常數、Zeabur 4GB plan 穩定運行',
+      ],
+      en: [
+        '1-hour+ podcasts no longer spike worker memory to 1.5-2 GB and trigger OOM',
+        'Switched to ffmpeg stream-copy chunking — constant memory, stable on Zeabur 4GB',
+      ],
+    },
   },
   {
     date: '2026-04-24', slug: 'admin-show-crud-ui', milestone: 'v0.2', tag: 'feature',
@@ -409,6 +736,16 @@ const RELEASE_LOG = [
     summary: {
       zh: '後台排程頁每張卡片加入操作按鈕(刪除節目、同步新集數、移除排程),刪除前跳確認 modal,避免誤觸 cascade 刪光所有逐字稿。',
       en: 'Each show card in admin gets action buttons (delete, sync episodes, unschedule). Delete shows a confirm modal to prevent accidental cascade-deletion of transcripts.',
+    },
+    summaryBullets: {
+      zh: [
+        '後台節目卡片新增刪除 / 同步集數 / 移除排程三個操作按鈕',
+        '刪除前跳確認 modal，避免誤觸 cascade 刪光所有逐字稿',
+      ],
+      en: [
+        'Show cards gain delete / sync / unschedule action buttons',
+        'Delete requires confirm modal to prevent accidental transcript cascade-delete',
+      ],
     },
   },
 
@@ -423,6 +760,18 @@ const RELEASE_LOG = [
       zh: '首頁從 4 個寫死的 mock shows 改成 GET /shows 真實資料,顯示每個節目已轉錄集數的進度條,並補上 loading/error/empty 三種狀態。',
       en: 'Home page swaps 4 hardcoded mock shows for live GET /shows data, with per-show transcribed-count progress bars and loading / error / empty states.',
     },
+    summaryBullets: {
+      zh: [
+        '首頁從 4 個寫死 mock 改成 GET /shows 真實資料',
+        '每個節目卡片顯示已轉錄集數的進度條',
+        '補上 loading / error / empty 三種狀態',
+      ],
+      en: [
+        'Home swaps 4 hardcoded mock shows for live GET /shows data',
+        'Per-show transcribed-count progress bars',
+        'Loading / error / empty states all wired up',
+      ],
+    },
   },
   {
     date: '2026-04-23', slug: 'rag-query', milestone: 'v0.1', tag: 'feature',
@@ -433,6 +782,18 @@ const RELEASE_LOG = [
     summary: {
       zh: '逐字稿切 chunk → embedding → pgvector 檢索 → LLM 帶引用回答。支援多輪對話(前端 5 輪滑動視窗)、Search 模式直接回原文,後台可換 Answer / Rewrite 模型。',
       en: 'Transcripts chunked → embedded → pgvector retrieval → LLM answer with citations. Multi-turn (5-window front-end memory), search-mode raw chunks, swappable Answer/Rewrite models in admin.',
+    },
+    summaryBullets: {
+      zh: [
+        'RAG 對話查詢正式上線：embedding + pgvector + LLM 帶引用回答',
+        '支援多輪對話（5 輪滑動視窗）+ Search 模式直接回原文片段',
+        '後台可切換 Answer / Rewrite 模型',
+      ],
+      en: [
+        'RAG conversational query goes live: embedding + pgvector + cited answers',
+        'Multi-turn dialog (5-window memory) + search mode for raw chunks',
+        'Admin can swap Answer / Rewrite models on the fly',
+      ],
     },
   },
   {
@@ -445,6 +806,16 @@ const RELEASE_LOG = [
       zh: 'OpenAI Whisper API 限單檔 25MB,長 podcast 會被拒。改成超過閾值自動切段、分批呼叫、合併結果並調整時間軸,使用者完全無感。',
       en: 'OpenAI Whisper rejects files >25MB. Provider now auto-chunks long audio, batches uploads, and merges results with corrected timestamps — transparent to the user.',
     },
+    summaryBullets: {
+      zh: [
+        '突破 OpenAI Whisper 25MB 單檔上限，超過自動切段',
+        '分批呼叫並合併結果、調整時間軸，使用者完全無感',
+      ],
+      en: [
+        'Bypasses OpenAI Whisper 25MB single-file limit via auto-chunking',
+        'Batched uploads merged with corrected timestamps — fully transparent',
+      ],
+    },
   },
   {
     date: '2026-04-21', slug: 'transcription-pipeline', milestone: 'v0.1', tag: 'feature',
@@ -455,6 +826,18 @@ const RELEASE_LOG = [
     summary: {
       zh: '集數音檔下載到 R2 物件儲存後,Celery worker 呼叫 Whisper(OpenAI 或本機 faster-whisper)轉成帶時間戳的逐字稿。新增 transcribe / get-transcript / batch transcribe API。',
       en: 'Audio files land in R2; Celery workers run Whisper (OpenAI or local faster-whisper) to produce timestamped transcripts. Adds transcribe / get-transcript / batch-transcribe APIs.',
+    },
+    summaryBullets: {
+      zh: [
+        '音檔下載到 R2，Celery worker 跑 Whisper 產出帶時間戳的逐字稿',
+        '支援 OpenAI Whisper API 與本地 faster-whisper 兩種模式',
+        '新增 transcribe / get-transcript / batch transcribe 三組 API',
+      ],
+      en: [
+        'Audio files land in R2; Celery workers produce timestamped transcripts',
+        'Supports both OpenAI Whisper API and local faster-whisper',
+        'New transcribe / get-transcript / batch-transcribe APIs',
+      ],
     },
   },
   {
@@ -467,6 +850,18 @@ const RELEASE_LOG = [
       zh: '使用者可貼 RSS URL 匯入真實節目,系統解析 RSS 2.0 + iTunes 延伸欄位,寫入 shows 與 episodes 表。新增 CRUD / sync / list 一整組節目 API。',
       en: 'Paste an RSS URL to import a real podcast — parses RSS 2.0 + iTunes fields into shows / episodes tables. Full CRUD + sync + list APIs included.',
     },
+    summaryBullets: {
+      zh: [
+        '貼 RSS URL 即可匯入真實節目，取代寫死的 mock 資料',
+        '解析 RSS 2.0 + iTunes 延伸欄位，寫入 shows 與 episodes 表',
+        '提供完整 CRUD / sync / list 節目 API',
+      ],
+      en: [
+        'Paste an RSS URL to import a real podcast — no more mock data',
+        'Parses RSS 2.0 + iTunes fields into shows / episodes tables',
+        'Full CRUD / sync / list APIs included',
+      ],
+    },
   },
   {
     date: '2026-04-21', slug: 'backend-api', milestone: 'v0.1', tag: 'feature',
@@ -477,6 +872,18 @@ const RELEASE_LOG = [
     summary: {
       zh: '建立 FastAPI 應用結構、PostgreSQL schema(節目/集數/逐字稿/向量)、pgvector extension、Alembic migration、health check,作為後續所有功能的基礎。',
       en: 'Establishes FastAPI structure, PostgreSQL schema (shows / episodes / transcripts / vectors), pgvector extension, Alembic migrations, and health-check — foundation for all features.',
+    },
+    summaryBullets: {
+      zh: [
+        'FastAPI 應用骨架 + PostgreSQL schema（節目 / 集數 / 逐字稿 / 向量）',
+        '啟用 pgvector extension，Alembic migration 管 schema 變更',
+        '健康檢查 endpoint 建好，後續所有功能的基礎',
+      ],
+      en: [
+        'FastAPI skeleton + PostgreSQL schema (shows / episodes / transcripts / vectors)',
+        'pgvector extension enabled; Alembic manages schema migrations',
+        'Health-check endpoint in place — foundation for everything that follows',
+      ],
     },
   },
   {
