@@ -212,6 +212,16 @@ async def _mark_queue_finished(
             logger.exception(
                 "failed to chain-enqueue summary for %s — non-fatal", ep_uuid
             )
+        try:
+            from app.workers.topic_task import classify_episode_topics
+
+            classify_episode_topics.delay(str(ep_uuid))
+            logger.info("chained topic task enqueued for %s", ep_uuid)
+        except Exception:
+            logger.exception(
+                "failed to chain-enqueue topic classification for %s — non-fatal",
+                ep_uuid,
+            )
 
 
 async def _lookup_show_id(episode_id: str) -> str | None:

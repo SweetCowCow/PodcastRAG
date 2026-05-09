@@ -195,11 +195,68 @@ async def run(
     return episodes, segments, errors
 
 
+async def _enqueue_via_celery(
+    *,
+    episode_id: uuid.UUID | None,
+    limit: int | None,
+    skip_labelled: bool,
+) -> int:
+    """Enqueue topic-classification tasks to Celery and return immediately.
+
+    This is the production-safe path: each episode runs in a Celery worker,
+    so a container restart only kills the in-flight episode (per-batch commit
+    inside `classify_episode` preserves its progress) and Celery's at-least-
+    once delivery requeues unfinished tasks. No need to keep the backfill
+    script running for hours.
+    """
+    from app.workers.topic_task import classify_episode_topics
+
+    engine = create_async_engine(settings.database_url, pool_pre_ping=True)
+    Session = async_sessionmaker(engine, expire_on_commit=False)
+
+    async with Session() as session:
+        if episode_id is not None:
+            ids = [episode_id]
+        else:
+            stmt = (
+                select(Episode.id)
+                .join(Transcript, Transcript.episode_id == Episode.id)
+                .where(Transcript.status == TranscriptStatus.completed)
+            )
+            if skip_labelled:
+                stmt = stmt.where(
+                    exists().where(
+                        TranscriptSegment.transcript_id == Transcript.id,
+                        TranscriptSegment.topic_label.is_(None),
+                    )
+                )
+            stmt = stmt.order_by(Episode.published_at.desc().nullslast())
+            rows = await session.execute(stmt)
+            ids = [r[0] for r in rows.all()]
+            if limit is not None:
+                ids = ids[:limit]
+
+    await engine.dispose()
+
+    for ep_id in ids:
+        classify_episode_topics.delay(str(ep_id))
+    return len(ids)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(__doc__)
     g = parser.add_mutually_exclusive_group(required=True)
     g.add_argument("--all", action="store_true")
     g.add_argument("--episode-id", type=uuid.UUID)
+    parser.add_argument(
+        "--mode",
+        choices=("enqueue", "inline"),
+        default="enqueue",
+        help=(
+            "enqueue (default): hand off to Celery workers and exit. "
+            "inline: classify in-process here (legacy; for dry-run / A/B only)."
+        ),
+    )
     parser.add_argument("--concurrency", type=int, default=10)
     parser.add_argument("--model", default="gpt-4o-mini")
     parser.add_argument(
@@ -237,6 +294,24 @@ def main() -> int:
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
     started = time.monotonic()
+
+    if args.mode == "enqueue":
+        if args.dry_run:
+            print("--dry-run only valid in --mode inline (no LLM calls in enqueue path)", flush=True)
+            return 2
+        n = asyncio.run(
+            _enqueue_via_celery(
+                episode_id=args.episode_id,
+                limit=args.limit,
+                skip_labelled=args.resume,
+            )
+        )
+        elapsed = time.monotonic() - started
+        print(
+            f"summary: enqueued={n} elapsed={elapsed:.1f}s (Celery workers will run them)",
+            flush=True,
+        )
+        return 0
 
     async def _runner() -> tuple[int, int, int]:
         loop = asyncio.get_running_loop()

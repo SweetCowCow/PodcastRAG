@@ -446,7 +446,7 @@ const AiStepSection = ({ step, draft, keys, keysByProvider, providerOfKey, setDr
             onChange={e => setExtra({ provider: e.target.value, ...(e.target.value === 'faster-whisper' ? { model_dir: draft.extra_config?.model_dir || '/models/faster-whisper' } : {}) })}
             style={{ width: '100%', background: TOKEN.surfaceRaised, border: `1px solid ${TOKEN.surfaceBorder}`, borderRadius: 8, padding: '9px 12px', color: TOKEN.text, fontSize: 14, outline: 'none', fontFamily: 'inherit' }}>
             <option value="openai">openai (Whisper API)</option>
-            <option value="faster-whisper">faster-whisper (local model)</option>
+            <option value="faster-whisper" disabled>{t ? 'faster-whisper（暫停使用 — 容器重啟會中斷）' : 'faster-whisper (disabled — restarts truncate progress)'}</option>
           </select>
         </div>
       )}

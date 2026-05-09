@@ -15,6 +15,7 @@ celery_app = Celery(
         "app.workers.cron_tick",
         "app.workers.lifecycle",
         "app.workers.summary_task",
+        "app.workers.topic_task",
         "app.workers.quota_digest",
         "app.workers.eval_reminder",
         "app.workers.db_backup",

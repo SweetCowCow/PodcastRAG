@@ -214,7 +214,12 @@ async def classify_episode_no_persist(
     without overwriting prod labels.
     """
     return await _classify_episode_impl(
-        db, episode_id, client=client, model=model, persist=False
+        db,
+        episode_id,
+        client=client,
+        model=model,
+        persist=False,
+        skip_labelled=False,
     )
 
 
@@ -224,15 +229,30 @@ async def classify_episode(
     *,
     client: OpenAI | None = None,
     model: str | None = None,
+    skip_labelled: bool = False,
 ) -> dict[uuid.UUID, str]:
     """Classify every segment of one episode via LLM. Returns id→label map.
+
+    Per-batch commit: each batch's labels persist immediately so a process
+    crash mid-episode preserves progress (previously: integral commit only at
+    the end → restart-during-classify lost the entire episode's work).
+
+    If `skip_labelled=True`, segments whose `topic_label` is already non-NULL
+    are skipped — used by resume runs to avoid re-paying LLM cost on already
+    classified batches. Default False (re-classify everything; safe for
+    fresh runs / model swaps).
 
     If `client` and `model` are provided, use them directly (bypass the
     `summary` step config). This lets backfill scripts route around the
     Zeabur AI Hub when it's throttling.
     """
     return await _classify_episode_impl(
-        db, episode_id, client=client, model=model, persist=True
+        db,
+        episode_id,
+        client=client,
+        model=model,
+        persist=True,
+        skip_labelled=skip_labelled,
     )
 
 
@@ -243,6 +263,7 @@ async def _classify_episode_impl(
     client: OpenAI | None,
     model: str | None,
     persist: bool,
+    skip_labelled: bool,
 ) -> dict[uuid.UUID, str]:
     episode = await db.get(Episode, episode_id)
     if episode is None:
@@ -263,13 +284,14 @@ async def _classify_episode_impl(
         logger.warning("transcript for episode %s not found", episode_id)
         return {}
 
-    segments = (
-        await db.execute(
-            select(TranscriptSegment)
-            .where(TranscriptSegment.transcript_id == transcript.id)
-            .order_by(TranscriptSegment.start_time)
-        )
-    ).scalars().all()
+    seg_stmt = (
+        select(TranscriptSegment)
+        .where(TranscriptSegment.transcript_id == transcript.id)
+        .order_by(TranscriptSegment.start_time)
+    )
+    if skip_labelled:
+        seg_stmt = seg_stmt.where(TranscriptSegment.topic_label.is_(None))
+    segments = (await db.execute(seg_stmt)).scalars().all()
     if not segments:
         return {}
 
@@ -320,6 +342,7 @@ async def _classify_episode_impl(
             )
             continue
 
+        batch_labels: dict[uuid.UUID, str] = {}
         for item in data.get("labels", []):
             try:
                 sid = uuid.UUID(str(item["id"]))
@@ -334,20 +357,35 @@ async def _classify_episode_impl(
                     label,
                 )
                 label = "topic_main"
+            batch_labels[sid] = label
             label_map[sid] = label
+
+        # Per-batch commit: persist this batch's labels immediately so that a
+        # mid-episode crash (container restart, OOM, SIGKILL) preserves
+        # progress. Survives the ephemeral-container failure mode that wiped
+        # v1-v4 backfill runs.
+        if persist and batch_labels:
+            for sid, label in batch_labels.items():
+                await db.execute(
+                    update(TranscriptSegment)
+                    .where(TranscriptSegment.id == sid)
+                    .values(topic_label=label)
+                )
+            await db.commit()
 
     # Short-segment fallback: < 5s segments without a label inherit the previous segment's label.
     prev_label = "topic_main"
+    fallback_labels: dict[uuid.UUID, str] = {}
     for s in segments:
         duration = float(s.end_time) - float(s.start_time)
         if s.id in label_map:
             prev_label = label_map[s.id]
         elif duration < SHORT_SEGMENT_THRESHOLD:
             label_map[s.id] = prev_label
+            fallback_labels[s.id] = prev_label
 
-    # Persist
-    if persist:
-        for sid, label in label_map.items():
+    if persist and fallback_labels:
+        for sid, label in fallback_labels.items():
             await db.execute(
                 update(TranscriptSegment)
                 .where(TranscriptSegment.id == sid)
