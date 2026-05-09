@@ -29,12 +29,13 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from openai import OpenAI
-from sqlalchemy import select
+from sqlalchemy import exists, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.core.config import settings
 from app.models.episode import Episode
 from app.models.transcript import Transcript, TranscriptStatus
+from app.models.transcript_segment import TranscriptSegment
 
 logger = logging.getLogger(__name__)
 
@@ -104,6 +105,7 @@ async def run(
     delay_s: float,
     dry_run: bool,
     out_path: Path | None,
+    resume: bool,
 ) -> tuple[int, int, int]:
     api_key = os.environ.get(api_key_env)
     if not api_key:
@@ -130,12 +132,20 @@ async def run(
         if episode_id is not None:
             ids = [episode_id]
         else:
-            rows = await session.execute(
+            stmt = (
                 select(Episode.id)
                 .join(Transcript, Transcript.episode_id == Episode.id)
                 .where(Transcript.status == TranscriptStatus.completed)
-                .order_by(Episode.published_at.desc().nullslast())
             )
+            if resume:
+                stmt = stmt.where(
+                    exists().where(
+                        TranscriptSegment.transcript_id == Transcript.id,
+                        TranscriptSegment.topic_label.is_(None),
+                    )
+                )
+            stmt = stmt.order_by(Episode.published_at.desc().nullslast())
+            rows = await session.execute(stmt)
             ids = [r[0] for r in rows.all()]
             if limit is not None:
                 ids = ids[:limit]
@@ -215,6 +225,14 @@ def main() -> int:
         help="Do not UPDATE DB; only classify + log/write to --out file.",
     )
     parser.add_argument("--out", type=Path, default=None)
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help=(
+            "Skip episodes whose transcript_segments are already fully labeled. "
+            "Use this when re-running after a crash to avoid double-paying LLM cost."
+        ),
+    )
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
@@ -236,6 +254,7 @@ def main() -> int:
             delay_s=args.delay_s,
             dry_run=args.dry_run,
             out_path=args.out,
+            resume=args.resume,
         )
 
     eps, segs, errs = asyncio.run(_runner())
