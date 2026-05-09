@@ -42,10 +42,36 @@ const MILESTONE_LABELS = {
   'v1.2': { zh: 'v1.2 — 量化 RAG 答題準確度基線',  en: 'v1.2 — RAG Accuracy Baseline, Measured' },
   'v1.3': { zh: 'v1.3 — 把資料背在保險上',         en: 'v1.3 — Putting Your Data on Insurance' },
   'v1.4': { zh: 'v1.4 — 混合檢索：找到節目主寫的關鍵字', en: 'v1.4 — Hybrid Retrieval: Catching the Host\'s Own Keywords' },
+  'v1.5': { zh: 'v1.5 — 更新日誌變好讀',           en: 'v1.5 — Release Log, Browsable' },
 };
 
 // Entries — newest milestone first; within each milestone newest date first.
 const RELEASE_LOG = [
+  // ─── v1.5 — Browsable Release Log (5/09) ───
+  {
+    date: '2026-05-09', slug: 'release-log-collapsible', milestone: 'v1.5', tag: 'ui',
+    title: {
+      zh: '更新日誌好讀了：先看重點摘要、想看細節再展開',
+      en: 'Release Log, Now Browsable: Skim the Bullets, Expand for Detail',
+    },
+    summary: {
+      zh: '到 v1.4 為止，更新日誌頁所有 entry 一次全展開，捲一輪要花不少時間，也不容易看出哪些版本跟你相關。從這版開始，每筆 entry 預設收合，只露出版本、日期、標題、tag、跟 2-4 個重點 bullet——一眼掃過去就能挑出感興趣的展開讀。點 header 任意位置（或鍵盤 Tab + Enter / Space）切換收合；也支援直接貼網址 anchor（如 `/release-log#r3-1-hybrid-retrieval`）自動展開那筆 + 滾動到位。順手把過去 36 筆舊 entry 的重點 bullet 也補齊（其中 3 筆內容太單薄就不補，避免冗餘）。',
+      en: 'Through v1.4, every release log entry rendered fully expanded by default — scrolling through the page took a while and it was hard to spot what was relevant to you. Starting now, entries default to collapsed: only the version, date, title, tag, and 2-4 summary bullets show. Skim the bullets, click any header (or Tab + Enter / Space) to expand the one you care about. URL anchors still work (e.g. `/release-log#r3-1-hybrid-retrieval` auto-expands and scrolls into view). Also backfilled summary bullets for 36 prior entries (3 trivial ones intentionally skipped to avoid filler).',
+    },
+    summaryBullets: {
+      zh: [
+        '每筆 entry 預設收合，header 露出 2-4 個重點 bullet 方便快速掃讀',
+        '點 header 或鍵盤 Tab + Enter / Space 展開、URL anchor 自動展開到位',
+        '舊 36 筆 entry 一併補齊重點 bullet，3 筆太單薄不補',
+      ],
+      en: [
+        'Entries collapse by default; headers show 2-4 summary bullets for quick scanning',
+        'Click header or Tab + Enter / Space to expand; URL anchors auto-expand and scroll',
+        'Backfilled bullets for 36 older entries; 3 trivial ones skipped to avoid filler',
+      ],
+    },
+  },
+
   // ─── v1.4 — Hybrid Retrieval (5/08) ───
   {
     date: '2026-05-08', slug: 'r3-1-hybrid-retrieval', milestone: 'v1.4', tag: 'enhancement',
