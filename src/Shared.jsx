@@ -520,4 +520,153 @@ const EpisodeBlurb = ({ episode, lang, style }) => {
   return <p style={baseStyle} dangerouslySetInnerHTML={{ __html: text }} />;
 };
 
-Object.assign(window, { API_BASE, TOKEN, Icon, Badge, Btn, Input, TopNav, ConfirmModal, FormModal, OverflowMenu, ProgressCounts, categoryToBadge, formatRelativeTime, useViewport, EpisodeBlurb });
+// ─────────────────────────────────────────────────────────────────────────────
+// SourceCard (R2.1 section 5)
+//
+// Renders a single retrieval source / citation entry. Backend now ships four
+// extra fields on every ChunkHit (`before_text`, `after_text`, `highlights`,
+// `ai_summary_excerpt`); this card renders them with sensible fallbacks for
+// older cached responses or description-source hits that may lack them.
+//
+// Security: `highlights` is server-rendered HTML with `<mark>` wrappers around
+// matched terms (ts_headline output). We do NOT trust the backend blindly —
+// `sanitiseMarkOnly` strips every tag other than `<mark>` / `</mark>` before
+// dangerouslySetInnerHTML touches it.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Strict whitelist sanitiser: keep only <mark> and </mark> (no attrs allowed).
+// Everything else — <script>, <img>, <a href=...>, <mark onclick=...> etc —
+// gets HTML-escaped so it renders as inert text.
+const _MARK_TAG_RE = /<\/?mark>/gi;
+const _MARK_PLACEHOLDER_OPEN = ' MARKOPEN ';
+const _MARK_PLACEHOLDER_CLOSE = ' MARKCLOSE ';
+const sanitiseMarkOnly = (html) => {
+  if (typeof html !== 'string' || !html) return '';
+  // 1) Stash <mark> / </mark> behind placeholders that survive escaping.
+  const stashed = html
+    .replace(/<mark>/gi, _MARK_PLACEHOLDER_OPEN)
+    .replace(/<\/mark>/gi, _MARK_PLACEHOLDER_CLOSE);
+  // 2) Escape every remaining HTML special so any `<...>` becomes text.
+  const escaped = stashed
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+  // 3) Restore the placeholders as the only allowed real tags.
+  return escaped
+    .split(_MARK_PLACEHOLDER_OPEN).join('<mark>')
+    .split(_MARK_PLACEHOLDER_CLOSE).join('</mark>');
+};
+
+const _formatTs = (sec) => {
+  if (typeof sec !== 'number' || !Number.isFinite(sec)) return '--:--';
+  const m = Math.floor(sec / 60);
+  const s = Math.floor(sec % 60);
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+};
+
+const SourceCard = ({ source, lang, onJump, position }) => {
+  const t = lang === 'zh';
+  const [expanded, setExpanded] = React.useState(false);
+  if (!source) return null;
+  const before = source.before_text || '';
+  const after = source.after_text || '';
+  const highlights = source.highlights || '';
+  const aiSummary = source.ai_summary_excerpt || '';
+  const mainText = source.text || '';
+  const epTitle = source.episode_title || (t ? '片段' : 'Clip');
+  const ts = source.start_time;
+  const handleJump = () => {
+    if (typeof onJump !== 'function') return;
+    onJump(source, position);
+  };
+  return (
+    <div className="source-card" style={{
+      background: TOKEN.surface,
+      border: `1px solid ${TOKEN.surfaceBorder}`,
+      borderRadius: 10,
+      padding: '14px 16px',
+      display: 'flex',
+      flexDirection: 'column',
+      gap: 8,
+    }}>
+      {/* App.jsx sets `mark { background: transparent }` globally; restore the
+          highlight inside SourceCard so server-rendered <mark> wrappers visibly
+          mark matched terms. */}
+      <style>{`.source-card mark { background: ${TOKEN.accent}33; color: ${TOKEN.accentHover || TOKEN.accent}; border-radius: 2px; padding: 0 2px; }`}</style>
+      {/* Header: episode title + timestamp */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        {typeof position === 'number' && (
+          <span style={{
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            minWidth: 22, height: 22, padding: '0 6px',
+            background: TOKEN.accentDim, color: TOKEN.accent,
+            border: `1px solid ${TOKEN.accent}55`, borderRadius: 6,
+            fontSize: 11, fontWeight: 700,
+          }}>{position + 1}</span>
+        )}
+        <span style={{ color: TOKEN.textSecondary, fontSize: 12, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{epTitle}</span>
+        {typeof ts === 'number' && (
+          <span style={{ color: TOKEN.textMuted, fontSize: 12, display: 'flex', alignItems: 'center', gap: 3, flexShrink: 0 }}>
+            <Icon name="clock" size={11} /> {_formatTs(ts)}
+          </span>
+        )}
+      </div>
+
+      {/* Main excerpt with optional before/after context */}
+      <p style={{ margin: 0, color: TOKEN.text, fontSize: 13, lineHeight: 1.65 }}>
+        {before && (
+          <span style={{ color: TOKEN.textMuted }}>{before.endsWith(' ') || /[　-鿿]/.test(before.slice(-1)) ? before : before + ' '}</span>
+        )}
+        {highlights ? (
+          <span dangerouslySetInnerHTML={{ __html: sanitiseMarkOnly(highlights) }} />
+        ) : (
+          <span>{mainText}</span>
+        )}
+        {after && (
+          <span style={{ color: TOKEN.textMuted }}>{after.startsWith(' ') || /[　-鿿]/.test(after.slice(0, 1)) ? after : ' ' + after}</span>
+        )}
+      </p>
+
+      {/* AI summary excerpt with show-more toggle */}
+      {aiSummary && (
+        <div style={{ fontSize: 12, color: TOKEN.textSecondary, lineHeight: 1.55 }}>
+          <span style={{ color: TOKEN.textMuted, marginRight: 6, fontWeight: 600 }}>{t ? '本集摘要' : 'Summary'}:</span>
+          <span>{aiSummary}</span>
+          {/* The 60-char excerpt already includes "…" when truncated. We expose
+              a toggle so a future iteration can stream the full summary; today
+              we re-show the same excerpt without trailing ellipsis. */}
+          {aiSummary.endsWith('…') && (
+            <button type="button" onClick={() => setExpanded(v => !v)} style={{
+              background: 'none', border: 'none', padding: 0, marginLeft: 6,
+              color: TOKEN.accent, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit',
+            }}>
+              {expanded ? (t ? '收合' : 'Show less') : (t ? '展開' : 'Show more')}
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Jump button */}
+      {typeof onJump === 'function' && typeof ts === 'number' && (
+        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+          <button type="button" onClick={handleJump} style={{
+            display: 'inline-flex', alignItems: 'center', gap: 4,
+            padding: '4px 10px', background: TOKEN.bg,
+            border: `1px solid ${TOKEN.surfaceBorder}`, borderRadius: 6,
+            color: TOKEN.accent, fontSize: 12, cursor: 'pointer',
+            fontFamily: 'inherit',
+          }}
+            onMouseEnter={e => (e.currentTarget.style.borderColor = TOKEN.accent)}
+            onMouseLeave={e => (e.currentTarget.style.borderColor = TOKEN.surfaceBorder)}>
+            <Icon name="play" size={11} color={TOKEN.accent} />
+            {t ? '跳到這段內容' : 'Jump to transcript'}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+};
+
+Object.assign(window, { API_BASE, TOKEN, Icon, Badge, Btn, Input, TopNav, ConfirmModal, FormModal, OverflowMenu, ProgressCounts, categoryToBadge, formatRelativeTime, useViewport, EpisodeBlurb, SourceCard, sanitiseMarkOnly });

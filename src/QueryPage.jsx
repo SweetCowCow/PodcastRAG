@@ -312,12 +312,16 @@ const QueryPage = ({ lang, show, onBack, onOpenEpisode, queryMode, user, onUserC
         throw new Error(formatError(body, lang));
       }
       const data = await res.json();
+      // Keep the raw ChunkHit shape (episode_id / episode_title / start_time /
+      // before_text / after_text / highlights / ai_summary_excerpt) so the new
+      // SourceCard can read every R2.1 enrichment field directly. We also
+      // attach a couple of legacy aliases for the older SearchResultCard.
       const mapped = (data.results || []).map(r => ({
+        ...r,
         epId: r.episode_id,
         epTitle: r.episode_title,
         startTime: r.start_time,
         timestamp: formatTimestamp(r.start_time),
-        text: r.text,
       }));
       setSearchResults(mapped);
     } catch (err) {
@@ -494,7 +498,13 @@ const QueryPage = ({ lang, show, onBack, onOpenEpisode, queryMode, user, onUserC
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                 <p style={{ color: TOKEN.textMuted, fontSize: 13, margin: '0 0 4px' }}>{t ? `找到 ${searchResults.length} 個相關片段` : `Found ${searchResults.length} segments`}</p>
                 {searchResults.map((r, i) => (
-                  <SearchResultCard key={i} result={r} lang={lang} query={searchQ} />
+                  <SourceCard
+                    key={i}
+                    source={r}
+                    lang={lang}
+                    position={i}
+                    onJump={(src) => onOpenEpisode({ id: src.episode_id, title: src.episode_title }, src.start_time)}
+                  />
                 ))}
               </div>
             )}
