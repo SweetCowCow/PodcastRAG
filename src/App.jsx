@@ -48,6 +48,57 @@ const App = () => {
     return () => window.removeEventListener('hashchange', sync);
   }, [prevPage]);
 
+  // R2.1-followup section 3: Deep-link receiver. On first load, if URL has
+  // ?show_id=&episode_id= (with optional &t=), reconstruct selectedShow +
+  // selectedEpisode + highlightTime and route directly to the transcript
+  // page. Failure modes (404, network) → toast + clear params + fallback home.
+  const [deepLinkLoaded, setDeepLinkLoaded] = React.useState(false);
+  React.useEffect(() => {
+    if (deepLinkLoaded) return;
+    setDeepLinkLoaded(true);  // run exactly once
+    let params;
+    try {
+      params = new URL(window.location.href).searchParams;
+    } catch (_) {
+      return;
+    }
+    const showId = params.get('show_id');
+    const episodeId = params.get('episode_id');
+    const tRaw = params.get('t');
+    if (!showId || !episodeId) return;
+    const tSec = tRaw != null && !Number.isNaN(parseFloat(tRaw)) ? parseFloat(tRaw) : null;
+    (async () => {
+      try {
+        // Fetch show metadata
+        const showsResp = await fetch(`${API_BASE}/shows`);
+        if (!showsResp.ok) throw new Error(`shows fetch ${showsResp.status}`);
+        const shows = await showsResp.json();
+        const show = shows.find(s => s.id === showId);
+        if (!show) throw new Error('show not found');
+        // Fetch episodes for that show
+        const epsResp = await fetch(`${API_BASE}/shows/${showId}/episodes`);
+        if (!epsResp.ok) throw new Error(`episodes fetch ${epsResp.status}`);
+        const eps = await epsResp.json();
+        const ep = eps.find(e => e.id === episodeId);
+        if (!ep) throw new Error('episode not found');
+        setSelectedShow(show);
+        setSelectedEpisode(ep);
+        setHighlightTime(tSec);
+        setPage('transcript');
+      } catch (err) {
+        // Clear stale params; toast and fall back to landing
+        try {
+          const url = new URL(window.location.href);
+          url.searchParams.delete('t');
+          url.searchParams.delete('episode_id');
+          url.searchParams.delete('show_id');
+          window.history.replaceState({}, '', url.toString());
+        } catch (_) { /* ignore */ }
+        window.alert(t ? '無法載入該集（已從連結清掉，回到首頁）' : 'Cannot load that episode (link cleared, back to home)');
+      }
+    })();
+  }, [deepLinkLoaded]);
+
   const applyTweak = (key, val) => {
     setTweaks(t => ({ ...t, [key]: val }));
     window.parent.postMessage({ type: '__edit_mode_set_keys', edits: { [key]: val } }, '*');
@@ -135,12 +186,12 @@ const App = () => {
                 setInitSearch('');
                 const seconds = typeof ht === 'number' ? ht : null;
                 setHighlightTime(seconds);
-                // R2.1 section 4: write deep-link `?t=<seconds>` into the URL so
-                // the citation jump is shareable / back-restorable. We use
-                // replaceState — page state is the source of truth, but the
-                // URL surfaces the timestamp (Decision 3).
+                // R2.1-followup section 3: URL needs show_id + episode_id + t so
+                // a reload / shared link can re-build state without React memory.
                 try {
                   const url = new URL(window.location.href);
+                  if (selectedShow?.id) url.searchParams.set('show_id', selectedShow.id);
+                  if (ep?.id) url.searchParams.set('episode_id', ep.id);
                   if (seconds != null) url.searchParams.set('t', String(seconds.toFixed(2)));
                   else url.searchParams.delete('t');
                   window.history.replaceState({}, '', url.toString());
@@ -153,11 +204,13 @@ const App = () => {
           <TranscriptPage lang={lang} show={selectedShow} episode={selectedEpisode}
             initSearch={initSearch} highlightTime={highlightTime}
             onBack={() => {
-              // Clear the deep-link param when leaving the transcript view so a
-              // subsequent unrelated navigation doesn't carry a stale `?t=`.
+              // Clear all deep-link params so a subsequent unrelated navigation
+              // doesn't carry stale show_id/episode_id/t.
               try {
                 const url = new URL(window.location.href);
                 url.searchParams.delete('t');
+                url.searchParams.delete('episode_id');
+                url.searchParams.delete('show_id');
                 window.history.replaceState({}, '', url.toString());
               } catch (_) { /* best-effort */ }
               setPage('query');
