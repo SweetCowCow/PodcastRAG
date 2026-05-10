@@ -27,6 +27,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 import time
 import urllib.error
@@ -75,10 +76,43 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 # HTTP helpers
 # ────────────────────────────────────────────────────────────────────
 
+def _fetch_csrf(backend_url: str, token: str, timeout: float = 10.0) -> str:
+    """Hit /me to retrieve the HMAC-derived CSRF token. CSRF middleware requires
+    X-CSRF-Token == HMAC(SESSION_SECRET, session_id) — the cookie's csrf_token
+    value is random and NOT what the backend validates against. The frontend
+    reads the derived token from /me response body."""
+    if not token:
+        return ""
+    req = urllib.request.Request(
+        f"{backend_url}/me", headers={"Cookie": f"session_id={token}"}
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return json.loads(resp.read().decode()).get("csrf_token", "") or ""
+    except (urllib.error.URLError, json.JSONDecodeError):
+        return ""
+
+
+_CSRF_CACHE: dict[str, str] = {}
+
+
 def _post(url: str, body: dict, token: str, timeout: float = 60.0) -> dict:
     headers = {"Content-Type": "application/json"}
     if token:
         headers["Cookie"] = f"session_id={token}"
+        # Backend requires Origin + X-CSRF-Token for state-changing requests.
+        # Cache the derived CSRF per token so we hit /me only once per run.
+        if token not in _CSRF_CACHE:
+            backend_root = url.rsplit("/", url.count("/") - 2)[0] if "://" in url else ""
+            # Derive backend_url from full url: scheme://host/...
+            from urllib.parse import urlparse
+            p = urlparse(url)
+            backend_root = f"{p.scheme}://{p.netloc}"
+            _CSRF_CACHE[token] = _fetch_csrf(backend_root, token)
+        csrf = _CSRF_CACHE[token]
+        if csrf:
+            headers["Origin"] = "https://app.podcastrag.app"
+            headers["X-CSRF-Token"] = csrf
     req = urllib.request.Request(
         url, data=json.dumps(body).encode("utf-8"), headers=headers, method="POST"
     )
@@ -109,23 +143,41 @@ def _retrieve(
     return [_to_chunk_id(h) for h in hits], [h.get("text", "") for h in hits], latency_ms
 
 
+# R2.1-fix Fix 1.3: strip `[N]` / `[N,M,...]` ref tokens before sending the
+# answer to the judge. The backend serves `[N]` brackets so the frontend can
+# render source cards on hover, but LLM judges treat the brackets as noise
+# and dock points (Pattern B in r21-prompt-regression case study).
+_RUNNER_CITATION_RE = re.compile(r"\s*\[\d+(?:\s*,\s*\d+)*\]")
+
+
+def _strip_inline_citations(text: str) -> str:
+    if not text:
+        return ""
+    return _RUNNER_CITATION_RE.sub("", text).strip()
+
+
 def _query(
     backend_url: str, show_id: str, question: str, token: str,
 ) -> tuple[str, list[str]]:
-    """Return (answer_text, retrieval_context_texts). Empty on failure."""
+    """Return (answer_text, retrieval_context_texts). Empty on failure.
+
+    The returned `answer_text` has inline `[N]` citation tokens stripped so
+    LLM judges see clean prose; the per-item `out_items["answer"]` written
+    later in the run also stores this cleaned form for traceability.
+    """
     try:
         resp = _post(
             f"{backend_url}/shows/{show_id}/query",
-            {"question": question},
+            {"question": question, "mode": "chat", "messages": []},
             token,
         )
     except (urllib.error.URLError, json.JSONDecodeError) as exc:
         print(f"[warn] query failed: {exc}", file=sys.stderr)
         return "", []
-    answer = resp.get("answer") or resp.get("response") or ""
+    raw_answer = resp.get("answer") or resp.get("response") or ""
     sources = resp.get("sources") or resp.get("results") or []
     context = [s.get("text", "") for s in sources if s.get("text")]
-    return answer, context
+    return _strip_inline_citations(raw_answer), context
 
 
 # ────────────────────────────────────────────────────────────────────
@@ -270,6 +322,7 @@ def run_eval(
         rr = reciprocal_rank(retrieved_match, gt_match) if gt_match else None
 
         judge_val: float | None = None
+        answer = ""
         if judge_fn is not None:
             answer, ctx_texts = _query(backend_url, show_id, item["question"], token)
             if answer:
@@ -284,6 +337,7 @@ def run_eval(
             "id": item["id"],
             "type": item["type"],
             "question": item["question"],
+            "answer": answer,  # R2.1-fix: persist the cleaned answer for prompt-diff forensics
             "recall_at_k": rec,
             "reciprocal_rank": rr,
             "judge_score": judge_val,
