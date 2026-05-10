@@ -1,19 +1,21 @@
-"""R2.1 section 2: snapshot tests for the answer prompt.
+"""R2.1-fix: prompt directive + snapshot tests for the rewritten answer prompt.
 
-Catches accidental drift in the bilingual citation directive that R2.1's
-faithfulness gate depends on. The snapshot is the rendered prompt for a
-fixed three-source fixture, in both `zh` and `en`.
+The snapshot is the rendered prompt for a fixed three-source fixture in both
+`zh` and `en`. If a prompt change is intentional, regenerate the expected
+blocks below by running:
 
-If a prompt change is intentional, regenerate the expected blocks below by
-running `python -m pytest backend/tests/test_llm_prompts.py -k snapshot -s`
-once and pasting the new output. Treat any unintended diff as a regression.
+    python -m pytest backend/tests/test_llm_prompts.py -k snapshot -s
+
+…and pasting the new output. Treat any unintended diff as a regression.
+
+Background: R2.1 launched a heavyweight prompt that triggered Faithfulness
+regression (case study: docs/case-studies/r21-prompt-regression-2026-05-10.md).
+R2.1-fix shrinks the prompt, softens refusal phrasing, and stops sending
+`source_key` / `episode_title` into the chunks block.
 """
 from __future__ import annotations
 
-from app.services.llm_prompts import (
-    REFUSAL_TEXT,
-    render_answer_prompt,
-)
+from app.services.llm_prompts import render_answer_prompt
 
 
 _FIXTURE_CHUNKS = [
@@ -25,54 +27,58 @@ _FIXTURE_CHUNKS = [
 
 def test_zh_prompt_contains_required_directives():
     out = render_answer_prompt(_FIXTURE_CHUNKS, lang="zh")
-    # Numbered enumeration `[1] [2] [3]` (Decision 4 + spec scenario "Answer cites single source")
-    assert "[1] ep:e1@10.00 (EP1)" in out
-    assert "[2] ep:e2@22.50 (EP2)" in out
-    assert "[3] desc:e3 (EP3)" in out
-    # Bilingual refusal directive (spec scenario "Empty retrieval triggers explicit refusal in zh")
-    assert REFUSAL_TEXT["zh"] in out
-    # Single + multi citation forms documented
-    assert "[N]" in out
-    assert "[N,M,...]" in out
-    # JSON shape unchanged (Task 2.3 — no breaking change to existing parser)
+    # R2.1-fix Fix 4: chunks_block now `[N]\n{body}` only — no source_key / title.
+    assert "[1]\n迪拉胖第一次來上節目時聊到童年。" in out
+    assert "[2]\n他在 EP2 又補充了相關背景。" in out
+    assert "[3]\n本集介紹了三首歌單。" in out
+    # Source key and episode title MUST NOT be sent (Fix 4 token diet).
+    assert "ep:e1@10.00" not in out
+    assert "(EP1)" not in out
+    # Citation contract still documented (Decision 4 — frontend depends on it).
+    assert "[1]" in out and "[1,3]" in out
+    # JSON shape unchanged so the existing parser keeps working.
     assert '"answer"' in out
     assert '"used_chunk_ids"' in out
-    # No-fabrication clause
-    assert "不編造" in out or "不要" in out
-    # Out-of-range refs are forbidden so the parser can strip them safely
-    assert "1..N" in out
+    # R2.1-fix Fix 2: refusal is naturally phrased — no mechanical literal.
+    assert "找不到相關內容，請改用其他關鍵字" not in out
+    assert "X 換成" in out  # the "replace X with topic" instruction
+    # R2.1-fix Fix 3: faithfulness is multi-tier, not a single "禁止編造" line.
+    assert "杜撰" in out
+    assert "語意彙整" in out
+    assert "片段資訊" in out
 
 
 def test_en_prompt_contains_required_directives():
     out = render_answer_prompt(_FIXTURE_CHUNKS, lang="en")
-    assert "[1] ep:e1@10.00 (EP1)" in out
-    assert "[2] ep:e2@22.50 (EP2)" in out
-    assert "[3] desc:e3 (EP3)" in out
-    assert REFUSAL_TEXT["en"] in out
-    assert "[N]" in out
-    assert "[N,M,...]" in out
+    assert "[1]\n迪拉胖第一次來上節目時聊到童年。" in out
+    assert "[2]\n他在 EP2 又補充了相關背景。" in out
+    assert "[3]\n本集介紹了三首歌單。" in out
+    assert "ep:e1@10.00" not in out
+    assert "(EP1)" not in out
+    assert "[1]" in out and "[1,3]" in out
     assert '"answer"' in out
     assert '"used_chunk_ids"' in out
-    assert "1..N" in out
+    # Naturally phrased refusal, not the mechanical fallback string.
+    assert "No relevant content was found. Please try different keywords." not in out
+    assert "replace X" in out
+    # Multi-tier faithfulness clauses present.
+    assert "never invent" in out
+    assert "synthesise" in out
+    assert "partial info" in out
 
 
 def test_empty_chunks_still_renders_with_refusal_directive():
-    """When retrieval returned zero chunks, the prompt must still tell the
-    model to emit the bilingual refusal string (not fabricate)."""
+    """When retrieval returned zero chunks the prompt must still tell the
+    model to refuse with a natural-language explanation (R2.1-fix Fix 2)."""
     out_zh = render_answer_prompt([], lang="zh")
     out_en = render_answer_prompt([], lang="en")
-    assert REFUSAL_TEXT["zh"] in out_zh
-    assert REFUSAL_TEXT["en"] in out_en
-    # No `[1]` source listed
-    assert "[1]" not in out_zh.split("Sources:")[-1]
+    assert "目前的資料裡沒有提到" in out_zh
+    assert "doesn't mention" in out_en
+    # No `[1]` source listed under the Sources header.
+    assert "[1]\n" not in out_zh.split("Sources:")[-1]
 
 
 def test_zh_prompt_snapshot():
-    """Frozen snapshot — change with intent only.
-
-    Asserts the entire rendered prompt char-for-char so future drift is
-    caught in code review (per task 2.4).
-    """
     out = render_answer_prompt(_FIXTURE_CHUNKS, lang="zh")
     assert out == _EXPECTED_ZH
 
@@ -82,61 +88,61 @@ def test_en_prompt_snapshot():
     assert out == _EXPECTED_EN
 
 
-_EXPECTED_ZH = """你是 podcast 問答助理。只能根據下方提供的 sources 回答，sources 之外的事實一律不引用、不編造。
-回覆語言請與使用者問題語言一致。
+_EXPECTED_ZH = """你是 podcast 問答助理。請優先依據下方 sources 回答；回覆語言與使用者問題語言一致。
 
-每一個 source 前綴會以 `[N]` 標號（N 從 1 開始，與 retrieval 排序一致）。
-你必須遵守以下 citation 規範：
-- 每一句陳述事實的句子，句尾必須加上對應 source 的編號 token：
-  - 單一來源：`[N]`（例如：他在 EP1 提過這件事[1]。）
-  - 多個來源綜合：`[N,M,...]`（例如：他在 EP1 與 EP134 都聊過[1,3]。）
-- 不在 1..N 範圍的編號禁止使用（後端會直接 strip 掉並降級顯示）。
-- sources 沒提到的內容禁止寫進答案；不確定就明說「資料中沒有提到」。
-- 當完全沒有 sources 可用，或所有 sources 都無法支撐問題時，請回覆：
-  「找不到相關內容，請改用其他關鍵字」。
+Citation 規範：
+- 每一句陳述事實的句子，句尾請加上對應 source 編號 token，例如 `[1]` 或 `[1,3]`。
+- 編號必須在 1..N 範圍內；不在範圍的編號後端會 strip 掉。
 
-回應格式必須是合法的 JSON object，shape 如下（**完全不要改欄位名**）：
-{"answer": "<你的回答（含每句末尾的 [N] / [N,M] token）>", "used_chunk_ids": ["ep:<episode_id>@<start_time>" 或 "desc:<episode_id>", ...]}
+Faithfulness 規範：
+- 具體事實點（人名、數字、地點、時間、引述原話）必須來自 sources，不得杜撰。
+- 可以對 sources 做語意彙整、合理推論主旨，不必每個字都直接複製。
+- sources 只給片段資訊時，請把已知部分講清楚並說明哪部分尚無資料，不要整段拒答。
 
-`used_chunk_ids` 只列出你實際引用的 source key（與下方 sources 區塊的前綴一致）。
+拒答規範：
+- 當 sources 完全無法支撐問題時，用自然中文回應，例如：「目前的資料裡沒有提到 X，建議用其他關鍵字試試。」（請把 X 換成問題實際在問的主題詞）。
+
+回應格式：
+必須是合法 JSON object：{"answer": "<你的回答（含 [N] / [N,M] token）>", "used_chunk_ids": ["ep:<episode_id>@<start_time>" 或 "desc:<episode_id>", ...]}
+`used_chunk_ids` 只列出實際引用的 source 編號對應的 key。
 
 Sources:
-[1] ep:e1@10.00 (EP1)
+[1]
 迪拉胖第一次來上節目時聊到童年。
 
-[2] ep:e2@22.50 (EP2)
+[2]
 他在 EP2 又補充了相關背景。
 
-[3] desc:e3 (EP3)
+[3]
 本集介紹了三首歌單。
 """
 
 
-_EXPECTED_EN = """You are a podcast Q&A assistant. Answer ONLY using the sources provided below; never introduce facts that are not in the sources.
-Reply in the same language as the user's question.
+_EXPECTED_EN = """You are a podcast Q&A assistant. Prefer answering from the sources below; reply in the user's question language.
 
-Each source is prefixed with `[N]` where N starts at 1 and matches the retrieval order.
-You MUST follow these citation rules:
-- Every factual sentence must end with the bracketed reference token of its source:
-  - Single source: `[N]` (e.g. "He mentioned this in EP1[1].")
-  - Multi-source synthesis: `[N,M,...]` (e.g. "He covered this in both EP1 and EP134[1,3].")
-- Numbers outside 1..N are forbidden (the backend will strip them and gracefully degrade).
-- Do NOT invent content that is not in the sources; if unsure, explicitly say "the sources do not mention".
-- When no sources are available or no source supports the question, reply with:
-  "No relevant content was found. Please try different keywords."
+Citation rules:
+- End each factual sentence with the matching source token, e.g. `[1]` or `[1,3]`.
+- Numbers must be within 1..N; out-of-range tokens are stripped server-side.
 
-Respond with a valid JSON object in EXACTLY this shape (do NOT rename fields):
-{"answer": "<your answer with [N] / [N,M] tokens at the end of each factual sentence>", "used_chunk_ids": ["ep:<episode_id>@<start_time>" or "desc:<episode_id>", ...]}
+Faithfulness rules:
+- Concrete facts (names, numbers, places, times, direct quotes) must come from sources — never invent them.
+- You may synthesise themes and infer main points across sources without quoting verbatim.
+- When sources only give partial info, state what is known and flag what is missing — do not refuse outright.
 
-`used_chunk_ids` lists only the source keys you actually cited (the prefixes shown in the Sources block below).
+Refusal:
+- If no source can support the question, reply naturally, e.g. "The provided material doesn't mention X — try a different keyword." (replace X with the actual topic the user asked about).
+
+Response format:
+Must be a valid JSON object: {"answer": "<your answer with [N] / [N,M] tokens>", "used_chunk_ids": ["ep:<episode_id>@<start_time>" or "desc:<episode_id>", ...]}
+`used_chunk_ids` lists only the source keys you actually cited.
 
 Sources:
-[1] ep:e1@10.00 (EP1)
+[1]
 迪拉胖第一次來上節目時聊到童年。
 
-[2] ep:e2@22.50 (EP2)
+[2]
 他在 EP2 又補充了相關背景。
 
-[3] desc:e3 (EP3)
+[3]
 本集介紹了三首歌單。
 """

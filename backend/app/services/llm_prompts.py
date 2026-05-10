@@ -7,6 +7,12 @@ the design). The response shape (`{"answer": ..., "used_chunk_ids": [...]}`)
 is unchanged so the existing parser in `rag.answer_with_chunks` keeps working
 without breakage.
 
+R2.1-fix (2026-05-10): post-launch eval showed the original prompt over-refused
+(Pattern A), polluted answers with `[N]` noise (Pattern B), doubled latency by
+bloating system tokens (Pattern C), and forced a mechanical refusal string
+that judges disliked (Pattern D). This module is the rewrite — see
+`docs/case-studies/r21-prompt-regression-2026-05-10.md` for the diagnosis.
+
 Bilingual refusal directive per spec scenario "Empty retrieval triggers
 explicit refusal":
     zh → 找不到相關內容，請改用其他關鍵字
@@ -18,72 +24,105 @@ from typing import Literal
 
 Lang = Literal["zh", "en"]
 
-# Refusal strings — the parser in `rag.answer_with_chunks` does not enforce
-# these literal strings; the LLM is instructed to emit them when no source
-# supports the question, and tests assert on the substrings.
+# Refusal strings — kept for backward-compat. The R2.1-fix prompt no longer
+# forces the LLM to emit this exact phrase; tests that assert on the substring
+# still pass for callers that emit the literal, but the model is now free to
+# phrase its refusal naturally.
 REFUSAL_TEXT: dict[Lang, str] = {
     "zh": "找不到相關內容，請改用其他關鍵字",
     "en": "No relevant content was found. Please try different keywords.",
 }
 
 
-_ZH_INSTRUCTIONS = """你是 podcast 問答助理。只能根據下方提供的 sources 回答，sources 之外的事實一律不引用、不編造。
-回覆語言請與使用者問題語言一致。
+# R2.1-fix Fix 4: zh / en share one skeleton with surface-only swaps. The
+# faithfulness rules (Fix 3) and refusal style (Fix 2) live in the surface
+# strings — the structure stays identical so we don't double-maintain logic.
 
-每一個 source 前綴會以 `[N]` 標號（N 從 1 開始，與 retrieval 排序一致）。
-你必須遵守以下 citation 規範：
-- 每一句陳述事實的句子，句尾必須加上對應 source 的編號 token：
-  - 單一來源：`[N]`（例如：他在 EP1 提過這件事[1]。）
-  - 多個來源綜合：`[N,M,...]`（例如：他在 EP1 與 EP134 都聊過[1,3]。）
-- 不在 1..N 範圍的編號禁止使用（後端會直接 strip 掉並降級顯示）。
-- sources 沒提到的內容禁止寫進答案；不確定就明說「資料中沒有提到」。
-- 當完全沒有 sources 可用，或所有 sources 都無法支撐問題時，請回覆：
-  「找不到相關內容，請改用其他關鍵字」。
-
-回應格式必須是合法的 JSON object，shape 如下（**完全不要改欄位名**）：
-{{"answer": "<你的回答（含每句末尾的 [N] / [N,M] token）>", "used_chunk_ids": ["ep:<episode_id>@<start_time>" 或 "desc:<episode_id>", ...]}}
-
-`used_chunk_ids` 只列出你實際引用的 source key（與下方 sources 區塊的前綴一致）。
-
-Sources:
-{chunks_block}
-"""
-
-
-_EN_INSTRUCTIONS = """You are a podcast Q&A assistant. Answer ONLY using the sources provided below; never introduce facts that are not in the sources.
-Reply in the same language as the user's question.
-
-Each source is prefixed with `[N]` where N starts at 1 and matches the retrieval order.
-You MUST follow these citation rules:
-- Every factual sentence must end with the bracketed reference token of its source:
-  - Single source: `[N]` (e.g. "He mentioned this in EP1[1].")
-  - Multi-source synthesis: `[N,M,...]` (e.g. "He covered this in both EP1 and EP134[1,3].")
-- Numbers outside 1..N are forbidden (the backend will strip them and gracefully degrade).
-- Do NOT invent content that is not in the sources; if unsure, explicitly say "the sources do not mention".
-- When no sources are available or no source supports the question, reply with:
-  "No relevant content was found. Please try different keywords."
-
-Respond with a valid JSON object in EXACTLY this shape (do NOT rename fields):
-{{"answer": "<your answer with [N] / [N,M] tokens at the end of each factual sentence>", "used_chunk_ids": ["ep:<episode_id>@<start_time>" or "desc:<episode_id>", ...]}}
-
-`used_chunk_ids` lists only the source keys you actually cited (the prefixes shown in the Sources block below).
-
-Sources:
-{chunks_block}
-"""
+_SURFACE: dict[Lang, dict[str, str]] = {
+    "zh": {
+        "intro": "你是 podcast 問答助理。請優先依據下方 sources 回答；回覆語言與使用者問題語言一致。",
+        "citation_header": "Citation 規範：",
+        "citation_single": "- 每一句陳述事實的句子，句尾請加上對應 source 編號 token，例如 `[1]` 或 `[1,3]`。",
+        "citation_range": "- 編號必須在 1..N 範圍內；不在範圍的編號後端會 strip 掉。",
+        "faithfulness_header": "Faithfulness 規範：",
+        "faithfulness_facts": "- 具體事實點（人名、數字、地點、時間、引述原話）必須來自 sources，不得杜撰。",
+        "faithfulness_synth": "- 可以對 sources 做語意彙整、合理推論主旨，不必每個字都直接複製。",
+        "faithfulness_partial": "- sources 只給片段資訊時，請把已知部分講清楚並說明哪部分尚無資料，不要整段拒答。",
+        "refusal_header": "拒答規範：",
+        "refusal": (
+            "- 當 sources 完全無法支撐問題時，用自然中文回應，例如："
+            "「目前的資料裡沒有提到 X，建議用其他關鍵字試試。」（請把 X 換成問題實際在問的主題詞）。"
+        ),
+        "format_header": "回應格式：",
+        "format_body": (
+            '必須是合法 JSON object：'
+            '{"answer": "<你的回答（含 [N] / [N,M] token）>", '
+            '"used_chunk_ids": ["ep:<episode_id>@<start_time>" 或 "desc:<episode_id>", ...]}'
+        ),
+        "format_note": "`used_chunk_ids` 只列出實際引用的 source 編號對應的 key。",
+        "sources_header": "Sources:",
+    },
+    "en": {
+        "intro": "You are a podcast Q&A assistant. Prefer answering from the sources below; reply in the user's question language.",
+        "citation_header": "Citation rules:",
+        "citation_single": "- End each factual sentence with the matching source token, e.g. `[1]` or `[1,3]`.",
+        "citation_range": "- Numbers must be within 1..N; out-of-range tokens are stripped server-side.",
+        "faithfulness_header": "Faithfulness rules:",
+        "faithfulness_facts": "- Concrete facts (names, numbers, places, times, direct quotes) must come from sources — never invent them.",
+        "faithfulness_synth": "- You may synthesise themes and infer main points across sources without quoting verbatim.",
+        "faithfulness_partial": "- When sources only give partial info, state what is known and flag what is missing — do not refuse outright.",
+        "refusal_header": "Refusal:",
+        "refusal": (
+            "- If no source can support the question, reply naturally, e.g. "
+            "\"The provided material doesn't mention X — try a different keyword.\" "
+            "(replace X with the actual topic the user asked about)."
+        ),
+        "format_header": "Response format:",
+        "format_body": (
+            'Must be a valid JSON object: '
+            '{"answer": "<your answer with [N] / [N,M] tokens>", '
+            '"used_chunk_ids": ["ep:<episode_id>@<start_time>" or "desc:<episode_id>", ...]}'
+        ),
+        "format_note": "`used_chunk_ids` lists only the source keys you actually cited.",
+        "sources_header": "Sources:",
+    },
+}
 
 
 def _format_chunks_block(chunks: list[tuple[str, str, str]]) -> str:
     """`chunks` is a list of (source_key, episode_title, text) triples.
 
-    Each entry is rendered as:
-        [N] source_key (episode_title)
-        text...
+    R2.1-fix Fix 4: only the body text is sent to the LLM (prefixed with
+    `[N]`). The `source_key` and `episode_title` are kept in the function
+    signature for caller compatibility but are NOT rendered into the prompt
+    — they bloat token count and the LLM doesn't need them to cite. The
+    backend still maps `used_chunk_ids` back to keys via the retrieval order.
     """
     parts: list[str] = []
-    for idx, (key, title, body) in enumerate(chunks, start=1):
-        parts.append(f"[{idx}] {key} ({title})\n{body}")
+    for idx, (_key, _title, body) in enumerate(chunks, start=1):
+        parts.append(f"[{idx}]\n{body}")
     return "\n\n".join(parts)
+
+
+def _render_template(lang: Lang, chunks_block: str) -> str:
+    s = _SURFACE[lang]
+    return (
+        f"{s['intro']}\n\n"
+        f"{s['citation_header']}\n"
+        f"{s['citation_single']}\n"
+        f"{s['citation_range']}\n\n"
+        f"{s['faithfulness_header']}\n"
+        f"{s['faithfulness_facts']}\n"
+        f"{s['faithfulness_synth']}\n"
+        f"{s['faithfulness_partial']}\n\n"
+        f"{s['refusal_header']}\n"
+        f"{s['refusal']}\n\n"
+        f"{s['format_header']}\n"
+        f"{s['format_body']}\n"
+        f"{s['format_note']}\n\n"
+        f"{s['sources_header']}\n"
+        f"{chunks_block}\n"
+    )
 
 
 def render_answer_prompt(
@@ -94,8 +133,9 @@ def render_answer_prompt(
 
     `chunks` is the list of source rows (key, title, text) in retrieval order.
     Numbering is 1-based. An empty `chunks` list is allowed — the prompt then
-    instructs the model to emit the bilingual refusal string.
+    instructs the model to answer with a natural-language refusal.
     """
     block = _format_chunks_block(chunks)
-    template = _ZH_INSTRUCTIONS if lang == "zh" else _EN_INSTRUCTIONS
-    return template.format(chunks_block=block)
+    rendered = _render_template(lang, block)
+    # No `.format()` call needed — we already substituted `chunks_block`.
+    return rendered
