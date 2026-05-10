@@ -17,11 +17,11 @@
 
 ## 3. Citation parser
 
-- [ ] 3.1 Implement `backend/app/services/citation_parser.py` with `parse(answer_text: str, num_sources: int)` returning `(cleaned_answer, citations_meta)` — implements Decision 4 (the strip half)
-- [ ] 3.2 Implement bracket-token extraction supporting both single `[N]` and multi `[N,M,...]` forms; tokens whose every component is in `1..num_sources` are kept, otherwise the whole token is removed — fulfils requirement "Citation parser strips invalid refs and degrades gracefully"
-- [ ] 3.3 Implement sentence splitting on `。 ！ ？ . ! ?` and produce `citations_meta` mapping each sentence's `sentence_index` to the list of valid `ref_ids` that appeared inside it
-- [ ] 3.4 Wire the parser into `/query` immediately after the answer model returns, before the response is serialised; ensure the `citations` array (built from `used_chunk_ids`) is unchanged so the frontend can still render source cards even when `citations_meta` ref_ids are all empty
-- [ ] 3.5 Write `backend/tests/test_citation_parser.py` covering: valid single ref, out-of-range ref stripped, multi-ref with one invalid component dropped entirely, empty input yields empty meta, no brackets at all yields per-sentence empty meta
+- [x] 3.1 Implement `backend/app/services/citation_parser.py` with `parse(answer_text: str, num_sources: int)` returning `(cleaned_answer, citations_meta)` — implements Decision 4 (the strip half)
+- [x] 3.2 Implement bracket-token extraction supporting both single `[N]` and multi `[N,M,...]` forms; tokens whose every component is in `1..num_sources` are kept, otherwise the whole token is removed — fulfils requirement "Citation parser strips invalid refs and degrades gracefully"
+- [x] 3.3 Implement sentence splitting on `。 ！ ？ . ! ?` and produce `citations_meta` mapping each sentence's `sentence_index` to the list of valid `ref_ids` that appeared inside it
+- [x] 3.4 Wire the parser into `/query` immediately after the answer model returns, before the response is serialised; ensure the `citations` array (built from `used_chunk_ids`) is unchanged so the frontend can still render source cards even when `citations_meta` ref_ids are all empty
+- [x] 3.5 Write `backend/tests/test_citation_parser.py` covering: valid single ref, out-of-range ref stripped, multi-ref with one invalid component dropped entirely, empty input yields empty meta, no brackets at all yields per-sentence empty meta
 
 ## 4. TranscriptPage deep-link receiver
 

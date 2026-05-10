@@ -18,10 +18,11 @@ from app.schemas.query import (
     PublicSearchResponse,
     QueryRequest,
     SearchResponse,
+    SentenceCitations,
 )
 from openai import OpenAI
 
-from app.services import rag
+from app.services import citation_parser, rag
 from app.services.ai_step_resolver import (
     AiStepNotConfiguredError,
     get_step_config,
@@ -329,11 +330,21 @@ async def query_show(
     else:
         cited_hits = hits
 
+    # R2.1 task 3.4: strip invalid `[N]` refs before serialising. The
+    # `citations` array (built from used_chunk_ids) is unchanged so the
+    # frontend can still render source cards even when no inline refs survive.
+    cleaned_answer, meta = citation_parser.parse(answer_text, len(hits))
+    citations_meta = [
+        SentenceCitations(sentence_index=m.sentence_index, ref_ids=m.ref_ids)
+        for m in meta
+    ]
+
     return ChatResponse(
         query_id=uuid.uuid4().hex[:32],
-        answer=answer_text,
+        answer=cleaned_answer,
         citations=[_to_schema_hit(h) for h in cited_hits],
         quota_remaining=quota_remaining,
+        citations_meta=citations_meta,
     )
 
 
