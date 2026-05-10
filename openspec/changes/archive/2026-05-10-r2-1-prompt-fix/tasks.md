@@ -16,13 +16,13 @@
 - [x] 2.1 commit Fix 1 (rag.py + strip_citations test)
 - [x] 2.2 commit Fix 1 整合（route caller 改用 raw + run.py 改用 cleaned）
 - [x] 2.3 commit Fix 2/3/4 (llm_prompts.py)
-- [ ] 2.4 push origin main
-- [ ] 2.5 等 Zeabur 4 service redeploy；webhook 不穩時用 `zeabur service redeploy --id 69eb10360da29f05f49a4b0b -y`
-- [ ] 2.6 prod smoke：`curl ... /shows/.../search` 確認回應 contract 不變（answer 裡 `[N]` 仍在；不報 500）
+- [x] 2.4 push origin main
+- [x] 2.5 等 Zeabur 4 service redeploy；webhook 不穩時用 `zeabur service redeploy --id 69eb10360da29f05f49a4b0b -y`
+- [x] 2.6 prod smoke：`curl ... /shows/.../search` 確認回應 contract 不變（answer 裡 `[N]` 仍在；不報 500）
 
 ## 3. Eval verify
 
-- [ ] 3.1 等 prod 穩定 30 sec 後跑 post-fix eval（同 dataset、同 backend、same top_k=5、metric_level=episode）
-- [ ] 3.2 對比 baseline `eval-this-not-that-cool-20260510T120602Z.json` 取 judge_mean / negative_mean / latency_p95
-- [ ] 3.3 Gate：judge_mean ≥ 0.7146 才算成功；否則停下來回報「具體哪個 metric 還不夠 + 推測原因 + 下一步」
-- [ ] 3.4 寫 `docs/case-studies/r21-prompt-fix-eval-2026-05-10.md`：三輪數字對照（baseline / first post / post-fix）+ pattern 對應 fix 是否生效
+- [x] 3.1 等 prod 穩定 30 sec 後跑 post-fix eval（同 dataset、同 backend、same top_k=5、metric_level=episode）
+- [x] 3.2 對比 baseline `eval-this-not-that-cool-20260510T120602Z.json` 取 judge_mean / negative_mean / latency_p95
+- [x] 3.3 Gate：judge_mean ≥ 0.7146 才算成功；否則停下來回報「具體哪個 metric 還不夠 + 推測原因 + 下一步」
+- [x] 3.4 寫 `docs/case-studies/r21-prompt-fix-eval-2026-05-10.md`：三輪數字對照（baseline / first post / post-fix）+ pattern 對應 fix 是否生效

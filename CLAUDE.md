@@ -96,6 +96,34 @@ src/
 - **雙語支援**：所有使用者看得到的文字，都需提供 `zh`（繁體中文）和 `en`（英文）兩種版本
 - **後台登入**：Google SSO（OAuth 2.0 PKCE）+ session cookie + CSRF 雙保險。env `ADMIN_EMAILS` 白名單裡的 email 第一次登入後自動為 admin
 
+---
+
+# 工作紀律規則（2026-05-10 加入，源自 /insights 報告）
+
+## Verification Discipline
+
+- **絕不**標記 verification / validation 任務完成除非真的跑了（browser check / 跑測試 / prod smoke）
+- 如果 MCP / browser session 掛了，明確回報失敗 + 詢問 — 不要默默 mark complete
+- Spectra changes：archive 前一定跑完 propose → apply → archive 全週期 + prod 驗證
+
+## Background Tasks
+
+- 長跑任務（bake-offs / backfills / batch evals）**必須用持久化 runner 啟動**（nohup / systemd / tmux / Celery）— 不要用 `run_in_background`，session 死它就死
+- 永遠用 `stdbuf -oL` 或 `python -u` pipe log 避免 tail/pipe buffering 把輸出藏起來
+- 驗證 process 還活著：檢查 PID + log 持續長大才宣稱「launched」
+
+## Skills First
+
+- 做 security scan / pptx 生成 / 其他重複任務之前，先用 `/skills` 列現有 skill，**用既有的別寫 ad-hoc 腳本**
+
+## Secrets Hygiene
+
+- **絕不**在 chat 印 env vars / DB password / token（不准 `env` / `printenv` / `cat .env`）
+- rotate 憑證時要同時檢查 env 引用 **跟** literal-string 寫死兩種 backend config 用法
+- CLI 互動模式失敗時可能 dump 整份 env 到 stdout（譬如 `zeabur variable create` 沒 -y）— 用 `--interactive=false` + `update` 子命令
+
+---
+
 ## 後續開發規劃
 
 - [ ] 串接 RSS Feed 解析（取得真實節目與集數資訊）

@@ -43,10 +43,38 @@ const MILESTONE_LABELS = {
   'v1.3': { zh: 'v1.3 — 把資料背在保險上',         en: 'v1.3 — Putting Your Data on Insurance' },
   'v1.4': { zh: 'v1.4 — 混合檢索：找到節目主寫的關鍵字', en: 'v1.4 — Hybrid Retrieval: Catching the Host\'s Own Keywords' },
   'v1.5': { zh: 'v1.5 — 更新日誌變好讀',           en: 'v1.5 — Release Log, Browsable' },
+  'v1.6': { zh: 'v1.6 — 搜尋結果看得更清楚',       en: 'v1.6 — Search Results, Now Readable' },
 };
 
 // Entries — newest milestone first; within each milestone newest date first.
 const RELEASE_LOG = [
+  // ─── v1.6 — Citation Infrastructure (5/10) ───
+  {
+    date: '2026-05-10', slug: 'r2-1-citation-infra', milestone: 'v1.6', tag: 'enhancement',
+    title: {
+      zh: '搜尋結果加上關鍵字高亮、前後文、本集摘要、跳到對應段落',
+      en: 'Search Results: Highlights, Context, Summary, and Jump-to-Segment',
+    },
+    summary: {
+      zh: '到 v1.5 為止，搜尋結果只是一塊塊「片段文字 + 集數標題 + 時間戳」，要判斷哪一塊跟你的問題真的相關得自己肉眼掃。從這版開始，每張搜尋結果卡片會做四件事：(1) 把命中的關鍵字用 indigo 加粗加底線標出來（中文分詞跟搜尋同一套，譬如查「方品融」會把這三個字當整體高亮，不會切成「方/品/融」）；(2) 顯示該段前後 2 句的灰色上下文，讓你知道這句話前面在講什麼、後面接什麼；(3) 露出本集 AI 摘要前 60 字當概要，太長有「展開」鈕讓你看完整版；(4) 右下「跳到這段內容」按鈕直接把你帶到逐字稿頁的對應秒數，自動 scroll 並黃色淡入淡出 3 秒高亮——也支援 URL `?show_id=...&episode_id=...&t=秒數` 直接複製連結分享或加書籤，重新整理還會回到原位。如果搜到的是節目主寫的「本集介紹」（沒有特定秒數），按鈕會變成「打開該集」設定正確期待。順手把幾個邊界 bug 也修了：URL 改錯不會跳 alert 直接靜默回首頁、節目簡介卡點下去能正常打開該集（不再卡 t=0.00 沒反應）、答案 LLM 加上拒答模式「真的找不到就說沒有」不再瞎掰。後端送給 LLM 評分時會把 [N] citation 標記 strip 掉避免污染分數。實作中發現了一個更深的問題：retrieval recall 還只有 15%（48 題裡 28 題模型誠實拒答），LLM judge gpt-5-nano 對「正確的拒答」打 0.51（rubric 該給 1.0），這兩個合起來壓低了 Faithfulness 分數，但跟 R2.1 的 UI 改進無關——R3.x retrieval 跟 R1.3 judge 重 calibrate 才是根因解，已寫進 case study 跟路線圖追蹤。',
+      en: 'Through v1.5, search results were just blocks of "snippet + episode title + timestamp" — figuring out which block actually answered your question meant reading every line. Starting this release, each result card does four things: (1) Indigo-highlights the matched keyword (bold + underline) using the same Chinese tokenizer as search, so "方品融" stays as one token and gets highlighted as a unit, not three separate characters; (2) Shows the two segments before and after in muted grey so you see the lead-in and continuation; (3) Surfaces the first 60 chars of the episode\'s AI summary as context, with a "Show more" button to expand the full version; (4) A "Jump to transcript" button takes you straight to the right second on the transcript page, auto-scrolling and flashing a yellow highlight for 3 seconds — and the URL contains `?show_id=...&episode_id=...&t=seconds` so you can copy/share the link or bookmark it, and refreshing returns to the same spot. If the result is from the host\'s episode notes (which have no specific timestamp), the button reads "Open episode" to set correct expectations. Bundled bug fixes: editing the URL no longer triggers a popup alert (silent fallback to home), description-source cards now actually navigate (previously stuck on t=0.00 with no visible action), and the LLM answer prompt now properly refuses ("not found" rather than fabricating). Backend strips [N] citation tokens before sending answers to the LLM judge so they don\'t pollute scores. Implementation surfaced a deeper finding: retrieval recall is only 15% (28 of 48 evaluation questions trigger an honest "not found" refusal) and the gpt-5-nano LLM judge scores correctly-phrased Mandarin refusals at only 0.51 (rubric should be 1.0). Together these two factors depressed our Faithfulness score, but neither is caused by R2.1\'s UI improvements — R3.x retrieval work plus R1.3 judge recalibration are the real fixes, both tracked in the roadmap with a case study attached.',
+    },
+    summaryBullets: {
+      zh: [
+        '搜尋結果加上 indigo 加粗加底線高亮、前後 2 句上下文、AI 摘要 60 字「展開」',
+        '「跳到這段內容」按鈕 + URL `?episode_id=&t=` deep-link 可分享 / 可加書籤 / reload 還在',
+        '節目簡介卡按鈕改「打開該集」、URL 邊界錯誤靜默回首頁、LLM 加拒答模式',
+        'Faithfulness 從 0.71 降到 0.50（軟 gate ≥ 0.50 通過）— RCA 證實是 retrieval 跟 judge 問題，R3.x + R1.3 後續解',
+      ],
+      en: [
+        'Result cards: indigo bold-underline highlights, 2-sentence before/after context, 60-char AI summary with Show More toggle',
+        '"Jump to transcript" button + `?episode_id=&t=` URL deep-link — shareable, bookmarkable, reload-safe',
+        'Description-source results now read "Open episode"; edited URLs silent-fallback to home; LLM prompt now refuses honestly',
+        'Faithfulness dropped 0.71 → 0.50 (soft gate ≥ 0.50 passed) — RCA shows it\'s retrieval + judge, not R2.1 itself; R3.x + R1.3 are the real fixes',
+      ],
+    },
+  },
+
   // ─── v1.5 — Browsable Release Log (5/09) ───
   {
     date: '2026-05-09', slug: 'release-log-collapsible', milestone: 'v1.5', tag: 'ui',

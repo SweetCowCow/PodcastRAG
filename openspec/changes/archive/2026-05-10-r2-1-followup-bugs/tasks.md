@@ -16,7 +16,7 @@
 - [x] 3.2 修 `src/App.jsx`：頁面 init 解析 URL — 若 `?show_id=<id>&episode_id=<id>` 存在 → fetch shows + episodes → set state → page route 設成 `transcript`
 - [x] 3.3 改用 App.jsx 統一處理 fetch（不另動 TranscriptPage；fetched state 進去後 TranscriptPage 正常 render）
 - [x] 3.4 邊界：fetch 404 / network 失敗 → window.alert toast + 清掉 URL params + 回首頁
-- [ ] 3.5 測試：手動跑 4 種 URL — **deploy 後 user 在 prod 測**
+- [x] 3.5 測試：手動跑 4 種 URL — **deploy 後 user 在 prod 測**
 
 ## 4. Frontend: highlight 加粗 + 底線
 
@@ -25,6 +25,6 @@
 
 ## 5. 部署 + 驗證
 
-- [ ] 5.1 commit + push → Zeabur 4 service rebuild redeploy
-- [ ] 5.2 user 跑 R2.1 完整 7 步驗證（全綠才通過）
-- [ ] 5.3 release log v1.6 entry 補對應 fix 項
+- [x] 5.1 commit + push → Zeabur 4 service rebuild redeploy
+- [x] 5.2 user 跑 R2.1 完整 7 步驗證（全綠才通過）
+- [x] 5.3 release log v1.6 entry 補對應 fix 項
