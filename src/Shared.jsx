@@ -594,7 +594,7 @@ const SourceCard = ({ source, lang, onJump, position }) => {
       {/* App.jsx sets `mark { background: transparent }` globally; restore the
           highlight inside SourceCard so server-rendered <mark> wrappers visibly
           mark matched terms. */}
-      <style>{`.source-card mark { background: ${TOKEN.accent}33; color: ${TOKEN.accentHover || TOKEN.accent}; border-radius: 2px; padding: 0 2px; }`}</style>
+      <style>{`.source-card mark { background: ${TOKEN.accent}33; color: ${TOKEN.accentHover || TOKEN.accent}; border-radius: 2px; padding: 0 2px; font-weight: 600; border-bottom: 1px solid ${TOKEN.accent}; }`}</style>
       {/* Header: episode title + timestamp */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
         {typeof position === 'number' && (
@@ -630,23 +630,25 @@ const SourceCard = ({ source, lang, onJump, position }) => {
       </p>
 
       {/* AI summary excerpt with show-more toggle */}
-      {aiSummary && (
-        <div style={{ fontSize: 12, color: TOKEN.textSecondary, lineHeight: 1.55 }}>
-          <span style={{ color: TOKEN.textMuted, marginRight: 6, fontWeight: 600 }}>{t ? '本集摘要' : 'Summary'}:</span>
-          <span>{aiSummary}</span>
-          {/* The 60-char excerpt already includes "…" when truncated. We expose
-              a toggle so a future iteration can stream the full summary; today
-              we re-show the same excerpt without trailing ellipsis. */}
-          {aiSummary.endsWith('…') && (
-            <button type="button" onClick={() => setExpanded(v => !v)} style={{
-              background: 'none', border: 'none', padding: 0, marginLeft: 6,
-              color: TOKEN.accent, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit',
-            }}>
-              {expanded ? (t ? '收合' : 'Show less') : (t ? '展開' : 'Show more')}
-            </button>
-          )}
-        </div>
-      )}
+      {aiSummary && (() => {
+        const aiFull = source.ai_summary_full || '';
+        const hasMore = aiFull && aiFull.length > aiSummary.replace(/…$/, '').length;
+        const display = expanded && hasMore ? aiFull : aiSummary;
+        return (
+          <div style={{ fontSize: 12, color: TOKEN.textSecondary, lineHeight: 1.55 }}>
+            <span style={{ color: TOKEN.textMuted, marginRight: 6, fontWeight: 600 }}>{t ? '本集摘要' : 'Summary'}:</span>
+            <span>{display}</span>
+            {hasMore && (
+              <button type="button" onClick={() => setExpanded(v => !v)} style={{
+                background: 'none', border: 'none', padding: 0, marginLeft: 6,
+                color: TOKEN.accent, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit',
+              }}>
+                {expanded ? (t ? '收合' : 'Show less') : (t ? '展開' : 'Show more')}
+              </button>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Jump button */}
       {typeof onJump === 'function' && typeof ts === 'number' && (
