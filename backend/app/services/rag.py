@@ -750,6 +750,24 @@ def _hit_key(hit: ChunkHit) -> str:
     return f"ep:{hit.episode_id}@{hit.start_time:.2f}"
 
 
+# R2.1-fix Fix 1: strip every `[N]` / `[N,M,...]` bracket ref token from an
+# answer string. Used by eval / judge consumers that should not see the inline
+# citation noise (the frontend renders the raw answer where `[N]` is meaningful;
+# `citation_parser.parse` already strips invalid tokens for the API path).
+_CITATION_TOKEN_RE = re.compile(r"\s*\[\d+(?:\s*,\s*\d+)*\]")
+
+
+def strip_citations(text: str) -> str:
+    """Remove every `[N]` / `[N,M,...]` bracket token (incl. preceding spaces).
+
+    Returns an empty string for falsy input. Idempotent: running twice on a
+    cleaned string returns the same string.
+    """
+    if not text:
+        return ""
+    return _CITATION_TOKEN_RE.sub("", text).strip()
+
+
 def answer_with_chunks(
     client: OpenAI,
     model: str,
@@ -757,8 +775,15 @@ def answer_with_chunks(
     question: str,
     chunks: list[ChunkHit],
     lang: Lang = "zh",
-) -> tuple[str, list[str]]:
+) -> tuple[str, str, list[str]]:
     """Send the answer prompt to the LLM and parse the JSON reply.
+
+    Returns `(answer_raw, answer_clean, used_ids)`:
+    - `answer_raw` retains the LLM's `[N]` / `[N,M,...]` inline citation tokens
+      so the frontend / `citation_parser.parse` can render source cards.
+    - `answer_clean` has every `[N]` token stripped via `strip_citations`,
+      suitable for sending to LLM judges or eval consumers that mistake the
+      brackets for noise.
 
     `lang` controls which bilingual prompt + refusal directive is used
     (Decision 4 + spec scenarios "Empty retrieval triggers explicit refusal").
@@ -787,6 +812,6 @@ def answer_with_chunks(
         parsed = _json.loads(raw)
         answer = parsed["answer"]
         used_ids = [str(k) for k in parsed.get("used_chunk_ids", [])]
-        return answer, used_ids
+        return answer, strip_citations(answer), used_ids
     except (ValueError, KeyError):
-        return raw, []
+        return raw, strip_citations(raw), []

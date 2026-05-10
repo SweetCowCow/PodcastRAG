@@ -305,7 +305,10 @@ async def query_show(
         base_url=answer_cfg.base_url, api_key=answer_cfg.api_key
     )
     try:
-        answer_text, used_ids = await asyncio.to_thread(
+        # R2.1-fix Fix 1: answer_with_chunks now returns (raw, clean, ids).
+        # The API serves the raw answer (frontend renders `[N]` brackets via
+        # `citation_parser.parse` below); the cleaned form is for eval/judge.
+        answer_text, _answer_clean, used_ids = await asyncio.to_thread(
             rag.answer_with_chunks,
             answer_client,
             answer_cfg.model,
