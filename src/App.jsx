@@ -86,7 +86,9 @@ const App = () => {
         setHighlightTime(tSec);
         setPage('transcript');
       } catch (err) {
-        // Clear stale params; toast and fall back to landing
+        // Silent fallback: clear stale params, route to home. No popup —
+        // URL deep-link is meant for share/bookmark, not for manual editing.
+        // Malformed URLs just quietly land on landing page.
         try {
           const url = new URL(window.location.href);
           url.searchParams.delete('t');
@@ -94,7 +96,7 @@ const App = () => {
           url.searchParams.delete('show_id');
           window.history.replaceState({}, '', url.toString());
         } catch (_) { /* ignore */ }
-        window.alert(t ? '無法載入該集（已從連結清掉，回到首頁）' : 'Cannot load that episode (link cleared, back to home)');
+        // (Optional dev hint:) console.warn('deep-link load failed:', err);
       }
     })();
   }, [deepLinkLoaded]);
