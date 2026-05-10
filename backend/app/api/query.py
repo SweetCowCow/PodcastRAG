@@ -361,4 +361,5 @@ def _to_schema_hit(hit: RagHit) -> ChunkHit:
         after_text=hit.after_text,
         highlights=hit.highlights,
         ai_summary_excerpt=hit.ai_summary_excerpt,
+        ai_summary_full=hit.ai_summary_full,
     )

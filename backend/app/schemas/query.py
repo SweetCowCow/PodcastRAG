@@ -29,6 +29,10 @@ class ChunkHit(BaseModel):
     after_text: str = ""
     highlights: str = ""
     ai_summary_excerpt: str = ""
+    # R2.1 followup: full (untruncated) episode ai_summary, used by the
+    # frontend SourceCard "expand" toggle. None when the episode has no
+    # ai_summary.
+    ai_summary_full: str | None = None
 
 
 # Schema version for the source/citation entry shape. R4 cache should key on

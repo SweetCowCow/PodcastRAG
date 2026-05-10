@@ -57,6 +57,9 @@ class ChunkHit:
     after_text: str = ""
     highlights: str = ""
     ai_summary_excerpt: str = ""
+    # R2.1 followup: full (untruncated) ai_summary used by SourceCard
+    # "expand" toggle. None when the episode has no ai_summary.
+    ai_summary_full: str | None = None
 
 
 def _vector_literal(vec: list[float]) -> str:
@@ -650,6 +653,29 @@ async def _fetch_ai_summary_excerpt(
     return _truncate_ai_summary(row["ai_summary"])
 
 
+async def _fetch_ai_summary_pair(
+    db: AsyncSession, episode_id: uuid.UUID
+) -> tuple[str, str | None]:
+    """Return (excerpt, full) for an episode's ai_summary in a single query.
+
+    `excerpt` is the 60-char truncated version (or "" when missing).
+    `full` is the untruncated stripped string, or None when the episode has
+    no ai_summary at all.
+    """
+    row = (
+        await db.execute(text(_AI_SUMMARY_SQL), {"episode_id": episode_id})
+    ).mappings().first()
+    if row is None:
+        return "", None
+    raw = row["ai_summary"]
+    if not raw:
+        return "", None
+    stripped = raw.strip()
+    if not stripped:
+        return "", None
+    return _truncate_ai_summary(stripped), stripped
+
+
 async def enrich_hits(
     db: AsyncSession, hits: list[ChunkHit], question: str
 ) -> list[ChunkHit]:
@@ -675,9 +701,9 @@ async def enrich_hits(
             hit.before_text = ""
             hit.after_text = ""
         hit.highlights = await _fetch_highlight(db, hit.text, ts_query)
-        hit.ai_summary_excerpt = await _fetch_ai_summary_excerpt(
-            db, hit.episode_id
-        )
+        excerpt, full = await _fetch_ai_summary_pair(db, hit.episode_id)
+        hit.ai_summary_excerpt = excerpt
+        hit.ai_summary_full = full
     return hits
 
 
