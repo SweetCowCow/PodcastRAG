@@ -164,6 +164,7 @@ async def public_search_show(
         k=payload.k,
         episode_id_filter=routed_eps,
     )
+    await rag.enrich_hits(db, hits, payload.question)
     return PublicSearchResponse(results=[_to_schema_hit(h) for h in hits])
 
 
@@ -221,6 +222,7 @@ async def query_show(
             payload.question,
             episode_id_filter=routed_eps,
         )
+        await rag.enrich_hits(db, hits, payload.question)
         return SearchResponse(
             results=[_to_schema_hit(h) for h in hits],
             quota_remaining=quota_remaining,
@@ -284,6 +286,7 @@ async def query_show(
         rewritten,
         episode_id_filter=routed_eps,
     )
+    await rag.enrich_hits(db, hits, rewritten)
 
     answer_client = OpenAI(
         base_url=answer_cfg.base_url, api_key=answer_cfg.api_key
@@ -330,4 +333,8 @@ def _to_schema_hit(hit: RagHit) -> ChunkHit:
         text=hit.text,
         distance=hit.distance,
         source=hit.source,
+        before_text=hit.before_text,
+        after_text=hit.after_text,
+        highlights=hit.highlights,
+        ai_summary_excerpt=hit.ai_summary_excerpt,
     )

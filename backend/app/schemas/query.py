@@ -23,11 +23,36 @@ class ChunkHit(BaseModel):
     text: str
     distance: float | None = None
     source: Literal["transcript", "description"] = "transcript"
+    # R2.1 citation infra: extra context fields. Default to empty so older
+    # callers that don't pass them still construct a valid model.
+    before_text: str = ""
+    after_text: str = ""
+    highlights: str = ""
+    ai_summary_excerpt: str = ""
+
+
+# Schema version for the source/citation entry shape. R4 cache should key on
+# this value so a future bump invalidates stale entries (see R2.1 design,
+# Open Question — `sources_schema_version`).
+SOURCES_SCHEMA_VERSION: int = 1
+
+
+class SentenceCitations(BaseModel):
+    """Per-sentence citation metadata produced by the citation parser.
+
+    `sentence_index` is the 0-based index of the sentence in the cleaned
+    answer (sentences split on `。 ！ ？ . ! ?`). `ref_ids` is the list of
+    valid 1-based source numbers referenced inside that sentence.
+    """
+
+    sentence_index: int
+    ref_ids: list[int] = Field(default_factory=list)
 
 
 class SearchResponse(BaseModel):
     results: list[ChunkHit]
     quota_remaining: int
+    sources_schema_version: int = SOURCES_SCHEMA_VERSION
 
 
 class ChatResponse(BaseModel):
@@ -35,6 +60,8 @@ class ChatResponse(BaseModel):
     answer: str
     citations: list[ChunkHit]
     quota_remaining: int
+    citations_meta: list[SentenceCitations] = Field(default_factory=list)
+    sources_schema_version: int = SOURCES_SCHEMA_VERSION
 
 
 class PublicSearchRequest(BaseModel):
@@ -53,3 +80,4 @@ class PublicSearchResponse(BaseModel):
     """
 
     results: list[ChunkHit]
+    sources_schema_version: int = SOURCES_SCHEMA_VERSION
