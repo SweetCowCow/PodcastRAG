@@ -7,21 +7,21 @@
 
 ## 2. Frontend: 「展開」toggle 真的展開
 
-- [ ] 2.1 在 `src/Shared.jsx` SourceCard 元件，「展開」button 點擊 → state toggle expandSummary；展開時顯示 `src.ai_summary_full || src.ai_summary_excerpt`，「展開」label 變「收合」（zh）/「Show less」（en）
-- [ ] 2.2 ai_summary_full 為空時 button 不顯示（避免空 toggle）
+- [x] 2.1 在 `src/Shared.jsx` SourceCard 元件，「展開」button 點擊 → state toggle expandSummary；展開時顯示 `src.ai_summary_full || src.ai_summary_excerpt`，「展開」label 變「收合」（zh）/「Show less」（en）
+- [x] 2.2 ai_summary_full 為空時 button 不顯示（避免空 toggle）
 
 ## 3. Frontend: URL deep-link 帶 episode_id
 
-- [ ] 3.1 修 `src/App.jsx`：navigation 寫 URL 時同時 set `episode_id` + `t` 兩個 param（取代現在只寫 `t`）
-- [ ] 3.2 修 `src/App.jsx`：頁面 init 解析 URL — 若 `?episode_id=<id>` 存在 → page route 設成 `transcript` 並把 episode_id 放進 state
-- [ ] 3.3 修 `src/TranscriptPage.jsx`：init 時若 episode 還沒 fetch → fetch episode + transcript；fetch 失敗才 fallback 首頁
-- [ ] 3.4 邊界：URL `?episode_id=<不存在 id>` → fetch 404 → toast「找不到該集」+ 回首頁
-- [ ] 3.5 測試：手動跑 4 種 URL（`?episode_id=<id>` / `?episode_id=<id>&t=300` / `?episode_id=<id>&t=99999` / `?episode_id=<bad-id>`），確認行為符合 Success Criteria
+- [x] 3.1 修 `src/App.jsx`：navigation 寫 URL 時同時 set `show_id` + `episode_id` + `t` 三個 param
+- [x] 3.2 修 `src/App.jsx`：頁面 init 解析 URL — 若 `?show_id=<id>&episode_id=<id>` 存在 → fetch shows + episodes → set state → page route 設成 `transcript`
+- [x] 3.3 改用 App.jsx 統一處理 fetch（不另動 TranscriptPage；fetched state 進去後 TranscriptPage 正常 render）
+- [x] 3.4 邊界：fetch 404 / network 失敗 → window.alert toast + 清掉 URL params + 回首頁
+- [ ] 3.5 測試：手動跑 4 種 URL — **deploy 後 user 在 prod 測**
 
 ## 4. Frontend: highlight 加粗 + 底線
 
-- [ ] 4.1 在 `src/QueryPage.jsx` line 683 (mark inline style) 加 `fontWeight: 600, borderBottom: '1px solid ' + TOKEN.accent, paddingBottom: 1`
-- [ ] 4.2 在 `src/TranscriptPage.jsx` 對應 `<mark>` 樣式（如果有）同樣處理
+- [x] 4.1 在 `src/Shared.jsx` SourceCard 內 scoped `<style>` 加 `font-weight: 600 + border-bottom: 1px solid TOKEN.accent`（mark 實際定義位置在這，不在 QueryPage 683）
+- [x] 4.2 TranscriptPage `<mark>` 已經用亮黃 (#fbbf24aa) 視覺夠強 — 不動（per spec「如果有」可選條款）
 
 ## 5. 部署 + 驗證
 
