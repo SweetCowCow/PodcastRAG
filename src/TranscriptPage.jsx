@@ -1,4 +1,24 @@
 // Transcript Page — Layer 3: Timeline + Keyword highlight
+//
+// R2.1 section 4 (deep-link receiver):
+//   • On mount we parse `?t=<seconds>` from the URL once and treat it as the
+//     authoritative deep-link target (Decision 3: pure-seconds URL, no
+//     auto-play). The legacy `highlightTime` prop is kept as a fallback for
+//     in-app navigation that did not yet round-trip through the URL.
+//   • A matched segment must fall within ±5 s of `t`; outside the window we
+//     scroll the transcript to the top and skip the highlight (no error).
+const _readDeepLinkSeconds = () => {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const raw = params.get('t');
+    if (raw == null || raw === '') return null;
+    const n = Number(raw);
+    return Number.isFinite(n) && n >= 0 ? n : null;
+  } catch (_) {
+    return null;
+  }
+};
+
 const TranscriptPage = ({ lang, show, episode, onBack, initSearch, highlightTime }) => {
   const t = lang === 'zh';
   const { isMobile } = useViewport();
@@ -7,6 +27,12 @@ const TranscriptPage = ({ lang, show, episode, onBack, initSearch, highlightTime
   const [highlightedIdx, setHighlightedIdx] = React.useState(null);
   const [segments, setSegments] = React.useState(null);
   const [segError, setSegError] = React.useState(null);
+  // Resolve deep-link seconds once on mount: URL `?t=` wins, prop is fallback.
+  const deepLinkSecondsRef = React.useRef(undefined);
+  if (deepLinkSecondsRef.current === undefined) {
+    const fromUrl = _readDeepLinkSeconds();
+    deepLinkSecondsRef.current = fromUrl != null ? fromUrl : (typeof highlightTime === 'number' ? highlightTime : null);
+  }
 
   React.useEffect(() => {
     if (!episode?.id) return;
@@ -26,12 +52,25 @@ const TranscriptPage = ({ lang, show, episode, onBack, initSearch, highlightTime
   };
 
   React.useEffect(() => {
-    if (highlightTime == null || !segments?.length) return;
+    const target = deepLinkSecondsRef.current;
+    if (target == null || !segments?.length) return;
     let closest = 0, minDiff = Infinity;
     segments.forEach((seg, i) => {
-      const diff = Math.abs(seg.start_time - highlightTime);
+      const diff = Math.abs(seg.start_time - target);
       if (diff < minDiff) { minDiff = diff; closest = i; }
     });
+    // R2.1 Decision: only highlight if the closest segment is within ±5 s of
+    // the requested timestamp. Outside the window we scroll to the top and
+    // skip the highlight — no error UI per spec.
+    const WINDOW_SECONDS = 5;
+    if (minDiff > WINDOW_SECONDS) {
+      setHighlightedIdx(null);
+      setTimeout(() => {
+        const scroller = document.getElementById('transcript-scroll');
+        if (scroller) scroller.scrollTop = 0;
+      }, 100);
+      return;
+    }
     setHighlightedIdx(closest);
     setActiveIdx(closest);
     setTimeout(() => {
@@ -40,7 +79,7 @@ const TranscriptPage = ({ lang, show, episode, onBack, initSearch, highlightTime
     }, 100);
     const timer = setTimeout(() => setHighlightedIdx(null), 3000);
     return () => clearTimeout(timer);
-  }, [highlightTime, segments]);
+  }, [segments]);
 
   const highlight = (text) => {
     if (!search.trim()) return text;
@@ -137,7 +176,7 @@ const TranscriptPage = ({ lang, show, episode, onBack, initSearch, highlightTime
         )}
 
         {/* Right: Full transcript */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: isMobile ? '14px 12px' : '20px 32px' }}>
+        <div id="transcript-scroll" style={{ flex: 1, overflowY: 'auto', padding: isMobile ? '14px 12px' : '20px 32px' }}>
           {!segments && !segError && (
             <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 60 }}>
               <div style={{ display: 'flex', gap: 6 }}>

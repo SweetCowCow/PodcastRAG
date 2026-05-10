@@ -130,12 +130,38 @@ const App = () => {
               user={user} onUserChange={refreshUser}
               initialQuery={landingQuery}
               onBack={() => { setLandingQuery(''); setPage('select'); }}
-              onOpenEpisode={(ep, ht) => { setSelectedEpisode(ep); setInitSearch(''); setHighlightTime(typeof ht === 'number' ? ht : null); setPage('transcript'); }} />
+              onOpenEpisode={(ep, ht) => {
+                setSelectedEpisode(ep);
+                setInitSearch('');
+                const seconds = typeof ht === 'number' ? ht : null;
+                setHighlightTime(seconds);
+                // R2.1 section 4: write deep-link `?t=<seconds>` into the URL so
+                // the citation jump is shareable / back-restorable. We use
+                // replaceState — page state is the source of truth, but the
+                // URL surfaces the timestamp (Decision 3).
+                try {
+                  const url = new URL(window.location.href);
+                  if (seconds != null) url.searchParams.set('t', String(seconds.toFixed(2)));
+                  else url.searchParams.delete('t');
+                  window.history.replaceState({}, '', url.toString());
+                } catch (_) { /* harmless; deep-link is best-effort */ }
+                setPage('transcript');
+              }} />
           </div>
         )}
         {page === 'transcript' && selectedEpisode && selectedShow && (
           <TranscriptPage lang={lang} show={selectedShow} episode={selectedEpisode}
-            initSearch={initSearch} highlightTime={highlightTime} onBack={() => setPage('query')} />
+            initSearch={initSearch} highlightTime={highlightTime}
+            onBack={() => {
+              // Clear the deep-link param when leaving the transcript view so a
+              // subsequent unrelated navigation doesn't carry a stale `?t=`.
+              try {
+                const url = new URL(window.location.href);
+                url.searchParams.delete('t');
+                window.history.replaceState({}, '', url.toString());
+              } catch (_) { /* best-effort */ }
+              setPage('query');
+            }} />
         )}
         {page === 'release-log' && <ReleaseLogPage lang={lang} />}
         {page === 'presentation' && <PresentationPage />}
