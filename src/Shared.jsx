@@ -650,23 +650,31 @@ const SourceCard = ({ source, lang, onJump, position }) => {
         );
       })()}
 
-      {/* Jump button */}
-      {typeof onJump === 'function' && typeof ts === 'number' && (
-        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-          <button type="button" onClick={handleJump} style={{
-            display: 'inline-flex', alignItems: 'center', gap: 4,
-            padding: '4px 10px', background: TOKEN.bg,
-            border: `1px solid ${TOKEN.surfaceBorder}`, borderRadius: 6,
-            color: TOKEN.accent, fontSize: 12, cursor: 'pointer',
-            fontFamily: 'inherit',
-          }}
-            onMouseEnter={e => (e.currentTarget.style.borderColor = TOKEN.accent)}
-            onMouseLeave={e => (e.currentTarget.style.borderColor = TOKEN.surfaceBorder)}>
-            <Icon name="play" size={11} color={TOKEN.accent} />
-            {t ? '跳到這段內容' : 'Jump to transcript'}
-          </button>
-        </div>
-      )}
+      {/* Jump button — label depends on source kind. Description hits don't
+          have a meaningful timestamp (start_time=0), so we say "open episode"
+          instead of "jump to segment" to set the right expectation. */}
+      {typeof onJump === 'function' && typeof ts === 'number' && (() => {
+        const isDescription = source.source === 'description';
+        const label = isDescription
+          ? (t ? '打開該集' : 'Open episode')
+          : (t ? '跳到這段內容' : 'Jump to transcript');
+        return (
+          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+            <button type="button" onClick={handleJump} style={{
+              display: 'inline-flex', alignItems: 'center', gap: 4,
+              padding: '4px 10px', background: TOKEN.bg,
+              border: `1px solid ${TOKEN.surfaceBorder}`, borderRadius: 6,
+              color: TOKEN.accent, fontSize: 12, cursor: 'pointer',
+              fontFamily: 'inherit',
+            }}
+              onMouseEnter={e => (e.currentTarget.style.borderColor = TOKEN.accent)}
+              onMouseLeave={e => (e.currentTarget.style.borderColor = TOKEN.surfaceBorder)}>
+              <Icon name={isDescription ? 'fileText' : 'play'} size={11} color={TOKEN.accent} />
+              {label}
+            </button>
+          </div>
+        );
+      })()}
     </div>
   );
 };
