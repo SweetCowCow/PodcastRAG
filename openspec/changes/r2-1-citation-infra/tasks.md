@@ -25,18 +25,18 @@
 
 ## 4. TranscriptPage deep-link receiver
 
-- [ ] 4.1 In `src/TranscriptPage.jsx`, parse `window.location.search` for `t=<seconds>` on mount — implements Decision 3: deep-link 採純秒數 URL（?t=252.6）+ 不自動播放
-- [ ] 4.2 Implement closest-segment search within ±5 seconds of the parsed `t`; scroll the matched segment into view and apply a 3-second highlighted background that fades out — fulfils requirement "Citation click navigates to transcript with highlight"
-- [ ] 4.3 When no segment falls in the ±5 second window, scroll to the top of the transcript and skip the highlight; do not emit an error
-- [ ] 4.4 Update QueryPage's `<SourceCard>` (in `src/Shared.jsx` if shared, or inline) so the jump button writes `?t=<seconds>` into the navigation URL when the page changes to TranscriptPage
-- [ ] 4.5 Set the jump button label to `跳到這段內容` when `lang === 'zh'` and `Jump to transcript` when `lang === 'en'` — implements Decision 6: 雙語 UI 文字採內嵌 i18n key 模式
+- [x] 4.1 In `src/TranscriptPage.jsx`, parse `window.location.search` for `t=<seconds>` on mount — implements Decision 3: deep-link 採純秒數 URL（?t=252.6）+ 不自動播放
+- [x] 4.2 Implement closest-segment search within ±5 seconds of the parsed `t`; scroll the matched segment into view and apply a 3-second highlighted background that fades out — fulfils requirement "Citation click navigates to transcript with highlight"
+- [x] 4.3 When no segment falls in the ±5 second window, scroll to the top of the transcript and skip the highlight; do not emit an error
+- [x] 4.4 Update QueryPage's `<SourceCard>` (in `src/Shared.jsx` if shared, or inline) so the jump button writes `?t=<seconds>` into the navigation URL when the page changes to TranscriptPage
+- [x] 4.5 Set the jump button label to `跳到這段內容` when `lang === 'zh'` and `Jump to transcript` when `lang === 'en'` — implements Decision 6: 雙語 UI 文字採內嵌 i18n key 模式
 
 ## 5. SourceCard rendering
 
-- [ ] 5.1 Update `<SourceCard>` to render the new `highlights` field via React `dangerouslySetInnerHTML` after a strict whitelist sanitiser that rejects every tag other than `<mark>`
-- [ ] 5.2 Render `before_text` and `after_text` as muted-colour spans surrounding the chunk's main text, visually conveying the `…前句…[hit]…後句…` layout
-- [ ] 5.3 Render `ai_summary_excerpt` on its own row with a `「展開」/`Show more` link that toggles the full summary; respect bilingual labels per Decision 6: 雙語 UI 文字採內嵌 i18n key 模式
-- [ ] 5.4 Ensure rendering is graceful when any of the four new fields is missing or empty (older cached responses or description sources)
+- [x] 5.1 Update `<SourceCard>` to render the new `highlights` field via React `dangerouslySetInnerHTML` after a strict whitelist sanitiser that rejects every tag other than `<mark>`
+- [x] 5.2 Render `before_text` and `after_text` as muted-colour spans surrounding the chunk's main text, visually conveying the `…前句…[hit]…後句…` layout
+- [x] 5.3 Render `ai_summary_excerpt` on its own row with a `「展開」/`Show more` link that toggles the full summary; respect bilingual labels per Decision 6: 雙語 UI 文字採內嵌 i18n key 模式
+- [x] 5.4 Ensure rendering is graceful when any of the four new fields is missing or empty (older cached responses or description sources)
 
 ## 6. R1.2 evaluation gate
 
