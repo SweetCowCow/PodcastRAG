@@ -2,7 +2,7 @@ import asyncio
 import uuid
 
 import openai
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Cookie, Depends, HTTPException, status
 from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -168,12 +168,24 @@ async def public_search_show(
     return PublicSearchResponse(results=[_to_schema_hit(h) for h in hits])
 
 
+def _resolve_lang(raw: str | None) -> str:
+    """Map the `lang` cookie value to either 'zh' or 'en' (default 'zh').
+
+    Per CLAUDE.md the project supports zh / en only; any other value falls
+    back to zh so the prompt always renders.
+    """
+    if raw and raw.lower().startswith("en"):
+        return "en"
+    return "zh"
+
+
 @router.post("/shows/{show_id}/query")
 async def query_show(
     show_id: uuid.UUID,
     payload: QueryRequest,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_authenticated_user),
+    lang: str | None = Cookie(default=None),
 ) -> SearchResponse | ChatResponse:
     show = await db.get(Show, show_id)
     if show is None:
@@ -299,6 +311,7 @@ async def query_show(
             history,
             payload.question,
             hits,
+            _resolve_lang(lang),
         )
     except (
         openai.RateLimitError,

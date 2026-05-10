@@ -18,6 +18,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services import api_health, tokenizer
+from app.services.llm_prompts import Lang, render_answer_prompt
 
 RETRIEVAL_TOP_K = 8
 RRF_K = 60
@@ -33,19 +34,9 @@ REWRITE_SYSTEM_PROMPT = (
     "preamble."
 )
 
-ANSWER_SYSTEM_PROMPT_TEMPLATE = (
-    "You are answering questions about a podcast show. Answer ONLY based on the "
-    "provided sources. If the sources don't contain the answer, say so. "
-    "Reply in the same language as the user's question.\n\n"
-    "Each source is prefixed with one of:\n"
-    "  - ep:<episode_id>@<start_time> for transcript chunks\n"
-    "  - desc:<episode_id> for episode description (RSS) chunks\n\n"
-    "You MUST respond with a JSON object in this exact format:\n"
-    '{{"answer": "<your answer here>", '
-    '"used_chunk_ids": ["ep:<episode_id>@<start_time>" or "desc:<episode_id>", ...]}}\n\n'
-    "In used_chunk_ids, list only the source keys you actually cited.\n\n"
-    "Sources:\n{chunks_block}"
-)
+# R2.1 Decision 4: the answer prompt now lives in `app.services.llm_prompts`
+# and enumerates sources as `[1] [2] [3]…`. The legacy single-template constant
+# is removed; callers should use `render_answer_prompt(chunks, lang)`.
 
 
 @dataclass
@@ -739,14 +730,20 @@ def answer_with_chunks(
     messages: list[dict],
     question: str,
     chunks: list[ChunkHit],
+    lang: Lang = "zh",
 ) -> tuple[str, list[str]]:
+    """Send the answer prompt to the LLM and parse the JSON reply.
+
+    `lang` controls which bilingual prompt + refusal directive is used
+    (Decision 4 + spec scenarios "Empty retrieval triggers explicit refusal").
+    """
     import json as _json
 
     history = messages[-HISTORY_WINDOW:]
-    chunks_block = "\n\n".join(
-        f"{_hit_key(c)} ({c.episode_title})\n{c.text}" for c in chunks
-    )
-    system_prompt = ANSWER_SYSTEM_PROMPT_TEMPLATE.format(chunks_block=chunks_block)
+    rendered_chunks = [
+        (_hit_key(c), c.episode_title, c.text) for c in chunks
+    ]
+    system_prompt = render_answer_prompt(rendered_chunks, lang=lang)
 
     chat_messages = [{"role": "system", "content": system_prompt}]
     chat_messages.extend({"role": m["role"], "content": m["content"]} for m in history)

@@ -10,10 +10,10 @@
 
 ## 2. LLM prompt and citation contract
 
-- [ ] 2.1 Rewrite the answer prompt in `backend/app/services/llm_prompts.py` to enumerate sources as `[1] [2] [3]…` and to require a bracketed reference token at the end of every factual sentence — implements Decision 4: LLM citation 用 ref id 編號 + 後端嚴格 strip
-- [ ] 2.2 Add the bilingual refusal directive (zh: 找不到相關內容，請改用其他關鍵字 / en: No relevant content was found. Please try different keywords.) and the no-fabrication clause — fulfils requirement "LLM answer prompt enforces citation, faithfulness, and refusal"
-- [ ] 2.3 Update the JSON schema instruction to keep `answer` and `used_chunk_ids` fields exactly as before (no breaking change to existing parser)
-- [ ] 2.4 Add a unit test that snapshots the rendered prompt template for a fixture of three sources with both `lang=zh` and `lang=en` so future prompt drift is caught in review
+- [x] 2.1 Rewrite the answer prompt in `backend/app/services/llm_prompts.py` to enumerate sources as `[1] [2] [3]…` and to require a bracketed reference token at the end of every factual sentence — implements Decision 4: LLM citation 用 ref id 編號 + 後端嚴格 strip
+- [x] 2.2 Add the bilingual refusal directive (zh: 找不到相關內容，請改用其他關鍵字 / en: No relevant content was found. Please try different keywords.) and the no-fabrication clause — fulfils requirement "LLM answer prompt enforces citation, faithfulness, and refusal"
+- [x] 2.3 Update the JSON schema instruction to keep `answer` and `used_chunk_ids` fields exactly as before (no breaking change to existing parser)
+- [x] 2.4 Add a unit test that snapshots the rendered prompt template for a fixture of three sources with both `lang=zh` and `lang=en` so future prompt drift is caught in review
 
 ## 3. Citation parser
 
