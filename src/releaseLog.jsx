@@ -48,6 +48,33 @@ const MILESTONE_LABELS = {
 
 // Entries — newest milestone first; within each milestone newest date first.
 const RELEASE_LOG = [
+  // ─── v1.6 — Eval Tooling (5/11) ───
+  {
+    date: '2026-05-11', slug: 'eval-runner-flags-patch', milestone: 'v1.6', tag: 'enhancement',
+    title: {
+      zh: 'Eval 工具可試跑 + 跑到一半當機可接續',
+      en: 'Eval Runner: Canary Trial Runs + Crash-Safe Resume',
+    },
+    summary: {
+      zh: '這版改動完全在背景，使用者看不到 — 但對於我們衡量 RAG 答題品質的可信度差很多。eval runner 本來只能整套跑完，跑到一半當機就要重來；而且不會把 LLM 的答案內容存下來，事後只看到分數沒辦法追原因。這次補了 4 個 CLI flag：(1) `--canary 3` 只跑前 3 題給人看 input / output / 評分合不合理才放大；(2) `--persist-answers` 把每題的問題、檢索到的片段、LLM 答案全文落盤，事後可以對著證據追根因；(3) `--checkpoint-every N` 每 N 題寫一次中繼檔，atomic 覆寫；(4) `--resume <path>` 從中繼檔接續跑，會驗證 dataset 是同一份才肯接。為什麼要做？5/10 R2.1 archive 卡關時，Faithfulness 分數從 0.71 掉到 0.50 跑了三輪 eval 都不確定是真退步還是 judge 抖動 — 因為沒存答案文字所以根因都是憑結構推論。這次補完 v2.0 eval skill 強制的 6 phase（preflight / canary / metric-sanity / variance / checkpoint / persistent runner）所需的全部 flag，下一次任何 prompt / retrieval 改動都可以拿證據說話。',
+      en: 'This change is entirely behind the scenes — no user-facing surface — but it materially improves how we measure RAG answer quality. Previously the eval runner could only run the full dataset in one go: if it crashed mid-run you started over, and answer text was never persisted so any after-the-fact root-cause analysis was structural guesswork. This release adds four CLI flags: (1) `--canary 3` runs only the first 3 items so you can eyeball inputs / outputs / scores before scaling up; (2) `--persist-answers` writes the question, retrieved chunks, and full LLM answer to disk for every item, enabling evidence-based RCA; (3) `--checkpoint-every N` writes an atomic checkpoint every N items; (4) `--resume <path>` picks up where a crashed run left off, validating the dataset matches before continuing. Why now? During R2.1 archive on 5/10, Faithfulness dropped 0.71 → 0.50 across three eval rounds and we could not tell signal from judge variance because answer text was never persisted. With these flags, the v2.0 eval skill\'s mandatory 6-phase discipline (preflight / canary / metric-sanity / variance / checkpoint / persistent runner) is now fully operational — every future prompt or retrieval change can be defended with evidence.',
+    },
+    summaryBullets: {
+      zh: [
+        '`--canary N` 試跑前 N 題 + `--persist-answers` 保存問題 / 檢索內容 / LLM 答案全文',
+        '`--checkpoint-every N` atomic 落盤 + `--resume <path>` 從中斷處接續（會驗證 dataset 一致）',
+        '11 個 unit test 覆蓋四個 flag + 互斥檢查（`--canary` 與 `--resume` 不能同時用）',
+        '純內部工具改動 — 終端使用者完全感覺不到，但 v2.0 eval skill 強制的 6 phase 從這版開始 callable',
+      ],
+      en: [
+        '`--canary N` runs the first N items only; `--persist-answers` dumps question / retrieved chunks / full LLM answer',
+        '`--checkpoint-every N` atomic checkpoint + `--resume <path>` picks up after a crash (dataset path is validated)',
+        '11 unit tests cover the four flags plus mutex (`--canary` and `--resume` cannot be combined)',
+        'Pure internal-tooling change — invisible to end users, but the v2.0 eval skill\'s mandatory 6-phase discipline is now fully callable',
+      ],
+    },
+  },
+
   // ─── v1.6 — Citation Infrastructure (5/10) ───
   {
     date: '2026-05-10', slug: 'r2-1-citation-infra', milestone: 'v1.6', tag: 'enhancement',

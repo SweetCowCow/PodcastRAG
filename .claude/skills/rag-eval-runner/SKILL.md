@@ -56,8 +56,7 @@ echo "  ✓ preflight passed"
 
 ```bash
 echo "== Phase 1: canary on 3 items =="
-# 用 --canary 3 跑前 3 題（runner 必須支援 --canary N，沒有先 patch）
-# 必須有 --persist-answers flag — 否則只有 score，事後沒辦法做 evidence-based prompt fix
+# Runner 內建 --canary / --persist-answers（per eval-runner-flags-patch 2026-05-11）
 python3 -m backend.eval.runners.run \
   --dataset "$DATASET" \
   --backend-url https://api.podcastrag.app \
@@ -119,14 +118,7 @@ print(f'⚠️ if SD ≥ 0.07, single-shot deltas < 0.14 are noise')
 
 ### Phase 4: Checkpoint every N samples
 
-Runner 必須每 N 樣本（建議 N=10）寫 partial result 到 disk，crash 後可 resume：
-
-```bash
-# Runner 必須支援 --checkpoint-every 10 跟 --resume <path>
-# 沒這兩個 flag → 先 patch runner（半小時）才 full run
-```
-
-實作 hint：每 10 題寫 `<out-dir>/.checkpoint.json`（覆蓋）+ 結束時刪。`--resume` 從 checkpoint 接續。
+Runner 內建 `--checkpoint-every N` 跟 `--resume <path>`（per eval-runner-flags-patch 2026-05-11）。每 N 題 atomic 寫 `<out-dir>/.checkpoint.json`，正常結束刪除；crash 後 `--resume <path>` 從中斷處接續（會驗證 dataset path 一致）。
 
 ### Phase 5: Persistent runner（不是 run_in_background）
 

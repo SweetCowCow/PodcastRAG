@@ -272,6 +272,31 @@ def _to_episode_ids(chunk_ids: list[str]) -> list[str]:
     return out
 
 
+def _checkpoint_path(out_dir: Path) -> Path:
+    return out_dir / ".checkpoint.json"
+
+
+def _write_checkpoint_atomic(path: Path, payload: dict) -> None:
+    """Write checkpoint via tmp + rename to avoid torn writes on crash."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    tmp.replace(path)
+
+
+def _load_checkpoint(resume_path: Path, dataset_path: Path) -> tuple[list[dict], set[str]]:
+    """Load checkpoint; verify dataset path matches the one recorded. Return (items, processed_ids)."""
+    cp = json.loads(resume_path.read_text(encoding="utf-8"))
+    recorded = cp.get("meta", {}).get("dataset", "")
+    if recorded and recorded != str(dataset_path):
+        raise ValueError(
+            f"checkpoint dataset mismatch: checkpoint recorded {recorded!r} "
+            f"but --dataset is {str(dataset_path)!r}"
+        )
+    processed = cp.get("items", [])
+    return processed, {it["id"] for it in processed}
+
+
 def run_eval(
     dataset_path: Path,
     backend_url: str,
@@ -281,11 +306,17 @@ def run_eval(
     out_dir: Path,
     match_window_s: float = DEFAULT_MATCH_WINDOW_S,
     metric_level: str = "episode",
+    canary: int | None = None,
+    persist_answers: bool = False,
+    checkpoint_every: int = 0,
+    resume_path: Path | None = None,
 ) -> dict:
     """Execute eval; return report dict + write JSON/MD to out_dir."""
     data = json.loads(dataset_path.read_text(encoding="utf-8"))
     show_id = data["show_id"]
     items = data["items"]
+    if canary is not None:
+        items = items[:canary]
 
     judge_fn = None
     judge_model = None
@@ -303,7 +334,27 @@ def run_eval(
             print(f"[warn] judge unavailable ({exc}); continuing retrieval-only", file=sys.stderr)
 
     out_items: list[dict] = []
+    processed_ids: set[str] = set()
+    if resume_path is not None:
+        out_items, processed_ids = _load_checkpoint(resume_path, dataset_path)
+        print(f"[resume] skipping {len(processed_ids)} already-processed items from {resume_path}", file=sys.stderr)
+
+    cp_path = _checkpoint_path(out_dir)
+    run_config_meta = {
+        "dataset": str(dataset_path),
+        "backend_url": backend_url,
+        "top_k": top_k,
+        "metric_level": metric_level,
+        "match_window_s": match_window_s,
+        "canary": canary,
+        "persist_answers": persist_answers,
+        "checkpoint_every": checkpoint_every,
+        "skip_judge": skip_judge,
+    }
+
     for i, item in enumerate(items, 1):
+        if item["id"] in processed_ids:
+            continue
         print(f"[{i}/{len(items)}] {item['id']} ({item['type']})…", file=sys.stderr)
         chunk_ids, chunk_texts, latency_ms = _retrieve(
             backend_url, show_id, item["question"], top_k, token,
@@ -323,6 +374,7 @@ def run_eval(
 
         judge_val: float | None = None
         answer = ""
+        ctx_texts: list[str] = []
         if judge_fn is not None:
             answer, ctx_texts = _query(backend_url, show_id, item["question"], token)
             if answer:
@@ -333,17 +385,24 @@ def run_eval(
                 except Exception as exc:  # noqa: BLE001
                     print(f"  [warn] judge failed: {exc}", file=sys.stderr)
 
-        out_items.append({
+        record: dict = {
             "id": item["id"],
             "type": item["type"],
-            "question": item["question"],
-            "answer": answer,  # R2.1-fix: persist the cleaned answer for prompt-diff forensics
             "recall_at_k": rec,
             "reciprocal_rank": rr,
             "judge_score": judge_val,
             "latency_ms": round(latency_ms, 1),
-            "retrieved_chunk_ids": chunk_ids,
-        })
+        }
+        if persist_answers:
+            record["question"] = item["question"]
+            record["retrieved_chunk_ids"] = chunk_ids
+            record["retrieved_texts"] = [t[:4000] for t in chunk_texts]
+            record["answer"] = answer
+            record["retrieval_context_for_judge"] = ctx_texts or chunk_texts
+        out_items.append(record)
+
+        if checkpoint_every and len(out_items) % checkpoint_every == 0:
+            _write_checkpoint_atomic(cp_path, {"meta": run_config_meta, "items": out_items})
 
     metrics = _aggregate(out_items)
     run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -355,16 +414,19 @@ def run_eval(
         "judge_model": judge_model,
         "top_k": top_k,
         "metric_level": metric_level,
-        "n_items": len(items),
+        "n_items": len(out_items),
         "metrics": metrics,
         "items": out_items,
     }
 
     out_dir.mkdir(parents=True, exist_ok=True)
-    json_path = out_dir / f"eval-{data['show_slug']}-{run_id}.json"
-    md_path = out_dir / f"eval-{data['show_slug']}-{run_id}.md"
+    suffix = ".canary" if canary is not None else ""
+    json_path = out_dir / f"eval-{data['show_slug']}-{run_id}{suffix}.json"
+    md_path = out_dir / f"eval-{data['show_slug']}-{run_id}{suffix}.md"
     json_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     md_path.write_text(_markdown_report(report), encoding="utf-8")
+    if cp_path.exists():
+        cp_path.unlink()
     print(f"\n[ok] report: {json_path}", file=sys.stderr)
     print(f"[ok] summary: {md_path}", file=sys.stderr)
     return report
@@ -401,10 +463,42 @@ def main(argv: Iterable[str] | None = None) -> int:
         type=Path,
         default=REPO_ROOT / "backend/eval/results",
     )
+    parser.add_argument(
+        "--canary",
+        type=int,
+        default=None,
+        help="If set, process only the first N items (positive integer). For Phase 1 canary runs.",
+    )
+    parser.add_argument(
+        "--persist-answers",
+        action="store_true",
+        help="Persist per-item question/answer/retrieved chunks for RCA. Off by default (lean output).",
+    )
+    parser.add_argument(
+        "--checkpoint-every",
+        type=int,
+        default=0,
+        help="Write .checkpoint.json every N items (atomic). 0 = disabled.",
+    )
+    parser.add_argument(
+        "--resume",
+        type=Path,
+        default=None,
+        help="Path to .checkpoint.json from a previous interrupted run. Skips already-processed items.",
+    )
     args = parser.parse_args(argv)
 
     if not args.dataset.exists():
         print(f"dataset not found: {args.dataset}", file=sys.stderr)
+        return 2
+    if args.canary is not None and args.canary <= 0:
+        print("--canary must be a positive integer", file=sys.stderr)
+        return 2
+    if args.checkpoint_every < 0:
+        print("--checkpoint-every must be >= 0", file=sys.stderr)
+        return 2
+    if args.canary is not None and args.resume is not None:
+        print("--canary and --resume are mutually exclusive (resume is for full runs)", file=sys.stderr)
         return 2
 
     run_eval(
@@ -416,6 +510,10 @@ def main(argv: Iterable[str] | None = None) -> int:
         out_dir=args.out_dir,
         match_window_s=args.match_window_s,
         metric_level=args.metric_level,
+        canary=args.canary,
+        persist_answers=args.persist_answers,
+        checkpoint_every=args.checkpoint_every,
+        resume_path=args.resume,
     )
     return 0
 
