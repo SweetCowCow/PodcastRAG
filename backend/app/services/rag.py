@@ -28,6 +28,43 @@ DESCRIPTION_CAP = 3
 ROUTE_EPISODES_K = 10
 HISTORY_WINDOW = 10
 
+
+def _parse_runtime_description_cap() -> int:
+    """Read RAG_DESCRIPTION_CAP at import time. Fall back to DESCRIPTION_CAP
+    on missing / malformed / negative value, with a single stderr warning.
+
+    Introduced by r3-2-retrieval-fix as a lever-test knob (2026-05-11)."""
+    raw = os.getenv("RAG_DESCRIPTION_CAP")
+    if raw is None or raw == "":
+        return DESCRIPTION_CAP
+    try:
+        val = int(raw)
+        if val < 0:
+            raise ValueError("must be >= 0")
+        return val
+    except (ValueError, TypeError):
+        import sys as _sys
+        print(
+            f"[warn] RAG_DESCRIPTION_CAP={raw!r} is not a non-negative int; "
+            f"falling back to in-code DESCRIPTION_CAP={DESCRIPTION_CAP}",
+            file=_sys.stderr,
+        )
+        return DESCRIPTION_CAP
+
+
+def _parse_runtime_show_name_filter() -> bool:
+    """Read RAG_SHOW_NAME_FILTER at import time. Returns False only when set
+    to a recognized disable token; otherwise True (preserves current strip
+    behaviour for unset / any other value)."""
+    raw = os.getenv("RAG_SHOW_NAME_FILTER", "").strip().lower()
+    if raw in ("false", "0", "off"):
+        return False
+    return True
+
+
+_DESCRIPTION_CAP_RUNTIME: int = _parse_runtime_description_cap()
+_SHOW_NAME_FILTER_ENABLED: bool = _parse_runtime_show_name_filter()
+
 REWRITE_SYSTEM_PROMPT = (
     "You rewrite a follow-up question into a standalone question, preserving the "
     "original intent and language. Use conversation history only to resolve "
@@ -91,7 +128,7 @@ def _build_ts_query(question: str) -> str | None:
         # every casual mention episode, drowning the actual answer chunk).
         # Embedding side gets the full question text so semantic signal is
         # preserved.
-        if tok in show_name_terms:
+        if _SHOW_NAME_FILTER_ENABLED and tok in show_name_terms:
             continue
         cleaned.append(tok)
     if not cleaned:
@@ -470,7 +507,7 @@ async def retrieve_hybrid(
         if len(final) >= k:
             break
         if h.source == "description":
-            if desc_count < DESCRIPTION_CAP:
+            if desc_count < _DESCRIPTION_CAP_RUNTIME:
                 final.append(h)
                 desc_count += 1
             else:
