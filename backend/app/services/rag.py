@@ -7,6 +7,7 @@ in parallel and merge by RRF score before returning the top-K.
 """
 from __future__ import annotations
 
+import os
 import re
 import time
 import uuid
@@ -383,12 +384,21 @@ async def retrieve_descriptions(
 
 
 def _should_skip_routing(question: str) -> bool:
-    """True when the question is too short to route reliably.
+    """True when the question is too short to route reliably, OR when the
+    operator has disabled two-layer routing via env flag.
+
+    Env flag: `ENABLE_TWO_LAYER_ROUTING` (default "true"; set to "false" to
+    short-circuit routing and search the whole show — equivalent to R3.1
+    behaviour). Introduced 2026-05-11 as hotfix after R3.2 baseline showed
+    Recall@5 regressed from 23.8% (R3.1) to 15.5% (R3.2) — see
+    `docs/case-studies/r32-routing-regression-2026-05-11.md`.
 
     Routing relies on description embedding similarity. Questions with
     fewer than 2 multi-char (length>=2) jieba tokens (e.g. just '迪拉胖')
     yield poor embedding signal — we'd rather search the whole show.
     """
+    if os.getenv("ENABLE_TWO_LAYER_ROUTING", "true").strip().lower() == "false":
+        return True
     if not question or not question.strip():
         return True
     tokens = tokenizer.tokenize(question)
