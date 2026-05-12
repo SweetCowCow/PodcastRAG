@@ -65,6 +65,73 @@ def _parse_runtime_show_name_filter() -> bool:
 _DESCRIPTION_CAP_RUNTIME: int = _parse_runtime_description_cap()
 _SHOW_NAME_FILTER_ENABLED: bool = _parse_runtime_show_name_filter()
 
+
+# r3-4: read-side env flag. When true, retrieval uses `embedding_v2`
+# (vector(3072), text-embedding-3-large) instead of `embedding` (vector(1536),
+# text-embedding-3-small). Read once at import (R3.2 lever-test pattern).
+def _parse_use_embedding_v2() -> bool:
+    raw = os.getenv("RAG_USE_EMBEDDING_V2", "").strip().lower()
+    return raw in ("true", "1", "on")
+
+
+_USE_EMBEDDING_V2: bool = _parse_use_embedding_v2()
+
+
+# Column name + distance expression. The v2 path casts to halfvec(3072) so
+# the HNSW index built over `(embedding_v2::halfvec(3072)) halfvec_cosine_ops`
+# is hit. The query embedding is cast to halfvec to match. Without the cast,
+# Postgres would evaluate against the raw vector(3072) column which has no
+# usable ANN index (vector_cosine_ops HNSW maxDim is 2000).
+if _USE_EMBEDDING_V2:
+    _EMB_LHS_C = "c.embedding_v2::halfvec(3072)"
+    _EMB_LHS_D = "d.embedding_v2::halfvec(3072)"
+    _EMB_RHS = "CAST(:query_embedding AS halfvec(3072))"
+    _EMB_NN_C = "c.embedding_v2 IS NOT NULL"
+    _EMB_NN_D = "d.embedding_v2 IS NOT NULL"
+    _EXPECTED_QUERY_DIM = 3072
+else:
+    _EMB_LHS_C = "c.embedding"
+    _EMB_LHS_D = "d.embedding"
+    _EMB_RHS = "CAST(:query_embedding AS vector)"
+    _EMB_NN_C = "c.embedding IS NOT NULL"
+    _EMB_NN_D = "d.embedding IS NOT NULL"
+    _EXPECTED_QUERY_DIM = 1536
+
+
+def _resolve_embed_placeholders(sql: str) -> str:
+    """Replace `__EMB_*__` placeholders in a SQL template per `_USE_EMBEDDING_V2`.
+
+    Done at function-call time (not module import) so unit tests can monkey
+    patch `_USE_EMBEDDING_V2` and `_EMB_*` constants and the next retrieval
+    call picks up the change. Production startup pays this cost once per
+    retrieval call which is negligible.
+    """
+    return (
+        sql.replace("__EMB_LHS_C__", _EMB_LHS_C)
+        .replace("__EMB_LHS_D__", _EMB_LHS_D)
+        .replace("__EMB_RHS__", _EMB_RHS)
+        .replace("__EMB_NN_C__", _EMB_NN_C)
+        .replace("__EMB_NN_D__", _EMB_NN_D)
+    )
+
+
+def _validate_query_dim(query_embedding: list[float]) -> None:
+    """Hard error when caller hands us an embedding whose dim doesn't match
+    the column we're about to read. Catches the spec scenario "dim mismatch
+    is a hard error" — happens when ai_steps points at a model whose native
+    dim != expected for the active column.
+    """
+    if not query_embedding:
+        return
+    if len(query_embedding) != _EXPECTED_QUERY_DIM:
+        raise RuntimeError(
+            f"rag: query embedding dim {len(query_embedding)} does not match "
+            f"expected dim {_EXPECTED_QUERY_DIM} for the active embedding "
+            f"column (RAG_USE_EMBEDDING_V2={_USE_EMBEDDING_V2}). Check the "
+            f"`ai_steps.embedding` model — must be text-embedding-3-large "
+            f"(3072) when v2 is on, text-embedding-3-small (1536) when off."
+        )
+
 REWRITE_SYSTEM_PROMPT = (
     "You rewrite a follow-up question into a standalone question, preserving the "
     "original intent and language. Use conversation history only to resolve "
@@ -159,14 +226,14 @@ _TRANSCRIPT_RRF_SQL = """
 WITH semantic AS (
     SELECT c.id AS chunk_id,
            ROW_NUMBER() OVER (
-               ORDER BY c.embedding <=> CAST(:query_embedding AS vector)
+               ORDER BY __EMB_LHS_C__ <=> __EMB_RHS__
            ) AS rank_s
     FROM transcript_chunks c
     JOIN transcripts t ON t.id = c.transcript_id
     JOIN episodes e ON e.id = t.episode_id
     WHERE e.show_id = :show_id
       AND t.status = 'completed'
-      AND c.embedding IS NOT NULL
+      AND __EMB_NN_C__
       {episode_filter}
     LIMIT :per_side
 ),
@@ -209,7 +276,7 @@ LIMIT :k
 
 _TRANSCRIPT_SEMANTIC_ONLY_SQL = """
 SELECT c.id AS chunk_id,
-       c.embedding <=> CAST(:query_embedding AS vector) AS distance,
+       __EMB_LHS_C__ <=> __EMB_RHS__ AS distance,
        c.start_time,
        c.end_time,
        c.text,
@@ -220,7 +287,7 @@ JOIN transcripts t ON t.id = c.transcript_id
 JOIN episodes e ON e.id = t.episode_id
 WHERE e.show_id = :show_id
   AND t.status = 'completed'
-  AND c.embedding IS NOT NULL
+  AND __EMB_NN_C__
   {episode_filter}
 ORDER BY distance
 LIMIT :k
@@ -235,12 +302,12 @@ _DESC_RRF_SQL = """
 WITH semantic AS (
     SELECT d.id AS chunk_id,
            ROW_NUMBER() OVER (
-               ORDER BY d.embedding <=> CAST(:query_embedding AS vector)
+               ORDER BY __EMB_LHS_D__ <=> __EMB_RHS__
            ) AS rank_s
     FROM episode_description_chunks d
     JOIN episodes e ON e.id = d.episode_id
     WHERE e.show_id = :show_id
-      AND d.embedding IS NOT NULL
+      AND __EMB_NN_D__
       AND (
         d.chunking_version = 2
         OR d.episode_id NOT IN (
@@ -299,7 +366,7 @@ LIMIT :k
 _DESC_SEMANTIC_ONLY_SQL = """
 -- prefer-v2 policy (semantic-only fallback path). See _DESC_RRF_SQL comment.
 SELECT d.id AS chunk_id,
-       d.embedding <=> CAST(:query_embedding AS vector) AS distance,
+       __EMB_LHS_D__ <=> __EMB_RHS__ AS distance,
        d.text,
        d.chunking_version,
        d.chunk_index,
@@ -308,7 +375,7 @@ SELECT d.id AS chunk_id,
 FROM episode_description_chunks d
 JOIN episodes e ON e.id = d.episode_id
 WHERE e.show_id = :show_id
-  AND d.embedding IS NOT NULL
+  AND __EMB_NN_D__
   AND (
     d.chunking_version = 2
     OR d.episode_id NOT IN (
@@ -331,11 +398,11 @@ SELECT episode_id
 FROM (
     SELECT DISTINCT ON (e.id)
            e.id AS episode_id,
-           d.embedding <=> CAST(:query_embedding AS vector) AS dist
+           __EMB_LHS_D__ <=> __EMB_RHS__ AS dist
     FROM episode_description_chunks d
     JOIN episodes e ON e.id = d.episode_id
     WHERE e.show_id = :show_id
-      AND d.embedding IS NOT NULL
+      AND __EMB_NN_D__
       AND (
         d.chunking_version = 2
         OR d.episode_id NOT IN (
@@ -345,7 +412,7 @@ FROM (
             WHERE e2.show_id = :show_id AND d2.chunking_version = 2
         )
       )
-    ORDER BY e.id, d.embedding <=> CAST(:query_embedding AS vector) ASC
+    ORDER BY e.id, __EMB_LHS_D__ <=> __EMB_RHS__ ASC
 ) per_ep
 ORDER BY dist ASC
 LIMIT :k
@@ -375,6 +442,7 @@ async def retrieve(
     semantic and lexical CTEs to the given episode set (used by the
     R3.2 two-layer routing flow).
     """
+    _validate_query_dim(query_embedding)
     ts_query = _build_ts_query(question) if question else None
 
     base_params: dict = {
@@ -385,7 +453,11 @@ async def retrieve(
     ep_filter = _episode_filter_clause("e", base_params, episode_id_filter)
 
     if ts_query:
-        sql = text(_TRANSCRIPT_RRF_SQL.format(episode_filter=ep_filter))
+        sql = text(
+            _resolve_embed_placeholders(_TRANSCRIPT_RRF_SQL).format(
+                episode_filter=ep_filter
+            )
+        )
         base_params["ts_query"] = ts_query
         base_params["per_side"] = RRF_PER_SIDE
         base_params["rrf_k"] = RRF_K
@@ -405,7 +477,11 @@ async def retrieve(
         ]
 
     # No lexical signal — fall back to pure semantic.
-    sql = text(_TRANSCRIPT_SEMANTIC_ONLY_SQL.format(episode_filter=ep_filter))
+    sql = text(
+        _resolve_embed_placeholders(_TRANSCRIPT_SEMANTIC_ONLY_SQL).format(
+            episode_filter=ep_filter
+        )
+    )
     result = await db.execute(sql, base_params)
     return [
         ChunkHit(
@@ -435,6 +511,7 @@ async def retrieve_descriptions(
     Description hits carry `source='description'` and zero start/end times
     so client-side "play from this time" UI can skip the affordance.
     """
+    _validate_query_dim(query_embedding)
     ts_query = _build_ts_query(question) if question else None
 
     base_params: dict = {
@@ -445,7 +522,11 @@ async def retrieve_descriptions(
     ep_filter = _episode_filter_clause("e", base_params, episode_id_filter)
 
     if ts_query:
-        sql = text(_DESC_RRF_SQL.format(episode_filter=ep_filter))
+        sql = text(
+            _resolve_embed_placeholders(_DESC_RRF_SQL).format(
+                episode_filter=ep_filter
+            )
+        )
         base_params["ts_query"] = ts_query
         base_params["per_side"] = RRF_PER_SIDE
         base_params["rrf_k"] = RRF_K
@@ -466,7 +547,11 @@ async def retrieve_descriptions(
             for row in result.mappings()
         ]
 
-    sql = text(_DESC_SEMANTIC_ONLY_SQL.format(episode_filter=ep_filter))
+    sql = text(
+        _resolve_embed_placeholders(_DESC_SEMANTIC_ONLY_SQL).format(
+            episode_filter=ep_filter
+        )
+    )
     result = await db.execute(sql, base_params)
     return [
         ChunkHit(
@@ -515,7 +600,8 @@ async def route_episodes(
     k: int = ROUTE_EPISODES_K,
 ) -> list[uuid.UUID]:
     """First-layer routing: top-k episode_id by description embedding cosine."""
-    sql = text(_ROUTE_EPISODES_SQL)
+    _validate_query_dim(query_embedding)
+    sql = text(_resolve_embed_placeholders(_ROUTE_EPISODES_SQL))
     result = await db.execute(
         sql,
         {

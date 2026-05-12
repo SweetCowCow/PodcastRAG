@@ -48,33 +48,32 @@ def upgrade() -> None:
     )
 
     # 2) HNSW indexes via halfvec cast (vector_cosine_ops HNSW maxDim=2000;
-    #    halfvec_cosine_ops supports up to 4000). CONCURRENTLY requires
-    #    autocommit so we drop out of the migration transaction.
-    with op.get_context().autocommit_block():
-        op.execute(
-            "CREATE INDEX CONCURRENTLY IF NOT EXISTS "
-            "idx_transcript_chunks_emb_v2_hnsw "
-            "ON transcript_chunks "
-            "USING hnsw ((embedding_v2::halfvec(3072)) halfvec_cosine_ops) "
-            "WITH (m=16, ef_construction=64)"
-        )
-        op.execute(
-            "CREATE INDEX CONCURRENTLY IF NOT EXISTS "
-            "idx_desc_chunks_emb_v2_hnsw "
-            "ON episode_description_chunks "
-            "USING hnsw ((embedding_v2::halfvec(3072)) halfvec_cosine_ops) "
-            "WITH (m=16, ef_construction=64)"
-        )
+    #    halfvec_cosine_ops supports up to 4000).
+    #
+    #    Note: We deliberately do NOT use CREATE INDEX CONCURRENTLY here.
+    #    The async alembic env (`run_sync` over a single async connection)
+    #    doesn't play cleanly with `autocommit_block`. Building HNSW over
+    #    an empty column is near-instant; the populating backfill happens
+    #    in a separate script after migration apply.
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS "
+        "idx_transcript_chunks_emb_v2_hnsw "
+        "ON transcript_chunks "
+        "USING hnsw ((embedding_v2::halfvec(3072)) halfvec_cosine_ops) "
+        "WITH (m=16, ef_construction=64)"
+    )
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS "
+        "idx_desc_chunks_emb_v2_hnsw "
+        "ON episode_description_chunks "
+        "USING hnsw ((embedding_v2::halfvec(3072)) halfvec_cosine_ops) "
+        "WITH (m=16, ef_construction=64)"
+    )
 
 
 def downgrade() -> None:
-    with op.get_context().autocommit_block():
-        op.execute(
-            "DROP INDEX CONCURRENTLY IF EXISTS idx_desc_chunks_emb_v2_hnsw"
-        )
-        op.execute(
-            "DROP INDEX CONCURRENTLY IF EXISTS idx_transcript_chunks_emb_v2_hnsw"
-        )
+    op.execute("DROP INDEX IF EXISTS idx_desc_chunks_emb_v2_hnsw")
+    op.execute("DROP INDEX IF EXISTS idx_transcript_chunks_emb_v2_hnsw")
     op.execute(
         "ALTER TABLE episode_description_chunks DROP COLUMN IF EXISTS embedding_v2"
     )

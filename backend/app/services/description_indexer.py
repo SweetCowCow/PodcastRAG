@@ -23,7 +23,7 @@ from app.models.episode import Episode
 from app.models.episode_description_chunk import EpisodeDescriptionChunk
 from app.services import tokenizer
 from app.services.ai_step_resolver import get_step_config
-from app.services.embedding import embed_texts
+from app.services.embedding import embed_texts, embed_texts_dual
 
 logger = logging.getLogger(__name__)
 
@@ -146,9 +146,11 @@ async def build_description_index_for_episode(
         return "skipped"
 
     # Build embedding via the embedding step (always OpenAI).
+    # r3-4 dual-write: populate both legacy (1536) and v2 (3072) columns.
     embedding_cfg = await get_step_config(db, "embedding")
-    vectors = embed_texts([cleaned], embedding_cfg)
-    embedding = vectors[0] if vectors else None
+    legacy_vecs, v2_vecs = embed_texts_dual([cleaned], embedding_cfg)
+    embedding = legacy_vecs[0] if legacy_vecs else None
+    embedding_v2 = v2_vecs[0] if v2_vecs else None
 
     # Tokenise; tsvector populated server-side via `to_tsvector('simple', ...)`.
     await tokenizer.load_dictionary(db)
@@ -171,6 +173,7 @@ async def build_description_index_for_episode(
         chunk_index=chunk_index,
         text=cleaned,
         embedding=embedding,
+        embedding_v2=embedding_v2,
         text_tsvector=func.to_tsvector("simple", tsv_text),
     )
     stmt = stmt.on_conflict_do_update(
@@ -182,6 +185,7 @@ async def build_description_index_for_episode(
         set_={
             "text": stmt.excluded.text,
             "embedding": stmt.excluded.embedding,
+            "embedding_v2": stmt.excluded.embedding_v2,
             "text_tsvector": stmt.excluded.text_tsvector,
             "updated_at": func.now(),
         },
