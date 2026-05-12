@@ -66,14 +66,20 @@ def test_desc_semantic_only_sql_selects_chunking_version_and_index():
     assert "d.chunk_index" in _DESC_SEMANTIC_ONLY_SQL
 
 
-def test_desc_rrf_sql_does_not_filter_by_chunking_version():
-    """v1 + v2 must share the RRF pool — no WHERE clause filters them apart."""
-    assert "chunking_version =" not in _DESC_RRF_SQL.replace(
-        "d.chunking_version,", ""
-    )
-    assert "chunking_version =" not in _DESC_SEMANTIC_ONLY_SQL.replace(
-        "d.chunking_version,", ""
-    )
+def test_desc_rrf_sql_applies_prefer_v2_filter():
+    """The original chunking-version-coexistence D3 assumption (v1+v2 share
+    one pool, RRF score decides) was falsified by r3-2-retrieval-fix Phase
+    2 final eval (Recall@5 went 0.1548 → 0.0952). The
+    `description-retrieval-prefer-v2` change replaced it with a prefer-v2
+    WHERE clause: same-episode v2 hides v1 from the pool, episodes without
+    v2 still fall back to v1. Both CTEs and the semantic-only fallback
+    must carry the filter."""
+    assert "d.chunking_version = 2" in _DESC_RRF_SQL
+    assert "d.chunking_version = 2" in _DESC_SEMANTIC_ONLY_SQL
+    # And the fallback sub-select must scope by show_id to keep the
+    # semi-join cheap.
+    assert _DESC_RRF_SQL.count("e2.show_id = :show_id") >= 2
+    assert "e2.show_id = :show_id" in _DESC_SEMANTIC_ONLY_SQL
 
 
 def test_episode_description_chunk_has_composite_unique():

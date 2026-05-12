@@ -227,6 +227,11 @@ LIMIT :k
 """
 
 _DESC_RRF_SQL = """
+-- prefer-v2 policy: per-episode, if any v2 chunk exists in the queried show,
+-- only that episode's v2 chunks enter the pool; episodes without v2 fall
+-- back to v1. This recovers Recall@5 lost by chunking-version-coexistence
+-- D3's "v1+v2 share one RRF pool" assumption (see
+-- `openspec/changes/description-retrieval-prefer-v2/design.md` D1/D2/D4).
 WITH semantic AS (
     SELECT d.id AS chunk_id,
            ROW_NUMBER() OVER (
@@ -236,6 +241,15 @@ WITH semantic AS (
     JOIN episodes e ON e.id = d.episode_id
     WHERE e.show_id = :show_id
       AND d.embedding IS NOT NULL
+      AND (
+        d.chunking_version = 2
+        OR d.episode_id NOT IN (
+            SELECT d2.episode_id
+            FROM episode_description_chunks d2
+            JOIN episodes e2 ON e2.id = d2.episode_id
+            WHERE e2.show_id = :show_id AND d2.chunking_version = 2
+        )
+      )
       {episode_filter}
     LIMIT :per_side
 ),
@@ -249,6 +263,15 @@ lexical AS (
     WHERE e.show_id = :show_id
       AND d.text_tsvector IS NOT NULL
       AND d.text_tsvector @@ to_tsquery('simple', :ts_query)
+      AND (
+        d.chunking_version = 2
+        OR d.episode_id NOT IN (
+            SELECT d2.episode_id
+            FROM episode_description_chunks d2
+            JOIN episodes e2 ON e2.id = d2.episode_id
+            WHERE e2.show_id = :show_id AND d2.chunking_version = 2
+        )
+      )
       {episode_filter}
     LIMIT :per_side
 ),
@@ -274,6 +297,7 @@ LIMIT :k
 """
 
 _DESC_SEMANTIC_ONLY_SQL = """
+-- prefer-v2 policy (semantic-only fallback path). See _DESC_RRF_SQL comment.
 SELECT d.id AS chunk_id,
        d.embedding <=> CAST(:query_embedding AS vector) AS distance,
        d.text,
@@ -285,18 +309,45 @@ FROM episode_description_chunks d
 JOIN episodes e ON e.id = d.episode_id
 WHERE e.show_id = :show_id
   AND d.embedding IS NOT NULL
+  AND (
+    d.chunking_version = 2
+    OR d.episode_id NOT IN (
+        SELECT d2.episode_id
+        FROM episode_description_chunks d2
+        JOIN episodes e2 ON e2.id = d2.episode_id
+        WHERE e2.show_id = :show_id AND d2.chunking_version = 2
+    )
+  )
   {episode_filter}
 ORDER BY distance
 LIMIT :k
 """
 
 _ROUTE_EPISODES_SQL = """
-SELECT e.id AS episode_id
-FROM episode_description_chunks d
-JOIN episodes e ON e.id = d.episode_id
-WHERE e.show_id = :show_id
-  AND d.embedding IS NOT NULL
-ORDER BY d.embedding <=> CAST(:query_embedding AS vector)
+-- prefer-v2 + DISTINCT-episode routing. DISTINCT ON ensures each episode
+-- contributes only its single closest chunk (k rows = k distinct episodes,
+-- not k chunk rows). See design.md D3.
+SELECT episode_id
+FROM (
+    SELECT DISTINCT ON (e.id)
+           e.id AS episode_id,
+           d.embedding <=> CAST(:query_embedding AS vector) AS dist
+    FROM episode_description_chunks d
+    JOIN episodes e ON e.id = d.episode_id
+    WHERE e.show_id = :show_id
+      AND d.embedding IS NOT NULL
+      AND (
+        d.chunking_version = 2
+        OR d.episode_id NOT IN (
+            SELECT d2.episode_id
+            FROM episode_description_chunks d2
+            JOIN episodes e2 ON e2.id = d2.episode_id
+            WHERE e2.show_id = :show_id AND d2.chunking_version = 2
+        )
+      )
+    ORDER BY e.id, d.embedding <=> CAST(:query_embedding AS vector) ASC
+) per_ep
+ORDER BY dist ASC
 LIMIT :k
 """
 
