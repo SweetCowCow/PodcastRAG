@@ -44,6 +44,11 @@ class EpisodeDescriptionChunk(Base):
     text: Mapped[str] = mapped_column(Text, nullable=False)
     text_tsvector: Mapped[str | None] = mapped_column(TSVECTOR, nullable=True)
     embedding: Mapped[list[float] | None] = mapped_column(Vector(1536), nullable=True)
+    # r3-4: new 3072-dim column for text-embedding-3-large. Cohabits with
+    # legacy `embedding` until cleanup migration drops the old column.
+    embedding_v2: Mapped[list[float] | None] = mapped_column(
+        Vector(3072), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

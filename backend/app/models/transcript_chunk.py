@@ -28,6 +28,11 @@ class TranscriptChunk(Base):
     end_time: Mapped[float] = mapped_column(Float, nullable=False)
     text: Mapped[str] = mapped_column(Text, nullable=False)
     embedding: Mapped[list[float] | None] = mapped_column(Vector(1536), nullable=True)
+    # r3-4: new 3072-dim column for text-embedding-3-large. Cohabits with
+    # legacy `embedding` until cleanup migration drops the old column.
+    embedding_v2: Mapped[list[float] | None] = mapped_column(
+        Vector(3072), nullable=True
+    )
     text_tsvector: Mapped[str | None] = mapped_column(TSVECTOR, nullable=True)
     segment_ids: Mapped[list[uuid.UUID]] = mapped_column(
         ARRAY(UUID(as_uuid=True)), nullable=False
