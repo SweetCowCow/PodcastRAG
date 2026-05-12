@@ -1,6 +1,6 @@
 # PodcastRAG 路線圖
 
-> 最後更新：2026-05-12（R3.2 retrieval-fix Phase 1 完成 + chunking-version-coexistence propose）
+> 最後更新：2026-05-12（R3.2 Phase 2 + Phase 2 retry 完成；Recall ceiling 結構性，等 r3-4 embedding swap）
 
 本文件記錄 PodcastRAG 後續開發的優先順序與規劃。依 Phase 排序，**Phase A 阻擋公開最先**，再做評測基線，再優化 RAG，最後商業化。
 
@@ -122,8 +122,10 @@ R3 拆三段做（每段都跑 eval baseline 對照升幅）：
 | Change | 狀態 | 摘要 |
 |--------|------|------|
 | `r3-2-two-layer-topic-seg` | 43/54 done | R3.2 主體：two-layer routing + topic seg。Backfill 跑完，等與 retrieval-fix 同 milestone 一起 archive |
-| `r3-2-retrieval-fix` | 17/36 done | Phase 1 (env flags + 4-arm lever test) 完成，Case C 確認；Phase 2 pilot agent 在跑 |
-| `chunking-version-coexistence` | 0/38 done | 38 tasks 剛 propose（2026-05-12），agent 在 apply |
+| `r3-2-retrieval-fix` | 17/36 done | Phase 1 完成；Phase 2 pilot 第一次 FAIL（Recall 0.0952），結構性 SQL bug 在 `description-retrieval-prefer-v2` 中修 |
+| `chunking-version-coexistence` | applied | schema + ChunkHit + indexer + cleanup 已 ship；D3 共池假設由 `description-retrieval-prefer-v2` 推翻 |
+| `description-retrieval-prefer-v2` | apply 完成 commit `957cc9a` | 修 prefer-v2 + routing DISTINCT + P95 latency 4350→1920ms (-56%)；2026-05-12 final eval Recall 0.1548 = Phase 1 ceiling，**< 0.30 gate FAIL**；不 rollout、不 archive；prod 保留因 net positive（修 regression + routing chunk-row bug） |
+| `r3-4-embedding-model-swap` ⚡ | 起草中 | 真因 = embedding model 對 ZH-Hant + 短句弱（六個 lever 同 Recall ceiling 0.1548 證實 structural）；opus agent 並行做 benchmark + 小樣本實測 + propose |
 
 ## Parked changes（7 個，待 R3.2 milestone 收尾後依序解封）
 
