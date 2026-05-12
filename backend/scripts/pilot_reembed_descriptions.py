@@ -1,0 +1,261 @@
+"""Phase 2 pilot driver: re-chunk + re-embed episode descriptions for one show.
+
+Two modes:
+  --dry-run (default): compute chunk counts + token estimate + cost projection.
+                       Prints summary, writes detail to --output JSON file.
+                       Does NOT call OpenAI. Does NOT write DB.
+  --execute:           actually call embedding API + INSERT new chunk rows
+                       with chunking_version=2 (depends on the sibling change
+                       `chunking-version-coexistence` for the schema column).
+                       Resumable via --state-file.
+
+THIS TASK ONLY EXERCISES --dry-run. Do not run --execute until:
+  1. `chunking-version-coexistence` change is merged (DB schema ready).
+  2. Cost estimate reviewed by a human.
+  3. Backend Celery / embedding step config sanity-checked.
+
+Usage:
+    cd backend && python -m scripts.pilot_reembed_descriptions \\
+        --show-id 45fc2462-17cf-42f5-98a7-68fe1a222228 \\
+        --dry-run \\
+        --output /tmp/pilot-cost-estimate.json
+"""
+from __future__ import annotations
+
+import argparse
+import asyncio
+import json
+import logging
+import sys
+import uuid
+from dataclasses import asdict, dataclass
+from pathlib import Path
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+from app.core.config import settings
+from app.models.episode import Episode
+from app.services.description_rechunker import (
+    DescriptionChunk,
+    rechunk_description,
+)
+
+logger = logging.getLogger(__name__)
+
+# OpenAI text-embedding-3-small pricing (as of 2026-05): $0.02 per 1M tokens.
+EMBEDDING_MODEL = "text-embedding-3-small"
+USD_PER_MILLION_TOKENS = 0.02
+# OpenAI baseline (from Phase 2 design.md) — used to derive a safety margin.
+OPENAI_BASELINE_USD = 108.59
+
+
+@dataclass
+class EpisodeEstimate:
+    episode_id: str
+    raw_chars: int
+    chunk_count: int
+    total_chars: int
+    tokens: int
+
+
+def _count_tokens(texts: list[str]) -> int:
+    """Token count via tiktoken's cl100k_base (used by text-embedding-3-small)."""
+    import tiktoken
+
+    enc = tiktoken.get_encoding("cl100k_base")
+    return sum(len(enc.encode(t)) for t in texts)
+
+
+async def _load_episodes_from_db(
+    show_id: uuid.UUID,
+) -> list[tuple[uuid.UUID, str]]:
+    engine = create_async_engine(settings.database_url)
+    Session = async_sessionmaker(engine, expire_on_commit=False)
+    try:
+        async with Session() as s:
+            rows = await s.execute(
+                select(Episode.id, Episode.description)
+                .where(Episode.show_id == show_id)
+                .where(Episode.description.is_not(None))
+                .order_by(Episode.published_at.desc().nulls_last())
+            )
+            return [(r[0], r[1]) for r in rows.all() if r[1]]
+    finally:
+        await engine.dispose()
+
+
+def _load_episodes_from_json(path: Path) -> list[tuple[uuid.UUID, str]]:
+    """Offline fallback for dry-run when the prod DB isn't reachable from
+    the dev host. Expects a JSON array of {"id": "<uuid>", "description": "..."}.
+    """
+    raw = json.loads(path.read_text())
+    out: list[tuple[uuid.UUID, str]] = []
+    for r in raw:
+        if not r.get("description"):
+            continue
+        out.append((uuid.UUID(r["id"]), r["description"]))
+    return out
+
+
+def _run_dry(
+    show_id: uuid.UUID,
+    episodes: list[tuple[uuid.UUID, str]],
+    output_path: Path,
+) -> dict:
+    per_ep: list[EpisodeEstimate] = []
+    sample_chunks: list[dict] = []
+
+    for ep_id, raw in episodes:
+        chunks: list[DescriptionChunk] = rechunk_description(raw)
+        chunk_texts = [c.text for c in chunks]
+        total_chars = sum(len(t) for t in chunk_texts)
+        tokens = _count_tokens(chunk_texts) if chunk_texts else 0
+        per_ep.append(
+            EpisodeEstimate(
+                episode_id=str(ep_id),
+                raw_chars=len(raw),
+                chunk_count=len(chunks),
+                total_chars=total_chars,
+                tokens=tokens,
+            )
+        )
+        if len(sample_chunks) < 5 and chunks:
+            for c in chunks[: 5 - len(sample_chunks)]:
+                sample_chunks.append(
+                    {
+                        "episode_id": str(ep_id),
+                        "text": c.text,
+                        "chars": len(c.text),
+                        "start_char": c.start_char,
+                        "end_char": c.end_char,
+                    }
+                )
+
+    total_chunks = sum(e.chunk_count for e in per_ep)
+    total_tokens = sum(e.tokens for e in per_ep)
+    estimated_usd = total_tokens * USD_PER_MILLION_TOKENS / 1_000_000
+    safety_factor = (
+        OPENAI_BASELINE_USD / estimated_usd if estimated_usd > 0 else float("inf")
+    )
+
+    summary = {
+        "show_id": str(show_id),
+        "embedding_model": EMBEDDING_MODEL,
+        "usd_per_million_tokens": USD_PER_MILLION_TOKENS,
+        "total_episodes": len(per_ep),
+        "total_chunks": total_chunks,
+        "estimated_tokens": total_tokens,
+        "estimated_usd": round(estimated_usd, 6),
+        "openai_baseline_usd": OPENAI_BASELINE_USD,
+        "safety_factor_vs_baseline": round(safety_factor, 2),
+        "avg_chunks_per_episode": (
+            round(total_chunks / len(per_ep), 2) if per_ep else 0
+        ),
+        "sample_chunks": sample_chunks,
+        "per_episode": [asdict(e) for e in per_ep],
+    }
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2))
+
+    print("=" * 64)
+    print(f"Pilot dry-run: show {show_id}")
+    print("=" * 64)
+    print(f"  Episodes processed     : {summary['total_episodes']}")
+    print(f"  Total chunks produced  : {summary['total_chunks']}")
+    print(f"  Avg chunks/episode     : {summary['avg_chunks_per_episode']}")
+    print(f"  Estimated tokens       : {summary['estimated_tokens']:,}")
+    print(
+        f"  Estimated cost (USD)   : ${summary['estimated_usd']:.6f}  "
+        f"(model: {EMBEDDING_MODEL})"
+    )
+    print(
+        f"  Safety factor vs OpenAI baseline (${OPENAI_BASELINE_USD}): "
+        f"{summary['safety_factor_vs_baseline']}x cheaper"
+    )
+    print(f"  Detail written to      : {output_path}")
+    print("=" * 64)
+    print("First few chunk samples:")
+    for i, sc in enumerate(sample_chunks, 1):
+        preview = sc["text"][:80].replace("\n", " ")
+        print(f"  [{i}] ep={sc['episode_id'][:8]} ({sc['chars']} chars) {preview}")
+    return summary
+
+
+async def _run_execute(
+    show_id: uuid.UUID,
+    episodes: list[tuple[uuid.UUID, str]],
+    state_path: Path,
+) -> None:
+    """Actual re-embed + DB write. NOT executed in this task — placeholder
+    that depends on the sibling change `chunking-version-coexistence` to
+    provide the `chunking_version` column on `episode_description_chunks`.
+    """
+    raise NotImplementedError(
+        "--execute path requires `chunking-version-coexistence` migration "
+        "to be merged first. Wiring stub left intentionally; see "
+        "openspec/changes/r3-2-retrieval-fix/design.md Phase 2."
+    )
+
+
+def main() -> int:
+    p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument("--show-id", type=uuid.UUID, required=True)
+    mode = p.add_mutually_exclusive_group()
+    mode.add_argument(
+        "--dry-run",
+        dest="dry_run",
+        action="store_true",
+        default=True,
+        help="Estimate chunks + tokens + cost only (default).",
+    )
+    mode.add_argument(
+        "--execute",
+        dest="dry_run",
+        action="store_false",
+        help="Actually call OpenAI + write DB rows. Requires "
+             "chunking-version-coexistence schema.",
+    )
+    p.add_argument(
+        "--output",
+        type=Path,
+        default=Path("/tmp/pilot-cost-estimate.json"),
+        help="Path to write dry-run JSON detail.",
+    )
+    p.add_argument(
+        "--state-file",
+        type=Path,
+        default=Path("/tmp/pilot-reembed-state.json"),
+        help="Resume state for --execute (last_processed_episode_id).",
+    )
+    p.add_argument(
+        "--descriptions-json",
+        type=Path,
+        default=None,
+        help="Load episode descriptions from a JSON file instead of the DB "
+             "(useful for dry-run when prod DB is unreachable from dev host). "
+             "Format: [{\"id\": \"<uuid>\", \"description\": \"...\"}, ...]",
+    )
+    args = p.parse_args()
+
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
+
+    if args.descriptions_json is not None:
+        episodes = _load_episodes_from_json(args.descriptions_json)
+    else:
+        episodes = asyncio.run(_load_episodes_from_db(args.show_id))
+    if not episodes:
+        print(f"No episodes with descriptions found for show {args.show_id}.")
+        return 1
+
+    if args.dry_run:
+        _run_dry(args.show_id, episodes, args.output)
+        return 0
+
+    asyncio.run(_run_execute(args.show_id, episodes, args.state_file))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
