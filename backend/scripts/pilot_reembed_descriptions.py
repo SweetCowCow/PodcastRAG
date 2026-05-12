@@ -31,15 +31,20 @@ import uuid
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
-from sqlalchemy import select
+from sqlalchemy import delete, func, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.core.config import settings
 from app.models.episode import Episode
+from app.models.episode_description_chunk import EpisodeDescriptionChunk
+from app.services import tokenizer
+from app.services.ai_step_resolver import get_step_config
 from app.services.description_rechunker import (
     DescriptionChunk,
     rechunk_description,
 )
+from app.services.embedding import embed_texts
 
 logger = logging.getLogger(__name__)
 
@@ -188,15 +193,108 @@ async def _run_execute(
     episodes: list[tuple[uuid.UUID, str]],
     state_path: Path,
 ) -> None:
-    """Actual re-embed + DB write. NOT executed in this task — placeholder
-    that depends on the sibling change `chunking-version-coexistence` to
-    provide the `chunking_version` column on `episode_description_chunks`.
+    """Actually re-chunk + re-embed + write v2 rows into
+    episode_description_chunks. Idempotent per-episode: each run first
+    DELETEs any existing (episode_id, chunking_version=2) rows for that
+    episode, then INSERTs fresh v2 rows numbered (0..N-1).
+
+    Resume: writes `state_path` after every successful episode commit
+    containing `{"completed": ["<episode_id>", ...]}`. Re-runs skip
+    episodes already in that list.
+
+    Depends on the `chunking-version-coexistence` schema migration
+    (`t8a9b0c1d2e3`) having been applied to the target DB.
     """
-    raise NotImplementedError(
-        "--execute path requires `chunking-version-coexistence` migration "
-        "to be merged first. Wiring stub left intentionally; see "
-        "openspec/changes/r3-2-retrieval-fix/design.md Phase 2."
-    )
+    completed: set[str] = set()
+    if state_path.exists():
+        try:
+            completed = set(json.loads(state_path.read_text()).get("completed", []))
+            logger.info("resume: %d episodes already completed", len(completed))
+        except Exception:
+            logger.warning(
+                "could not parse state file %s; starting from scratch", state_path
+            )
+
+    engine = create_async_engine(settings.database_url)
+    Session = async_sessionmaker(engine, expire_on_commit=False)
+    total_chunks_written = 0
+    episode_count = 0
+    try:
+        async with Session() as s:
+            embedding_cfg = await get_step_config(s, "embedding")
+            await tokenizer.load_dictionary(s)
+
+            for ep_id, raw in episodes:
+                ep_id_str = str(ep_id)
+                if ep_id_str in completed:
+                    continue
+
+                chunks = rechunk_description(raw)
+                if not chunks:
+                    logger.info("episode %s: 0 chunks (empty after clean); skip", ep_id)
+                    completed.add(ep_id_str)
+                    state_path.parent.mkdir(parents=True, exist_ok=True)
+                    state_path.write_text(
+                        json.dumps({"completed": sorted(completed)}, ensure_ascii=False)
+                    )
+                    continue
+
+                chunk_texts = [c.text for c in chunks]
+                vectors = embed_texts(chunk_texts, embedding_cfg)
+                if len(vectors) != len(chunk_texts):
+                    raise RuntimeError(
+                        f"embed_texts returned {len(vectors)} vectors for "
+                        f"{len(chunk_texts)} chunks (episode {ep_id})"
+                    )
+
+                try:
+                    # Idempotent: wipe any prior v2 rows for this episode.
+                    await s.execute(
+                        delete(EpisodeDescriptionChunk).where(
+                            EpisodeDescriptionChunk.episode_id == ep_id,
+                            EpisodeDescriptionChunk.chunking_version == 2,
+                        )
+                    )
+                    for idx, (txt, vec) in enumerate(zip(chunk_texts, vectors)):
+                        tokens = tokenizer.tokenize(txt)
+                        tsv_text = " ".join(tokens)
+                        stmt = pg_insert(EpisodeDescriptionChunk.__table__).values(
+                            episode_id=ep_id,
+                            chunking_version=2,
+                            chunk_index=idx,
+                            text=txt,
+                            embedding=vec,
+                            text_tsvector=func.to_tsvector("simple", tsv_text),
+                        )
+                        await s.execute(stmt)
+                    await s.commit()
+                    total_chunks_written += len(chunks)
+                    episode_count += 1
+                    completed.add(ep_id_str)
+                    state_path.parent.mkdir(parents=True, exist_ok=True)
+                    state_path.write_text(
+                        json.dumps({"completed": sorted(completed)}, ensure_ascii=False)
+                    )
+                    logger.info(
+                        "episode %s: wrote %d v2 chunks (total %d eps / %d chunks)",
+                        ep_id, len(chunks), episode_count, total_chunks_written,
+                    )
+                except Exception:
+                    await s.rollback()
+                    logger.exception(
+                        "episode %s: failed; will be retried on next run", ep_id
+                    )
+                    continue
+    finally:
+        await engine.dispose()
+
+    print("=" * 64)
+    print(f"--execute summary: show {show_id}")
+    print(f"  Episodes processed this run : {episode_count}")
+    print(f"  v2 chunks written this run  : {total_chunks_written}")
+    print(f"  Total completed (resumable) : {len(completed)}")
+    print(f"  State file                  : {state_path}")
+    print("=" * 64)
 
 
 def main() -> int:

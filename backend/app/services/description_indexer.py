@@ -88,9 +88,19 @@ def clean_description(raw: str | None) -> str:
 
 
 async def build_description_index_for_episode(
-    db: AsyncSession, episode_id: uuid.UUID
+    db: AsyncSession,
+    episode_id: uuid.UUID,
+    *,
+    chunking_version: int = 1,
+    chunk_index: int = 0,
 ) -> str:
-    """Build/UPSERT the description chunk for one episode.
+    """Build/UPSERT a description chunk row for one episode.
+
+    `chunking_version` defaults to 1 (whole-description v1 behaviour, used by
+    every existing caller without change). Pilot re-chunk drivers pass
+    `chunking_version=2` + an explicit `chunk_index` to write v2 rows alongside
+    the v1 row (composite unique on `(episode_id, chunking_version,
+    chunk_index)` keeps writes deterministic).
 
     Returns: 'inserted' | 'updated' | 'skipped' | 'deleted_empty'
     """
@@ -113,18 +123,22 @@ async def build_description_index_for_episode(
         )
 
     if not cleaned:
-        # Delete any existing row for this episode.
+        # Delete only the same-version row; never touch the other version.
         existing = (
             await db.execute(
                 select(EpisodeDescriptionChunk).where(
-                    EpisodeDescriptionChunk.episode_id == episode_id
+                    EpisodeDescriptionChunk.episode_id == episode_id,
+                    EpisodeDescriptionChunk.chunking_version == chunking_version,
+                    EpisodeDescriptionChunk.chunk_index == chunk_index,
                 )
             )
         ).scalar_one_or_none()
         if existing is not None:
             await db.execute(
                 delete(EpisodeDescriptionChunk).where(
-                    EpisodeDescriptionChunk.episode_id == episode_id
+                    EpisodeDescriptionChunk.episode_id == episode_id,
+                    EpisodeDescriptionChunk.chunking_version == chunking_version,
+                    EpisodeDescriptionChunk.chunk_index == chunk_index,
                 )
             )
             await db.commit()
@@ -144,19 +158,27 @@ async def build_description_index_for_episode(
     existing = (
         await db.execute(
             select(EpisodeDescriptionChunk).where(
-                EpisodeDescriptionChunk.episode_id == episode_id
+                EpisodeDescriptionChunk.episode_id == episode_id,
+                EpisodeDescriptionChunk.chunking_version == chunking_version,
+                EpisodeDescriptionChunk.chunk_index == chunk_index,
             )
         )
     ).scalar_one_or_none()
 
     stmt = pg_insert(EpisodeDescriptionChunk.__table__).values(
         episode_id=episode_id,
+        chunking_version=chunking_version,
+        chunk_index=chunk_index,
         text=cleaned,
         embedding=embedding,
         text_tsvector=func.to_tsvector("simple", tsv_text),
     )
     stmt = stmt.on_conflict_do_update(
-        index_elements=[EpisodeDescriptionChunk.episode_id],
+        index_elements=[
+            EpisodeDescriptionChunk.episode_id,
+            EpisodeDescriptionChunk.chunking_version,
+            EpisodeDescriptionChunk.chunk_index,
+        ],
         set_={
             "text": stmt.excluded.text,
             "embedding": stmt.excluded.embedding,

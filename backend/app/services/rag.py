@@ -98,6 +98,12 @@ class ChunkHit:
     # R2.1 followup: full (untruncated) ai_summary used by SourceCard
     # "expand" toggle. None when the episode has no ai_summary.
     ai_summary_full: str | None = None
+    # chunking-version-coexistence: which description chunking pass produced
+    # this hit. 1 = legacy whole-description (default; also transcript hits).
+    # 2 = pilot re-chunk (≤200 chars). Surfaced in retrieval so eval / admin
+    # tooling can attribute Recall lifts to the rollout.
+    chunking_version: int = 1
+    chunk_index: int = 0
 
 
 def _vector_literal(vec: list[float]) -> str:
@@ -256,6 +262,8 @@ combined AS (
 SELECT cb.chunk_id,
        cb.rrf_score,
        d.text,
+       d.chunking_version,
+       d.chunk_index,
        e.id AS episode_id,
        e.title AS episode_title
 FROM combined cb
@@ -269,6 +277,8 @@ _DESC_SEMANTIC_ONLY_SQL = """
 SELECT d.id AS chunk_id,
        d.embedding <=> CAST(:query_embedding AS vector) AS distance,
        d.text,
+       d.chunking_version,
+       d.chunk_index,
        e.id AS episode_id,
        e.title AS episode_title
 FROM episode_description_chunks d
@@ -399,6 +409,8 @@ async def retrieve_descriptions(
                 text=row["text"],
                 rrf_score=float(row["rrf_score"]),
                 source="description",
+                chunking_version=int(row["chunking_version"]),
+                chunk_index=int(row["chunk_index"]),
             )
             for row in result.mappings()
         ]
@@ -415,6 +427,8 @@ async def retrieve_descriptions(
             text=row["text"],
             distance=float(row["distance"]),
             source="description",
+            chunking_version=int(row["chunking_version"]),
+            chunk_index=int(row["chunk_index"]),
         )
         for row in result.mappings()
     ]
