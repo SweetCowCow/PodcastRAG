@@ -44,7 +44,7 @@ from app.services.description_rechunker import (
     DescriptionChunk,
     rechunk_description,
 )
-from app.services.embedding import embed_texts
+from app.services.embedding import embed_texts, embed_texts_dual
 
 logger = logging.getLogger(__name__)
 
@@ -240,10 +240,16 @@ async def _run_execute(
                     continue
 
                 chunk_texts = [c.text for c in chunks]
-                vectors = embed_texts(chunk_texts, embedding_cfg)
-                if len(vectors) != len(chunk_texts):
+                # r3-4: dual-write both legacy (1536) and v2 (3072) columns.
+                legacy_vecs, v2_vecs = embed_texts_dual(chunk_texts, embedding_cfg)
+                if legacy_vecs is not None and len(legacy_vecs) != len(chunk_texts):
                     raise RuntimeError(
-                        f"embed_texts returned {len(vectors)} vectors for "
+                        f"legacy embed returned {len(legacy_vecs)} for "
+                        f"{len(chunk_texts)} chunks (episode {ep_id})"
+                    )
+                if v2_vecs is not None and len(v2_vecs) != len(chunk_texts):
+                    raise RuntimeError(
+                        f"v2 embed returned {len(v2_vecs)} for "
                         f"{len(chunk_texts)} chunks (episode {ep_id})"
                     )
 
@@ -255,15 +261,18 @@ async def _run_execute(
                             EpisodeDescriptionChunk.chunking_version == 2,
                         )
                     )
-                    for idx, (txt, vec) in enumerate(zip(chunk_texts, vectors)):
+                    for idx, txt in enumerate(chunk_texts):
                         tokens = tokenizer.tokenize(txt)
                         tsv_text = " ".join(tokens)
+                        legacy_vec = legacy_vecs[idx] if legacy_vecs is not None else None
+                        v2_vec = v2_vecs[idx] if v2_vecs is not None else None
                         stmt = pg_insert(EpisodeDescriptionChunk.__table__).values(
                             episode_id=ep_id,
                             chunking_version=2,
                             chunk_index=idx,
                             text=txt,
-                            embedding=vec,
+                            embedding=legacy_vec,
+                            embedding_v2=v2_vec,
                             text_tsvector=func.to_tsvector("simple", tsv_text),
                         )
                         await s.execute(stmt)
