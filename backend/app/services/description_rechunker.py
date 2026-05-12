@@ -28,12 +28,17 @@ from dataclasses import dataclass
 
 from app.services.description_indexer import clean_description
 
-MAX_CHARS = 200
+MAX_CHARS = 120
 
 # Sentence-end punctuation (CJK + ASCII). Comma is intentionally excluded so
 # we don't slice mid-clause; if a single comma-only sentence overruns we fall
 # through to the hard-split branch.
-_SENT_SPLIT_RE = re.compile(r"([。！？!?\.]+)")
+# r3-4 change: drop ASCII `.` from sentence boundaries because it cuts URLs
+# ("https://example.com" was being split into "https://example." +
+# "com/..."). CJK 句末 + ASCII !? are sufficient for description text;
+# trailing-period English sentences fall through into the hard-split layer
+# which packs by whitespace.
+_SENT_SPLIT_RE = re.compile(r"([。！？!?]+)")
 
 
 @dataclass(frozen=True)
@@ -71,11 +76,17 @@ def _split_sentences(paragraph: str) -> list[tuple[str, int]]:
 
 
 def _hard_split(text: str, base_offset: int) -> list[tuple[str, int, int]]:
-    """Fallback for sentences longer than MAX_CHARS: chop on whitespace, then
-    raw char-window. Returns (chunk_text, start, end) tuples (absolute offsets).
+    """Fallback for sentences longer than MAX_CHARS: chop on whitespace.
+
+    Returns (chunk_text, start, end) tuples (absolute offsets).
+
+    Per r3-4 spec: URLs / hashtags / emoji clusters SHALL NOT be broken
+    mid-token. We pack whitespace-delimited tokens greedily; if a single
+    token itself exceeds MAX_CHARS (e.g. a long URL), it emits as its own
+    chunk that intentionally overruns the limit rather than mid-token char
+    slicing.
     """
     out: list[tuple[str, int, int]] = []
-    # First try whitespace-greedy packing
     tokens = re.split(r"(\s+)", text)
     buf = ""
     buf_local_start = 0
@@ -92,17 +103,37 @@ def _hard_split(text: str, base_offset: int) -> list[tuple[str, int, int]]:
     if buf.strip():
         out.append((buf, base_offset + buf_local_start, base_offset + cursor))
 
-    # Any residual chunk still > MAX_CHARS (e.g., no whitespace at all):
-    # raw char-window slice.
+    # If a residual chunk still exceeds MAX_CHARS, it's because a single
+    # whitespace-token (URL, emoji cluster, hashtag) is itself > MAX_CHARS.
+    # Spec: keep it intact in a single chunk. Only raw char-window slice
+    # when there's truly no protected token (heuristic: chunk contains no
+    # URL-like / hashtag / emoji content AND no internal whitespace).
     final: list[tuple[str, int, int]] = []
     for chunk_text, s, e in out:
         if len(chunk_text) <= MAX_CHARS:
             final.append((chunk_text, s, e))
             continue
+        if _contains_protected_token(chunk_text):
+            # Keep intact, overrun is allowed per spec.
+            final.append((chunk_text, s, e))
+            continue
+        # No protected tokens, no whitespace -> last-resort char window slice.
         for i in range(0, len(chunk_text), MAX_CHARS):
             piece = chunk_text[i : i + MAX_CHARS]
             final.append((piece, s + i, s + i + len(piece)))
     return final
+
+
+# Tokens we refuse to break mid-token: URLs, hashtags, and emoji clusters.
+_PROTECTED_TOKEN_RE = re.compile(
+    r"https?://\S+"               # URLs
+    r"|#\S+"                       # hashtags
+    r"|[\U0001F300-\U0001FAFF☀-➿️]+"  # emoji clusters
+)
+
+
+def _contains_protected_token(s: str) -> bool:
+    return bool(_PROTECTED_TOKEN_RE.search(s))
 
 
 def rechunk_description(raw: str | None) -> list[DescriptionChunk]:
