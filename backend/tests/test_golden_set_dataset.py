@@ -18,18 +18,18 @@ import pytest
 DATASETS_DIR = Path(__file__).resolve().parents[1] / "eval" / "datasets"
 SCHEMA_PATH = DATASETS_DIR / "_schema.json"
 
-# Per spec the initial golden set targets 50 items (10 sentinel + 40 core)
-# across 5 types. v2 of `this-not-that-cool.json` came in at 48 items because
-# 2 fact-core candidates were dropped during audit (Path A clean) — accepted
-# as a quality > quantity trade-off, see project memory.
+# r3-5-disable-routing audit (2026-05-13): removed 36 LLM-auto items
+# (`thisno-core-*`) whose verified bad-question rate was ≥75%. The dataset now
+# contains only the 10 hand-crafted sentinel items (q01-q10). Future LLM-auto
+# items SHALL stage through `_pending_review.json` per build_golden_set.py.
 EXPECTED_TYPE_HISTOGRAM_V2 = {
-    "fact": 17,
-    "comprehension": 12,
-    "cross-episode": 10,
-    "negative": 6,
-    "code-switch": 3,
+    "fact": 3,
+    "comprehension": 2,
+    "cross-episode": 2,
+    "negative": 2,
+    "code-switch": 1,
 }
-EXPECTED_TOTAL_V2 = 48
+EXPECTED_TOTAL_V2 = 10
 EXPECTED_SENTINEL_COUNT = 10
 
 
@@ -71,4 +71,39 @@ def test_v2_dataset_has_correct_distribution(path):
     sentinel_count = sum(1 for i in items if i.get("sentinel"))
     assert sentinel_count == EXPECTED_SENTINEL_COUNT, (
         f"{path.name}: sentinel count {sentinel_count} != {EXPECTED_SENTINEL_COUNT}"
+    )
+
+
+# ─── r3-5-disable-routing: LLM-auto staging discipline ────────────────
+
+
+@pytest.mark.parametrize(
+    "path",
+    _list_dataset_files() or [pytest.param(None, marks=pytest.mark.skip(reason="no dataset present yet"))],
+)
+def test_no_thisno_core_ids_without_audit_metadata(path):
+    """After the 2026-05-13 audit, items whose id starts with `thisno-core-`
+    SHALL NOT exist in the main dataset unless the dataset's `audit` metadata
+    records that they passed human review (per the staging discipline in
+    backend/eval/scripts/build_golden_set.py)."""
+    with path.open(encoding="utf-8") as f:
+        data = json.load(f)
+
+    offending = [
+        i for i in data.get("items", [])
+        if isinstance(i.get("id"), str) and i["id"].startswith("thisno-core-")
+    ]
+    if not offending:
+        return  # clean state — no work to do
+
+    audit = data.get("audit") or {}
+    # If the dataset re-introduces any thisno-core-* id, the top-level audit
+    # block MUST record a non-empty reviewed_by + reviewed_at attesting the
+    # human-review step described in the rag-eval-dataset spec.
+    reviewed_by = audit.get("reviewed_by")
+    reviewed_at = audit.get("reviewed_at")
+    assert reviewed_by and reviewed_at, (
+        f"{path.name}: contains {len(offending)} `thisno-core-*` items but "
+        f"`audit.reviewed_by` / `audit.reviewed_at` not set — staging discipline "
+        f"violated (see rag-eval-dataset spec, r3-5-disable-routing)."
     )

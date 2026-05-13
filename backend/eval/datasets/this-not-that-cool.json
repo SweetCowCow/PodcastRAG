@@ -103,12 +103,13 @@
       "ground_truth_chunk_ids": [
         "ep:c1d87278-7dba-4fb1-930d-c2bd3a3461d2@990.68",
         "ep:c1d87278-7dba-4fb1-930d-c2bd3a3461d2@997.68",
-        "ep:c1d87278-7dba-4fb1-930d-c2bd3a3461d2@999.78"
+        "ep:c1d87278-7dba-4fb1-930d-c2bd3a3461d2@999.78",
+        "ep:dbeecd79-f170-476a-b4e9-80e64eb49528@1423.22"
       ],
       "sentinel": true,
       "source_episode_id": "c1d87278-7dba-4fb1-930d-c2bd3a3461d2",
       "scope": "exact",
-      "notes": "EP134 16:30–18:30。中英夾雜：drill / grime / sexy drill (中文翻『性感磚』) / quick out / Pop Smoke / Fred Again / Central Cee。"
+      "notes": "EP134 16:30–18:30。中英夾雜：drill / grime / sexy drill (中文翻『性感磚』) / quick out / Pop Smoke / Fred Again / Central Cee。 | 2026-05-13 audit: EP66 @ 23:43 也在講英國藝人 ego（與 UK Drill 文化相關，補進 anchor）。"
     },
     {
       "id": "q06-pei-shezhang-recipe",
@@ -218,613 +219,54 @@
       "source_episode_id": "c1d87278-7dba-4fb1-930d-c2bd3a3461d2",
       "scope": "open_set_lenient",
       "notes": "Cross-episode (option B open-set + C 預檢)。Anchor 是 EP134 開工歌『安身之處』 + EP143 家常味『被照顧到』。預檢警示：RAG 對『安身之處』語意檢索不準，反而抓到 EP121/EP68/EP74 等『歸屬感』相近概念；EP143 anchor 連『家常味 被照顧』都沒命中（這是 RAG 對 EP143 retrieval 的獨立問題訊號）。Eval 用 lenient match：retrieve 到 EP121/EP68 等相關集不算錯，只要至少含一個 anchor 就 hit。"
-    },
-    {
-      "id": "thisno-core-fac-000",
-      "type": "fact",
-      "question": "迪拉胖提到的台中原住民是哪一位？",
-      "expected_answer_keywords": [
-        "台中",
-        "原住民"
-      ],
-      "ground_truth_chunk_ids": [
-        "ep:380716c0-c9de-491a-a8dd-ba1231816cf9@381.80"
-      ],
-      "sentinel": false,
-      "source_episode_id": "380716c0-c9de-491a-a8dd-ba1231816cf9"
-    },
-    {
-      "id": "thisno-core-fac-001",
-      "type": "fact",
-      "question": "誰說80%的歌都是你的歌？",
-      "expected_answer_keywords": [
-        "80%",
-        "歌"
-      ],
-      "ground_truth_chunk_ids": [
-        "ep:7d2341f1-e658-40a5-b9ec-b76d07be9f6a@819.09"
-      ],
-      "sentinel": false,
-      "source_episode_id": "7d2341f1-e658-40a5-b9ec-b76d07be9f6a"
-    },
-    {
-      "id": "thisno-core-fac-002",
-      "type": "fact",
-      "question": "節目中提到拜拜時通常在做什麼？",
-      "expected_answer_keywords": [
-        "拜拜"
-      ],
-      "ground_truth_chunk_ids": [
-        "ep:9c2a9529-81d2-4407-96bc-e566f333dcae@633.58"
-      ],
-      "sentinel": false,
-      "source_episode_id": "9c2a9529-81d2-4407-96bc-e566f333dcae"
-    },
-    {
-      "id": "thisno-core-fac-003",
-      "type": "fact",
-      "question": "誰認為人才是因為需求而被驅動的？",
-      "expected_answer_keywords": [
-        "需求",
-        "驅動",
-        "人才"
-      ],
-      "ground_truth_chunk_ids": [
-        "ep:380716c0-c9de-491a-a8dd-ba1231816cf9@4888.28"
-      ],
-      "sentinel": false,
-      "source_episode_id": "380716c0-c9de-491a-a8dd-ba1231816cf9"
-    },
-    {
-      "id": "thisno-core-fac-004",
-      "type": "fact",
-      "question": "節目中提到受到什麼文化影響很深？",
-      "expected_answer_keywords": [
-        "美國文化",
-        "影響"
-      ],
-      "ground_truth_chunk_ids": [
-        "ep:380716c0-c9de-491a-a8dd-ba1231816cf9@1522.44"
-      ],
-      "sentinel": false,
-      "source_episode_id": "380716c0-c9de-491a-a8dd-ba1231816cf9"
-    },
-    {
-      "id": "thisno-core-fac-005",
-      "type": "fact",
-      "question": "迪拉胖的媽媽對難吃的食物有什麼看法？",
-      "expected_answer_keywords": [
-        "難吃",
-        "沒關係",
-        "迪拉胖",
-        "媽媽"
-      ],
-      "ground_truth_chunk_ids": [
-        "ep:9c2a9529-81d2-4407-96bc-e566f333dcae@2259.29"
-      ],
-      "sentinel": false,
-      "source_episode_id": "9c2a9529-81d2-4407-96bc-e566f333dcae"
-    },
-    {
-      "id": "thisno-core-fac-006",
-      "type": "fact",
-      "question": "節目中提到的美艷女人是誰？",
-      "expected_answer_keywords": [
-        "美艷",
-        "女人"
-      ],
-      "ground_truth_chunk_ids": [
-        "ep:380716c0-c9de-491a-a8dd-ba1231816cf9@1711.44"
-      ],
-      "sentinel": false,
-      "source_episode_id": "380716c0-c9de-491a-a8dd-ba1231816cf9"
-    },
-    {
-      "id": "thisno-core-com-000",
-      "type": "comprehension",
-      "question": "為什麼迪拉會提到『幹 人才是因為需求而被驅動的』這句話，並用什麼方式解釋這個概念？",
-      "expected_answer_keywords": [
-        "需求",
-        "驅動",
-        "動機",
-        "行動"
-      ],
-      "ground_truth_chunk_ids": [
-        "ep:380716c0-c9de-491a-a8dd-ba1231816cf9@4888.28"
-      ],
-      "sentinel": false,
-      "source_episode_id": "380716c0-c9de-491a-a8dd-ba1231816cf9"
-    },
-    {
-      "id": "thisno-core-com-001",
-      "type": "comprehension",
-      "question": "迪拉為什麼形容某個人是『受到美國文化影響很深』？他想傳達什麼觀點？",
-      "expected_answer_keywords": [
-        "美國文化",
-        "影響",
-        "價值觀",
-        "行為模式"
-      ],
-      "ground_truth_chunk_ids": [
-        "ep:380716c0-c9de-491a-a8dd-ba1231816cf9@1522.44"
-      ],
-      "sentinel": false,
-      "source_episode_id": "380716c0-c9de-491a-a8dd-ba1231816cf9"
-    },
-    {
-      "id": "thisno-core-com-002",
-      "type": "comprehension",
-      "question": "迪拉提到的『把臘腸切片』是為了說明什麼樣的飲食細節或習慣？",
-      "expected_answer_keywords": [
-        "臘腸",
-        "切片",
-        "習慣",
-        "飲食"
-      ],
-      "ground_truth_chunk_ids": [
-        "ep:9c2a9529-81d2-4407-96bc-e566f333dcae@3364.63"
-      ],
-      "sentinel": false,
-      "source_episode_id": "9c2a9529-81d2-4407-96bc-e566f333dcae"
-    },
-    {
-      "id": "thisno-core-com-003",
-      "type": "comprehension",
-      "question": "迪拉提到『我媽就會說難吃沒什麼關係』這段話時，他想表達什麼樣的家庭觀念或價值？",
-      "expected_answer_keywords": [
-        "家庭觀念",
-        "難吃",
-        "包容",
-        "價值觀"
-      ],
-      "ground_truth_chunk_ids": [
-        "ep:9c2a9529-81d2-4407-96bc-e566f333dcae@2259.29"
-      ],
-      "sentinel": false,
-      "source_episode_id": "9c2a9529-81d2-4407-96bc-e566f333dcae"
-    },
-    {
-      "id": "thisno-core-com-004",
-      "type": "comprehension",
-      "question": "迪拉怎麼解釋『這80%的歌都是你的歌』這句話，背後可能反映什麼樣的音樂合作模式？",
-      "expected_answer_keywords": [
-        "音樂",
-        "合作",
-        "創作比例",
-        "貢獻"
-      ],
-      "ground_truth_chunk_ids": [
-        "ep:7d2341f1-e658-40a5-b9ec-b76d07be9f6a@819.09"
-      ],
-      "sentinel": false,
-      "source_episode_id": "7d2341f1-e658-40a5-b9ec-b76d07be9f6a"
-    },
-    {
-      "id": "thisno-core-cro-000",
-      "type": "cross-episode",
-      "question": "多集節目中提到的拜拜習慣與迪拉個人信仰或生活方式有什麼關聯？",
-      "expected_answer_keywords": [
-        "拜拜",
-        "生活方式",
-        "信仰",
-        "文化"
-      ],
-      "ground_truth_chunk_ids": [
-        "ep:9c2a9529-81d2-4407-96bc-e566f333dcae@633.58",
-        "ep:380716c0-c9de-491a-a8dd-ba1231816cf9@4888.28"
-      ],
-      "sentinel": false,
-      "source_episode_id": "9c2a9529-81d2-4407-96bc-e566f333dcae"
-    },
-    {
-      "id": "thisno-core-cro-001",
-      "type": "cross-episode",
-      "question": "迪拉是否在多集裡提到過與食物相關的個人偏好或家庭習慣？",
-      "expected_answer_keywords": [
-        "食物",
-        "偏好",
-        "家庭",
-        "習慣"
-      ],
-      "ground_truth_chunk_ids": [
-        "ep:9c2a9529-81d2-4407-96bc-e566f333dcae@2259.29",
-        "ep:f3c4a5ca-4edb-485a-984b-859377ad3c53@1344.98"
-      ],
-      "sentinel": false,
-      "source_episode_id": "9c2a9529-81d2-4407-96bc-e566f333dcae"
-    },
-    {
-      "id": "thisno-core-cro-002",
-      "type": "cross-episode",
-      "question": "在不同集數中，主持人們如何看待和討論美國文化的影響？",
-      "expected_answer_keywords": [
-        "美國文化",
-        "影響",
-        "討論",
-        "觀點"
-      ],
-      "ground_truth_chunk_ids": [
-        "ep:380716c0-c9de-491a-a8dd-ba1231816cf9@1522.44",
-        "ep:9c2a9529-81d2-4407-96bc-e566f333dcae@5554.64"
-      ],
-      "sentinel": false,
-      "source_episode_id": "380716c0-c9de-491a-a8dd-ba1231816cf9"
-    },
-    {
-      "id": "thisno-core-neg-000",
-      "type": "negative",
-      "question": "節目裡是否聊過台北市饒舌歌手在信義區的演出文化？",
-      "expected_answer_keywords": [
-        "節目未提及",
-        "台北市",
-        "信義區",
-        "饒舌歌手",
-        "演出文化"
-      ],
-      "ground_truth_chunk_ids": [],
-      "sentinel": false,
-      "source_episode_id": ""
-    },
-    {
-      "id": "thisno-core-neg-001",
-      "type": "negative",
-      "question": "杜忠祐是否討論過台灣地下嘻哈派對的歷史發展？",
-      "expected_answer_keywords": [
-        "節目未提及",
-        "杜忠祐",
-        "地下嘻哈",
-        "台灣派對",
-        "歷史發展"
-      ],
-      "ground_truth_chunk_ids": [],
-      "sentinel": false,
-      "source_episode_id": ""
-    },
-    {
-      "id": "thisno-core-neg-002",
-      "type": "negative",
-      "question": "阿鳴是否提到桃園地區饒舌活動的規模和特色？",
-      "expected_answer_keywords": [
-        "節目未提及",
-        "阿鳴",
-        "桃園",
-        "饒舌活動",
-        "活動特色"
-      ],
-      "ground_truth_chunk_ids": [],
-      "sentinel": false,
-      "source_episode_id": ""
-    },
-    {
-      "id": "thisno-core-cod-000",
-      "type": "code-switch",
-      "question": "台中的原住民文化對嘻哈和 street style 有什麼影響？",
-      "expected_answer_keywords": [
-        "台中",
-        "原住民",
-        "嘻哈",
-        "街頭文化"
-      ],
-      "ground_truth_chunk_ids": [
-        "ep:380716c0-c9de-491a-a8dd-ba1231816cf9@381.80"
-      ],
-      "sentinel": false,
-      "source_episode_id": "380716c0-c9de-491a-a8dd-ba1231816cf9"
-    },
-    {
-      "id": "thisno-core-cod-001",
-      "type": "code-switch",
-      "question": "主持人提到 set 是什麼概念？它跟 DJ 的 live set 有什麼相似之處？",
-      "expected_answer_keywords": [
-        "set",
-        "概念",
-        "DJ",
-        "live set"
-      ],
-      "ground_truth_chunk_ids": [
-        "ep:f3c4a5ca-4edb-485a-984b-859377ad3c53@3563.20"
-      ],
-      "sentinel": false,
-      "source_episode_id": "f3c4a5ca-4edb-485a-984b-859377ad3c53"
-    },
-    {
-      "id": "thisno-core-fac-007",
-      "type": "fact",
-      "question": "張媽媽的故事是在哪段內容中提到的？",
-      "expected_answer_keywords": [
-        "張媽媽",
-        "故事",
-        "內容",
-        "提到"
-      ],
-      "ground_truth_chunk_ids": [
-        "ep:53a77044-e836-4c8b-be71-51cd44f96fa8@5024.26"
-      ],
-      "sentinel": false,
-      "source_episode_id": "53a77044-e836-4c8b-be71-51cd44f96fa8"
-    },
-    {
-      "id": "thisno-core-fac-008",
-      "type": "fact",
-      "question": "Q Burger 的哪種元素被特別提到很讚？",
-      "expected_answer_keywords": [
-        "Q Burger",
-        "醬油",
-        "很讚"
-      ],
-      "ground_truth_chunk_ids": [
-        "ep:f3c4a5ca-4edb-485a-984b-859377ad3c53@4753.34"
-      ],
-      "sentinel": false,
-      "source_episode_id": "f3c4a5ca-4edb-485a-984b-859377ad3c53"
-    },
-    {
-      "id": "thisno-core-fac-009",
-      "type": "fact",
-      "question": "哪個朋友到後台包包打開後發生了什麼？",
-      "expected_answer_keywords": [
-        "朋友",
-        "後台",
-        "包包",
-        "打開",
-        "發生"
-      ],
-      "ground_truth_chunk_ids": [
-        "ep:380716c0-c9de-491a-a8dd-ba1231816cf9@394.00"
-      ],
-      "sentinel": false,
-      "source_episode_id": "380716c0-c9de-491a-a8dd-ba1231816cf9"
-    },
-    {
-      "id": "thisno-core-fac-010",
-      "type": "fact",
-      "question": "城堡 Castle 的什麼特性被提到？",
-      "expected_answer_keywords": [
-        "城堡",
-        "Castle",
-        "特性",
-        "提到"
-      ],
-      "ground_truth_chunk_ids": [
-        "ep:f3c4a5ca-4edb-485a-984b-859377ad3c53@513.56"
-      ],
-      "sentinel": false,
-      "source_episode_id": "f3c4a5ca-4edb-485a-984b-859377ad3c53"
-    },
-    {
-      "id": "thisno-core-fac-011",
-      "type": "fact",
-      "question": "小時候在高雄吃的鐵板麵有什麼特別的地方？",
-      "expected_answer_keywords": [
-        "小時候",
-        "高雄",
-        "鐵板麵",
-        "特別"
-      ],
-      "ground_truth_chunk_ids": [
-        "ep:f3c4a5ca-4edb-485a-984b-859377ad3c53@3700.16"
-      ],
-      "sentinel": false,
-      "source_episode_id": "f3c4a5ca-4edb-485a-984b-859377ad3c53"
-    },
-    {
-      "id": "thisno-core-fac-012",
-      "type": "fact",
-      "question": "主持人提到的很有名的三張唱片是什麼？",
-      "expected_answer_keywords": [
-        "主持人",
-        "很有名",
-        "三張唱片"
-      ],
-      "ground_truth_chunk_ids": [
-        "ep:380716c0-c9de-491a-a8dd-ba1231816cf9@1559.44"
-      ],
-      "sentinel": false,
-      "source_episode_id": "380716c0-c9de-491a-a8dd-ba1231816cf9"
-    },
-    {
-      "id": "thisno-core-fac-013",
-      "type": "fact",
-      "question": "壽桃裡面是否包含什麼特別的餡料？",
-      "expected_answer_keywords": [
-        "壽桃",
-        "餡料",
-        "特別"
-      ],
-      "ground_truth_chunk_ids": [
-        "ep:9c2a9529-81d2-4407-96bc-e566f333dcae@4619.06"
-      ],
-      "sentinel": false,
-      "source_episode_id": "9c2a9529-81d2-4407-96bc-e566f333dcae"
-    },
-    {
-      "id": "thisno-core-com-005",
-      "type": "comprehension",
-      "question": "為什麼迪拉形容香港大餐廳的年夜飯與台灣的有很大不同？",
-      "expected_answer_keywords": [
-        "香港大餐廳",
-        "年夜飯",
-        "台灣",
-        "不同",
-        "文化差異"
-      ],
-      "ground_truth_chunk_ids": [
-        "ep:9c2a9529-81d2-4407-96bc-e566f333dcae@1952.99"
-      ],
-      "sentinel": false,
-      "source_episode_id": "9c2a9529-81d2-4407-96bc-e566f333dcae"
-    },
-    {
-      "id": "thisno-core-com-006",
-      "type": "comprehension",
-      "question": "迪拉如何解釋嘻哈比賽中參賽者想要『贏得出來』的心態？",
-      "expected_answer_keywords": [
-        "比賽",
-        "贏得出來",
-        "參賽者",
-        "心態",
-        "目標"
-      ],
-      "ground_truth_chunk_ids": [
-        "ep:53a77044-e836-4c8b-be71-51cd44f96fa8@2945.05"
-      ],
-      "sentinel": false,
-      "source_episode_id": "53a77044-e836-4c8b-be71-51cd44f96fa8"
-    },
-    {
-      "id": "thisno-core-com-007",
-      "type": "comprehension",
-      "question": "迪拉為什麼提到勾芡這個動作在料理中的重要性？",
-      "expected_answer_keywords": [
-        "勾芡",
-        "料理",
-        "重要性",
-        "技術",
-        "口感"
-      ],
-      "ground_truth_chunk_ids": [
-        "ep:53a77044-e836-4c8b-be71-51cd44f96fa8@2229.79"
-      ],
-      "sentinel": false,
-      "source_episode_id": "53a77044-e836-4c8b-be71-51cd44f96fa8"
-    },
-    {
-      "id": "thisno-core-com-008",
-      "type": "comprehension",
-      "question": "迪拉怎麼描述年輕精神小夥在節目中的形象？",
-      "expected_answer_keywords": [
-        "年輕",
-        "精神小夥",
-        "形象",
-        "活力",
-        "個性"
-      ],
-      "ground_truth_chunk_ids": [
-        "ep:53a77044-e836-4c8b-be71-51cd44f96fa8@2831.99"
-      ],
-      "sentinel": false,
-      "source_episode_id": "53a77044-e836-4c8b-be71-51cd44f96fa8"
-    },
-    {
-      "id": "thisno-core-com-009",
-      "type": "comprehension",
-      "question": "迪拉為什麼強調比賽時先決定品項的重要性？",
-      "expected_answer_keywords": [
-        "比賽",
-        "品項",
-        "先決定",
-        "策略",
-        "重要性"
-      ],
-      "ground_truth_chunk_ids": [
-        "ep:53a77044-e836-4c8b-be71-51cd44f96fa8@451.04"
-      ],
-      "sentinel": false,
-      "source_episode_id": "53a77044-e836-4c8b-be71-51cd44f96fa8"
-    },
-    {
-      "id": "thisno-core-cro-003",
-      "type": "cross-episode",
-      "question": "主持人在節目中提到的韓國相關店家或文化有哪些？",
-      "expected_answer_keywords": [
-        "韓國",
-        "烤腸店",
-        "店家",
-        "文化"
-      ],
-      "ground_truth_chunk_ids": [
-        "ep:53a77044-e836-4c8b-be71-51cd44f96fa8@661.72",
-        "ep:7d2341f1-e658-40a5-b9ec-b76d07be9f6a@4602.34"
-      ],
-      "sentinel": false,
-      "source_episode_id": "53a77044-e836-4c8b-be71-51cd44f96fa8"
-    },
-    {
-      "id": "thisno-core-cro-004",
-      "type": "cross-episode",
-      "question": "Leo在節目中提到過哪種行為會打斷別人？",
-      "expected_answer_keywords": [
-        "Leo",
-        "打斷",
-        "行為"
-      ],
-      "ground_truth_chunk_ids": [
-        "ep:7d2341f1-e658-40a5-b9ec-b76d07be9f6a@1571.54",
-        "ep:380716c0-c9de-491a-a8dd-ba1231816cf9@2369.16"
-      ],
-      "sentinel": false,
-      "source_episode_id": "7d2341f1-e658-40a5-b9ec-b76d07be9f6a"
-    },
-    {
-      "id": "thisno-core-cro-005",
-      "type": "cross-episode",
-      "question": "節目中多次提到的料理有什麼特殊的搭配或味道？",
-      "expected_answer_keywords": [
-        "台式加西式",
-        "宮保雞丁",
-        "清燉",
-        "炸東西"
-      ],
-      "ground_truth_chunk_ids": [
-        "ep:f3c4a5ca-4edb-485a-984b-859377ad3c53@1732.74",
-        "ep:f3c4a5ca-4edb-485a-984b-859377ad3c53@3625.52",
-        "ep:53a77044-e836-4c8b-be71-51cd44f96fa8@1262.43",
-        "ep:53a77044-e836-4c8b-be71-51cd44f96fa8@3675.16"
-      ],
-      "sentinel": false,
-      "source_episode_id": "f3c4a5ca-4edb-485a-984b-859377ad3c53"
-    },
-    {
-      "id": "thisno-core-cro-006",
-      "type": "cross-episode",
-      "question": "迪拉在多集節目中提到過哪些特殊的飲食偏好或習慣？",
-      "expected_answer_keywords": [
-        "清教徒",
-        "戰斧豬排",
-        "美式side dish",
-        "泡菜"
-      ],
-      "ground_truth_chunk_ids": [
-        "ep:f3c4a5ca-4edb-485a-984b-859377ad3c53@3494.76",
-        "ep:53a77044-e836-4c8b-be71-51cd44f96fa8@2651.79",
-        "ep:9c2a9529-81d2-4407-96bc-e566f333dcae@3148.83",
-        "ep:53a77044-e836-4c8b-be71-51cd44f96fa8@1358.43"
-      ],
-      "sentinel": false,
-      "source_episode_id": "f3c4a5ca-4edb-485a-984b-859377ad3c53"
-    },
-    {
-      "id": "thisno-core-cro-007",
-      "type": "cross-episode",
-      "question": "節目中多次提到不同區域的文化或地理位置，例如中山區及東區，這些地點對嘻哈圈或生活有什麼影響？",
-      "expected_answer_keywords": [
-        "中山區",
-        "東區",
-        "文化影響",
-        "生活圈"
-      ],
-      "ground_truth_chunk_ids": [
-        "ep:7d2341f1-e658-40a5-b9ec-b76d07be9f6a@3097.52",
-        "ep:380716c0-c9de-491a-a8dd-ba1231816cf9@139.10"
-      ],
-      "sentinel": false,
-      "source_episode_id": "7d2341f1-e658-40a5-b9ec-b76d07be9f6a"
-    },
-    {
-      "id": "thisno-core-neg-003",
-      "type": "negative",
-      "question": "節目中有討論 Eminem 主演的《8 Mile》電影嗎？",
-      "expected_answer_keywords": [
-        "節目未提及",
-        "Eminem",
-        "8 Mile",
-        "電影"
-      ],
-      "ground_truth_chunk_ids": [],
-      "sentinel": false,
-      "source_episode_id": "",
-      "scope": "negative",
-      "notes": "預檢過：搜『Eminem 8 Mile 電影』在 prod RAG 沒命中相關內容，trap 設計乾淨。Drake / Kendrick 等其他西方饒舌候選因 EP40《美國Diss大戰》誤命中而棄用。"
     }
-  ]
+  ],
+  "audit": {
+    "date": "2026-05-13",
+    "removed_count": 36,
+    "patched_ids": [
+      "q05-uk-drill-features"
+    ],
+    "reason": "LLM-auto-generated 壞題率 ≥75%（驗證樣本 4/4 全壞），移出全部 thisno-core-* 共 36 題；q05-uk-drill-features 補 EP66 (dbeecd79) @ 1423.22 anchor（audit 確認屬 UK Drill 語境）。本 audit 對應 r3-5-disable-routing change。",
+    "removed_ids": [
+      "thisno-core-cod-000",
+      "thisno-core-cod-001",
+      "thisno-core-fac-000",
+      "thisno-core-fac-001",
+      "thisno-core-fac-002",
+      "thisno-core-fac-003",
+      "thisno-core-fac-004",
+      "thisno-core-fac-005",
+      "thisno-core-fac-006",
+      "thisno-core-fac-007",
+      "thisno-core-fac-008",
+      "thisno-core-fac-009",
+      "thisno-core-fac-010",
+      "thisno-core-fac-011",
+      "thisno-core-fac-012",
+      "thisno-core-fac-013",
+      "thisno-core-com-000",
+      "thisno-core-com-001",
+      "thisno-core-com-002",
+      "thisno-core-com-003",
+      "thisno-core-com-004",
+      "thisno-core-com-005",
+      "thisno-core-com-006",
+      "thisno-core-com-007",
+      "thisno-core-com-008",
+      "thisno-core-com-009",
+      "thisno-core-cro-000",
+      "thisno-core-cro-001",
+      "thisno-core-cro-002",
+      "thisno-core-cro-003",
+      "thisno-core-cro-004",
+      "thisno-core-cro-005",
+      "thisno-core-cro-006",
+      "thisno-core-cro-007",
+      "thisno-core-neg-000",
+      "thisno-core-neg-001",
+      "thisno-core-neg-002",
+      "thisno-core-neg-003"
+    ]
+  }
 }

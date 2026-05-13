@@ -574,17 +574,19 @@ def _should_skip_routing(question: str) -> bool:
     """True when the question is too short to route reliably, OR when the
     operator has disabled two-layer routing via env flag.
 
-    Env flag: `ENABLE_TWO_LAYER_ROUTING` (default "true"; set to "false" to
-    short-circuit routing and search the whole show — equivalent to R3.1
-    behaviour). Introduced 2026-05-11 as hotfix after R3.2 baseline showed
-    Recall@5 regressed from 23.8% (R3.1) to 15.5% (R3.2) — see
-    `docs/case-studies/r32-routing-regression-2026-05-11.md`.
+    Env flag: `ENABLE_TWO_LAYER_ROUTING` (default "false"; set to "true" to
+    re-enable routing for diagnostics). The 2026-05-13 audit showed routing
+    was a net negative on human-curated queries (Recall@5 0.0625 with routing
+    vs 0.4375 without). See r3-5-disable-routing change for the spike data
+    and `docs/case-studies/r32-routing-regression-2026-05-11.md` for the
+    original 2026-05-11 hotfix context (now superseded).
 
     Routing relies on description embedding similarity. Questions with
     fewer than 2 multi-char (length>=2) jieba tokens (e.g. just '迪拉胖')
-    yield poor embedding signal — we'd rather search the whole show.
+    yield poor embedding signal — when routing IS re-enabled, we'd rather
+    search the whole show.
     """
-    if os.getenv("ENABLE_TWO_LAYER_ROUTING", "true").strip().lower() == "false":
+    if os.getenv("ENABLE_TWO_LAYER_ROUTING", "false").strip().lower() == "false":
         return True
     if not question or not question.strip():
         return True

@@ -5,19 +5,40 @@ Workflow:
 2. Sample 5 episodes (longest transcripts win, with a small random factor).
 3. For each (type, quota) pair, prompt an LLM with few-shot examples
    to generate questions anchored to specific chunk_ids.
-4. Output a JSON draft to stdout (or --out path) for human audit.
+4. Write JSON to a STAGING file for human audit.
+
+STAGING DISCIPLINE (since r3-5-disable-routing audit, 2026-05-13):
+Output SHALL be written to `backend/eval/datasets/_pending_review.json` by
+default. The main dataset (`backend/eval/datasets/{show_slug}.json`) SHALL
+NOT be overwritten by this script directly. The 2026-05-13 audit of this
+script's prior output (36 `thisno-core-*` items) showed a verified bad-
+question rate of ≥75% — single-keyword-triggered deep questions, anchors
+not aligned with question semantics, cross-episode anchors with episodes
+unrelated to the question.
+
+To write directly to the main dataset (e.g. after a human review pass),
+all three of `--target-main`, `--reviewed-by <id>`, and `--reviewed-at
+<ISO8601>` MUST be supplied. Absent any one of them, the script exits with
+code 2 to prevent accidental main-dataset corruption.
 
 NOTE: This script generates *core* items only. The 10 sentinel items must
 be hand-crafted by a human with verified ground-truth chunk_ids — see
 .claude/skills/golden-set-builder/SKILL.md for the full workflow.
 
-Usage:
+Usage (staging, default):
     python -m backend.eval.scripts.build_golden_set \
         --show-id <uuid> \
         --backend-url http://localhost:8000 \
         --auth-token $EVAL_AUTH_TOKEN \
-        --n-core 40 \
-        --out /tmp/draft.json
+        --n-core 40
+
+Usage (write to main, requires review metadata):
+    python -m backend.eval.scripts.build_golden_set \
+        --show-id <uuid> --show-slug this-not-that-cool \
+        --target-main \
+        --reviewed-by reviewer-id \
+        --reviewed-at 2026-05-13T10:00:00Z \
+        ...
 """
 from __future__ import annotations
 
@@ -335,7 +356,30 @@ def main(argv: Iterable[str] | None = None) -> int:
         help="JSON array of topic strings to ban from new questions (e.g. existing keep set)",
     )
     parser.add_argument("--model", default="gpt-4o", help="Hub model for synthesis")
-    parser.add_argument("--out", type=Path, default=Path("/tmp/golden-set-draft.json"))
+    parser.add_argument(
+        "--out",
+        type=Path,
+        default=Path("backend/eval/datasets/_pending_review.json"),
+        help="Staging output path. To write to the main per-show dataset use "
+             "--target-main with --reviewed-by/--reviewed-at.",
+    )
+    parser.add_argument(
+        "--target-main",
+        action="store_true",
+        help="If set together with --reviewed-by and --reviewed-at, write "
+             "directly to backend/eval/datasets/{show_slug}.json. Otherwise "
+             "the script exits with code 2 to enforce staging discipline.",
+    )
+    parser.add_argument(
+        "--reviewed-by",
+        default=None,
+        help="Required when --target-main is set: non-empty reviewer identifier.",
+    )
+    parser.add_argument(
+        "--reviewed-at",
+        default=None,
+        help="Required when --target-main is set: ISO8601 timestamp of review.",
+    )
     parser.add_argument(
         "--sentinel-path",
         type=Path,
@@ -349,6 +393,18 @@ def main(argv: Iterable[str] | None = None) -> int:
         help="Max regenerate rounds per type to fill quota with valid items",
     )
     args = parser.parse_args(argv)
+
+    # Staging discipline gate (r3-5-disable-routing, 2026-05-13)
+    if args.target_main:
+        if not (args.reviewed_by and args.reviewed_at):
+            print(
+                "[fatal] --target-main requires both --reviewed-by <id> and "
+                "--reviewed-at <ISO8601>. Refusing to write to main dataset "
+                "without human review metadata.",
+                file=sys.stderr,
+            )
+            return 2
+        args.out = Path(f"backend/eval/datasets/{args.show_slug}.json")
 
     chunks = _fetch_chunks(args.backend_url, args.show_id, args.auth_token)
     if len(chunks) < 10:

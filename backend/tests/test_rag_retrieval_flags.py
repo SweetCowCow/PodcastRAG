@@ -118,3 +118,45 @@ def test_both_flags_combined(monkeypatch):
     )
     assert rag._DESCRIPTION_CAP_RUNTIME == 0
     assert rag._SHOW_NAME_FILTER_ENABLED is False
+
+
+# ─── ENABLE_TWO_LAYER_ROUTING (r3-5-disable-routing) ─────────────────
+
+
+_MULTI_TOKEN_QUESTION = "節目名是怎麼來的"
+
+
+def test_enable_two_layer_routing_unset_skips_routing(monkeypatch):
+    """env unset → skip_routing returns True (new default)."""
+    rag = _reload_rag(monkeypatch, ENABLE_TWO_LAYER_ROUTING=None)
+    assert rag._should_skip_routing(_MULTI_TOKEN_QUESTION) is True
+
+
+def test_enable_two_layer_routing_true_enables_routing(monkeypatch):
+    """env=true → skip_routing returns False (routing re-enabled for diagnostics)."""
+    rag = _reload_rag(monkeypatch, ENABLE_TWO_LAYER_ROUTING="true")
+    assert rag._should_skip_routing(_MULTI_TOKEN_QUESTION) is False
+
+
+@pytest.mark.parametrize("val", ["false", "FALSE", "False", " false ", "FaLsE"])
+def test_enable_two_layer_routing_false_variants_skip(monkeypatch, val):
+    """env=false (any case/whitespace) → skip_routing returns True."""
+    rag = _reload_rag(monkeypatch, ENABLE_TWO_LAYER_ROUTING=val)
+    assert rag._should_skip_routing(_MULTI_TOKEN_QUESTION) is True
+
+
+def test_enable_two_layer_routing_empty_skips(monkeypatch):
+    """env='' → strip().lower() == '' != 'false' so fall through to jieba check.
+
+    For a question with ≥2 multi-char tokens this falls to the multi_char branch
+    which returns False, meaning routing IS attempted. Confirm this edge case.
+    """
+    rag = _reload_rag(monkeypatch, ENABLE_TWO_LAYER_ROUTING="")
+    # Empty string ≠ "false" — falls through to jieba check
+    assert rag._should_skip_routing(_MULTI_TOKEN_QUESTION) is False
+
+
+def test_enable_two_layer_routing_true_short_question_still_skipped(monkeypatch):
+    """Even with routing env=true, a question with <2 multi-char tokens skips routing."""
+    rag = _reload_rag(monkeypatch, ENABLE_TWO_LAYER_ROUTING="true")
+    assert rag._should_skip_routing("迪拉") is True

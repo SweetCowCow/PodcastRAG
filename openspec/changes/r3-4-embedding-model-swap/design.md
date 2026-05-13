@@ -170,3 +170,28 @@ CREATE INDEX CONCURRENTLY idx_desc_chunks_emb_v2_hnsw
 1. ~~ai_steps 切換時機~~ → **走 admin UI** 手動切，不寫進 alembic data migration（避免「config 已切但 backfill 沒做完」race condition）。流程：「backfill `embedding_v2` 全綠 → admin UI 切 ai_steps → 設 RAG_USE_EMBEDDING_V2=true 並 redeploy」。
 2. ~~Embedding step config 是否需要 dim override~~ → **顯式寫 dim=3072 防呆**，避免未來 OpenAI 預設行為改變或誤改 step config 觸發 Matryoshka 降維。
 3. ~~Rollback 後 embedding_v2 保留多久~~ → **1 個月觀察期**後跑 cleanup migration（章節 10）drop 舊 column + index + flag。
+
+## D7 — routing 才是主因（2026-05-13 follow-up）
+
+r3-4 cutover 後 prod eval：
+
+| metric | LLM-auto-inflated 48-item set | human-curated 10-item set |
+|---|---|---|
+| Recall@5 | 0.2222 | 0.0625 |
+| code-switch | 0.0 | 0.0 |
+| fact | 0.353 | 0.0 |
+
+r3-4 設計時假設 R3.2 ceiling (0.1548) 主因是 embedding model 訊號不足。2026-05-13 audit + spike 推翻這個假設：
+
+- 移除 36 個 LLM-auto 壞題（壞題率 ≥75%）後，純人類 query 上 r3-4 的「fact +95%」消失（0.353 → 0.0），證明那是 LLM-auto-inflated 假象
+- B3 spike：跳過 `route_episodes` 後 human-curated Recall@5 從 0.0625 → 0.4375 （7x）
+- 真正瓶頸：`route_episodes` 在帶專有名詞 query 上把答案 episode 擋在 top-10 外
+
+**結論**：
+- **Embedding v2-large 維持 prod**（v3-large 對 fact 類仍有 marginal gain，且儲存成本可接受）
+- 但 **r3-4 D4 ship gate 條件作廢** — Recall@5 ≥ 0.25 必過 / ≥ 0.35 加分 那組數字是建立在壞測試集上、不是 r3-4 該背的標準
+- r3-4 archive 改以「embedding swap 不傷害、保留為未來基礎；真正的 retrieval quality gain 由 r3-5-disable-routing 達成」收尾
+- 與 r3-5-disable-routing pair archive（同一輪 archive，順序 r3-5 先、r3-4 後）
+- 後續 r3.x change 要設 gate 時 **必須以 human-curated 測試集為準**，不能再用 LLM-auto-inflated 數字
+
+詳見 `openspec/changes/r3-5-disable-routing/design.md` D2-D6 段。
