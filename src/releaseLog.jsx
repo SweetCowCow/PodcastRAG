@@ -44,10 +44,40 @@ const MILESTONE_LABELS = {
   'v1.4': { zh: 'v1.4 — 混合檢索：找到節目主寫的關鍵字', en: 'v1.4 — Hybrid Retrieval: Catching the Host\'s Own Keywords' },
   'v1.5': { zh: 'v1.5 — 更新日誌變好讀',           en: 'v1.5 — Release Log, Browsable' },
   'v1.6': { zh: 'v1.6 — 搜尋結果看得更清楚',       en: 'v1.6 — Search Results, Now Readable' },
+  'v1.7': { zh: 'v1.7 — 搜尋準度大幅提升',         en: 'v1.7 — Retrieval Quality, Materially Better' },
 };
 
 // Entries — newest milestone first; within each milestone newest date first.
 const RELEASE_LOG = [
+  // ─── v1.7 — Retrieval Quality Fix (5/13) ───
+  {
+    date: '2026-05-13', slug: 'r3-5-disable-routing', milestone: 'v1.7', tag: 'fix',
+    title: {
+      zh: '搜尋常找不到正確答案？關掉一層擋路的路由邏輯，準度直接 7 倍',
+      en: 'Search Could Not Find the Right Episode — One Routing Layer Was the Culprit, Now Disabled',
+    },
+    summary: {
+      zh: '到 v1.6 為止，搜尋有個藏很深的問題：問「節目名「這又沒有很屌」是怎麼來的？」這種帶節目名的問題時，系統不是找講由來的 EP1，而是把「description 裡有提到《這又沒有很屌》」的後面集數推到前面（那些只是開頭歡迎詞 “歡迎收聽 XX EP128…”，根本沒講由來）。背後是 5/11 加進來的 two-layer routing：每筆 query 先用 description embedding 把節目挑出 top-10 候選 episodes，再去這 10 集裡撈片段。但 routing 那層是「純語意 cosine、沒 lexical 信號」，遇到 query 帶專有名詞時被書名字串拉走，正確答案的集數連 top-10 都進不去，後面再強的 retrieval 都救不了。這次把 routing 預設關掉（env flag 早就在那、就是切預設值），同樣 10 題人工測試集的 Recall@5 從 0.0625 升到 0.4375（7 倍）、P95 延遲 2170ms（遠低於 4500ms 容忍上限）。順手做了一次測試集 audit：移出 36 個 LLM 自動生成的爛題（單關鍵字觸發深度問題、anchor 對不上 question），把測試集純化成 10 題人工親寫的 sentinel。LLM 自動產題目這條路不是不能用，但加 staging + 人工二次審核才行——build_golden_set.py 已加守門：要寫主測試集必須 `--target-main` + `--reviewed-by` + `--reviewed-at` 三者齊備，否則只進 `_pending_review.json` staging。同一波 archive 把 r3-4 (text-embedding-3-large) 也一起收尾：embedding 升級保留 in prod，但承認原本宣稱的「fact +95%」幾乎全來自被污染的測試集——真正讓使用者體驗變好的是這次關掉 routing，不是 embedding swap。',
+      en: 'Through v1.6, search had a deeply hidden flaw: asking "where does the show name 《這又沒有很屌》come from?" did NOT surface EP1 (which actually tells the origin story); instead, later episodes that merely *mention* the show name in their description ("welcome back to 《這又沒有很屌》 EP128…") ranked higher. Root cause: a two-layer routing pass added 5/11. Every query first runs description-embedding cosine to pick top-10 candidate episodes, then retrieves chunks only from those 10. But the routing layer is pure semantic cosine with NO lexical signal — when a query includes a proper noun (the show title), the cosine match latches onto episodes that literally contain that string, kicking the actual answer episode out of the top 10. No matter how good the downstream retriever is, it cannot recover. This release flips the env-flag default to OFF (the kill-switch was already in code; we just switched the default). On the same 10-item human-curated test set, Recall@5 went from 0.0625 to 0.4375 — a 7x improvement. P95 latency 2170ms, well under the 4500ms ship gate. Also bundled an audit of the test set itself: removed 36 LLM-auto-generated bad items (single-keyword-triggered deep questions, anchors not matching question semantics), keeping only the 10 hand-crafted sentinel items. LLM-auto generation is not banned, but it now must stage through `_pending_review.json` and requires `--target-main` + `--reviewed-by` + `--reviewed-at` to write to the main dataset. Pair-archived r3-4 (text-embedding-3-large upgrade): the embedding model stays in prod, but we are now honest that the originally claimed "fact +95%" was driven almost entirely by the poisoned LLM-auto subset — the real user-facing improvement is this routing fix, not the embedding swap.',
+    },
+    summaryBullets: {
+      zh: [
+        '同樣 10 題人工測試集 Recall@5：0.0625 → 0.4375（7 倍），fact / comprehension / cross-episode 都有 gain',
+        '帶書名 / 專有名詞的 query 不再被「description 提到該名詞的後面集數」hijack — EP1 由來那集現在 rank 1',
+        '測試集移出 36 個 LLM 自動產的爛題（壞題率 ≥ 75%），只留 10 題人工 sentinel；future LLM 產題必須先過 staging 才能進主資料集',
+        'P95 延遲 2170ms，遠低於 4500ms ship 容忍上限 — env flag 留著，可隨時切回 routing 做對照',
+        '同波 archive r3-4 embedding 升級：保留 v3-large in prod，但承認原本「fact +95%」是測試集污染造成的假象',
+      ],
+      en: [
+        'Same 10-item human-curated set: Recall@5 0.0625 → 0.4375 (7x); fact / comprehension / cross-episode all improved',
+        'Queries with proper nouns (show title) no longer hijacked by "later episodes that just mention the title" — EP1 origin story is now rank 1',
+        'Removed 36 LLM-auto bad items (verified ≥75% bad-question rate); kept 10 hand-crafted sentinels; future LLM-generated items must stage via `_pending_review.json` with reviewer metadata',
+        'P95 latency 2170ms, well below the 4500ms ship gate; env flag preserved so routing can be toggled back on for diagnostics',
+        'Pair-archived the r3-4 embedding upgrade (text-embedding-3-large) — model stays in prod, but the previously claimed "fact +95%" is now disclosed as inflated by the poisoned LLM-auto subset, not real user-facing gain',
+      ],
+    },
+  },
+
   // ─── v1.6 — Eval Tooling (5/11) ───
   {
     date: '2026-05-11', slug: 'eval-runner-flags-patch', milestone: 'v1.6', tag: 'enhancement',
