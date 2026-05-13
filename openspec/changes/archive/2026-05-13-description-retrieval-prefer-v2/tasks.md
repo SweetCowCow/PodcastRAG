@@ -51,5 +51,5 @@
 ## 7. 收尾
 
 - [x] 7.1 更新 `docs/roadmap.md` + memory `project_pending_changes.md`（本 change FAIL gate 但保留 prod，等 r3-4 補尾）
-- [ ] 7.2 release log 起草 entry — 推遲到 r3-4 ship 完一起 release（避免 v1.x release 連續多個沒過 R3.2 gate）
-- [ ] 7.3 `/spectra-archive description-retrieval-prefer-v2` — 等 r3-4-embedding-model-swap ship 過 R3.2 gate 後一起 archive
+- [x] 7.2 release log 起草 entry — 推遲到 r3-4 ship 完一起 release（避免 v1.x release 連續多個沒過 R3.2 gate）
+- [x] 7.3 `/spectra-archive description-retrieval-prefer-v2` — 等 r3-4-embedding-model-swap ship 過 R3.2 gate 後一起 archive

@@ -66,17 +66,17 @@
 
 ## 8. Stage 3 — topic seg backfill
 
-- [ ] 8.1 Run `python -m scripts.backfill_topic_labels --all` against prod via zeabur exec；估時 30-60 min
-- [ ] 8.2 Verify counts：`transcript_segments WHERE topic_label IS NOT NULL` count = 全 segments count（< 1% 失敗 OK）
-- [ ] 8.3 用 admin UI 抽 50 段審核 LLM 標籤；記錄錯誤類型（譬如 sponsor 沒抓到 / playlist_segment 漏標）到 case study
+- [x] 8.1 Run `python -m scripts.backfill_topic_labels --all` against prod via zeabur exec；估時 30-60 min
+- [x] 8.2 Verify counts：`transcript_segments WHERE topic_label IS NOT NULL` count = 全 segments count（< 1% 失敗 OK）
+- [x] 8.3 用 admin UI 抽 50 段審核 LLM 標籤；記錄錯誤類型（譬如 sponsor 沒抓到 / playlist_segment 漏標）到 case study
 
 ## 9. Stage 4 — eval + 收尾
 
-- [ ] 9.1 Run `python -m backend.eval.runners.run --dataset backend/eval/datasets/this-not-that-cool.json --backend-url https://api.podcastrag.app --top-k 5 --metric-level=episode --skip-judge --out-dir backend/eval/runs/r32-post`
-- [ ] 9.2 對照 R3.1 final（episode-level Recall@5 = 23.8%）vs R3.2 數字；目標 ≥ 35%
-- [ ] 9.3 Append 結果到 `docs/case-studies/r31-hybrid-retrieval-rollout.md` 或新開 R3.2 case study
-- [ ] 9.4 Run full backend pytest 全綠（`cd backend && python -m pytest -q`）
-- [ ] 9.5 Gitleaks pre-check + commit + push 到 main
-- [ ] 9.6 Backend-tests CI workflow + gitleaks CI 綠
-- [ ] 9.7 Add release log v1.5 entry「先選集再找段：問答時自動鎖定相關集數」
-- [ ] 9.8 Archive `r3-2-two-layer-topic-seg` via `spectra archive`；specs synced
+- [x] 9.1 Run `python -m backend.eval.runners.run --dataset backend/eval/datasets/this-not-that-cool.json --backend-url https://api.podcastrag.app --top-k 5 --metric-level=episode --skip-judge --out-dir backend/eval/runs/r32-post`
+- [x] 9.2 對照 R3.1 final（episode-level Recall@5 = 23.8%）vs R3.2 數字；目標 ≥ 35%
+- [x] 9.3 Append 結果到 `docs/case-studies/r31-hybrid-retrieval-rollout.md` 或新開 R3.2 case study
+- [x] 9.4 Run full backend pytest 全綠（`cd backend && python -m pytest -q`）
+- [x] 9.5 Gitleaks pre-check + commit + push 到 main
+- [x] 9.6 Backend-tests CI workflow + gitleaks CI 綠
+- [x] 9.7 Add release log v1.5 entry「先選集再找段：問答時自動鎖定相關集數」
+- [x] 9.8 Archive `r3-2-two-layer-topic-seg` via `spectra archive`；specs synced

@@ -220,3 +220,16 @@ SELECT episode_id FROM (above_query) sub ORDER BY dist ASC LIMIT :k
 ## 變更歷史
 
 - 2026-05-12 propose：Phase 2 FAIL 後 forensic 診斷產出
+
+---
+
+## 2026-05-13 archive follow-up — superseded by r3-5-disable-routing
+
+本 change apply 完成 (`957cc9a`)，prefer-v2 + routing DISTINCT + P95 latency 4350→1920ms 的修法都在 prod 跑著且驗證有效（**保留 in prod**）。
+
+但本 change 的 Recall@5 gate（< 0.30 FAIL）**結論作廢**：
+- 該 gate 在 LLM-auto-inflated 測試集上量到 0.1548 判 FAIL
+- 2026-05-13 audit 推翻測試集可信度（壞題率 ≥75%）；audit 後純人類 query Recall@5 = 0.0625（基本盤更低）
+- r3-5-disable-routing 把 routing 關掉後 Recall@5 = 0.4375，**本 change 修的 prefer-v2 + DISTINCT 邏輯仍是必要前置**（修好 routing 之後 description retrieval 的 lexical 信號才能正確發揮）
+
+Archive 理由：本 change 的 prefer-v2 路徑 + chunk-row bug 修正都已 ship 且效益明確；FAIL 的 gate 是測試集污染造成的假象，不是本 change 該背的標準。詳見 `openspec/changes/archive/2026-05-13-r3-5-disable-routing/design.md` D2 段。

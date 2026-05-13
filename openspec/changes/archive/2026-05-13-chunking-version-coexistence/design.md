@@ -367,3 +367,13 @@ final eval pass → r3-2-retrieval-fix archive
 ## 變更歷史
 
 - 2026-05-12 propose：r3-2-retrieval-fix Phase 1 lever 結論定 Case C → 本 change 開出來解 schema 共存問題
+
+---
+
+## 2026-05-13 archive follow-up — superseded by r3-5-disable-routing
+
+本 change apply 完成（schema + ChunkHit + indexer + cleanup 已 ship in prod）。
+
+D3 的「v1+v2 共池 RRF」假設在後續 Phase 2 被 `description-retrieval-prefer-v2` 推翻 — 實際採 prefer-v2（v2 有就用 v2、無則 fallback v1）而非共池。本 change 的 schema 變更（`chunking_version` + `chunk_index` 欄位）仍是該路徑的必要基礎。
+
+archive 理由：schema 與 indexer 變更都已生效；D3 共池假設作廢但 schema 仍正確。詳見 `description-retrieval-prefer-v2` 與 `r3-5-disable-routing` 的 follow-up notes。

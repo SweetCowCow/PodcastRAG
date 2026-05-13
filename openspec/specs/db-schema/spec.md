@@ -936,3 +936,301 @@ tests:
   - backend/tests/test_rag_rrf.py
   - backend/tests/test_rebuild_chunks.py
 -->
+
+---
+### Requirement: transcript_segments topic_label column
+
+The `transcript_segments` table SHALL contain a `topic_label VARCHAR(50) NULL` column populated by the topic-segmentation backfill (see `topic-segmentation` capability). The column SHALL accept any string (the application validates against the show's allowed label set; DB does not enforce this so per-show extensions can be added without schema migrations).
+
+A btree index `ix_segments_topic_label` SHALL exist on `(topic_label)` to support future filter queries.
+
+#### Scenario: Column nullable after migration
+
+- **WHEN** the `r3.2-two-layer-topic-seg` migration runs against a populated DB
+- **THEN** existing rows SHALL have `topic_label = NULL`
+- **AND** new INSERTs without an explicit `topic_label` value SHALL succeed
+
+#### Scenario: Index present
+
+- **WHEN** the migration completes
+- **THEN** index `ix_segments_topic_label` SHALL exist on column `topic_label` of `transcript_segments`
+
+
+<!-- @trace
+source: r3-2-two-layer-topic-seg
+updated: 2026-05-13
+code:
+  - backend/app/models/episode.py
+  - backend/app/models/transcript_segment.py
+  - backend/app/api/admin/__init__.py
+  - backend/alembic/versions/u9b0c1d2e3f4_add_embedding_v2_columns.py
+  - backend/app/schemas/tokenizer.py
+  - backend/app/services/rag.py
+  - src/TranscriptPage.jsx
+  - src/ReleaseLogPage.jsx
+  - backend/app/services/topic_segmentation.py
+  - backend/app/models/transcript_chunk.py
+  - backend/eval/datasets/this-not-that-cool.json
+  - backend/app/services/description_rechunker.py
+  - backend/app/models/show.py
+  - backend/app/services/description_indexer.py
+  - backend/app/workers/tasks.py
+  - backend/app/services/embedding.py
+  - backend/app/models/tokenizer_term.py
+  - backend/app/api/admin/tokenizer.py
+  - backend/app/api/admin/topic_seg.py
+  - src/App.jsx
+  - backend/app/services/citation_parser.py
+  - backend/app/workers/celery_app.py
+  - src/AdminTopicSegAuditTab.jsx
+  - backend/scripts/backfill_topic_labels.py
+  - CLAUDE.md
+  - backend/alembic/versions/t8a9b0c1d2e3_chunking_version_description_chunks.py
+  - src/Shared.jsx
+  - backend/alembic/versions/s7f8a9b0c1d2_r32_topic_seg.py
+  - backend/app/api/admin/chunking_status.py
+  - src/releaseLog.jsx
+  - backend/app/schemas/query.py
+  - backend/app/schemas/topic_seg.py
+  - backend/eval/scripts/build_golden_set.py
+  - backend/app/workers/topic_task.py
+  - src/QueryPage.jsx
+  - backend/eval/runners/run.py
+  - backend/app/models/episode_description_chunk.py
+  - backend/scripts/backfill_embedding_v2.py
+  - .github/workflows/backend-tests.yml
+  - backend/scripts/pilot_reembed_descriptions.py
+  - src/AdminTokenizerTab.jsx
+  - backend/app/services/key_resolver.py
+  - backend/scripts/cleanup_v1_description_chunks.py
+  - backend/app/api/query.py
+  - docs/roadmap.md
+  - backend/app/services/llm_prompts.py
+  - index.html
+  - src/AdminPage.jsx
+  - backend/app/services/tokenizer.py
+  - backend/eval/scripts/embedding_bakeoff.py
+  - backend/app/core/csrf.py
+tests:
+  - backend/tests/test_eval_metric_level.py
+  - backend/tests/test_description_retrieval_prefer_v2.py
+  - backend/tests/test_rag_embedding_v2_flag.py
+  - backend/tests/test_qa_feedback_api.py
+  - backend/tests/test_description_chunker_120.py
+  - backend/tests/test_rag_rrf.py
+  - backend/tests/test_description_rechunker.py
+  - backend/tests/test_topic_segmentation_persist.py
+  - backend/tests/test_tokenizer_show_name_filter.py
+  - backend/tests/test_ai_summary_full_field.py
+  - backend/tests/test_llm_prompts.py
+  - backend/tests/test_topic_segmentation.py
+  - backend/tests/test_citation_parser.py
+  - backend/tests/test_route_episodes.py
+  - backend/tests/test_admin_topic_seg.py
+  - backend/tests/test_embedding_v2_dual_write.py
+  - backend/tests/test_rag_retrieval_flags.py
+  - backend/tests/test_key_resolver.py
+  - backend/tests/test_error_responses.py
+  - backend/tests/test_strip_citations.py
+  - backend/tests/test_chunking_version_coexistence.py
+  - backend/tests/test_eval_runner_flags.py
+  - backend/tests/test_golden_set_dataset.py
+  - backend/tests/test_rag_query_response_shape.py
+-->
+
+---
+### Requirement: shows segment_categories column
+
+The `shows` table SHALL contain a `segment_categories JSONB NOT NULL DEFAULT '[]'` column holding an array of `{name: str, desc: str}` objects representing per-show extension labels for the topic-segmentation pipeline. The application SHALL validate at admin / write time that each entry has both keys; the DB does not enforce structure.
+
+#### Scenario: Default empty array
+
+- **WHEN** an existing `shows` row is loaded after migration
+- **THEN** `segment_categories` SHALL equal `[]`
+
+#### Scenario: Custom categories survive UPSERT
+
+- **GIVEN** an UPDATE sets `segment_categories = '[{"name":"playlist_segment","desc":"..."}]'` for one show
+- **WHEN** that row is read back
+- **THEN** the `segment_categories` value SHALL match exactly
+
+
+<!-- @trace
+source: r3-2-two-layer-topic-seg
+updated: 2026-05-13
+code:
+  - backend/app/models/episode.py
+  - backend/app/models/transcript_segment.py
+  - backend/app/api/admin/__init__.py
+  - backend/alembic/versions/u9b0c1d2e3f4_add_embedding_v2_columns.py
+  - backend/app/schemas/tokenizer.py
+  - backend/app/services/rag.py
+  - src/TranscriptPage.jsx
+  - src/ReleaseLogPage.jsx
+  - backend/app/services/topic_segmentation.py
+  - backend/app/models/transcript_chunk.py
+  - backend/eval/datasets/this-not-that-cool.json
+  - backend/app/services/description_rechunker.py
+  - backend/app/models/show.py
+  - backend/app/services/description_indexer.py
+  - backend/app/workers/tasks.py
+  - backend/app/services/embedding.py
+  - backend/app/models/tokenizer_term.py
+  - backend/app/api/admin/tokenizer.py
+  - backend/app/api/admin/topic_seg.py
+  - src/App.jsx
+  - backend/app/services/citation_parser.py
+  - backend/app/workers/celery_app.py
+  - src/AdminTopicSegAuditTab.jsx
+  - backend/scripts/backfill_topic_labels.py
+  - CLAUDE.md
+  - backend/alembic/versions/t8a9b0c1d2e3_chunking_version_description_chunks.py
+  - src/Shared.jsx
+  - backend/alembic/versions/s7f8a9b0c1d2_r32_topic_seg.py
+  - backend/app/api/admin/chunking_status.py
+  - src/releaseLog.jsx
+  - backend/app/schemas/query.py
+  - backend/app/schemas/topic_seg.py
+  - backend/eval/scripts/build_golden_set.py
+  - backend/app/workers/topic_task.py
+  - src/QueryPage.jsx
+  - backend/eval/runners/run.py
+  - backend/app/models/episode_description_chunk.py
+  - backend/scripts/backfill_embedding_v2.py
+  - .github/workflows/backend-tests.yml
+  - backend/scripts/pilot_reembed_descriptions.py
+  - src/AdminTokenizerTab.jsx
+  - backend/app/services/key_resolver.py
+  - backend/scripts/cleanup_v1_description_chunks.py
+  - backend/app/api/query.py
+  - docs/roadmap.md
+  - backend/app/services/llm_prompts.py
+  - index.html
+  - src/AdminPage.jsx
+  - backend/app/services/tokenizer.py
+  - backend/eval/scripts/embedding_bakeoff.py
+  - backend/app/core/csrf.py
+tests:
+  - backend/tests/test_eval_metric_level.py
+  - backend/tests/test_description_retrieval_prefer_v2.py
+  - backend/tests/test_rag_embedding_v2_flag.py
+  - backend/tests/test_qa_feedback_api.py
+  - backend/tests/test_description_chunker_120.py
+  - backend/tests/test_rag_rrf.py
+  - backend/tests/test_description_rechunker.py
+  - backend/tests/test_topic_segmentation_persist.py
+  - backend/tests/test_tokenizer_show_name_filter.py
+  - backend/tests/test_ai_summary_full_field.py
+  - backend/tests/test_llm_prompts.py
+  - backend/tests/test_topic_segmentation.py
+  - backend/tests/test_citation_parser.py
+  - backend/tests/test_route_episodes.py
+  - backend/tests/test_admin_topic_seg.py
+  - backend/tests/test_embedding_v2_dual_write.py
+  - backend/tests/test_rag_retrieval_flags.py
+  - backend/tests/test_key_resolver.py
+  - backend/tests/test_error_responses.py
+  - backend/tests/test_strip_citations.py
+  - backend/tests/test_chunking_version_coexistence.py
+  - backend/tests/test_eval_runner_flags.py
+  - backend/tests/test_golden_set_dataset.py
+  - backend/tests/test_rag_query_response_shape.py
+-->
+
+---
+### Requirement: tokenizer_custom_terms is_show_name flag
+
+The `tokenizer_custom_terms` table SHALL contain an `is_show_name BOOLEAN NOT NULL DEFAULT false` column. Tokens with `is_show_name = true` SHALL be excluded from the `to_tsquery` lexical query string built by `_build_ts_query()` (see `tokenizer-dictionary` capability), but SHALL remain available to jieba for chunk-time tokenisation (so that show-name tokens still split correctly when the chunk text is tsvector-encoded).
+
+#### Scenario: Default false after migration
+
+- **WHEN** the migration completes
+- **THEN** all existing rows in `tokenizer_custom_terms` SHALL have `is_show_name = false`
+
+#### Scenario: Show-name flag persistable
+
+- **GIVEN** an admin updates a row to `is_show_name = true`
+- **WHEN** the row is read back
+- **THEN** `is_show_name` SHALL equal `true`
+
+<!-- @trace
+source: r3-2-two-layer-topic-seg
+updated: 2026-05-13
+code:
+  - backend/app/models/episode.py
+  - backend/app/models/transcript_segment.py
+  - backend/app/api/admin/__init__.py
+  - backend/alembic/versions/u9b0c1d2e3f4_add_embedding_v2_columns.py
+  - backend/app/schemas/tokenizer.py
+  - backend/app/services/rag.py
+  - src/TranscriptPage.jsx
+  - src/ReleaseLogPage.jsx
+  - backend/app/services/topic_segmentation.py
+  - backend/app/models/transcript_chunk.py
+  - backend/eval/datasets/this-not-that-cool.json
+  - backend/app/services/description_rechunker.py
+  - backend/app/models/show.py
+  - backend/app/services/description_indexer.py
+  - backend/app/workers/tasks.py
+  - backend/app/services/embedding.py
+  - backend/app/models/tokenizer_term.py
+  - backend/app/api/admin/tokenizer.py
+  - backend/app/api/admin/topic_seg.py
+  - src/App.jsx
+  - backend/app/services/citation_parser.py
+  - backend/app/workers/celery_app.py
+  - src/AdminTopicSegAuditTab.jsx
+  - backend/scripts/backfill_topic_labels.py
+  - CLAUDE.md
+  - backend/alembic/versions/t8a9b0c1d2e3_chunking_version_description_chunks.py
+  - src/Shared.jsx
+  - backend/alembic/versions/s7f8a9b0c1d2_r32_topic_seg.py
+  - backend/app/api/admin/chunking_status.py
+  - src/releaseLog.jsx
+  - backend/app/schemas/query.py
+  - backend/app/schemas/topic_seg.py
+  - backend/eval/scripts/build_golden_set.py
+  - backend/app/workers/topic_task.py
+  - src/QueryPage.jsx
+  - backend/eval/runners/run.py
+  - backend/app/models/episode_description_chunk.py
+  - backend/scripts/backfill_embedding_v2.py
+  - .github/workflows/backend-tests.yml
+  - backend/scripts/pilot_reembed_descriptions.py
+  - src/AdminTokenizerTab.jsx
+  - backend/app/services/key_resolver.py
+  - backend/scripts/cleanup_v1_description_chunks.py
+  - backend/app/api/query.py
+  - docs/roadmap.md
+  - backend/app/services/llm_prompts.py
+  - index.html
+  - src/AdminPage.jsx
+  - backend/app/services/tokenizer.py
+  - backend/eval/scripts/embedding_bakeoff.py
+  - backend/app/core/csrf.py
+tests:
+  - backend/tests/test_eval_metric_level.py
+  - backend/tests/test_description_retrieval_prefer_v2.py
+  - backend/tests/test_rag_embedding_v2_flag.py
+  - backend/tests/test_qa_feedback_api.py
+  - backend/tests/test_description_chunker_120.py
+  - backend/tests/test_rag_rrf.py
+  - backend/tests/test_description_rechunker.py
+  - backend/tests/test_topic_segmentation_persist.py
+  - backend/tests/test_tokenizer_show_name_filter.py
+  - backend/tests/test_ai_summary_full_field.py
+  - backend/tests/test_llm_prompts.py
+  - backend/tests/test_topic_segmentation.py
+  - backend/tests/test_citation_parser.py
+  - backend/tests/test_route_episodes.py
+  - backend/tests/test_admin_topic_seg.py
+  - backend/tests/test_embedding_v2_dual_write.py
+  - backend/tests/test_rag_retrieval_flags.py
+  - backend/tests/test_key_resolver.py
+  - backend/tests/test_error_responses.py
+  - backend/tests/test_strip_citations.py
+  - backend/tests/test_chunking_version_coexistence.py
+  - backend/tests/test_eval_runner_flags.py
+  - backend/tests/test_golden_set_dataset.py
+  - backend/tests/test_rag_query_response_shape.py
+-->

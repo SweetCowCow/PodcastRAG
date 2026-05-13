@@ -191,3 +191,19 @@ R3.2 design 已預設 `--metric-level episode`。本 change 沿用，chunk-level
 
 - 2026-05-11 propose 階段：spectra-discuss 5 個假設、確認 routing 已證偽、lever test 兩段式設計定稿
 - 2026-05-12 Phase 1 完成：4-arm lever test 全跑完，Recall 結構性 ceiling 證實 → Case C；Phase 2 staged single-show rollout 計畫定稿（pilot 對象「這又沒有很屌」）
+
+---
+
+## 2026-05-13 archive follow-up — superseded by r3-5-disable-routing
+
+本 change 跑完 Phase 1 lever test（4 組 a/b/c/d 全部 Recall = 0.1548）+ Phase 2 sibling re-chunking pilot，gate FAIL（Recall < 0.30）。
+
+當時推論「Recall ceiling 結構性、真兇在 embedding model」，因此啟動 `r3-4-embedding-model-swap`。2026-05-13 audit 推翻這個推論：
+
+- 0.1548 ceiling 在 LLM-auto-inflated 測試集上量到，audit 後純人類 query baseline = 0.0625（更糟）
+- 真兇不是 embedding model，是 `route_episodes` 把答案 episode 擋在 top-10 外（r3-5 spike B2 驗證）
+- r3-5 把 routing 關掉後 Recall = 0.4375（7x）
+
+archive 理由：本 change 的 lever test 證據結論作廢、但執行的 SQL 改動（chunk_index 排序、show name filter env flag 等）已 ship 且不傷害。詳見 `r3-5-disable-routing` design.md D2-D7。
+
+未做完的 Phase 2 任務（pilot eval、ship gate 驗證等）不再做 — r3-5 已用更上游的 routing fix 達標。

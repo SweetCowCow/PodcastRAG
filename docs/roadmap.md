@@ -1,6 +1,6 @@
 # PodcastRAG 路線圖
 
-> 最後更新：2026-05-12（R3.2 Phase 2 + Phase 2 retry 完成；Recall ceiling 結構性，等 r3-4 embedding swap）
+> 最後更新：2026-05-13（R3.5 + R3.2 milestone 全 archive；human Recall@5 0.0625→0.4375 (7x)。下一動：擴 golden set → whisper-chunking-fix → R2.2 prompt redo）
 
 本文件記錄 PodcastRAG 後續開發的優先順序與規劃。依 Phase 排序，**Phase A 阻擋公開最先**，再做評測基線，再優化 RAG，最後商業化。
 
@@ -62,8 +62,10 @@ R3 拆三段做（每段都跑 eval baseline 對照升幅）：
 | 代號 | 項目 | 依賴 | 說明 |
 |------|------|------|------|
 | **R3.1** ✅ shipped 2026-05-08 | Hybrid retrieval 核心 | R1 ✅ | (a) Chunk 重定義：30-60s / 5-10 segments + 前後 1 seg overlap；(b) jieba 分詞 + tsvector + 自訂詞典 (29 詞 manual seed)；(c) pgvector + tsvector RRF 融合；(d) Episode description 進 BM25（556 集）。**結果**：episode-level Recall@5 從 2.4% → 23.8%（10x），Recall@20 = 62%。詳見 `docs/case-studies/r31-hybrid-retrieval-rollout.md`。**併入 R3.2 的 carry-over**：description chunks 在排序壓 transcript anchor (cap 或 down-weight)、通用詞 dict 條目造成 noise (節目名類)、eval metric 加 episode-level flag |
-| **R3.2** | 兩層檢索 + topic segmentation | R3.1 | 拆三張 change：(1) `r3-2-two-layer-topic-seg`（43/54 done, 等收尾）— two-layer routing + topic seg backfill 完成；(2) `r3-2-retrieval-fix` ⚡ in flight — Phase 1 lever test 4 組跑完 (a/b/c/d)，Recall 結構性 ceiling 0.1548 → 確認 Case C，Phase 2 採單節目 pilot 對「這又沒有很屌」做 description re-chunking（dry-run 估 $0.001，已 commit `13e2493`）；(3) `chunking-version-coexistence` ⚡ in flight — sibling change，加 `chunking_version + chunk_index` 欄位讓 v1/v2 chunks 共存（38 tasks，~3.5 hr）。詳見 `docs/case-studies/r32-routing-regression-2026-05-11.md` |
-| **R3.3** | Metadata filter + 多欄位 weighting（~52 tasks，parked）| R3.2 | (a) 從 episode title 正則抽 `Ft.`/`Feat.`/`feat.` 後的來賓名 → episodes 表加 `guests` 欄位；(b) 日期 / 主題 metadata filter（2024 那集/馬世芳那集）；(c) BM25 多欄位 weighting：title > description > chunk text；(d) speaker 暫不做（要重轉錄 360 集太貴，留 P2）|
+| **R3.2** ✅ shipped 2026-05-11~13 | 兩層檢索 + topic segmentation（4 個 changes 全 archive） | R3.1 | (1) `r3-2-two-layer-topic-seg` — topic seg backfill 全綠（保留 in prod）；two-layer routing 在 r3-5 被關掉；(2) `r3-2-retrieval-fix` — Phase 1 lever test 證實 Recall ceiling 結構性，**但結論被 r3-5 推翻**（測試集污染）；(3) `chunking-version-coexistence` — schema 已 ship；(4) `description-retrieval-prefer-v2` — prefer-v2 + RRF DISTINCT + P95 -56% 已 ship。詳見各 archive design.md 的「2026-05-13 archive follow-up」段 + `docs/case-studies/r32-routing-regression-2026-05-11.md`（5/13 follow-up 結論作廢）|
+| **R3.4** ✅ shipped 2026-05-12~13 | text-embedding-3-large + dual-write | R3.1 | embedding model 從 `text-embedding-3-small` 升級到 `text-embedding-3-large`（3072 dim）。原本 ship gate（D4）作廢 — 真正瓶頸是 routing 不是 embedding，詳見 archive design.md D7 follow-up |
+| **R3.5** ✅ shipped 2026-05-13 (v1.7) | 關掉 two-layer routing | R3.2 | `ENABLE_TWO_LAYER_ROUTING` env default 翻 false；同 archive 把 golden set audit 結果（移 36 LLM-auto 壞題、補 q05 EP66 anchor、加 staging 守門）固化；human-curated Recall@5 0.0625 → **0.4375 (7x)**、P95 2170ms（< 4500ms gate）。詳見 archive design.md D2-D7 |
+| **R3.3** | Metadata filter + 多欄位 weighting（~52 tasks，parked）| R3.2 ✅ | (a) 從 episode title 正則抽 `Ft.`/`Feat.`/`feat.` 後的來賓名 → episodes 表加 `guests` 欄位；(b) 日期 / 主題 metadata filter（2024 那集/馬世芳那集）；(c) BM25 多欄位 weighting：title > description > chunk text；(d) speaker 暫不做（要重轉錄 360 集太貴，留 P2）|
 | **R2.1** ✅ shipped 2026-05-10 | citation infrastructure（v1.6） | R1 | 後端 sources 回應加 4 欄位（before/after_text、highlights、ai_summary_excerpt + ai_summary_full）；前端 `<SourceCard>` 加關鍵字 indigo 高亮（加粗+底線）+ before/after 灰色上下文 + AI 摘要 60 字「展開」+「跳到這段內容」button；URL deep-link `?show_id=&episode_id=&t=` shareable / bookmarkable / reload-safe；description-source 卡按鈕改「打開該集」；URL 邊界錯誤靜默回首頁；LLM prompt 加拒答模式 + `[N]` citation contract；citation parser strip 無效 ref。**Faithfulness gate 重訂為軟 gate（≥ 0.50）**因 RCA 證實退步根因是 retrieval 15% recall + judge 對中文拒答打折，跟 UI 無關。詳見 `docs/case-studies/r21-rca-deep-2026-05-10.md` |
 | **R2.2** | prompt 重做（待 R3.x + R1.3 完成）| R3.x / R1.3 | 等 retrieval 改善 + judge re-bake-off 完，回頭把 Faithfulness 拉回 ≥ 0.71；同時做 inline `[N]` 渲染、hover ↔ source 互動、popover 完整化、mobile bottom sheet、無障礙 ARIA |
 | **R4** | RAG 結果 cache | — | Redis hash key on 問題 + show + top_k + model。🆕 回應附 `cache_hit: bool` flag 給前端（dev 模式可顯示，學自競品 findtt.top） |
@@ -119,29 +121,28 @@ R3 拆三段做（每段都跑 eval baseline 對照升幅）：
 
 ## 進行中 changes（active，非 parked）
 
-| Change | 狀態 | 摘要 |
-|--------|------|------|
-| `r3-2-two-layer-topic-seg` | 43/54 done | R3.2 主體：two-layer routing + topic seg。Backfill 跑完，等與 retrieval-fix 同 milestone 一起 archive |
-| `r3-2-retrieval-fix` | 17/36 done | Phase 1 完成；Phase 2 pilot 第一次 FAIL（Recall 0.0952），結構性 SQL bug 在 `description-retrieval-prefer-v2` 中修 |
-| `chunking-version-coexistence` | applied | schema + ChunkHit + indexer + cleanup 已 ship；D3 共池假設由 `description-retrieval-prefer-v2` 推翻 |
-| `description-retrieval-prefer-v2` | apply 完成 commit `957cc9a` | 修 prefer-v2 + routing DISTINCT + P95 latency 4350→1920ms (-56%)；2026-05-12 final eval Recall 0.1548 = Phase 1 ceiling，**< 0.30 gate FAIL**；不 rollout、不 archive；prod 保留因 net positive（修 regression + routing chunk-row bug） |
-| `r3-4-embedding-model-swap` ⚡ | 起草中 | 真因 = embedding model 對 ZH-Hant + 短句弱（六個 lever 同 Recall ceiling 0.1548 證實 structural）；opus agent 並行做 benchmark + 小樣本實測 + propose |
+（2026-05-13 R3.2 milestone 全部 archive 收尾後清空 — 詳見下方「已 archive」段）
 
-## Parked changes（7 個，待 R3.2 milestone 收尾後依序解封）
+## Parked changes（7 個）
 
-按優先建議排序：
+**今天的執行順序（2026-05-13 user 拍板）**：
+1. ✅ R3.x 收尾家務（archive 4 個 R3.2-era stale changes）
+2. ⏳ **C 軌**：擴 human golden set 到 n=30+
+3. ⏳ `whisper-chunking-fix` (~12) — 80min 集 multipart 撞 25MiB chunk 沒生效 bug
+4. ⏳ **R2.2 prompt redo** — Faithfulness 拉回（routing 已修，先量新 baseline 再決定 prompt 改動範圍）
 
-1. `whisper-chunking-fix` (~12 tasks) — 修 80min 集 multipart 撞 25MiB chunk 沒生效 bug
-2. `celery-routing-and-dispatcher-fix` (F1, ~18) — EP20 互卡 + stale-detect 失效（R3.2 archive 後最先做）
-3. `r3-3-metadata-filter` (~52) — 詳見 Phase C 表
-4. `multi-provider-usage-monitoring` (~25) — admin AI Hub + OpenAI 用量觀測 + budget 告警
-5. `task-failure-monitoring-and-circuit-breaker` (F2, ~31) — 失敗率告警 + 永久錯短路 + 斷路器（依賴 F1）
-6. `backfill-progress-admin-tab` (~16) — admin Queue Tab 進度概覽（將合進「新節目 onboarding flow」討論）
-7. `fix-eval-dataset-com-004-json-leak` (~7) — thisno-core-com-004 答案混 raw JSON
+其他 parked（待之後規劃）：
 
-## 衍生待 propose（2026-05-12 session 討論補進來）
+5. `celery-routing-and-dispatcher-fix` (F1, ~18) — EP20 互卡 + stale-detect 失效
+6. `r3-3-metadata-filter` (~52) — 詳見 Phase C 表
+7. `multi-provider-usage-monitoring` (~25) — admin AI Hub + OpenAI 用量觀測 + budget 告警
+8. `task-failure-monitoring-and-circuit-breaker` (F2, ~31) — 失敗率告警 + 永久錯短路 + 斷路器（依賴 F1）
+9. `backfill-progress-admin-tab` (~16) — admin Queue Tab 進度概覽（將合進「新節目 onboarding flow」討論）
+10. `fix-eval-dataset-com-004-json-leak` (~7) — thisno-core-com-004 答案混 raw JSON
 
-- **eval golden set 擴張到 曼報 + 壹加壹電台** — 各 ~48 題（10 sentinel + 38 audited core），等 R3.2 archive 後啟動
+## 衍生待 propose
+
+- **eval golden set 擴張到 曼報 + 壹加壹電台** — 各 ~30+ 題人工 sentinel，等本節目 30+ 題到位再啟動
 - **新節目 onboarding flow（情境 B）** — admin 加 show 時看 cost preview + 必須 confirm + worker throttle + 進度面板；建議合進 `backfill-progress-admin-tab`
 - **R3.x 候選未 propose**：列舉型查詢 / topic seg 自動類別建議 / segment_categories admin UI / 業配段降權 multiplier / dict weight_in_lexical_query 通用化
 
@@ -151,6 +152,7 @@ R3 拆三段做（每段都跑 eval baseline 對照升幅）：
 
 | Change(s) | Archive 路徑 | 摘要 |
 |-----------|-------------|------|
+| **R3.5** `r3-5-disable-routing` + R3.4 + R3.2 milestone (6 個) | `openspec/changes/archive/2026-05-13-*` | **v1.7 milestone**：關掉 two-layer routing + 6 個 R3.x changes pair archive。Recall@5 (human-curated) 0.0625 → **0.4375 (7x)**、P95 2170ms。Golden set audit 移 36 LLM-auto 壞題、留 10 sentinel、加 staging 守門。各 archive design.md 都有「2026-05-13 archive follow-up」段說明 supersession 邏輯 |
 | `r2-1-citation-infra` + `r2-1-followup-bugs` + `r2-1-prompt-fix` | `openspec/changes/archive/2026-05-10-r2-1-*` | citation infrastructure（v1.6）：search 結果加 highlights / before/after_text / ai_summary 60 字 + 「展開」+「跳到這段內容」button + URL deep-link shareable + LLM prompt 加拒答模式 + citation parser strip [N]。**Faithfulness gate 重訂為軟 gate（≥ 0.50）**因 RCA 證實退步根因是 retrieval recall 15% + judge 對中文拒答打折，跟 UI 無關。Case study `docs/case-studies/r21-rca-deep-2026-05-10.md` |
 | `db-backup` | `openspec/changes/archive/2026-05-07-db-backup/` | 每日 03:00 UTC pg_dump → age → R2 離站；月度 GHA 還原驗證；7d/4w/12m retention。月成本 ~$1。Release log v1.3 |
 | `freemium-onboarding` | `openspec/changes/archive/2026-05-04-freemium-onboarding/` | LandingPage + 公開段落搜尋（IP rate limit 20/day）+ 登入解鎖 LLM 答案 + quota 申請流程。Release log v1.0 |

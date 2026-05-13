@@ -199,3 +199,18 @@ Constraints：
 1. 第一層 routing fallback 條件「query 字元 < 4」是否合適？或改用 jieba token 數 < 2？— 採後者（更精準）
 2. Topic seg 對 segment 邊界很短的（< 5 秒，譬如 Whisper 切的填詞）怎麼標？— 跟前一個 segment 同 label，或全部標 `meta`；採前者
 3. Audit endpoint 是否同時顯示前後 1-2 個 segment 上下文？— 是，列表呈現 `[prev_seg.text] [target_seg.text *with label*] [next_seg.text]` 三段對照
+
+---
+
+## 2026-05-13 archive follow-up — partial supersession by r3-5-disable-routing
+
+本 change 兩個主軸：
+1. **Topic segmentation backfill** — 全 corpus 跑完，topic 段 metadata 落盤；prod 用到的功能（segment_categories 等）保留。
+2. **Two-layer routing (`route_episodes`)** — 被 r3-5-disable-routing **整層關掉**：純人類 query Recall@5 從 0.0625 → 0.4375（routing 是 net negative）。
+
+archive 理由：
+- Topic seg backfill 部分已完成且 in prod，**保留**
+- Two-layer routing 部分 code 保留但 default 翻向 false（r3-5），未來若改 routing 為 hybrid（加 lexical 信號）才會考慮重新啟用
+- 本 change 未做完的剩餘 11 tasks 多為 routing-side eval / cleanup，已不再相關
+
+詳見 `r3-5-disable-routing` design.md D2（spike 證據）、D7（與本 change 的關係）。

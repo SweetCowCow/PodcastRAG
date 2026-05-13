@@ -172,178 +172,233 @@ code:
 ---
 ### Requirement: Semantic search endpoint returns ranked chunks
 
-The backend SHALL expose `POST /shows/{show_id}/search` which SHALL be guarded by the `optional_auth_with_ip_limit` dependency (see auth-system + ip-rate-limit capabilities). The endpoint accepts body `{"question": "<non-empty string>", "k": <optional int 1-50, default 8>}`. The endpoint SHALL embed the question using the configured embedding step, jieba-tokenise the question for lexical matching using the current custom dictionary (see tokenizer-dictionary capability), and perform hybrid retrieval combining semantic (pgvector cosine distance) and lexical (PostgreSQL tsvector ts_rank) signals via Reciprocal Rank Fusion. Retrieval SHALL be performed against `transcript_chunks` AND `episode_description_chunks` (see episode-description-index capability) filtered to the specified `show_id`, both ranked by RRF and then unioned, with the final top-K returned by descending RRF score. Each result SHALL carry a `source` discriminator equal to `"transcript"` or `"description"`. The endpoint SHALL NOT include any LLM-generated answer. The endpoint SHALL NOT decrement `quota_remaining` even for authenticated callers.
+The backend SHALL expose `POST /shows/{show_id}/search` guarded by `optional_auth_with_ip_limit`. The endpoint accepts body `{"question": "<non-empty string>", "k": <optional int 1-50, default 8>}`. The endpoint SHALL embed the question, jieba-tokenise it, **invoke `route_episodes()` (with skip rule for short queries)**, and run `retrieve_hybrid()` with the routed `episode_id_filter`. Each result SHALL carry a `source` discriminator equal to `"transcript"` or `"description"`. The endpoint SHALL NOT include any LLM-generated answer. The endpoint SHALL NOT decrement `quota_remaining` even for authenticated callers. The `DESCRIPTION_CAP` rule SHALL apply.
 
-#### Scenario: RRF combines semantic and lexical ranks
+#### Scenario: Anonymous request returns top-K with capped description mix
 
-- **GIVEN** `transcript_chunks` semantic top-50 returns chunk `A` at rank 3 and chunk `B` at rank 50
-- **AND** `transcript_chunks` lexical top-50 returns chunk `A` at rank 25 and chunk `B` at rank 1
-- **WHEN** the endpoint computes RRF scores with constant `k=60`
-- **THEN** chunk `A`'s RRF score SHALL equal `1/(60+3) + 1/(60+25)` and chunk `B`'s RRF score SHALL equal `1/(60+50) + 1/(60+1)`
-- **AND** chunk `A` SHALL rank higher (~0.0276 vs ~0.0255 — semantic-rank-3 contribution outweighs B's lexical-rank-1 with k=60)
+- **GIVEN** an unauthenticated visitor under the IP daily limit and a question yielding ≥ 2 multi-char jieba tokens
+- **WHEN** the visitor calls `POST /shows/{show_id}/search`
+- **THEN** routing SHALL run, hybrid retrieval SHALL apply the episode filter
+- **AND** the result SHALL contain at most 3 description hits within the returned 8
 
-#### Scenario: Chunk hit only on one side scored with placeholder rank
+#### Scenario: Short-query bypass for entity-only queries
 
-- **WHEN** chunk `C` is in the semantic top-50 at rank 10 but absent from the lexical top-50
-- **THEN** chunk `C`'s RRF score SHALL be computed using `1/(60+10) + 1/(60+999)` where the absent-side rank is treated as a sentinel beyond the cutoff
+- **GIVEN** a question whose jieba tokenisation yields < 2 tokens of length ≥ 2 (e.g. just "迪拉胖")
+- **WHEN** the search endpoint runs
+- **THEN** routing SHALL be skipped
+- **AND** `retrieve_hybrid()` SHALL run with `episode_id_filter=None`
 
-#### Scenario: Description and transcript results unified by RRF score
+#### Scenario: Search excludes other shows after routing
 
-- **GIVEN** a transcript chunk with RRF score 0.020 and a description chunk with RRF score 0.025
-- **WHEN** the endpoint constructs the final ranked list
-- **THEN** the description chunk SHALL appear before the transcript chunk in the response
-- **AND** each result SHALL include `source: "transcript"` or `source: "description"` matching its origin
-
-#### Scenario: Anonymous request under rate limit returns top-K hybrid results
-
-- **GIVEN** an unauthenticated visitor whose IP counter is 5 and `ip_search_rate_limit_per_day=20`
-- **WHEN** the visitor calls `POST /shows/{show_id}/search` with body `{"question": "歌單"}`
-- **THEN** the IP counter SHALL become 6
-- **AND** the embedding API SHALL be called once
-- **AND** jieba tokenisation SHALL run once on the question
-- **AND** the response SHALL be HTTP 200 with up to 8 ranked chunks (default k)
-- **AND** the response SHALL NOT contain an `answer` field
+- **WHEN** routing returns 10 `episode_id` for `show_id=A` and the second-layer query is issued
+- **THEN** the response SHALL NOT include any chunk whose owning episode belongs to `show_id=B`, regardless of similarity
 
 #### Scenario: Anonymous request over rate limit is rejected without embedding call
 
-- **GIVEN** an unauthenticated visitor whose IP counter is at the limit
+- **GIVEN** an unauthenticated visitor whose IP counter is at the daily limit
 - **WHEN** the visitor calls `POST /shows/{show_id}/search`
-- **THEN** the response SHALL be HTTP 429 with `error_code='ip_rate_limited'`
+- **THEN** the response SHALL be HTTP 429
 - **AND** no embedding API call SHALL be made
-
-#### Scenario: Authenticated request bypasses IP limit
-
-- **GIVEN** an authenticated user from an IP whose counter is at the daily limit
-- **WHEN** the user calls `POST /shows/{show_id}/search`
-- **THEN** the request SHALL be processed
-- **AND** the IP counter SHALL NOT be incremented
-- **AND** the response SHALL be HTTP 200 with hybrid ranked results
-- **AND** the user's `quota_remaining` SHALL NOT be decremented
-
-#### Scenario: Search excludes other shows
-
-- **WHEN** a search query is issued for `show_id=A` and a higher-scoring chunk exists for `show_id=B`
-- **THEN** the response SHALL NOT include any chunk (transcript or description) whose owning episode belongs to `show_id=B`
-
-#### Scenario: Search excludes incomplete transcripts
-
-- **WHEN** a search query is issued and one episode in the show has a transcript whose `status` is not `completed`
-- **THEN** the response SHALL NOT include any transcript chunk from that incomplete transcript
-- **AND** the response MAY still include the episode's description chunk if its description is non-empty
-
-#### Scenario: k parameter is clamped
-
-- **WHEN** the body has `{"k": 100}`
-- **THEN** the response SHALL contain at most 50 chunks (the documented upper bound)
 
 
 <!-- @trace
-source: r3-1-hybrid-retrieval
-updated: 2026-05-08
+source: r3-2-two-layer-topic-seg
+updated: 2026-05-13
 code:
-  - backend/eval/runs/r31-post/eval-this-not-that-cool-20260508T053656Z.json
-  - backend/eval/runs/r31-post-v3-w30/eval-this-not-that-cool-20260508T055624Z.json
-  - backend/eval/runs/r31-post/eval-this-not-that-cool-20260508T053656Z.md
-  - backend/eval/runs/r31-v4-k20/eval-this-not-that-cool-20260508T060609Z.json
-  - backend/scripts/rebuild_chunks.py
-  - backend/eval/runs/r31-v4-k20/eval-this-not-that-cool-20260508T060609Z.md
-  - backend/eval/runs/r31-post-v4-w30/eval-this-not-that-cool-20260508T060447Z.md
-  - backend/eval/runs/r31-v4-k8/eval-this-not-that-cool-20260508T060724Z.json
-  - backend/eval/runs/r31-v4-k8/eval-this-not-that-cool-20260508T060724Z.md
+  - backend/app/models/episode.py
+  - backend/app/models/transcript_segment.py
   - backend/app/api/admin/__init__.py
-  - backend/eval/runs/r31-post-w30/eval-this-not-that-cool-20260508T053824Z.json
-  - backend/eval/runs/r31-post-or-w30/eval-this-not-that-cool-20260508T054817Z.json
-  - backend/eval/runs/r31-post-v4-w30/eval-this-not-that-cool-20260508T060447Z.json
-  - backend/eval/runs/r31-post-w60/eval-this-not-that-cool-20260508T053914Z.json
+  - backend/alembic/versions/u9b0c1d2e3f4_add_embedding_v2_columns.py
+  - backend/app/schemas/tokenizer.py
   - backend/app/services/rag.py
+  - src/TranscriptPage.jsx
+  - src/ReleaseLogPage.jsx
+  - backend/app/services/topic_segmentation.py
+  - backend/app/models/transcript_chunk.py
+  - backend/eval/datasets/this-not-that-cool.json
+  - backend/app/services/description_rechunker.py
+  - backend/app/models/show.py
+  - backend/app/services/description_indexer.py
+  - backend/app/workers/tasks.py
+  - backend/app/services/embedding.py
+  - backend/app/models/tokenizer_term.py
+  - backend/app/api/admin/tokenizer.py
+  - backend/app/api/admin/topic_seg.py
+  - src/App.jsx
+  - backend/app/services/citation_parser.py
+  - backend/app/workers/celery_app.py
+  - src/AdminTopicSegAuditTab.jsx
+  - backend/scripts/backfill_topic_labels.py
+  - CLAUDE.md
+  - backend/alembic/versions/t8a9b0c1d2e3_chunking_version_description_chunks.py
+  - src/Shared.jsx
+  - backend/alembic/versions/s7f8a9b0c1d2_r32_topic_seg.py
+  - backend/app/api/admin/chunking_status.py
   - src/releaseLog.jsx
-  - backend/eval/runs/r31-post-v3-w30/eval-this-not-that-cool-20260508T055624Z.md
-  - backend/eval/runs/r31-post-w30/eval-this-not-that-cool-20260508T053824Z.md
-  - backend/app/services/chunking.py
-  - backend/eval/runs/r31-post-or-w30/eval-this-not-that-cool-20260508T054817Z.md
+  - backend/app/schemas/query.py
+  - backend/app/schemas/topic_seg.py
+  - backend/eval/scripts/build_golden_set.py
+  - backend/app/workers/topic_task.py
+  - src/QueryPage.jsx
+  - backend/eval/runners/run.py
+  - backend/app/models/episode_description_chunk.py
+  - backend/scripts/backfill_embedding_v2.py
+  - .github/workflows/backend-tests.yml
+  - backend/scripts/pilot_reembed_descriptions.py
+  - src/AdminTokenizerTab.jsx
+  - backend/app/services/key_resolver.py
+  - backend/scripts/cleanup_v1_description_chunks.py
+  - backend/app/api/query.py
   - docs/roadmap.md
-  - backend/scripts/build_jieba_seed_dict.py
-  - backend/eval/runs/r31-post-w60/eval-this-not-that-cool-20260508T053914Z.md
+  - backend/app/services/llm_prompts.py
+  - index.html
+  - src/AdminPage.jsx
+  - backend/app/services/tokenizer.py
+  - backend/eval/scripts/embedding_bakeoff.py
+  - backend/app/core/csrf.py
 tests:
-  - backend/tests/test_chunking_overlap.py
+  - backend/tests/test_eval_metric_level.py
+  - backend/tests/test_description_retrieval_prefer_v2.py
+  - backend/tests/test_rag_embedding_v2_flag.py
+  - backend/tests/test_qa_feedback_api.py
+  - backend/tests/test_description_chunker_120.py
   - backend/tests/test_rag_rrf.py
-  - backend/tests/test_rebuild_chunks.py
+  - backend/tests/test_description_rechunker.py
+  - backend/tests/test_topic_segmentation_persist.py
+  - backend/tests/test_tokenizer_show_name_filter.py
+  - backend/tests/test_ai_summary_full_field.py
+  - backend/tests/test_llm_prompts.py
+  - backend/tests/test_topic_segmentation.py
+  - backend/tests/test_citation_parser.py
+  - backend/tests/test_route_episodes.py
+  - backend/tests/test_admin_topic_seg.py
+  - backend/tests/test_embedding_v2_dual_write.py
+  - backend/tests/test_rag_retrieval_flags.py
+  - backend/tests/test_key_resolver.py
+  - backend/tests/test_error_responses.py
+  - backend/tests/test_strip_citations.py
+  - backend/tests/test_chunking_version_coexistence.py
+  - backend/tests/test_eval_runner_flags.py
+  - backend/tests/test_golden_set_dataset.py
+  - backend/tests/test_rag_query_response_shape.py
 -->
 
 ---
 ### Requirement: Chat endpoint answers with citations using Tier 2 RAG
 
-The backend SHALL expose `POST /shows/{show_id}/query` guarded by `require_authenticated_user` and atomic quota decrement (see user-quota). The endpoint SHALL execute the Tier 2 RAG pipeline: (1) if the request includes a non-empty `messages` history, rewrite the question to a standalone form using the configured rewrite model; (2) embed the (rewritten) question AND jieba-tokenise it; (3) retrieve top 8 results via the same hybrid (RRF) retrieval as `/search`, against both `transcript_chunks` and `episode_description_chunks`; (4) generate an answer using the configured answer model with the retrieved chunks as grounding, requesting structured JSON output containing `answer` and `used_chunk_ids`; (5) return the answer together with only the citation chunks referenced in `used_chunk_ids`. Description-source citations SHALL be presented to the answer model with a clear marker (e.g. `desc:<episode_id>`) distinguishing them from transcript citations (`ep:<episode_id>@<start_time>`). If JSON parsing of the model output fails, the endpoint SHALL fall back to returning the raw text as `answer` with all retrieved chunks as `citations`. This endpoint SHALL NOT accept anonymous callers and SHALL NOT consult the IP rate limit.
+The backend SHALL expose `POST /shows/{show_id}/query` guarded by `require_authenticated_user` and atomic quota decrement (see user-quota). The endpoint SHALL execute the Tier 2 RAG pipeline: (1) if the request includes a non-empty `messages` history, rewrite the question to a standalone form using the configured rewrite model; (2) embed the (rewritten) question AND jieba-tokenise it; (3) **invoke `route_episodes()` to obtain a top-10 episode filter (skipping routing for short queries per the routing-skip rule)**; (4) retrieve top 8 results via `retrieve_hybrid()` with the episode filter and the `DESCRIPTION_CAP` mix; (5) generate an answer using the configured answer model with the retrieved chunks as grounding, requesting structured JSON output containing `answer` and `used_chunk_ids`; (6) return the answer together with only the citation chunks referenced in `used_chunk_ids`. Description-source citations SHALL be presented to the answer model with a clear marker (e.g. `desc:<episode_id>`) distinguishing them from transcript citations (`ep:<episode_id>@<start_time>`). If JSON parsing of the model output fails, the endpoint SHALL fall back to returning the raw text as `answer` with all retrieved chunks as `citations`. This endpoint SHALL NOT accept anonymous callers and SHALL NOT consult the IP rate limit.
+
+#### Scenario: First turn skips rewrite but uses two-layer retrieval
+
+- **WHEN** a client calls `POST /shows/{show_id}/query` with an empty or missing `messages` array
+- **THEN** the endpoint SHALL NOT call the rewrite model, SHALL embed the original `question` directly, SHALL invoke `route_episodes()` then `retrieve_hybrid()` with the routing result as filter, and SHALL return an answer
+
+#### Scenario: Follow-up turn rewrites and re-routes
+
+- **WHEN** a client calls with non-empty `messages` history and a follow-up `question`
+- **THEN** the endpoint SHALL call the rewrite model, embed the rewrite, invoke `route_episodes()` with the rewritten embedding, then `retrieve_hybrid()` with that filter
 
 #### Scenario: Hybrid retrieval result feeds answer prompt
 
-- **WHEN** a chat-mode query is issued and hybrid retrieval returns 5 transcript chunks and 3 description chunks
-- **THEN** the answer prompt SHALL list all 8 results, each prefixed with `ep:<episode_id>@<start_time>` for transcripts or `desc:<episode_id>` for descriptions
-- **AND** the model is permitted to cite either form in `used_chunk_ids`
-
-#### Scenario: First turn skips rewrite
-
-- **WHEN** a client calls `POST /shows/{show_id}/query` with an empty or missing `messages` array
-- **THEN** the endpoint SHALL NOT call the rewrite model, SHALL embed the original `question` directly, SHALL retrieve via RRF, and SHALL return an answer
-
-#### Scenario: Follow-up turn uses rewritten question for retrieval
-
-- **WHEN** a client calls with a non-empty `messages` history and a new `question` containing a pronoun
-- **THEN** the endpoint SHALL call the rewrite model, SHALL use the rewrite output as the retrieval query, and the answer model SHALL receive the original messages plus the new question (not the rewritten form) as conversation input
+- **WHEN** a chat-mode query yields 5 transcript chunks and 3 description chunks (post-cap)
+- **THEN** the answer prompt SHALL list all 8 results with `ep:<episode_id>@<start_time>` and `desc:<episode_id>` prefixes respectively
 
 #### Scenario: Response includes only used citations
 
 - **WHEN** chat mode completes successfully and the model returns valid JSON with `used_chunk_ids`
-- **THEN** the response body SHALL contain `answer` (string) and `citations` (array containing only the chunks whose key appears in `used_chunk_ids`)
+- **THEN** the response body SHALL contain `answer` and `citations` (chunks whose key appears in `used_chunk_ids`)
 
 #### Scenario: Structured output parse failure falls back to full citations
 
-- **WHEN** the answer model returns output that cannot be parsed as JSON or lacks the `answer` key
-- **THEN** the endpoint SHALL treat the entire model output as the `answer` string and SHALL return all retrieved chunks as `citations`
-
-#### Scenario: Sliding window limit enforced
-
-- **WHEN** a client sends a `messages` array longer than 10 entries
-- **THEN** the endpoint SHALL use only the most recent 10 entries when building prompts
+- **WHEN** the answer model returns output that cannot be parsed as JSON or lacks `answer`
+- **THEN** the endpoint SHALL return the raw text as `answer` and all retrieved chunks as `citations`
 
 #### Scenario: Anonymous request rejected with 401
 
 - **WHEN** an unauthenticated request reaches `POST /shows/{show_id}/query`
-- **THEN** the response SHALL be HTTP 401 with `error_code='not_authenticated'`
-- **AND** no embedding or LLM API SHALL be called
+- **THEN** the response SHALL be HTTP 401
 
 
 <!-- @trace
-source: r3-1-hybrid-retrieval
-updated: 2026-05-08
+source: r3-2-two-layer-topic-seg
+updated: 2026-05-13
 code:
-  - backend/eval/runs/r31-post/eval-this-not-that-cool-20260508T053656Z.json
-  - backend/eval/runs/r31-post-v3-w30/eval-this-not-that-cool-20260508T055624Z.json
-  - backend/eval/runs/r31-post/eval-this-not-that-cool-20260508T053656Z.md
-  - backend/eval/runs/r31-v4-k20/eval-this-not-that-cool-20260508T060609Z.json
-  - backend/scripts/rebuild_chunks.py
-  - backend/eval/runs/r31-v4-k20/eval-this-not-that-cool-20260508T060609Z.md
-  - backend/eval/runs/r31-post-v4-w30/eval-this-not-that-cool-20260508T060447Z.md
-  - backend/eval/runs/r31-v4-k8/eval-this-not-that-cool-20260508T060724Z.json
-  - backend/eval/runs/r31-v4-k8/eval-this-not-that-cool-20260508T060724Z.md
+  - backend/app/models/episode.py
+  - backend/app/models/transcript_segment.py
   - backend/app/api/admin/__init__.py
-  - backend/eval/runs/r31-post-w30/eval-this-not-that-cool-20260508T053824Z.json
-  - backend/eval/runs/r31-post-or-w30/eval-this-not-that-cool-20260508T054817Z.json
-  - backend/eval/runs/r31-post-v4-w30/eval-this-not-that-cool-20260508T060447Z.json
-  - backend/eval/runs/r31-post-w60/eval-this-not-that-cool-20260508T053914Z.json
+  - backend/alembic/versions/u9b0c1d2e3f4_add_embedding_v2_columns.py
+  - backend/app/schemas/tokenizer.py
   - backend/app/services/rag.py
+  - src/TranscriptPage.jsx
+  - src/ReleaseLogPage.jsx
+  - backend/app/services/topic_segmentation.py
+  - backend/app/models/transcript_chunk.py
+  - backend/eval/datasets/this-not-that-cool.json
+  - backend/app/services/description_rechunker.py
+  - backend/app/models/show.py
+  - backend/app/services/description_indexer.py
+  - backend/app/workers/tasks.py
+  - backend/app/services/embedding.py
+  - backend/app/models/tokenizer_term.py
+  - backend/app/api/admin/tokenizer.py
+  - backend/app/api/admin/topic_seg.py
+  - src/App.jsx
+  - backend/app/services/citation_parser.py
+  - backend/app/workers/celery_app.py
+  - src/AdminTopicSegAuditTab.jsx
+  - backend/scripts/backfill_topic_labels.py
+  - CLAUDE.md
+  - backend/alembic/versions/t8a9b0c1d2e3_chunking_version_description_chunks.py
+  - src/Shared.jsx
+  - backend/alembic/versions/s7f8a9b0c1d2_r32_topic_seg.py
+  - backend/app/api/admin/chunking_status.py
   - src/releaseLog.jsx
-  - backend/eval/runs/r31-post-v3-w30/eval-this-not-that-cool-20260508T055624Z.md
-  - backend/eval/runs/r31-post-w30/eval-this-not-that-cool-20260508T053824Z.md
-  - backend/app/services/chunking.py
-  - backend/eval/runs/r31-post-or-w30/eval-this-not-that-cool-20260508T054817Z.md
+  - backend/app/schemas/query.py
+  - backend/app/schemas/topic_seg.py
+  - backend/eval/scripts/build_golden_set.py
+  - backend/app/workers/topic_task.py
+  - src/QueryPage.jsx
+  - backend/eval/runners/run.py
+  - backend/app/models/episode_description_chunk.py
+  - backend/scripts/backfill_embedding_v2.py
+  - .github/workflows/backend-tests.yml
+  - backend/scripts/pilot_reembed_descriptions.py
+  - src/AdminTokenizerTab.jsx
+  - backend/app/services/key_resolver.py
+  - backend/scripts/cleanup_v1_description_chunks.py
+  - backend/app/api/query.py
   - docs/roadmap.md
-  - backend/scripts/build_jieba_seed_dict.py
-  - backend/eval/runs/r31-post-w60/eval-this-not-that-cool-20260508T053914Z.md
+  - backend/app/services/llm_prompts.py
+  - index.html
+  - src/AdminPage.jsx
+  - backend/app/services/tokenizer.py
+  - backend/eval/scripts/embedding_bakeoff.py
+  - backend/app/core/csrf.py
 tests:
-  - backend/tests/test_chunking_overlap.py
+  - backend/tests/test_eval_metric_level.py
+  - backend/tests/test_description_retrieval_prefer_v2.py
+  - backend/tests/test_rag_embedding_v2_flag.py
+  - backend/tests/test_qa_feedback_api.py
+  - backend/tests/test_description_chunker_120.py
   - backend/tests/test_rag_rrf.py
-  - backend/tests/test_rebuild_chunks.py
+  - backend/tests/test_description_rechunker.py
+  - backend/tests/test_topic_segmentation_persist.py
+  - backend/tests/test_tokenizer_show_name_filter.py
+  - backend/tests/test_ai_summary_full_field.py
+  - backend/tests/test_llm_prompts.py
+  - backend/tests/test_topic_segmentation.py
+  - backend/tests/test_citation_parser.py
+  - backend/tests/test_route_episodes.py
+  - backend/tests/test_admin_topic_seg.py
+  - backend/tests/test_embedding_v2_dual_write.py
+  - backend/tests/test_rag_retrieval_flags.py
+  - backend/tests/test_key_resolver.py
+  - backend/tests/test_error_responses.py
+  - backend/tests/test_strip_citations.py
+  - backend/tests/test_chunking_version_coexistence.py
+  - backend/tests/test_eval_runner_flags.py
+  - backend/tests/test_golden_set_dataset.py
+  - backend/tests/test_rag_query_response_shape.py
 -->
 
 ---
@@ -956,3 +1011,642 @@ The DB SHALL have nullable `embedding_v2 vector(3072)` columns on both `transcri
 - **WHEN** `\d transcript_chunks` is inspected
 - **THEN** `embedding_v2` column SHALL NOT exist
 - **AND** `idx_transcript_chunks_emb_v2_cosine` SHALL NOT exist
+
+---
+### Requirement: `route_episodes` returns distinct episode_ids and prefers v2 ranking
+
+`_ROUTE_EPISODES_SQL` (the first-layer two-layer routing query in `backend/app/services/rag.py`) SHALL return at most `k` **distinct** episode_ids, not `k` chunk-row results. For each candidate episode, its representative cosine distance SHALL be computed from the episode's v2 chunks if it has any, falling back to v1 otherwise (same prefer-v2 policy as retrieval).
+
+The previous SQL `SELECT e.id ... ORDER BY d.embedding <=> :qv LIMIT :k` returned chunk-row level results, which after v1+v2 coexistence (~16× pool growth) caused 4-5 episodes' chunks to consume the top-10 budget, hard-filtering retrieval to the wrong episode set. See case study root cause #3.
+
+#### Scenario: Routing returns k distinct episode_ids
+
+- **GIVEN** a show has 10 v2 chunks for episode E1 and 1 v1 chunk for E2 (only)
+- **WHEN** `route_episodes(show_id, query_embedding, k=2)` is called
+- **THEN** the result SHALL contain exactly 2 elements: `[E1.id, E2.id]` (in any order)
+- **AND** the result SHALL NOT contain duplicate episode_ids
+
+#### Scenario: Routing prefers v2 chunks for ranking when present
+
+- **GIVEN** episode E has both v1 and v2 chunks
+- **WHEN** routing computes E's cosine distance for ranking purposes
+- **THEN** the distance SHALL be the minimum cosine distance over E's v2 chunks
+- **AND** E's v1 chunks SHALL NOT influence the distance value
+
+#### Scenario: Routing falls back to v1 when episode has no v2
+
+- **GIVEN** episode E has only v1 chunks (no v2)
+- **AND** another episode in the same show has v2 chunks
+- **WHEN** routing computes ranking
+- **THEN** E SHALL still be eligible for top-K via its v1 chunk's cosine distance
+
+---
+### Requirement: prefer-v2 SQL uses PG-friendly semi-join form
+
+The prefer-v2 WHERE clause in `_DESC_RRF_SQL`, `_DESC_SEMANTIC_ONLY_SQL`, and `_ROUTE_EPISODES_SQL` SHALL be written such that the PostgreSQL planner uses a hash semi-join (not a per-row nested loop subquery) for the "episodes-with-v2" sub-select. The implementation SHALL verify this via `EXPLAIN ANALYZE` against the pilot show before deploying.
+
+#### Scenario: EXPLAIN ANALYZE shows hash semi-join
+
+- **GIVEN** the modified retrieval SQL is run against a show with mixed v1/v2 chunks
+- **WHEN** `EXPLAIN ANALYZE SELECT ... FROM ...` is captured locally
+- **THEN** the plan SHALL include a `Hash Semi Join` or `Hash Anti Join` node (or equivalent)
+- **AND** SHALL NOT include a `SubPlan` that re-executes per outer row
+
+---
+### Requirement: Description chunks carry `chunking_version` and `chunk_index`
+
+The `episode_description_chunks` table SHALL include a `chunking_version smallint NOT NULL DEFAULT 1` column and a `chunk_index smallint NOT NULL DEFAULT 0` column. All rows existing before this migration SHALL be backfilled to `(chunking_version=1, chunk_index=0)` by the column DEFAULT. Newer chunking strategies (re-chunked variants) SHALL be written as rows with `chunking_version >= 2`. The chunk model SHALL expose both fields via SQLAlchemy.
+
+#### Scenario: Existing rows backfilled to v1
+
+- **GIVEN** rows existed in `episode_description_chunks` before this change
+- **WHEN** the migration `t8_chunking_version_description_chunks` runs `upgrade()`
+- **THEN** every existing row SHALL have `chunking_version = 1` and `chunk_index = 0`
+- **AND** the columns SHALL be `NOT NULL`
+
+#### Scenario: New rows can be written at v2
+
+- **GIVEN** the migration has been applied
+- **WHEN** an indexer writes a row with `chunking_version=2, chunk_index=0`
+- **THEN** the row SHALL be persisted without violating any constraint
+- **AND** a query for the same `episode_id` SHALL return both the v1 row and the v2 row
+
+---
+### Requirement: Composite unique on `(episode_id, chunking_version, chunk_index)` replaces per-episode unique
+
+The `episode_description_chunks` table SHALL NOT have a single-column `UNIQUE(episode_id)` constraint. It SHALL have a `UNIQUE(episode_id, chunking_version, chunk_index)` constraint named `uq_desc_chunk_episode_version_index`. Two rows that share `episode_id` but differ in `chunking_version` or `chunk_index` SHALL be allowed to coexist.
+
+#### Scenario: (episode, v1) and (episode, v2) coexist
+
+- **GIVEN** a row `(episode_id=E, chunking_version=1, chunk_index=0)` already exists
+- **WHEN** the indexer attempts to insert `(episode_id=E, chunking_version=2, chunk_index=0)`
+- **THEN** the insert SHALL succeed
+
+#### Scenario: Duplicate (episode, version, index) rejected
+
+- **GIVEN** a row `(episode_id=E, chunking_version=2, chunk_index=5)` exists
+- **WHEN** another insert with the same `(episode_id, chunking_version, chunk_index)` triplet runs
+- **THEN** the database SHALL trigger the UPSERT `on_conflict_do_update` path on the new constraint
+- **AND** no duplicate row SHALL be created
+
+---
+### Requirement: `retrieve_hybrid` pools v1 and v2 description chunks together
+
+The description-side hybrid retrieval SQL (`_DESC_RRF_SQL` and `_DESC_SEMANTIC_ONLY_SQL` in `backend/app/services/rag.py`) SHALL NOT filter rows by `chunking_version`. The RRF pool SHALL contain all `chunking_version` variants for a given show, and ranking SHALL be decided solely by hybrid score. Callers SHALL NOT need to specify a `chunking_version` to retrieve results.
+
+#### Scenario: Mixed v1+v2 pool ranks by score
+
+- **GIVEN** a show has both v1 and v2 description chunks for some of its episodes
+- **WHEN** `retrieve_descriptions()` is called for that show
+- **THEN** the result hits MAY include both v1 and v2 chunks
+- **AND** the ordering SHALL be by RRF score (or semantic distance when lexical pathway is empty), not by `chunking_version`
+
+---
+### Requirement: `ChunkHit` exposes `chunking_version` metadata
+
+The `ChunkHit` dataclass SHALL include a `chunking_version: int` field with default value `1`. For description hits, the value SHALL reflect the row's `chunking_version` column. For transcript hits, the value SHALL remain the default `1` (transcript chunks are not versioned by this change).
+
+#### Scenario: Description hit carries its row's version
+
+- **GIVEN** a v2 description chunk wins RRF and enters top-K
+- **WHEN** the API returns the corresponding `ChunkHit`
+- **THEN** `chunk_hit.chunking_version` SHALL equal `2`
+
+#### Scenario: Transcript hit defaults to v1
+
+- **GIVEN** a transcript chunk enters top-K
+- **WHEN** the API returns the corresponding `ChunkHit`
+- **THEN** `chunk_hit.chunking_version` SHALL equal `1`
+- **AND** no transcript-side query SHALL reference a `chunking_version` column
+
+---
+### Requirement: Dedup collapses same-episode multi-version description hits
+
+When two description hits from the same `episode_id` but different `chunking_version` both enter the candidate pool, the dedup step SHALL retain only the hit with the higher RRF score (or lower semantic distance when in semantic-only fallback). The retained hit's `chunking_version` and `chunk_index` SHALL be preserved as metadata.
+
+#### Scenario: v1 and v2 hits from same episode collapsed
+
+- **GIVEN** a candidate pool contains `(episode=E, source=description, v=1, score=0.4)` and `(episode=E, source=description, v=2, score=0.6)`
+- **WHEN** the dedup step runs
+- **THEN** the output SHALL contain exactly one hit for episode E
+- **AND** that hit SHALL have `chunking_version = 2`
+
+---
+### Requirement: Description indexer accepts `chunking_version` and `chunk_index` keyword parameters
+
+`index_episode_description()` in `backend/app/services/description_indexer.py` SHALL accept keyword-only parameters `chunking_version: int = 1` and `chunk_index: int = 0`. The UPSERT SHALL key conflict resolution on the composite `(episode_id, chunking_version, chunk_index)` index. The empty-content delete pathway SHALL scope its `DELETE` to the same `(episode_id, chunking_version)` pair so it does not remove rows of another version.
+
+#### Scenario: Default call writes v1 row
+
+- **GIVEN** an existing caller invokes `index_episode_description(episode_id=E, text="...")` without naming `chunking_version`
+- **WHEN** the indexer runs
+- **THEN** the row written SHALL have `chunking_version=1, chunk_index=0`
+- **AND** behaviour SHALL be identical to pre-change behaviour for v1-only data
+
+#### Scenario: Versioned call writes v2 row without disturbing v1
+
+- **GIVEN** a v1 row for episode E already exists
+- **WHEN** `index_episode_description(episode_id=E, chunking_version=2, chunk_index=3, text="...")` is called
+- **THEN** a new row `(E, 2, 3)` SHALL be inserted
+- **AND** the existing `(E, 1, 0)` row SHALL remain unchanged
+
+#### Scenario: Empty-content delete only scoped to one version
+
+- **GIVEN** episode E has both v1 and v2 description rows
+- **WHEN** `index_episode_description(episode_id=E, chunking_version=2, text="")` runs and triggers the delete-existing-empty pathway
+- **THEN** only `(E, 2, *)` rows SHALL be deleted
+- **AND** `(E, 1, *)` rows SHALL remain in place
+
+---
+### Requirement: `cleanup_v1_description_chunks.py` script is idempotent, dry-run-default, and v2-aware
+
+The cleanup script at `backend/scripts/cleanup_v1_description_chunks.py` SHALL require `--show-id`. Without `--execute` it SHALL only print a plan (dry-run). It SHALL refuse to delete v1 rows for any show where at least one episode has no v2 chunk, unless `--force` is supplied. Deletion SHALL be scoped to `WHERE show_id = ? AND chunking_version = 1` and SHALL be per-episode transactional.
+
+#### Scenario: Dry-run prints plan only
+
+- **GIVEN** the script is invoked without `--execute`
+- **WHEN** it finishes
+- **THEN** no `DELETE` SHALL have been issued
+- **AND** the printed plan SHALL include episode counts (`total`, `with_v2`, `missing_v2`)
+
+#### Scenario: Refuses to delete when episodes lack v2 chunks
+
+- **GIVEN** a show has 163 episodes but only 100 have v2 chunks
+- **WHEN** the script runs with `--execute` but without `--force`
+- **THEN** it SHALL exit with non-zero status
+- **AND** no v1 rows SHALL be deleted
+
+#### Scenario: --force overrides safeguard
+
+- **GIVEN** the same condition as above
+- **WHEN** the script runs with `--execute --force`
+- **THEN** all v1 rows for the given show SHALL be deleted
+- **AND** the operator SHALL accept the consequence that 63 episodes will have no description chunk afterwards
+
+---
+### Requirement: `chunking-status` admin endpoint reports v1/v2 breakdown
+
+`GET /admin/chunking-status` SHALL be available to admin-authenticated requests and SHALL return, for every show, the episode total, the count of v1 description chunks, and the count of v2 description chunks. Non-admin callers SHALL receive `401` or `403`.
+
+#### Scenario: Admin sees per-show breakdown
+
+- **GIVEN** an admin-authenticated session
+- **WHEN** the client requests `GET /admin/chunking-status`
+- **THEN** the response SHALL contain one entry per show with `show_id`, `title`, `episode_total`, `v1_chunks`, `v2_chunks`
+- **AND** for a show that has not yet been re-chunked, `v2_chunks` SHALL equal `0`
+
+#### Scenario: Non-admin rejected
+
+- **GIVEN** a non-admin or unauthenticated request
+- **WHEN** it hits `GET /admin/chunking-status`
+- **THEN** the response status SHALL be `401` or `403`
+
+---
+### Requirement: Description hit cap is tunable via `RAG_DESCRIPTION_CAP` env
+
+The backend SHALL read `RAG_DESCRIPTION_CAP` at module import time. The value SHALL be an integer >= 0 and SHALL override the in-code `DESCRIPTION_CAP` constant used by `retrieve_hybrid` to bound the number of `source == "description"` hits in the top-K result. When `RAG_DESCRIPTION_CAP` is unset, malformed (non-integer), or negative, the in-code default SHALL be used and a single warning SHALL be logged to stderr describing the fallback. Changing this env variable SHALL require a service restart to take effect.
+
+#### Scenario: env unset uses in-code default
+
+- **GIVEN** `RAG_DESCRIPTION_CAP` is unset
+- **WHEN** the backend imports `app.services.rag`
+- **THEN** the runtime cap SHALL equal the in-code `DESCRIPTION_CAP` default
+- **AND** no warning SHALL be logged
+
+#### Scenario: env value 0 fully excludes description hits
+
+- **GIVEN** `RAG_DESCRIPTION_CAP=0`
+- **WHEN** `/shows/{show_id}/search` is invoked with a question that would normally produce description hits
+- **THEN** the response top-K SHALL contain zero items with `source == "description"`
+
+#### Scenario: malformed env falls back with warning
+
+- **GIVEN** `RAG_DESCRIPTION_CAP=abc`
+- **WHEN** the backend imports `app.services.rag`
+- **THEN** the runtime cap SHALL equal the in-code default
+- **AND** a single warning line SHALL be emitted on stderr naming both the malformed value and the fallback value
+
+
+<!-- @trace
+source: r3-2-retrieval-fix
+updated: 2026-05-13
+code:
+  - backend/app/services/description_indexer.py
+  - backend/eval/scripts/build_golden_set.py
+  - backend/app/api/admin/chunking_status.py
+  - backend/eval/scripts/embedding_bakeoff.py
+  - backend/eval/datasets/this-not-that-cool.json
+  - backend/app/workers/tasks.py
+  - backend/scripts/pilot_reembed_descriptions.py
+  - backend/app/services/description_rechunker.py
+  - src/releaseLog.jsx
+  - backend/app/models/transcript_chunk.py
+  - backend/app/services/rag.py
+  - backend/app/services/key_resolver.py
+  - backend/scripts/cleanup_v1_description_chunks.py
+  - backend/alembic/versions/u9b0c1d2e3f4_add_embedding_v2_columns.py
+  - backend/app/models/episode.py
+  - backend/app/models/episode_description_chunk.py
+  - backend/alembic/versions/t8a9b0c1d2e3_chunking_version_description_chunks.py
+  - backend/app/services/embedding.py
+  - backend/scripts/backfill_embedding_v2.py
+  - backend/app/api/admin/__init__.py
+  - docs/roadmap.md
+tests:
+  - backend/tests/test_embedding_v2_dual_write.py
+  - backend/tests/test_description_retrieval_prefer_v2.py
+  - backend/tests/test_golden_set_dataset.py
+  - backend/tests/test_rag_retrieval_flags.py
+  - backend/tests/test_chunking_version_coexistence.py
+  - backend/tests/test_description_rechunker.py
+  - backend/tests/test_key_resolver.py
+  - backend/tests/test_description_chunker_120.py
+  - backend/tests/test_rag_embedding_v2_flag.py
+-->
+
+---
+### Requirement: Show-name term filtering is tunable via `RAG_SHOW_NAME_FILTER` env
+
+The backend SHALL read `RAG_SHOW_NAME_FILTER` at module import time. When the value (case-insensitive) is `"false"`, `"0"`, or `"off"`, the `_build_ts_query` lexical query builder SHALL NOT drop tokens listed in `tokenizer.get_show_name_terms()`. Any other value (or unset) SHALL preserve current strip behaviour. The semantic / embedding path SHALL be unaffected regardless of this flag. Changing this env variable SHALL require a service restart to take effect.
+
+#### Scenario: env unset preserves current strip behaviour
+
+- **GIVEN** `RAG_SHOW_NAME_FILTER` is unset
+- **AND** `tokenizer.get_show_name_terms()` contains `"這又沒有很屌"`
+- **WHEN** `_build_ts_query("節目名「這又沒有很屌」是怎麼來的？")` is called
+- **THEN** the returned tsquery SHALL NOT contain `"這又沒有很屌"` as a term
+
+#### Scenario: env set to false retains show-name tokens
+
+- **GIVEN** `RAG_SHOW_NAME_FILTER=false`
+- **AND** `tokenizer.get_show_name_terms()` contains `"這又沒有很屌"`
+- **WHEN** `_build_ts_query("節目名「這又沒有很屌」是怎麼來的？")` is called
+- **THEN** the returned tsquery SHALL contain `"這又沒有很屌"` as a term
+
+#### Scenario: embedding side never affected
+
+- **GIVEN** any value of `RAG_SHOW_NAME_FILTER`
+- **WHEN** `/shows/{show_id}/search` embeds the question
+- **THEN** the full question text (including any show-name term) SHALL be embedded; no token SHALL be stripped from the embedding input
+
+<!-- @trace
+source: r3-2-retrieval-fix
+updated: 2026-05-13
+code:
+  - backend/app/services/description_indexer.py
+  - backend/eval/scripts/build_golden_set.py
+  - backend/app/api/admin/chunking_status.py
+  - backend/eval/scripts/embedding_bakeoff.py
+  - backend/eval/datasets/this-not-that-cool.json
+  - backend/app/workers/tasks.py
+  - backend/scripts/pilot_reembed_descriptions.py
+  - backend/app/services/description_rechunker.py
+  - src/releaseLog.jsx
+  - backend/app/models/transcript_chunk.py
+  - backend/app/services/rag.py
+  - backend/app/services/key_resolver.py
+  - backend/scripts/cleanup_v1_description_chunks.py
+  - backend/alembic/versions/u9b0c1d2e3f4_add_embedding_v2_columns.py
+  - backend/app/models/episode.py
+  - backend/app/models/episode_description_chunk.py
+  - backend/alembic/versions/t8a9b0c1d2e3_chunking_version_description_chunks.py
+  - backend/app/services/embedding.py
+  - backend/scripts/backfill_embedding_v2.py
+  - backend/app/api/admin/__init__.py
+  - docs/roadmap.md
+tests:
+  - backend/tests/test_embedding_v2_dual_write.py
+  - backend/tests/test_description_retrieval_prefer_v2.py
+  - backend/tests/test_golden_set_dataset.py
+  - backend/tests/test_rag_retrieval_flags.py
+  - backend/tests/test_chunking_version_coexistence.py
+  - backend/tests/test_description_rechunker.py
+  - backend/tests/test_key_resolver.py
+  - backend/tests/test_description_chunker_120.py
+  - backend/tests/test_rag_embedding_v2_flag.py
+-->
+
+---
+### Requirement: Two-layer retrieval — first-layer episode routing
+
+The retrieval pipeline SHALL contain a first-layer routing step `route_episodes(db, show_id, query_embedding, k=10)` that returns the top-`k` `episode_id` values for the query, ranked solely by cosine similarity between `query_embedding` and `episode_description_chunks.embedding`. The routing SHALL JOIN through `episodes` to enforce the `show_id` filter and SHALL exclude episodes whose description chunk is missing.
+
+The default `k` SHALL be 10. Routing SHALL be skipped when the question text yields fewer than 2 jieba tokens of length ≥ 2 (entity-only or single-word queries) — in that case the second-layer hybrid retrieval SHALL run against the full show without an episode filter.
+
+#### Scenario: Top-10 episodes returned by description cosine
+
+- **GIVEN** a show with 162 episodes each carrying a non-null `episode_description_chunks` row
+- **WHEN** `route_episodes(db, show_id, query_embedding, k=10)` is called
+- **THEN** exactly 10 `episode_id` values SHALL be returned
+- **AND** the values SHALL be ordered by ascending cosine distance to `query_embedding`
+
+#### Scenario: Skip routing for entity-only short query
+
+- **GIVEN** a question containing only one jieba token of length ≥ 2 (e.g. just "迪拉胖")
+- **WHEN** the search endpoint runs
+- **THEN** routing SHALL NOT be invoked
+- **AND** the second-layer hybrid retrieval SHALL run against the entire show
+
+#### Scenario: Routing limited by show
+
+- **WHEN** routing is invoked for `show_id=A` while another show `B` has higher-similarity descriptions
+- **THEN** the returned `episode_id` list SHALL contain only episodes whose `episodes.show_id = A`
+
+
+<!-- @trace
+source: r3-2-two-layer-topic-seg
+updated: 2026-05-13
+code:
+  - backend/app/models/episode.py
+  - backend/app/models/transcript_segment.py
+  - backend/app/api/admin/__init__.py
+  - backend/alembic/versions/u9b0c1d2e3f4_add_embedding_v2_columns.py
+  - backend/app/schemas/tokenizer.py
+  - backend/app/services/rag.py
+  - src/TranscriptPage.jsx
+  - src/ReleaseLogPage.jsx
+  - backend/app/services/topic_segmentation.py
+  - backend/app/models/transcript_chunk.py
+  - backend/eval/datasets/this-not-that-cool.json
+  - backend/app/services/description_rechunker.py
+  - backend/app/models/show.py
+  - backend/app/services/description_indexer.py
+  - backend/app/workers/tasks.py
+  - backend/app/services/embedding.py
+  - backend/app/models/tokenizer_term.py
+  - backend/app/api/admin/tokenizer.py
+  - backend/app/api/admin/topic_seg.py
+  - src/App.jsx
+  - backend/app/services/citation_parser.py
+  - backend/app/workers/celery_app.py
+  - src/AdminTopicSegAuditTab.jsx
+  - backend/scripts/backfill_topic_labels.py
+  - CLAUDE.md
+  - backend/alembic/versions/t8a9b0c1d2e3_chunking_version_description_chunks.py
+  - src/Shared.jsx
+  - backend/alembic/versions/s7f8a9b0c1d2_r32_topic_seg.py
+  - backend/app/api/admin/chunking_status.py
+  - src/releaseLog.jsx
+  - backend/app/schemas/query.py
+  - backend/app/schemas/topic_seg.py
+  - backend/eval/scripts/build_golden_set.py
+  - backend/app/workers/topic_task.py
+  - src/QueryPage.jsx
+  - backend/eval/runners/run.py
+  - backend/app/models/episode_description_chunk.py
+  - backend/scripts/backfill_embedding_v2.py
+  - .github/workflows/backend-tests.yml
+  - backend/scripts/pilot_reembed_descriptions.py
+  - src/AdminTokenizerTab.jsx
+  - backend/app/services/key_resolver.py
+  - backend/scripts/cleanup_v1_description_chunks.py
+  - backend/app/api/query.py
+  - docs/roadmap.md
+  - backend/app/services/llm_prompts.py
+  - index.html
+  - src/AdminPage.jsx
+  - backend/app/services/tokenizer.py
+  - backend/eval/scripts/embedding_bakeoff.py
+  - backend/app/core/csrf.py
+tests:
+  - backend/tests/test_eval_metric_level.py
+  - backend/tests/test_description_retrieval_prefer_v2.py
+  - backend/tests/test_rag_embedding_v2_flag.py
+  - backend/tests/test_qa_feedback_api.py
+  - backend/tests/test_description_chunker_120.py
+  - backend/tests/test_rag_rrf.py
+  - backend/tests/test_description_rechunker.py
+  - backend/tests/test_topic_segmentation_persist.py
+  - backend/tests/test_tokenizer_show_name_filter.py
+  - backend/tests/test_ai_summary_full_field.py
+  - backend/tests/test_llm_prompts.py
+  - backend/tests/test_topic_segmentation.py
+  - backend/tests/test_citation_parser.py
+  - backend/tests/test_route_episodes.py
+  - backend/tests/test_admin_topic_seg.py
+  - backend/tests/test_embedding_v2_dual_write.py
+  - backend/tests/test_rag_retrieval_flags.py
+  - backend/tests/test_key_resolver.py
+  - backend/tests/test_error_responses.py
+  - backend/tests/test_strip_citations.py
+  - backend/tests/test_chunking_version_coexistence.py
+  - backend/tests/test_eval_runner_flags.py
+  - backend/tests/test_golden_set_dataset.py
+  - backend/tests/test_rag_query_response_shape.py
+-->
+
+---
+### Requirement: Two-layer retrieval — second-layer episode-filtered hybrid
+
+`retrieve_hybrid(db, show_id, query_embedding, question, k=8, episode_id_filter=None)` SHALL accept an optional `episode_id_filter: list[UUID] | None` parameter. When provided and non-empty, both the transcript-side and description-side CTEs SHALL include `episode_id IN :episode_id_filter` in their `WHERE` clauses (joining through `episodes` for transcript_chunks).
+
+When `episode_id_filter` is `None` or empty, the function SHALL behave identically to its R3.1 form (search across the entire show).
+
+#### Scenario: Filter restricts both sides
+
+- **GIVEN** `episode_id_filter = [E1, E2, E3]`
+- **WHEN** `retrieve_hybrid` is called
+- **THEN** every result SHALL belong to one of `{E1, E2, E3}`
+- **AND** transcript chunks from other episodes SHALL NOT appear even if their semantic distance is lower
+
+#### Scenario: None filter falls back to full show
+
+- **WHEN** `retrieve_hybrid(...)` is called with `episode_id_filter=None`
+- **THEN** the SQL SHALL omit the `episode_id IN ...` predicate
+- **AND** the result set SHALL be identical to R3.1 behaviour
+
+
+<!-- @trace
+source: r3-2-two-layer-topic-seg
+updated: 2026-05-13
+code:
+  - backend/app/models/episode.py
+  - backend/app/models/transcript_segment.py
+  - backend/app/api/admin/__init__.py
+  - backend/alembic/versions/u9b0c1d2e3f4_add_embedding_v2_columns.py
+  - backend/app/schemas/tokenizer.py
+  - backend/app/services/rag.py
+  - src/TranscriptPage.jsx
+  - src/ReleaseLogPage.jsx
+  - backend/app/services/topic_segmentation.py
+  - backend/app/models/transcript_chunk.py
+  - backend/eval/datasets/this-not-that-cool.json
+  - backend/app/services/description_rechunker.py
+  - backend/app/models/show.py
+  - backend/app/services/description_indexer.py
+  - backend/app/workers/tasks.py
+  - backend/app/services/embedding.py
+  - backend/app/models/tokenizer_term.py
+  - backend/app/api/admin/tokenizer.py
+  - backend/app/api/admin/topic_seg.py
+  - src/App.jsx
+  - backend/app/services/citation_parser.py
+  - backend/app/workers/celery_app.py
+  - src/AdminTopicSegAuditTab.jsx
+  - backend/scripts/backfill_topic_labels.py
+  - CLAUDE.md
+  - backend/alembic/versions/t8a9b0c1d2e3_chunking_version_description_chunks.py
+  - src/Shared.jsx
+  - backend/alembic/versions/s7f8a9b0c1d2_r32_topic_seg.py
+  - backend/app/api/admin/chunking_status.py
+  - src/releaseLog.jsx
+  - backend/app/schemas/query.py
+  - backend/app/schemas/topic_seg.py
+  - backend/eval/scripts/build_golden_set.py
+  - backend/app/workers/topic_task.py
+  - src/QueryPage.jsx
+  - backend/eval/runners/run.py
+  - backend/app/models/episode_description_chunk.py
+  - backend/scripts/backfill_embedding_v2.py
+  - .github/workflows/backend-tests.yml
+  - backend/scripts/pilot_reembed_descriptions.py
+  - src/AdminTokenizerTab.jsx
+  - backend/app/services/key_resolver.py
+  - backend/scripts/cleanup_v1_description_chunks.py
+  - backend/app/api/query.py
+  - docs/roadmap.md
+  - backend/app/services/llm_prompts.py
+  - index.html
+  - src/AdminPage.jsx
+  - backend/app/services/tokenizer.py
+  - backend/eval/scripts/embedding_bakeoff.py
+  - backend/app/core/csrf.py
+tests:
+  - backend/tests/test_eval_metric_level.py
+  - backend/tests/test_description_retrieval_prefer_v2.py
+  - backend/tests/test_rag_embedding_v2_flag.py
+  - backend/tests/test_qa_feedback_api.py
+  - backend/tests/test_description_chunker_120.py
+  - backend/tests/test_rag_rrf.py
+  - backend/tests/test_description_rechunker.py
+  - backend/tests/test_topic_segmentation_persist.py
+  - backend/tests/test_tokenizer_show_name_filter.py
+  - backend/tests/test_ai_summary_full_field.py
+  - backend/tests/test_llm_prompts.py
+  - backend/tests/test_topic_segmentation.py
+  - backend/tests/test_citation_parser.py
+  - backend/tests/test_route_episodes.py
+  - backend/tests/test_admin_topic_seg.py
+  - backend/tests/test_embedding_v2_dual_write.py
+  - backend/tests/test_rag_retrieval_flags.py
+  - backend/tests/test_key_resolver.py
+  - backend/tests/test_error_responses.py
+  - backend/tests/test_strip_citations.py
+  - backend/tests/test_chunking_version_coexistence.py
+  - backend/tests/test_eval_runner_flags.py
+  - backend/tests/test_golden_set_dataset.py
+  - backend/tests/test_rag_query_response_shape.py
+-->
+
+---
+### Requirement: Description hits capped in top-K
+
+The merge step inside `retrieve_hybrid` SHALL cap the number of `source='description'` hits in the returned top-K to at most `DESCRIPTION_CAP` (a named constant in `backend/app/services/rag.py`). The cap SHALL default to 3. Excess description hits SHALL be replaced (in rank order) by the next-best transcript hits if any are available; if no transcript replacements remain, the description hits SHALL be returned to fill the slot.
+
+#### Scenario: Cap of 3 description hits
+
+- **GIVEN** RRF-merged ranking yields 5 description hits before any transcript hit
+- **WHEN** the function returns top-K=8
+- **THEN** the result SHALL contain at most 3 description hits
+- **AND** at least 5 transcript hits if that many exist post-merge
+
+#### Scenario: Cap waived when transcript pool is exhausted
+
+- **GIVEN** RRF-merged ranking yields 4 description hits and 0 transcript hits (e.g. show with empty transcript_chunks)
+- **WHEN** the function returns top-K=8
+- **THEN** the result MAY contain all 4 description hits even though that exceeds `DESCRIPTION_CAP`
+
+##### Example: Cap behaviour
+
+| RRF order | source | included in top-8? |
+| --- | --- | --- |
+| 1 | description | yes (1/3) |
+| 2 | description | yes (2/3) |
+| 3 | description | yes (3/3) |
+| 4 | description | no (cap hit) |
+| 5 | transcript | yes |
+| 6 | description | no |
+| 7 | transcript | yes |
+| 8 | transcript | yes |
+
+<!-- @trace
+source: r3-2-two-layer-topic-seg
+updated: 2026-05-13
+code:
+  - backend/app/models/episode.py
+  - backend/app/models/transcript_segment.py
+  - backend/app/api/admin/__init__.py
+  - backend/alembic/versions/u9b0c1d2e3f4_add_embedding_v2_columns.py
+  - backend/app/schemas/tokenizer.py
+  - backend/app/services/rag.py
+  - src/TranscriptPage.jsx
+  - src/ReleaseLogPage.jsx
+  - backend/app/services/topic_segmentation.py
+  - backend/app/models/transcript_chunk.py
+  - backend/eval/datasets/this-not-that-cool.json
+  - backend/app/services/description_rechunker.py
+  - backend/app/models/show.py
+  - backend/app/services/description_indexer.py
+  - backend/app/workers/tasks.py
+  - backend/app/services/embedding.py
+  - backend/app/models/tokenizer_term.py
+  - backend/app/api/admin/tokenizer.py
+  - backend/app/api/admin/topic_seg.py
+  - src/App.jsx
+  - backend/app/services/citation_parser.py
+  - backend/app/workers/celery_app.py
+  - src/AdminTopicSegAuditTab.jsx
+  - backend/scripts/backfill_topic_labels.py
+  - CLAUDE.md
+  - backend/alembic/versions/t8a9b0c1d2e3_chunking_version_description_chunks.py
+  - src/Shared.jsx
+  - backend/alembic/versions/s7f8a9b0c1d2_r32_topic_seg.py
+  - backend/app/api/admin/chunking_status.py
+  - src/releaseLog.jsx
+  - backend/app/schemas/query.py
+  - backend/app/schemas/topic_seg.py
+  - backend/eval/scripts/build_golden_set.py
+  - backend/app/workers/topic_task.py
+  - src/QueryPage.jsx
+  - backend/eval/runners/run.py
+  - backend/app/models/episode_description_chunk.py
+  - backend/scripts/backfill_embedding_v2.py
+  - .github/workflows/backend-tests.yml
+  - backend/scripts/pilot_reembed_descriptions.py
+  - src/AdminTokenizerTab.jsx
+  - backend/app/services/key_resolver.py
+  - backend/scripts/cleanup_v1_description_chunks.py
+  - backend/app/api/query.py
+  - docs/roadmap.md
+  - backend/app/services/llm_prompts.py
+  - index.html
+  - src/AdminPage.jsx
+  - backend/app/services/tokenizer.py
+  - backend/eval/scripts/embedding_bakeoff.py
+  - backend/app/core/csrf.py
+tests:
+  - backend/tests/test_eval_metric_level.py
+  - backend/tests/test_description_retrieval_prefer_v2.py
+  - backend/tests/test_rag_embedding_v2_flag.py
+  - backend/tests/test_qa_feedback_api.py
+  - backend/tests/test_description_chunker_120.py
+  - backend/tests/test_rag_rrf.py
+  - backend/tests/test_description_rechunker.py
+  - backend/tests/test_topic_segmentation_persist.py
+  - backend/tests/test_tokenizer_show_name_filter.py
+  - backend/tests/test_ai_summary_full_field.py
+  - backend/tests/test_llm_prompts.py
+  - backend/tests/test_topic_segmentation.py
+  - backend/tests/test_citation_parser.py
+  - backend/tests/test_route_episodes.py
+  - backend/tests/test_admin_topic_seg.py
+  - backend/tests/test_embedding_v2_dual_write.py
+  - backend/tests/test_rag_retrieval_flags.py
+  - backend/tests/test_key_resolver.py
+  - backend/tests/test_error_responses.py
+  - backend/tests/test_strip_citations.py
+  - backend/tests/test_chunking_version_coexistence.py
+  - backend/tests/test_eval_runner_flags.py
+  - backend/tests/test_golden_set_dataset.py
+  - backend/tests/test_rag_query_response_shape.py
+-->
