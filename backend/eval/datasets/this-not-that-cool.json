@@ -7,6 +7,7 @@
     {
       "id": "q01-show-name-origin",
       "type": "fact",
+      "eval_mode": "chunk_id",
       "question": "節目名「這又沒有很屌」是怎麼來的？",
       "expected_answer_keywords": [
         "迪拉",
@@ -24,12 +25,12 @@
       ],
       "sentinel": true,
       "source_episode_id": "9359c207-1970-4ab4-acce-bf8d44967b68",
-      "scope": "exact",
       "notes": "EP1 04:10–05:00。迪拉的口頭禪+反應，反映他敢直接評論音樂好壞、不客套的個性。"
     },
     {
       "id": "q02-no-rap-championship",
       "type": "negative",
+      "eval_mode": "chunk_id",
       "question": "迪拉胖在 EP1 有提到自己得過什麼嘻哈大賽冠軍嗎？",
       "expected_answer_keywords": [
         "節目未提及",
@@ -40,12 +41,12 @@
       "ground_truth_chunk_ids": [],
       "sentinel": true,
       "source_episode_id": "9359c207-1970-4ab4-acce-bf8d44967b68",
-      "scope": "negative",
       "notes": "陷阱題：迪拉只提過自己當大嘻哈評審 + 顏色唱片公司老闆。RAG 不應幻覺出「冠軍」。預檢顯示 RAG 抓 EP27/EP68/EP80 大嘻哈相關段落但無冠軍內容，trap 設計有效。"
     },
     {
       "id": "q03-mid-age-opening-view",
       "type": "fact",
+      "eval_mode": "chunk_id",
       "question": "迪拉胖在 EP134 為什麼不挑一首振奮的開工歌？他選的歌想表達什麼概念？",
       "expected_answer_keywords": [
         "安身之處",
@@ -63,12 +64,12 @@
       ],
       "sentinel": true,
       "source_episode_id": "c1d87278-7dba-4fb1-930d-c2bd3a3461d2",
-      "scope": "exact",
       "notes": "EP134 28:10–34:30。45 歲的迪拉認為中老年人不需要每年重新振奮，需要找精神/物理上的安身之處。"
     },
     {
       "id": "q04-mid-age-anchor-change",
       "type": "comprehension",
+      "eval_mode": "chunk_id",
       "question": "節目裡迪拉怎麼描述中老年人的開工想法跟年輕時的差異？",
       "expected_answer_keywords": [
         "中老年",
@@ -86,12 +87,12 @@
       ],
       "sentinel": true,
       "source_episode_id": "c1d87278-7dba-4fb1-930d-c2bd3a3461d2",
-      "scope": "exact",
       "notes": "EP134 33:30–36:00。年輕時想做 ABC、達標就值得；中年改成想生活方式怎麼過、設小錨定（例如『家裡不能有過夜廚餘』）。"
     },
     {
       "id": "q05-uk-drill-features",
       "type": "code-switch",
+      "eval_mode": "chunk_id",
       "question": "節目裡他們怎麼形容英國 Drill 音樂的特色？提到哪些變體和類似藝人？",
       "expected_answer_keywords": [
         "drill",
@@ -108,12 +109,12 @@
       ],
       "sentinel": true,
       "source_episode_id": "c1d87278-7dba-4fb1-930d-c2bd3a3461d2",
-      "scope": "exact",
       "notes": "EP134 16:30–18:30。中英夾雜：drill / grime / sexy drill (中文翻『性感磚』) / quick out / Pop Smoke / Fred Again / Central Cee。 | 2026-05-13 audit: EP66 @ 23:43 也在講英國藝人 ego（與 UK Drill 文化相關，補進 anchor）。"
     },
     {
       "id": "q06-pei-shezhang-recipe",
       "type": "fact",
+      "eval_mode": "chunk_id",
       "question": "迪拉去試音《也好吃》那天遇到誰？對方做了什麼？",
       "expected_answer_keywords": [
         "裴社長",
@@ -130,12 +131,12 @@
       ],
       "sentinel": true,
       "source_episode_id": "6c5ce32f-fb37-4aa0-b72c-7d14a7c1c163",
-      "scope": "exact",
       "notes": "EP143 01:00–03:30。鏡週刊裴偉社長；裴問迪拉用什麼麵（辛拉麵），送食譜。靠裴社長的台塑招待所牛小排配方可在家複刻（前提：要先吃過原版）。"
     },
     {
       "id": "q07-home-flavor-definition",
       "type": "comprehension",
+      "eval_mode": "chunk_id",
       "question": "迪拉跟馬世芳怎麼定義『家常味』？為什麼家常菜可以天天吃，但 Fine dining 不行？",
       "expected_answer_keywords": [
         "家常味",
@@ -152,12 +153,12 @@
       ],
       "sentinel": true,
       "source_episode_id": "6c5ce32f-fb37-4aa0-b72c-7d14a7c1c163",
-      "scope": "exact",
       "notes": "EP143 50:30–53:00。家常菜是『全世界最客製化的餐廳』；可以天天吃是因為從小味覺記憶形成時就接受了這個系統，雙向的（家人知道你的胃口、你也習慣了那個味道）。"
     },
     {
       "id": "q08-no-yanse-release-here",
       "type": "negative",
+      "eval_mode": "chunk_id",
       "question": "迪拉胖在 EP143 有提到他的廠牌顏色今年會發行哪些新專輯嗎？",
       "expected_answer_keywords": [
         "節目未提及",
@@ -168,12 +169,12 @@
       "ground_truth_chunk_ids": [],
       "sentinel": true,
       "source_episode_id": "6c5ce32f-fb37-4aa0-b72c-7d14a7c1c163",
-      "scope": "negative",
       "notes": "陷阱題：EP143 整集都在聊家常菜跟馬芳的書《也好吃》，沒講顏色發行。RAG 不應把 EP134 的 Leo 薯條雷鬼/雲端司機 Fish in the Tank 混進來。"
     },
     {
       "id": "q09-host-roster-change",
       "type": "cross-episode",
+      "eval_mode": "open_set_lenient",
       "question": "《這又沒有很屌》從第一集到 EP134，主持人陣容有什麼變化？",
       "expected_answer_keywords": [
         "迪拉",
@@ -193,12 +194,12 @@
       ],
       "sentinel": true,
       "source_episode_id": "9359c207-1970-4ab4-acce-bf8d44967b68",
-      "scope": "narrowed_two_anchor",
       "notes": "Cross-episode (option A 窄化版)。EP1 三人（迪拉/方品融/杜忠祐）→ EP134 四人（多了阿鳴）。Ground truth 鎖定兩集 intro 自介段；retrieve 抓到中間集解釋阿鳴何時加入也算對 (lenient)。預檢：『阿鳴第一次來上節目』未精準命中我們三集，但兩 anchor intro 段對照仍可由 retrieval 覆蓋。"
     },
     {
       "id": "q10-shelter-concept-cross-ep",
       "type": "cross-episode",
+      "eval_mode": "open_set_lenient",
       "question": "迪拉在《這又沒有很屌》裡有講過『安身之處』或『被照顧到』這個概念嗎？",
       "expected_answer_keywords": [
         "安身之處",
@@ -217,7 +218,6 @@
       ],
       "sentinel": true,
       "source_episode_id": "c1d87278-7dba-4fb1-930d-c2bd3a3461d2",
-      "scope": "open_set_lenient",
       "notes": "Cross-episode (option B open-set + C 預檢)。Anchor 是 EP134 開工歌『安身之處』 + EP143 家常味『被照顧到』。預檢警示：RAG 對『安身之處』語意檢索不準，反而抓到 EP121/EP68/EP74 等『歸屬感』相近概念；EP143 anchor 連『家常味 被照顧』都沒命中（這是 RAG 對 EP143 retrieval 的獨立問題訊號）。Eval 用 lenient match：retrieve 到 EP121/EP68 等相關集不算錯，只要至少含一個 anchor 就 hit。"
     }
   ],

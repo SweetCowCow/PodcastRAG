@@ -19,8 +19,16 @@ Usage:
 Notes:
   - --auth-token is the e2e-login session cookie value (memory: e2e-login-backdoor).
     Required because /shows/.../search is rate-limited 20/day for anon callers.
-  - Negative items (empty ground_truth) are excluded from Recall/MRR averages
-    but still scored by the judge (answer should say "not mentioned").
+  - Scoring dispatches on each item's `eval_mode`:
+      * chunk_id        → Recall@K against ground_truth_chunk_ids (legacy path;
+                          empty ground_truth → None, excluded from chunk mean —
+                          this is how negative items are kept out of the average
+                          while still being scored by the judge for "not mentioned").
+      * open_set_lenient → any-anchor-hit → recall 1.0, else 0.0 (still aggregates
+                          in the chunk-based group alongside chunk_id items).
+      * enumeration     → ignore chunk anchors; compute episode_set_recall against
+                          expected_episode_ids; aggregated into its own group so
+                          the metric is not mixed with chunk-based items.
 """
 from __future__ import annotations
 
@@ -41,11 +49,11 @@ from typing import Iterable
 try:
     # Invoked as `python -m backend.eval.runners.run` from repo root
     from backend.eval.metrics.mrr import reciprocal_rank
-    from backend.eval.metrics.recall import recall_at_k
+    from backend.eval.metrics.recall import episode_set_recall, recall_at_k
 except ModuleNotFoundError:
     # Invoked under pytest with cwd=backend/
     from eval.metrics.mrr import reciprocal_rank
-    from eval.metrics.recall import recall_at_k
+    from eval.metrics.recall import episode_set_recall, recall_at_k
 
 
 # Lenient chunk match: production retrieval returns chunk-level start_times
@@ -185,8 +193,16 @@ def _query(
 # ────────────────────────────────────────────────────────────────────
 
 def _aggregate(items: list[dict]) -> dict:
-    """Compute overall + per-type means. Recall/RR exclude None; judge excludes None."""
-    def _agg(group: list[dict]) -> dict:
+    """Compute overall + per-type means, split between chunk-based and enumeration groups.
+
+    - chunk_based group: items with eval_mode in {chunk_id, open_set_lenient}.
+      Reports recall_at_k_mean / mrr (legacy semantics; empty-gt → None excluded).
+    - enumeration group: items with eval_mode == enumeration.
+      Reports episode_set_recall_mean instead; chunk-level Recall/MRR are N/A.
+
+    Judge / latency are summarised across all items regardless of eval_mode.
+    """
+    def _chunk_agg(group: list[dict]) -> dict:
         recalls = [it["recall_at_k"] for it in group if it["recall_at_k"] is not None]
         rrs = [it["reciprocal_rank"] for it in group if it["recall_at_k"] is not None]
         judges = [it["judge_score"] for it in group if it.get("judge_score") is not None]
@@ -200,12 +216,28 @@ def _aggregate(items: list[dict]) -> dict:
             "latency_p95_ms": round(_p95(latencies), 1) if latencies else None,
         }
 
+    def _enum_agg(group: list[dict]) -> dict:
+        ep_recalls = [it["episode_set_recall"] for it in group if it.get("episode_set_recall") is not None]
+        judges = [it["judge_score"] for it in group if it.get("judge_score") is not None]
+        latencies = [it["latency_ms"] for it in group if it.get("latency_ms")]
+        return {
+            "n": len(group),
+            "n_scored_retrieval": len(ep_recalls),
+            "episode_set_recall_mean": round(mean(ep_recalls), 4) if ep_recalls else None,
+            "judge_score_mean": round(mean(judges), 4) if judges else None,
+            "latency_p95_ms": round(_p95(latencies), 1) if latencies else None,
+        }
+
+    chunk_items = [it for it in items if it.get("eval_mode", "chunk_id") != "enumeration"]
+    enum_items = [it for it in items if it.get("eval_mode") == "enumeration"]
+
     by_type: dict[str, list[dict]] = defaultdict(list)
     for it in items:
         by_type[it["type"]].append(it)
     return {
-        "overall": _agg(items),
-        "by_type": {t: _agg(g) for t, g in sorted(by_type.items())},
+        "chunk_based": _chunk_agg(chunk_items),
+        "enumeration": _enum_agg(enum_items),
+        "by_type": {t: _chunk_agg(g) for t, g in sorted(by_type.items())},
     }
 
 
@@ -223,23 +255,28 @@ def _p95(values: list[float]) -> float:
 
 def _markdown_report(report: dict) -> str:
     m = report["metrics"]
+    chunk = m.get("chunk_based", {})
+    enum_grp = m.get("enumeration", {})
+    level = report.get("metric_level", "chunk")
+    k = report["top_k"]
     lines = [
         f"# RAG eval — {report['dataset']} ({report['version']})",
         "",
         f"- run_id: `{report['run_id']}`",
         f"- backend: `{report['backend']}`",
         f"- judge_model: `{report.get('judge_model') or '(skipped)'}`",
-        f"- top_k: {report['top_k']}",
+        f"- top_k: {k}",
         f"- n_items: {report['n_items']}",
         "",
         "## Overall",
         "",
         "| metric | value |",
         "|---|---|",
-        f"| Recall@{report['top_k']} ({report.get('metric_level','chunk')}) | {m['overall']['recall_at_k_mean']} |",
-        f"| MRR | {m['overall']['mrr']} |",
-        f"| Judge mean (1-5) | {m['overall']['judge_score_mean']} |",
-        f"| Latency P95 (ms) | {m['overall']['latency_p95_ms']} |",
+        f"| Recall@{k} (chunk, {level}, n={chunk.get('n', 0)}) | {chunk.get('recall_at_k_mean')} |",
+        f"| Episode Set Recall (enumeration, n={enum_grp.get('n', 0)}) | {enum_grp.get('episode_set_recall_mean')} |",
+        f"| MRR (chunk group) | {chunk.get('mrr')} |",
+        f"| Judge mean (1-5, all items) | {chunk.get('judge_score_mean')} |",
+        f"| Latency P95 (ms, chunk group) | {chunk.get('latency_p95_ms')} |",
         "",
         "## By type",
         "",
@@ -355,22 +392,41 @@ def run_eval(
     for i, item in enumerate(items, 1):
         if item["id"] in processed_ids:
             continue
-        print(f"[{i}/{len(items)}] {item['id']} ({item['type']})…", file=sys.stderr)
+        eval_mode = item.get("eval_mode", "chunk_id")
+        print(f"[{i}/{len(items)}] {item['id']} ({item['type']}, {eval_mode})…", file=sys.stderr)
         chunk_ids, chunk_texts, latency_ms = _retrieve(
             backend_url, show_id, item["question"], top_k, token,
         )
-        gt = item.get("ground_truth_chunk_ids", [])
-        if metric_level == "episode":
-            # Episode-level match: hit if any retrieved chunk shares episode_id
-            # with any anchor (ignores start_time and `match_window_s`).
-            retrieved_match = _to_episode_ids(chunk_ids)
-            gt_match = _to_episode_ids(gt)
+
+        rec: float | None
+        rr: float | None
+        ep_recall: float | None = None
+
+        if eval_mode == "enumeration":
+            # Episode-set recall against expected_episode_ids; chunk-based metrics N/A.
+            retrieved_eps = _to_episode_ids(chunk_ids)
+            expected_eps = item.get("expected_episode_ids", [])
+            ep_recall = episode_set_recall(retrieved_eps, expected_eps)
+            rec = None
+            rr = None
         else:
-            # Chunk-level (legacy R1.2 / R3.1 behaviour) — bucket by window.
-            retrieved_match = _to_lenient_ids(chunk_ids, match_window_s)
-            gt_match = _to_lenient_ids(gt, match_window_s)
-        rec = recall_at_k(retrieved_match, gt_match, k=top_k)
-        rr = reciprocal_rank(retrieved_match, gt_match) if gt_match else None
+            gt = item.get("ground_truth_chunk_ids", [])
+            if metric_level == "episode":
+                # Episode-level match: hit if any retrieved chunk shares episode_id
+                # with any anchor (ignores start_time and `match_window_s`).
+                retrieved_match = _to_episode_ids(chunk_ids)
+                gt_match = _to_episode_ids(gt)
+            else:
+                # Chunk-level (legacy R1.2 / R3.1 behaviour) — bucket by window.
+                retrieved_match = _to_lenient_ids(chunk_ids, match_window_s)
+                gt_match = _to_lenient_ids(gt, match_window_s)
+            if eval_mode == "open_set_lenient":
+                # Any-anchor-hit → 1.0; otherwise 0.0 (treats partial matches as full credit).
+                rec = 1.0 if (gt_match and set(retrieved_match) & set(gt_match)) else 0.0
+            else:
+                # chunk_id mode (legacy): fractional recall against full anchor set.
+                rec = recall_at_k(retrieved_match, gt_match, k=top_k)
+            rr = reciprocal_rank(retrieved_match, gt_match) if gt_match else None
 
         judge_val: float | None = None
         answer = ""
@@ -388,8 +444,10 @@ def run_eval(
         record: dict = {
             "id": item["id"],
             "type": item["type"],
+            "eval_mode": eval_mode,
             "recall_at_k": rec,
             "reciprocal_rank": rr,
+            "episode_set_recall": ep_recall,
             "judge_score": judge_val,
             "latency_ms": round(latency_ms, 1),
         }

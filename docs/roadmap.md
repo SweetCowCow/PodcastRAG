@@ -145,6 +145,7 @@ R3 拆三段做（每段都跑 eval baseline 對照升幅）：
 - **eval golden set 擴張到 曼報 + 壹加壹電台** — 各 ~30+ 題人工 sentinel，等本節目 30+ 題到位再啟動
 - **新節目 onboarding flow（情境 B）** — admin 加 show 時看 cost preview + 必須 confirm + worker throttle + 進度面板；建議合進 `backfill-progress-admin-tab`
 - **R3.x 候選未 propose**：列舉型查詢 / topic seg 自動類別建議 / segment_categories admin UI / 業配段降權 multiplier / dict weight_in_lexical_query 通用化
+- **`eval-runner-dynamic-top-k`**（待 `eval-runner-enumeration-scope` ship 後 propose）— enumeration items 的 top_k 動態提到 `len(expected_episode_ids)`（或 1.2x），才能測 catalog-wide 召回真實上限。動機：q25 expected 25 集，固定 top_k=5 下 episode_set_recall 數學上限 0.20。影響面：retrieval cost / latency aggregation 都會變，需獨立 change 評估
 
 ---
 

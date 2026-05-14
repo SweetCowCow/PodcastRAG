@@ -8,151 +8,268 @@
     {
       "id": "q11-ep19-guest-dad-rental-shop",
       "type": "fact",
+      "eval_mode": "chunk_id",
       "question": "EP19《動漫歌單》來賓提到他爸爸以前在哪裡工作？後來兼差開了什麼店讓他接觸到漫畫？",
-      "expected_answer_keywords": ["電信局", "錄影帶店", "公務人員", "兼差", "漫畫"],
-      "ground_truth_chunk_ids": ["ep:88f78fbe-d216-4334-bf4f-e3e3caeea48d@1446.34"],
+      "expected_answer_keywords": [
+        "電信局",
+        "錄影帶店",
+        "公務人員",
+        "兼差",
+        "漫畫"
+      ],
+      "ground_truth_chunk_ids": [
+        "ep:88f78fbe-d216-4334-bf4f-e3e3caeea48d@1446.34"
+      ],
       "sentinel": false,
       "source_episode_id": "88f78fbe-d216-4334-bf4f-e3e3caeea48d",
-      "scope": "exact",
       "notes": "EP19 @ 24:06 附近。來賓爸爸原電信局公務員，兼差開錄影帶店 4-5 年讓來賓接觸聖鬥士等漫畫。2026-05-13 user co-drafted。"
     },
     {
       "id": "q12-ep140-kaohsiung-first-edition-and-venues",
       "type": "fact",
+      "eval_mode": "chunk_id",
       "question": "EP140《高雄美食第二彈》提到第一彈的兩位來賓是誰？節目裡指出高雄哪兩個場館是音樂節 / 國際演唱會重鎮？",
-      "expected_answer_keywords": ["阿寬", "邱承翰", "高雄巨蛋", "世運主場館"],
-      "ground_truth_chunk_ids": ["ep:d15bddde-153f-484f-bff6-0bb74415b718@29.0"],
+      "expected_answer_keywords": [
+        "阿寬",
+        "邱承翰",
+        "高雄巨蛋",
+        "世運主場館"
+      ],
+      "ground_truth_chunk_ids": [
+        "ep:d15bddde-153f-484f-bff6-0bb74415b718@29.00"
+      ],
       "sentinel": false,
       "source_episode_id": "d15bddde-153f-484f-bff6-0bb74415b718",
-      "scope": "exact",
       "notes": "EP140 開場 @ 00:29。第一彈來賓 = 阿寬+邱承翰；場館 = 高雄巨蛋 + 世運主場館（逐字稿 ASR 誤為「世韻」，user 5/13 確認）。"
     },
     {
       "id": "q13-ep131-show-me-money-korea-entry",
       "type": "fact",
+      "eval_mode": "chunk_id",
       "question": "EP131《回到 2016 歌單》主持人提到 Big Bang 結束後，她轉去看哪部韓國 hip-hop 實境節目？故事背景是哪一年？",
-      "expected_answer_keywords": ["Big Bang", "Show Me Your Money", "2016", "韓國", "hip-hop"],
-      "ground_truth_chunk_ids": ["ep:17070937-4c67-420f-9914-38cebaa51c91@1800.74"],
+      "expected_answer_keywords": [
+        "Big Bang",
+        "Show Me Your Money",
+        "2016",
+        "韓國",
+        "hip-hop"
+      ],
+      "ground_truth_chunk_ids": [
+        "ep:17070937-4c67-420f-9914-38cebaa51c91@1800.74"
+      ],
       "sentinel": false,
       "source_episode_id": "17070937-4c67-420f-9914-38cebaa51c91",
-      "scope": "exact",
       "notes": "EP131 @ 30:00。Big Bang 結束 → 主持人轉看《Show Me Your Money》（韓國 hip-hop 實境節目），時間點 2016 年。"
     },
     {
       "id": "q14-ep128-pork-floss-brand-and-childhood",
       "type": "fact",
+      "eval_mode": "chunk_id",
       "question": "EP128《平價美食對決》來賓偏好哪個牌子的肉鬆？該牌子的『普通肉鬆』加了什麼一起炒？他國中時自己準備的最簡單組合是什麼？",
-      "expected_answer_keywords": ["新東陽", "普通肉鬆", "全肉肉鬆", "黃豆粉", "白飯", "海苔"],
-      "ground_truth_chunk_ids": ["ep:3b0bda36-b72a-4360-a19d-16b89b931071@2659.95"],
+      "expected_answer_keywords": [
+        "新東陽",
+        "普通肉鬆",
+        "全肉肉鬆",
+        "黃豆粉",
+        "白飯",
+        "海苔"
+      ],
+      "ground_truth_chunk_ids": [
+        "ep:3b0bda36-b72a-4360-a19d-16b89b931071@2659.95"
+      ],
       "sentinel": false,
       "source_episode_id": "3b0bda36-b72a-4360-a19d-16b89b931071",
-      "scope": "exact",
       "notes": "EP128 @ 44:20。新東陽兩種肉鬆：全肉 vs 普通（加黃豆粉）；來賓國中自煮白飯 + 海苔肉鬆。"
     },
     {
       "id": "q15-ep102-best-ramen-broth-style",
       "type": "fact",
+      "eval_mode": "chunk_id",
       "question": "EP102《拉麵宅》來賓推薦『目前最好一碗拉麵』是什麼湯底結構？為什麼適合年紀大的人吃？",
-      "expected_answer_keywords": ["清湯", "清雞湯", "醬油", "負擔", "拉麵"],
-      "ground_truth_chunk_ids": ["ep:f0218bf0-c44d-4da5-9729-641b2d659f9a@2719.97"],
+      "expected_answer_keywords": [
+        "清湯",
+        "清雞湯",
+        "醬油",
+        "負擔",
+        "拉麵"
+      ],
+      "ground_truth_chunk_ids": [
+        "ep:f0218bf0-c44d-4da5-9729-641b2d659f9a@2719.97"
+      ],
       "sentinel": false,
       "source_episode_id": "f0218bf0-c44d-4da5-9729-641b2d659f9a",
-      "scope": "exact",
       "notes": "EP102 @ 45:20。最佳拉麵湯底 = 清雞湯 + 醬油（清湯式），相較魚介系油較少、負擔小，適合年紀漸長的人。"
     },
     {
       "id": "q16-ep110-coffee-32cups-gout",
       "type": "fact",
+      "eval_mode": "chunk_id",
       "question": "EP110《沖咖啡沖到痛風》迪拉跟阿名在哪個展覽擺攤沖咖啡？第一天沖了幾杯？為什麼迪拉第二天會痛風？",
-      "expected_answer_keywords": ["TMEX", "臺北音樂博覽會", "臺北流行音樂中心", "32杯", "阿名", "痛風"],
-      "ground_truth_chunk_ids": ["ep:82b5e770-1a9a-49b4-828c-18b9394d3a25@2203.24"],
+      "expected_answer_keywords": [
+        "TMEX",
+        "臺北音樂博覽會",
+        "臺北流行音樂中心",
+        "32杯",
+        "阿名",
+        "痛風"
+      ],
+      "ground_truth_chunk_ids": [
+        "ep:82b5e770-1a9a-49b4-828c-18b9394d3a25@2203.24"
+      ],
       "sentinel": false,
       "source_episode_id": "82b5e770-1a9a-49b4-828c-18b9394d3a25",
-      "scope": "exact",
       "notes": "EP110 @ 36:43。臺北流行音樂中心主辦的 TAIPEI MUSIC EXPO (TMEX) 臺北音樂博覽會擺攤，迪拉+阿名第一天沖 32 杯（沒停 + 偷跑早開始），第二天痛風。逐字稿「南港咖啡器材展」是 ASR 錯字（user 5/13 確認），正確是 TMEX。"
     },
     {
       "id": "q17-ep18-nike-invincible-shoe",
       "type": "fact",
+      "eval_mode": "chunk_id",
       "question": "EP18《黃玠 跑鞋國王》提到剛開始跑步時買的 Nike 鞋款叫什麼？鞋底厚度多少？標榜什麼特色？",
-      "expected_answer_keywords": ["Nike", "Invincible", "4公分", "鞋底", "避震", "泡棉"],
-      "ground_truth_chunk_ids": ["ep:f72cc0d1-17df-4712-9a83-e0216a243233@2931.74"],
+      "expected_answer_keywords": [
+        "Nike",
+        "Invincible",
+        "4公分",
+        "鞋底",
+        "避震",
+        "泡棉"
+      ],
+      "ground_truth_chunk_ids": [
+        "ep:f72cc0d1-17df-4712-9a83-e0216a243233@2931.74"
+      ],
       "sentinel": false,
       "source_episode_id": "f72cc0d1-17df-4712-9a83-e0216a243233",
-      "scope": "exact",
       "notes": "EP18 @ 48:52。Nike Invincible 鞋底約 4 公分厚，號稱品牌『最屌的泡棉』+ 避震系統。受訪者剛跑步時為了避震選此款。"
     },
     {
       "id": "q18-ep108-reggae-vs-ska-tempo-causal",
       "type": "comprehension",
+      "eval_mode": "chunk_id",
       "question": "EP108《墾丁雷鬼歌單》來賓如何解釋雷鬼音樂比 SKA 慢的成因？派對需求跟氣候因素扮演什麼角色？",
-      "expected_answer_keywords": ["雷鬼", "SKA", "牙買加", "派對", "太熱", "BPM", "慢"],
-      "ground_truth_chunk_ids": ["ep:0b12db27-c0ff-42a8-a5d8-ccce33283183@1442.26"],
+      "expected_answer_keywords": [
+        "雷鬼",
+        "SKA",
+        "牙買加",
+        "派對",
+        "太熱",
+        "BPM",
+        "慢"
+      ],
+      "ground_truth_chunk_ids": [
+        "ep:0b12db27-c0ff-42a8-a5d8-ccce33283183@1442.26"
+      ],
       "sentinel": false,
       "source_episode_id": "0b12db27-c0ff-42a8-a5d8-ccce33283183",
-      "scope": "exact",
       "notes": "EP108 @ 24:02。因果鏈：牙買加太熱 → 派對音樂太快跳起來會熱 → 演化出雷鬼把節奏放慢；SKA 是更早期較快版本。逐字稿「亞馬遜加」是 ASR 把『牙買加』聽錯（user 5/13 確認）。"
     },
     {
       "id": "q19-ep142-vegas-veteran-rage",
       "type": "comprehension",
+      "eval_mode": "chunk_id",
       "question": "EP142《Live 演出歌單》主持人提到某位在 Vegas 駐唱 25 年的老牌藝人，演唱會上抱怨什麼場地限制？這個限制為什麼讓他覺得不被尊重，導致整場變成『串燒』？",
-      "expected_answer_keywords": ["Las Vegas", "25 年", "1 分鐘", "串燒", "場地限制"],
-      "ground_truth_chunk_ids": ["ep:fa604fe3-20f5-47d4-a82c-2a48aa11028d@1583.70"],
+      "expected_answer_keywords": [
+        "Las Vegas",
+        "25 年",
+        "1 分鐘",
+        "串燒",
+        "場地限制"
+      ],
+      "ground_truth_chunk_ids": [
+        "ep:fa604fe3-20f5-47d4-a82c-2a48aa11028d@1583.70"
+      ],
       "sentinel": false,
       "source_episode_id": "fa604fe3-20f5-47d4-a82c-2a48aa11028d",
-      "scope": "exact",
       "notes": "EP142 @ 26:24。老牌藝人（混 Vegas 25 年）被限制『1 分鐘 1 首歌』導致整場變串燒，台上飆髒話表達不滿。"
     },
     {
       "id": "q20-ep15-late-night-protein-vs-carb",
       "type": "comprehension",
+      "eval_mode": "chunk_id",
       "question": "EP15《臺北城夜夜生宵》來賓為什麼主張宵夜不適合吃純肉？他怎麼解套『想吃牛肉但又不想消化負擔太重』的矛盾？",
-      "expected_answer_keywords": ["宵夜", "牛肉麵", "澱粉", "難消化", "折衷"],
-      "ground_truth_chunk_ids": ["ep:53a77044-e836-4c8b-be71-51cd44f96fa8@955.92"],
+      "expected_answer_keywords": [
+        "宵夜",
+        "牛肉麵",
+        "澱粉",
+        "難消化",
+        "折衷"
+      ],
+      "ground_truth_chunk_ids": [
+        "ep:53a77044-e836-4c8b-be71-51cd44f96fa8@955.92"
+      ],
       "sentinel": false,
       "source_episode_id": "53a77044-e836-4c8b-be71-51cd44f96fa8",
-      "scope": "exact",
       "notes": "EP15 @ 15:55。來賓主張：純肉宵夜難消化；解套：選牛肉麵（湯+肉+澱粉），既滿足想吃肉的慾望也不過重。"
     },
     {
       "id": "q21-ep115-bbq-vibe-playlist-strategy",
       "type": "comprehension",
+      "eval_mode": "chunk_id",
       "question": "EP115《烤肉才沒人管你放什麼歌》主持人為什麼烤肉時不預先排歌單而是現場即興抓？現場 vibe 怎麼影響她選歌的策略？",
-      "expected_answer_keywords": ["烤肉", "歌單", "vibe", "現場", "抓"],
-      "ground_truth_chunk_ids": ["ep:ad6a3a71-c543-4ec1-b28e-9148439507ee@2224.82"],
+      "expected_answer_keywords": [
+        "烤肉",
+        "歌單",
+        "vibe",
+        "現場",
+        "抓"
+      ],
+      "ground_truth_chunk_ids": [
+        "ep:ad6a3a71-c543-4ec1-b28e-9148439507ee@2224.82"
+      ],
       "sentinel": false,
       "source_episode_id": "ad6a3a71-c543-4ec1-b28e-9148439507ee",
-      "scope": "exact",
       "notes": "EP115 @ 37:05。主持人連續幾年烤肉都負責放音樂、走現場 vibe 抓歌而不預排，因應大家當下要求 / 場合氛圍。"
     },
     {
       "id": "q22-ep44-gift-food-freshness-paradox",
       "type": "comprehension",
+      "eval_mode": "chunk_id",
       "question": "EP44《伴手禮是社交潤滑劑》來賓用鯛魚燒當例子說明什麼送禮糾結？為什麼『現吃好吃』的食物反而不適合當伴手禮？吃貨送禮時最在意什麼？",
-      "expected_answer_keywords": ["伴手禮", "鯛魚燒", "軟掉", "吃貨", "送禮", "狀態"],
-      "ground_truth_chunk_ids": ["ep:65030207-726d-43ba-80d4-d4c0efb97ac8@1607.39"],
+      "expected_answer_keywords": [
+        "伴手禮",
+        "鯛魚燒",
+        "軟掉",
+        "吃貨",
+        "送禮",
+        "狀態"
+      ],
+      "ground_truth_chunk_ids": [
+        "ep:65030207-726d-43ba-80d4-d4c0efb97ac8@1607.39"
+      ],
       "sentinel": false,
       "source_episode_id": "65030207-726d-43ba-80d4-d4c0efb97ac8",
-      "scope": "exact",
       "notes": "EP44 @ 26:47。送禮糾結：鯛魚燒現吃酥脆好吃，但帶去給朋友就軟掉、狀態變差；吃貨在意『送出去的食物保留最佳狀態』。"
     },
     {
       "id": "q23-ep66-ig-please-come-taiwan-fan-plight",
       "type": "comprehension",
+      "eval_mode": "chunk_id",
       "question": "EP66《浪人祭歌單》主持人忠祐為什麼選某些外國藝人 / 團入歌單？他在 IG 留言『Please come to Taiwan』的互動模式反映台灣樂迷想看外國團來台的什麼處境？",
-      "expected_answer_keywords": ["忠祐", "IG", "Please come to Taiwan", "外國團", "樂迷", "浪人祭"],
-      "ground_truth_chunk_ids": ["ep:dbeecd79-f170-476a-b4e9-80e64eb49528@1542.86"],
+      "expected_answer_keywords": [
+        "忠祐",
+        "IG",
+        "Please come to Taiwan",
+        "外國團",
+        "樂迷",
+        "浪人祭"
+      ],
+      "ground_truth_chunk_ids": [
+        "ep:dbeecd79-f170-476a-b4e9-80e64eb49528@1542.86"
+      ],
       "sentinel": false,
       "source_episode_id": "dbeecd79-f170-476a-b4e9-80e64eb49528",
-      "scope": "exact",
       "notes": "EP66 @ 25:42。忠祐選團入歌單原因：是他常去 IG 留言『Please come to Taiwan』的外國團；按讚但鮮少回應/真的來，反映台灣樂迷單向追團的處境。"
     },
     {
       "id": "q26-list-kaohsiung-food-episodes",
       "type": "cross-episode",
+      "eval_mode": "enumeration",
       "question": "節目裡有講過高雄美食的集數有哪些？",
-      "expected_answer_keywords": ["高雄", "美食", "鹽埕", "鴨肉", "高雄美食"],
+      "expected_answer_keywords": [
+        "高雄",
+        "美食",
+        "鹽埕",
+        "鴨肉",
+        "高雄美食"
+      ],
       "ground_truth_chunk_ids": [],
       "expected_episode_ids": [
         "d15bddde-153f-484f-bff6-0bb74415b718",
@@ -164,14 +281,18 @@
       ],
       "sentinel": false,
       "source_episode_id": "d15bddde-153f-484f-bff6-0bb74415b718",
-      "scope": "enumeration",
       "notes": "Cross-episode 子型 B（metadata + content 混合列舉）。Golden answer = 6 集，寬鬆解讀（DB scan 2026-05-13）。Recall 門檻 60% = 至少召回 4 集算 hit。\n\n收進來的 6 集：\n- EP140 高雄美食第二彈（標題，主題）ft.楊大正、張凱婷\n- EP85 高雄美食新手任務（標題，主題）ft.邱承漢、阿寬\n- EP58 異世界美食家：第一杯（content：西部牛仔德國豬腳、新崛江、貢丸堂）ft.阿寬\n- EP21 異世界美食家：早餐（content：高雄王記燒餅、南北鐵板麵差異）ft.火鳥\n- EP129 烘爐地（**標題誤導**，content：booking 雷達書店、廣東盛味沙茶爐、菜市場餐酒館、銀座聚場）ft.小老虎\n- EP97 金曲預測前哨戰（**標題誤導**，content：鴨肉本/鴨肉蒸/七咸鵝肉/猴家鴨肉、鹽埕區美食辯論）\n\n排除：EP60（駁二展非美食）、EP22 上下（巡演非美食）、EP88（transcript 無高雄 chunk，僅 description 帶過）。\n\n本題 EP129 + EP97 是純 content 路徑（標題既無『高雄』也無『美食』），純 metadata-filter 抓不到 → 是 R3.3 metadata-filter 的對照組教材；同時也是『RAG 做法對不對』的驗收題（user 2026-05-14 註）。"
     },
     {
       "id": "q25-list-playlist-episodes",
       "type": "cross-episode",
+      "eval_mode": "enumeration",
       "question": "節目裡有哪些集是歌單？",
-      "expected_answer_keywords": ["歌單", "集數", "EP"],
+      "expected_answer_keywords": [
+        "歌單",
+        "集數",
+        "EP"
+      ],
       "ground_truth_chunk_ids": [],
       "expected_episode_ids": [
         "fa604fe3-20f5-47d4-a82c-2a48aa11028d",
@@ -202,67 +323,104 @@
       ],
       "sentinel": false,
       "source_episode_id": "fa604fe3-20f5-47d4-a82c-2a48aa11028d",
-      "scope": "enumeration",
       "notes": "Cross-episode 子型 B（純 metadata 列舉）。Golden answer = 25 集標題含「歌單」（DB query 2026-05-13）。Cell: 歌單 × 混合（有/無來賓都含）。預期評估方式：retrieved chunks → unique episode set → recall vs expected_episode_ids；hit 門檻初步定 60%（15/25 集）。⚠️ 評估 runner 尚未實作 enumeration scope — 需要新 evaluator path 才能跑這題（建議併入 R3.3 metadata-filter 那個 change）。本題剛好驗證 R3.3 是否解掉 catalog-wide 召回痛點。2026-05-13 user co-drafted。"
     },
     {
       "id": "q30-no-yang-dazheng-opens-restaurant",
       "type": "negative",
+      "eval_mode": "chunk_id",
       "question": "EP140《高雄美食第二彈》楊大正有提到他自己在高雄開過餐廳嗎？",
-      "expected_answer_keywords": ["節目未提及", "沒有提到", "楊大正", "滅火器", "高雄樂團"],
+      "expected_answer_keywords": [
+        "節目未提及",
+        "沒有提到",
+        "楊大正",
+        "滅火器",
+        "高雄樂團"
+      ],
       "ground_truth_chunk_ids": [],
       "sentinel": true,
       "source_episode_id": "d15bddde-153f-484f-bff6-0bb74415b718",
-      "scope": "negative",
       "notes": "陷阱題：EP140 楊大正是來聊高雄美食推薦（鹽埕區/陽明國中黃昏市場/ㄋㄨㄚㄋㄨㄚ肉圓 等），整集圍繞他作為高雄人 + 滅火器主唱身份分享口袋名單；節目沒提他自己在高雄開過餐廳。Distractor 強度高：同集大量提到餐廳名 + 楊大正本人，RAG 容易抓到相關 chunks 然後幻覺『楊大正開了 X 店』。Cell: 美食 × 有來賓（補負例 trap）。\n\n**測試重點**：q02/q08 已測『主持人本人 / 廠牌』的 negative；q30 換角度測『來賓的人設衍生幻覺』— 樂團主唱跨足餐飲是常見人設，RAG 要忍住不腦補。2026-05-14 user co-drafted。"
     },
     {
       "id": "q29-ep138-punchline-wins-round",
       "type": "code-switch",
+      "eval_mode": "chunk_id",
       "question": "EP138 感情經營研討會的第一輪，主持人為什麼判給小卡比贏？",
-      "expected_answer_keywords": ["punchline", "小卡比", "笑話", "勝出", "第一輪", "梗"],
+      "expected_answer_keywords": [
+        "punchline",
+        "小卡比",
+        "笑話",
+        "勝出",
+        "第一輪",
+        "梗"
+      ],
       "ground_truth_chunk_ids": [
         "ep:379df94f-6fc8-43ce-aa83-a68dd197ed34@3255.96",
         "ep:379df94f-6fc8-43ce-aa83-a68dd197ed34@3267.96"
       ],
       "sentinel": false,
       "source_episode_id": "379df94f-6fc8-43ce-aa83-a68dd197ed34",
-      "scope": "exact",
       "notes": "Code-switch（情境用語：punchline 作為評斷標準）。EP138 @ 54:16–54:28。小卡比靠『太多 punchline / 笑話得分』贏第一輪，獲宣傳作品機會。Cell: 感情經營題 × 有來賓 ft.阿夫、小卡比 — 補 golden set 在歌單/美食以外的類型多樣性。\n\n**測試重點**：q27 vibe = 情境用語、q28 Boombap = 名詞密集、q29 punchline = 評斷性英文詞（『因為 punchline 多所以贏』）。問句純中文，keyword 含『梗』作中文同義 fallback。2026-05-14 user co-drafted。"
     },
     {
       "id": "q28-ep111-hiphop-subgenres-coast",
       "type": "code-switch",
+      "eval_mode": "chunk_id",
       "question": "EP111 來賓 Barry Chen 怎麼描述他剛開始認識 Hip-Hop 的時候接觸到的不同風格？他特別有感覺的是哪一岸的音樂？",
-      "expected_answer_keywords": ["Hip-Hop", "Boombap", "G-Funk", "南岸", "東岸", "西岸", "饒舌", "美國", "風格"],
+      "expected_answer_keywords": [
+        "Hip-Hop",
+        "Boombap",
+        "G-Funk",
+        "南岸",
+        "東岸",
+        "西岸",
+        "饒舌",
+        "美國",
+        "風格"
+      ],
       "ground_truth_chunk_ids": [
         "ep:649cf4a0-c326-4b11-9a39-3e5e87d5f4d5@445.00",
         "ep:649cf4a0-c326-4b11-9a39-3e5e87d5f4d5@460.00"
       ],
       "sentinel": false,
       "source_episode_id": "649cf4a0-c326-4b11-9a39-3e5e87d5f4d5",
-      "scope": "exact",
       "notes": "Code-switch（密集中英夾雜）。EP111 @ 07:25–08:00。Barry Chen 從聽英文饒舌認識 Hip-Hop 風格：Boombap / G-Funk；對美國南岸音樂特別有感（東岸/西岸/南岸對比）。Cell: B Side ain't Bad × 有來賓。\n\n**測試重點**：q27 測單一英文詞（vibe），q28 升級測『多英文術語密集 + 並列』。問句純中文（饒舌風格 / 哪一岸），keyword 寬一點（加入饒舌 / 美國 / 風格 等 fallback 詞）。Boombap 算冷僻詞，RAG 抽象到『Hip-Hop 次類型』這層該能撈到。2026-05-14 user co-drafted。"
     },
     {
       "id": "q27-ep141-vibe-decides-feature",
       "type": "code-switch",
+      "eval_mode": "chunk_id",
       "question": "EP141 一開頭迪拉怎麼解釋他要不要讓藝人上節目宣傳？他是看費用嗎？",
-      "expected_answer_keywords": ["vibe", "宣傳", "費用", "挑剔", "打歌", "增色"],
+      "expected_answer_keywords": [
+        "vibe",
+        "宣傳",
+        "費用",
+        "挑剔",
+        "打歌",
+        "增色"
+      ],
       "ground_truth_chunk_ids": [
         "ep:6ee7eb9d-78b7-4389-9d7c-3ebe2e21aadc@50.24",
         "ep:6ee7eb9d-78b7-4389-9d7c-3ebe2e21aadc@86.40"
       ],
       "sentinel": false,
       "source_episode_id": "6ee7eb9d-78b7-4389-9d7c-3ebe2e21aadc",
-      "scope": "exact",
       "notes": "Code-switch。EP141 @ 00:50–01:26。迪拉不是看費用而是看『vibe 來不來』+ 對節目有沒有增色。Cell: 歌單 × 有來賓（ft.方品融）。\n\n**測試重點**：問句純中文，沒有 vibe 字，測 RAG 能不能 cross-lingual 從中文 query 撈到含英文 vibe 的 chunk。如果 retrieval 失敗 → tokenizer / embedding 對中英夾雜有問題。2026-05-14 user co-drafted。"
     },
     {
       "id": "q24-leo-wang-encounter-arc",
       "type": "cross-episode",
+      "eval_mode": "open_set_lenient",
       "question": "迪拉跟 Leo王 是怎麼從不認識變成合作夥伴的？節目裡有提過他們第一次見面的故事嗎？",
-      "expected_answer_keywords": ["Leo王", "Live house", "加好友", "樂迷", "音樂節", "合作"],
+      "expected_answer_keywords": [
+        "Leo王",
+        "Live house",
+        "加好友",
+        "樂迷",
+        "音樂節",
+        "合作"
+      ],
       "ground_truth_chunk_ids": [
         "ep:8b3d4c1d-be8d-4dde-b12c-4cbe9b60ef21@1766.87",
         "ep:8b3d4c1d-be8d-4dde-b12c-4cbe9b60ef21@1819.35",
@@ -270,7 +428,6 @@
       ],
       "sentinel": false,
       "source_episode_id": "8b3d4c1d-be8d-4dde-b12c-4cbe9b60ef21",
-      "scope": "open_set_lenient",
       "notes": "Cross-episode 子型 A（演進弧線）。EP107（無來賓）@ 29:26 迪拉視角：Live house 被點到才知是 Leo王、原本以為長像周杰倫陰柔細瘦結果是大光頭粗獷男。EP116（ft. Leo王）@ 03:07 Leo王 視角：『我更早是他的樂迷』→ 後來一起做音樂 → 在音樂節幫他拍照。Cell: 歌單×無 + 歌單×有 跨格。Lenient: 命中任一 anchor + 任何相關 Leo王/迪拉 合作/樂迷段落即算 hit。2026-05-13 user co-drafted。"
     }
   ],
