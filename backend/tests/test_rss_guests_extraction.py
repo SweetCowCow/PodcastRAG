@@ -31,6 +31,11 @@ from app.services.rss_parser import extract_guests_from_title
     ("EP134 主持人大改版", []),
     # Empty string
     ("", []),
+    # ASCII ampersand splitter (real-world: 曼報 EP112 / SP9 等)
+    ("EP112 曼報 Pro 第一屆股東會 ft. Vincent & Leslie", ["Vincent", "Leslie"]),
+    ("Ft. IEObserve & 商周副總編輯吳中傑", ["IEObserve", "商周副總編輯吳中傑"]),
+    # Full-width ampersand
+    ("ft. 甲＆乙", ["甲", "乙"]),
 ])
 def test_extract_guests_from_title(title, expected):
     assert extract_guests_from_title(title) == expected

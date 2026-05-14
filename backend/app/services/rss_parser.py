@@ -42,7 +42,7 @@ GUESTS_REGEX = re.compile(
     r"(?:【\s*)?(?:Ft\.|Feat\.|feat\.|featuring)\s*([^】\n]+?)(?:\s*】|$)",
     re.IGNORECASE,
 )
-_GUESTS_SPLIT_RE = re.compile(r"[/、,，]")
+_GUESTS_SPLIT_RE = re.compile(r"[/、,，&＆]")
 
 
 def extract_guests_from_title(title: str) -> list[str]:
