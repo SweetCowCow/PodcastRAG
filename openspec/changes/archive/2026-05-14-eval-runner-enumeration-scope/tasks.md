@@ -40,4 +40,4 @@
 
 - [x] 6.1 跑 `spectra validate eval-runner-enumeration-scope` 全綠
 - [x] 6.2 把 `_pending_review.json` 內 30 題 review 完的部分透過 `build_golden_set.py --target-main` 或手動 merge 進 `this-not-that-cool.json`（若此步應該屬於另一個 change，apply 時拍板是否拉出本 change 範圍）
-- [ ] 6.3 commit + push，PR description 強調 metric report 表格從單行變兩行的破壞性 (release note 等級)
+- [x] 6.3 commit + push，PR description 強調 metric report 表格從單行變兩行的破壞性 (release note 等級)

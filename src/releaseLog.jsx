@@ -49,7 +49,32 @@ const MILESTONE_LABELS = {
 
 // Entries — newest milestone first; within each milestone newest date first.
 const RELEASE_LOG = [
-  // ─── v1.7 — Retrieval Quality Fix (5/13) ───
+  // ─── v1.7 — Retrieval Quality Fix (5/13–5/14) ───
+  {
+    date: '2026-05-14', slug: 'eval-runner-enumeration-scope', milestone: 'v1.7', tag: 'enhancement',
+    title: {
+      zh: '量得到「節目裡到底有幾集是歌單」這種題了 — 為列舉型查詢開新的計分路徑',
+      en: 'Now We Can Score "List-All-Episodes" Questions — A New Scoring Lane for Enumeration Queries',
+    },
+    summary: {
+      zh: '之前 RAG 測試集問的都是「某一集講了什麼」這類定點題：把預期的逐字稿片段（chunk）列出來，搜尋有沒有命中那幾個 chunk 就算分。但我們其實也想知道使用者問「節目裡有哪些集是歌單？」、「有講過高雄美食的集數有哪些？」這種「**請列出所有相關集數**」的題目時，retrieval 拉出來的結果到底涵蓋了多少正確集數。問題是 eval runner 沒有對應的計分模式 — 跑到這種題會被誤判為「沒有 ground truth → 沉默排除」，整題消失在報表上，等於白跑。這次把「該怎麼算分」變成測試集的第一公民欄位 `eval_mode`，每題顯式聲明三種模式之一：`chunk_id`（定點題，舊行為不變）/ `open_set_lenient`（跨集弧線題，命中任一 anchor 即算）/ `enumeration`（列舉題，算「retrieval 涵蓋了預期集數集合的幾趴」）。Runner 看到 `enumeration` 題會走新計分路徑：`episode_set_recall = |retrieved ∩ expected| / |expected|`，不再跟一般 Recall@5 混在一起算平均，報表也拆成兩段獨立呈現。順手做了三件事：(1) 既有 30 題回填 `eval_mode` 欄位（合併 `narrowed_two_anchor` 進 `open_set_lenient`，反正行為一樣）；(2) 加 8 個 schema validator 單元測試 + 7 個 dispatch 單元測試守門；(3) 對 prod 跑完 n=30 baseline，q26（高雄美食列舉題）拿到 0.333（命中 2/6 集，top_k=5 上限是 0.83），q25（歌單列舉題）拿到 0.08（命中 2/25 集，top_k=5 上限只有 0.20 — 這個結構性天花板會在下一個 change `eval-runner-dynamic-top-k` 解掉）。**對使用者體驗沒有任何 behavior 改動**；這純粹是為了讓接下來的 R3.3 metadata-filter 上線後能驗證「列舉題召回有沒有真的變好」做的測量工程。',
+      en: 'Until now, our RAG test set only handled "what did episode X say about Y" — point queries: list the expected transcript chunks, count how many show up in retrieval. But users also ask "which episodes are music-playlist episodes?" or "which episodes covered Kaohsiung food?" — *enumerate-all-relevant-episodes* queries. The eval runner had no scoring lane for these: with empty `ground_truth_chunk_ids`, items silently dropped out of the Recall mean entirely. This release makes "how to score" a first-class field, `eval_mode`, declared per-item with one of three modes: `chunk_id` (point queries, legacy behavior unchanged) / `open_set_lenient` (cross-episode arc questions, any-anchor-hit counts as 1.0) / `enumeration` (list queries, scored as `|retrieved ∩ expected| / |expected|` over episode sets). The runner dispatches on `eval_mode` per item; enumeration items aggregate into their own metric group instead of polluting the chunk-based Recall mean, and the markdown report now renders two separate rows. Bundled three things alongside: (1) backfilled `eval_mode` on all 30 existing items (folded the prior `narrowed_two_anchor` value into `open_set_lenient` — same behavior); (2) 8 schema-validator unit tests + 7 dispatch unit tests as guardrails; (3) ran a fresh n=30 prod baseline — q26 (Kaohsiung food enumeration) scored 0.333 (2 of 6 episodes hit, top_k=5 ceiling is 0.83), q25 (playlist enumeration) scored 0.08 (2 of 25, top_k=5 ceiling only 0.20 — this structural ceiling will be lifted by a follow-on change `eval-runner-dynamic-top-k`). **No user-facing behavior change**; this is pure measurement infrastructure so the upcoming R3.3 metadata-filter has a way to prove "enumeration recall actually improved" once it ships.',
+    },
+    summaryBullets: {
+      zh: [
+        '測試集每題現在要明寫 `eval_mode`，runner 看 mode 分三條計分路徑：定點題 / 跨集弧線題 / 列舉題各自獨立 — 不再彼此污染平均分',
+        '列舉題拿到專屬指標 `episode_set_recall`：q26（高雄美食）= 0.333 命中 2/6 集；q25（歌單）= 0.08 命中 2/25 集（受 top_k=5 結構性壓制，下個 change 解掉）',
+        '報表表格從「一行 Overall Recall」變兩行：chunk-based n=18 / enumeration n=2 — 不混算，看趨勢更乾淨',
+        '使用者體驗零變化；這是為了下一階段「R3.3 metadata-filter 跨集召回」能驗證做的測量基礎工程',
+      ],
+      en: [
+        'Every test-set item now declares `eval_mode` explicitly; runner dispatches into three lanes (chunk_id / open_set_lenient / enumeration) so the metrics no longer cross-contaminate one another',
+        'Enumeration items get their own metric: q26 (Kaohsiung food) hit 2/6 episodes (0.333); q25 (playlists) hit 2/25 (0.08), capped by top_k=5 structurally — to be lifted by a follow-on change',
+        'Markdown report rows split from one "Overall Recall" line into two: chunk-based n=18 / enumeration n=2 — cleaner trend signal',
+        'Zero user-facing behavior change; this is measurement infrastructure so the next-up R3.3 metadata-filter has a way to prove cross-episode recall actually improves once shipped',
+      ],
+    },
+  },
   {
     date: '2026-05-13', slug: 'r3-5-disable-routing', milestone: 'v1.7', tag: 'fix',
     title: {
