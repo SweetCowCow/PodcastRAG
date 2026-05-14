@@ -57,3 +57,7 @@ docs/bills/
 # Random screenshots / scratch images at repo root
 aisteps-tab.png
 backend/eval/runs/
+
+# Local docker-compose overrides (host port remapping, dev-only env vars)
+docker-compose.override.yml
+docker-compose.override.yaml

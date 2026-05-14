@@ -3,7 +3,7 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import DateTime, Enum, Float, ForeignKey, String, Text, UniqueConstraint, func
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -38,6 +38,17 @@ class Episode(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+
+    # R3.3: guests list extracted from episode title (Ft./Feat./feat./【ft.】 patterns)
+    # and editable via admin. Stored as JSONB array of strings. NOT NULL with []
+    # default at the DB layer; new rows MAY omit this field and inherit the default.
+    guests: Mapped[list[str]] = mapped_column(
+        JSONB, nullable=False, server_default="[]"
+    )
+    # R3.3: jieba-tokenized tsvector of the episode title, populated Python-side
+    # at insert/update time (matches the pattern in transcript_chunks/
+    # episode_description_chunks). Used by Phase 8 multi-field BM25 RRF.
+    title_tsvector: Mapped[str | None] = mapped_column(TSVECTOR, nullable=True)
 
     ai_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     ai_summary_status: Mapped[str] = mapped_column(
