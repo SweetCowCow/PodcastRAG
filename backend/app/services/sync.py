@@ -32,11 +32,18 @@ async def sync_show_episodes(show_id: uuid.UUID, db: AsyncSession) -> dict:
         existing_ep = existing_by_guid.get(ep.guid)
         if existing_ep:
             changed = False
+            title_changed = existing_ep.title != ep.title
             for field in ("title", "description", "audio_url", "duration_seconds", "published_at"):
                 new_value = getattr(ep, field)
                 if getattr(existing_ep, field) != new_value:
                     setattr(existing_ep, field, new_value)
                     changed = True
+            # R3.3: re-extract guests only when title actually changed. Admin
+            # manual edits MAY have customized guests beyond what regex
+            # extracts; we never overwrite based on an unchanged title.
+            if title_changed and ep.guests and existing_ep.guests != ep.guests:
+                existing_ep.guests = ep.guests
+                changed = True
             if changed:
                 updated += 1
         else:
@@ -49,6 +56,7 @@ async def sync_show_episodes(show_id: uuid.UUID, db: AsyncSession) -> dict:
                     duration_seconds=ep.duration_seconds,
                     published_at=ep.published_at,
                     guid=ep.guid,
+                    guests=ep.guests,
                 )
             )
             added += 1
