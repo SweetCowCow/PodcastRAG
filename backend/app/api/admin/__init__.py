@@ -24,6 +24,7 @@ router = APIRouter(
 from app.api.admin.ai_steps import router as ai_steps_router  # noqa: E402
 from app.api.admin.api_keys import router as api_keys_router  # noqa: E402
 from app.api.admin.chunking_status import router as chunking_status_router  # noqa: E402
+from app.api.admin.episode_guests import router as episode_guests_router  # noqa: E402
 from app.api.admin.eval_runs import router as eval_runs_router  # noqa: E402
 from app.api.admin.summary_ops import router as summary_ops_router  # noqa: E402
 from app.api.admin.quota_requests import router as quota_requests_router  # noqa: E402
@@ -38,6 +39,7 @@ router.include_router(eval_runs_router)
 router.include_router(tokenizer_router)
 router.include_router(topic_seg_router)
 router.include_router(chunking_status_router)
+router.include_router(episode_guests_router)
 
 
 @router.get("/queue-status", response_model=QueueStatusResponse)

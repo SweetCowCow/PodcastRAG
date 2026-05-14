@@ -26,14 +26,15 @@ _VALID_KEYS = {k.value for k in StepKey}
 
 @router.get("", response_model=list[AiStepResponse])
 async def list_ai_steps(db: AsyncSession = Depends(get_db)) -> list[AiStepResponse]:
-    # Always 5 rows; order by the canonical step_key sequence so the UI can
-    # render sections in a stable order without sorting.
+    # Order by the canonical step_key sequence so the UI can render sections
+    # in a stable order without sorting. R3.3 added entity_extraction (6th).
     canonical_order = [
         StepKey.answer.value,
         StepKey.rewrite.value,
         StepKey.summary.value,
         StepKey.embedding.value,
         StepKey.transcription.value,
+        StepKey.entity_extraction.value,
     ]
     rows = (await db.execute(select(AiStep))).scalars().all()
     by_key = {r.step_key: r for r in rows}
