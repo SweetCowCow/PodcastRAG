@@ -9,6 +9,7 @@ const AdminPage = ({ lang, activePage, currentUser }) => {
     'admin-queue': <QueueTab lang={lang} />,
     'admin-users': <UserManagementTab lang={lang} currentUser={currentUser} />,
     'admin-quota-requests': <QuotaRequestsTab lang={lang} />,
+    'admin-guests': <AdminEpisodeGuestsTab lang={lang} />,
     'admin-tokenizer': <AdminTokenizerTab lang={lang} />,
     'admin-topic-seg-audit': <AdminTopicSegAuditTab lang={lang} />,
     'admin-external-api': <ExternalApiStatusTab lang={lang} />,
@@ -18,7 +19,7 @@ const AdminPage = ({ lang, activePage, currentUser }) => {
       <div style={{ padding: '32px 40px 16px', borderBottom: `1px solid ${TOKEN.surfaceBorder}`, background: TOKEN.surface }}>
         <p style={{ color: TOKEN.accent, fontSize: 12, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', margin: '0 0 4px' }}>{t ? '後台管理' : 'Administration'}</p>
         <h1 style={{ color: TOKEN.text, fontSize: 24, fontWeight: 700, margin: 0 }}>
-          {{ 'admin-api': t ? 'API 金鑰管理' : 'API Key Management', 'admin-llm': t ? 'LLM 模型設定' : 'LLM Model Settings', 'admin-rag': t ? 'RAG 參數設定' : 'RAG Configuration', 'admin-schedule': t ? '轉錄排程管理' : 'Transcription Schedule', 'admin-queue': t ? '轉錄序列' : 'Transcription Queue', 'admin-users': t ? '使用者管理' : 'User Management', 'admin-quota-requests': t ? 'Quota 申請' : 'Quota Requests', 'admin-tokenizer': t ? '分詞詞典管理' : 'Tokenizer Dictionary', 'admin-topic-seg-audit': t ? '段落分類審核' : 'Topic Segment Audit', 'admin-external-api': t ? '外部 API 狀態' : 'External API Status' }[activePage]}
+          {{ 'admin-api': t ? 'API 金鑰管理' : 'API Key Management', 'admin-llm': t ? 'LLM 模型設定' : 'LLM Model Settings', 'admin-rag': t ? 'RAG 參數設定' : 'RAG Configuration', 'admin-schedule': t ? '轉錄排程管理' : 'Transcription Schedule', 'admin-queue': t ? '轉錄序列' : 'Transcription Queue', 'admin-users': t ? '使用者管理' : 'User Management', 'admin-quota-requests': t ? 'Quota 申請' : 'Quota Requests', 'admin-guests': t ? '來賓管理' : 'Guests', 'admin-tokenizer': t ? '分詞詞典管理' : 'Tokenizer Dictionary', 'admin-topic-seg-audit': t ? '段落分類審核' : 'Topic Segment Audit', 'admin-external-api': t ? '外部 API 狀態' : 'External API Status' }[activePage]}
         </h1>
       </div>
       <div style={{ padding: '28px 40px 40px' }}>{pages[activePage]}</div>
