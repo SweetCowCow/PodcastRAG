@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING
 import jieba
 from sqlalchemy import select
 
+from app.models.show import Show
 from app.models.tokenizer_term import TokenizerCustomTerm
 
 if TYPE_CHECKING:
@@ -31,10 +32,12 @@ _lock = threading.Lock()
 
 
 def get_show_name_terms() -> set[str]:
-    """Return the set of terms flagged `is_show_name=true`.
+    """Return show-name terms auto-derived from `shows.title`.
 
     Used by `rag._build_ts_query` to drop show-name tokens from the
-    lexical query side (embedding side is not affected).
+    lexical query side (embedding side is not affected). The
+    `tokenizer_custom_terms.is_show_name` column is no longer consulted;
+    show names come from the canonical `shows` table.
     """
     return _show_name_terms.copy()
 
@@ -87,10 +90,15 @@ async def _register_from_db(db: AsyncSession) -> None:
     for row in rows:
         jieba.add_word(row.term, freq=row.weight)
         _loaded_terms.add(row.term)
-        if getattr(row, "is_show_name", False):
-            _show_name_terms.add(row.term)
+    show_titles = (await db.execute(select(Show.title))).scalars().all()
+    for title in show_titles:
+        if not title:
+            continue
+        jieba.add_word(title)
+        _loaded_terms.add(title)
+        _show_name_terms.add(title)
     logger.info(
-        "tokenizer dictionary loaded: %d terms (%d show-name)",
+        "tokenizer dictionary loaded: %d terms (%d show-name auto-derived)",
         len(_loaded_terms),
         len(_show_name_terms),
     )
@@ -118,8 +126,13 @@ def _lazy_sync_load() -> None:
                 for row in rows:
                     jieba.add_word(row.term, freq=row.weight)
                     _loaded_terms.add(row.term)
-                    if getattr(row, "is_show_name", False):
-                        _show_name_terms.add(row.term)
+                show_titles = session.execute(select(Show.title)).scalars().all()
+                for title in show_titles:
+                    if not title:
+                        continue
+                    jieba.add_word(title)
+                    _loaded_terms.add(title)
+                    _show_name_terms.add(title)
             engine.dispose()
             logger.info(
                 "tokenizer dictionary lazy-loaded (sync): %d terms",
