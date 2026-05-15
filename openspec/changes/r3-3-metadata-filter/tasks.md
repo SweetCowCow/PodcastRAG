@@ -53,8 +53,8 @@
 實作 Decision 2 的 bake-off methodology。
 
 - [x] 7.1 寫 `scripts/bakeoff_entity_extractor.py`：對 R1.2 dataset 48 題各跑三 model（gpt-4o-mini / gemini-2.5-flash-lite / claude-haiku-4-5），輸出 JSONL 含 question + each model 抽出的 entities
-- [ ] 7.2 人工 audit 抽 10 題對比 model 抽出 entity vs 預期，計算 entity F1（precision / recall on guests + date_range hit/miss）；結果寫 `docs/case-studies/r33-metadata-filter.md` Stage 2 section
-- [ ] 7.3 結論寫進 case study：選擇最便宜且 entity F1 ≥ 0.7 的 model 作為 prod 預設
+- [x] 7.2 人工 audit 抽 10 題對比 model 抽出 entity vs 預期，計算 entity F1（precision / recall on guests + date_range hit/miss）；結果寫 `docs/case-studies/r33-metadata-filter.md` Stage 2 section
+- [x] 7.3 結論寫進 case study：選擇最便宜且 entity F1 ≥ 0.7 的 model 作為 prod 預設
 
 ## 8. RAG 三池 RRF SQL Refactor（Semantic search endpoint returns ranked chunks / RRF pool weights configurable in Python）
 

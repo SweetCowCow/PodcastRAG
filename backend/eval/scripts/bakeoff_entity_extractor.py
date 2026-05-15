@@ -60,7 +60,8 @@ class ModelSpec:
     label: str            # Short name for output file
     model: str            # Model id passed to chat.completions
     base_url: str         # e.g. https://api.openai.com/v1
-    key_env: str          # env var holding the API key
+    provider: str         # api_keys.provider — resolved via key_resolver
+    key_env: str          # env var consulted before DB lookup
     est_cost_per_q: float # Rough USD per question for budget gating
 
 
@@ -70,6 +71,7 @@ DEFAULT_CANDIDATES: list[ModelSpec] = [
         label="gpt-4o-mini",
         model="gpt-4o-mini",
         base_url="https://api.openai.com/v1",
+        provider="openai",
         key_env="OPENAI_OFFICIAL_KEY",
         est_cost_per_q=0.0008,
     ),
@@ -77,6 +79,7 @@ DEFAULT_CANDIDATES: list[ModelSpec] = [
         label="gemini-2.5-flash-lite",
         model="gemini-2.5-flash-lite",
         base_url="https://hnd1.aihub.zeabur.ai/v1",
+        provider="zeabur-aihub",
         key_env="OPENAI_API_KEY",  # Zeabur AI Hub gateway key
         est_cost_per_q=0.0003,
     ),
@@ -84,6 +87,7 @@ DEFAULT_CANDIDATES: list[ModelSpec] = [
         label="claude-haiku-4-5",
         model="claude-haiku-4-5",
         base_url="https://hnd1.aihub.zeabur.ai/v1",
+        provider="zeabur-aihub",
         key_env="OPENAI_API_KEY",
         est_cost_per_q=0.0010,
     ),
@@ -212,15 +216,21 @@ async def _amain(args: argparse.Namespace) -> int:
         print(f"ERROR: estimated cost ${est:.4f} > $0.50 budget; pass --force-budget to override", file=sys.stderr)
         return 2
 
-    # Resolve API keys per model
-    import os
+    # Resolve API keys per model — env override first, then DB via key_resolver
+    try:
+        from app.services.key_resolver import get_provider_key
+    except ModuleNotFoundError:
+        from backend.app.services.key_resolver import get_provider_key  # type: ignore[no-redef]
     keys: dict[str, str] = {}
     for spec in candidates:
-        k = os.environ.get(spec.key_env)
-        if not k:
-            print(f"ERROR: env var {spec.key_env} not set for {spec.label}", file=sys.stderr)
+        try:
+            keys[spec.label] = get_provider_key(spec.provider, prefer_env=spec.key_env)
+        except KeyError as exc:
+            print(
+                f"ERROR: no key for {spec.label} (provider={spec.provider}, "
+                f"env={spec.key_env}): {exc}", file=sys.stderr,
+            )
             return 2
-        keys[spec.label] = k
 
     out_path = args.out_dir / f"entity-bakeoff-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}.jsonl"
     summary = await _bakeoff(args.dataset, candidates, keys, out_path)
