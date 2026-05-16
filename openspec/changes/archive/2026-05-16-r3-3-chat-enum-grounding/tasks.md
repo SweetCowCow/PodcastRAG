@@ -52,4 +52,4 @@
 - [x] 8.2 更新 `docs/case-studies/r33-metadata-filter.md`（append Stage 8 — chat-enum-grounding 結果）+ prod eval 數字對比
 - [x] 8.3 更新 `docs/roadmap.md` R3.3 row（加註 `r3-3-chat-enum-grounding` follow-up 已 ship、known limits A/B/C 解決）
 - [x] 8.4 同步 memory `project_pending_followups.md`（issue #1 標完成）
-- [ ] 8.5 `/spectra-archive r3-3-chat-enum-grounding`
+- [x] 8.5 `/spectra-archive r3-3-chat-enum-grounding`
