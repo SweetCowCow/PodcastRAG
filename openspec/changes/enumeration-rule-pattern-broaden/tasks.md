@@ -15,10 +15,10 @@
 ## 2. Prod 驗證
 
 - [x] 2.1 commit + push backend 變動（無 frontend / migration）；等 Zeabur backend build 綠
-- [ ] 2.2 chrome-devtools-mcp 自動化驗證 q26 句型：登入後直接打 chat endpoint with question `"節目裡有講過高雄美食的集數有哪些？"`，assert response.enumeration_episodes 非 null + enumeration_total > 0
-- [ ] 2.3 同樣對 q25 句型「節目裡有哪些集是歌單？」打一次（regression check），assert 行為 byte-identical 到 ship 前
-- [ ] 2.4 跑 false-positive 檢核：打 `"主持人有哪些人？"`，assert enumeration_episodes 為 null（rule pattern 不該命中、entity extractor 抽不出 guests/topics/date）
-- [ ] 2.5 用 eval-runner-chat-enum-scoring 的新 runner 跑一次 prod eval baseline：對比上次 q26 episode_set_recall = 0.333，預期升到 ≥ 0.5；aggregate enumeration mean 應從 0.5467 升
+- [x] 2.2 chrome-devtools-mcp 自動化驗證 q26 句型：登入後直接打 chat endpoint with question `"節目裡有講過高雄美食的集數有哪些？"`，assert response.enumeration_episodes 非 null + enumeration_total > 0
+- [x] 2.3 同樣對 q25 句型「節目裡有哪些集是歌單？」打一次（regression check），assert 行為 byte-identical 到 ship 前
+- [x] 2.4 跑 false-positive 檢核：打 `"主持人有哪些人？"`，assert enumeration_episodes 為 null（rule pattern 不該命中、entity extractor 抽不出 guests/topics/date）
+- [x] 2.5 用 eval-runner-chat-enum-scoring 的新 runner 跑一次 prod eval baseline：對比上次 q26 episode_set_recall = 0.333，預期升到 ≥ 0.5；aggregate enumeration mean 應從 0.5467 升
 
 ## 3. 收尾
 

@@ -49,7 +49,34 @@ const MILESTONE_LABELS = {
 
 // Entries — newest milestone first; within each milestone newest date first.
 const RELEASE_LOG = [
-  // ─── v1.7 — Retrieval Quality Fix (5/13–5/16) ───
+  // ─── v1.7 — Retrieval Quality Fix (5/13–5/17) ───
+  {
+    date: '2026-05-17', slug: 'enumeration-rule-pattern-broaden', milestone: 'v1.7', tag: 'fix',
+    title: {
+      zh: '「高雄美食的集數有哪些」這種反序問法現在也能列出集數了 — 順便挖出更深的 CJK 切詞 bug',
+      en: 'Reversed-Structure Questions Like "Which Episodes Cover Kaohsiung Food" Now Trigger Enumeration — and Surfaced a Deeper CJK Tokenization Bug',
+    },
+    summary: {
+      zh: '昨天 ship r3-3-chat-enum-grounding 後跑 eval baseline 發現 q26「節目裡有講過高雄美食的集數有哪些？」episode_set_recall 持平 0.333 沒升，q25「節目裡有哪些集是歌單？」卻升到 0.76。兩題都是列舉題、結構幾乎一樣，只差問句字序。挖下去發現兩層問題：(1) rule pattern 只認得「哪/那 + 集」正序結構（如「哪幾集」「有哪些集」），不認得「集數有哪些」「集有哪些」這類反序問法 — 把 regex 擴張一條 `集數?有[哪那]些` 解決；不擴張到無「集」字的「有哪些」「哪些是」（譬如「主持人有哪些？」會誤命中）。(2) 修完 regex 後 q26 確實觸發 enumeration 路徑，但 SQL 還是回 0 集 — 因為 LLM 抽出的多字 phrase「高雄美食」整段塞進 Postgres `to_tsquery(simple, ...)`，simple analyzer 不切 CJK，把「高雄美食」當一個 lexeme 對不上每集 description 存的 jieba 切過的「高雄」「美食」單字 token。修法：`find_episodes_by_topic` 在組 tsquery 前對每個 topic term 跑 jieba 切再 OR-join。Prod 結果：q26 從 0.333 → 1.0（chat 回 16 集，expected 6 集全命中）、q25 維持 0.76 zero regression、aggregate enumeration 從 0.5467 → 0.88 (+33pp)、chunk_id 題 byte-identical。',
+      en: 'After yesterday\'s r3-3-chat-enum-grounding shipped we ran the eval baseline and noticed q26 "Which episodes cover Kaohsiung food?" stayed flat at 0.333 while q25 "Which episodes are playlist episodes?" jumped to 0.76. Both are enumeration items with nearly identical structure, differing only in question word order. Two layers of issues surfaced: (1) the rule pattern only matched 哪/那 + 集 in forward order ("哪幾集" / "有哪些集"), missing reversed structures like "集數有哪些" / "集有哪些" — fixed by widening the regex with `集數?有[哪那]些` (carefully NOT extending to bare "有哪些" without 集, which would falsely match "主持人有哪些?"). (2) Once regex fixed and the path triggered, SQL still returned 0 episodes for q26 — the LLM-extracted multi-char phrase "高雄美食" was passed whole to Postgres `to_tsquery(simple, ...)`, and the simple analyzer does NOT segment CJK, so "高雄美食" became a single lexeme that never matched the jieba-tokenised descriptions which store "高雄" and "美食" as separate words. Fix: `find_episodes_by_topic` now jieba-tokenises each topic term BEFORE OR-joining for the tsquery. Prod result: q26 went 0.333 → 1.0 (chat returned 16 episodes covering all 6 expected ones), q25 held at 0.76 zero regression, aggregate enumeration 0.5467 → 0.88 (+33pp), chunk_id items byte-identical.',
+    },
+    summaryBullets: {
+      zh: [
+        'Rule pattern 加一條 `集數?有[哪那]些` 涵蓋「集數有哪些」「集有哪些」這類反序問法；不擴張到無「集」字的句型避免「主持人有哪些」誤命中',
+        '`find_episodes_by_topic` SQL 組裝前對每個 topic term 先用 jieba 切（譬如「高雄美食」→「高雄」+「美食」），避免 Postgres simple analyzer 不切 CJK 導致整段 phrase 對不上每集描述存的單字 token',
+        '某 term jieba 切後全是 stopword 則 fallback 留原 term，不丟訊號',
+        'Prod eval：q26 0.333 → 1.0、aggregate enumeration 0.5467 → 0.88、chunk_id Recall@5 0.86 byte-identical',
+        'Spec 加 ADDED「Topic-driven enumeration finder pre-tokenises LLM phrases with jieba」+ rule pattern MODIFIED 補三個 scenarios',
+      ],
+      en: [
+        'Rule pattern gains a `集數?有[哪那]些` arm covering reversed structures like "集數有哪些" / "集有哪些"; deliberately NOT extending to bare "有哪些" without 集 (avoids false positives like "主持人有哪些?")',
+        '`find_episodes_by_topic` now jieba-tokenises each topic term BEFORE OR-joining into the tsquery (e.g. "高雄美食" → "高雄" + "美食"), closing the impedance mismatch between Postgres simple analyzer (no CJK segmentation) and the jieba-tokenised description corpus',
+        'When jieba reduces a term to all-stopwords, the raw term is retained as fallback so the LLM signal is not silently dropped',
+        'Prod eval: q26 0.333 → 1.0, aggregate enumeration 0.5467 → 0.88, chunk_id Recall@5 0.86 byte-identical',
+        'Spec adds Topic-driven enumeration finder pre-tokenises LLM phrases with jieba + MODIFIED rule pattern with 3 new scenarios',
+      ],
+    },
+  },
   {
     date: '2026-05-16', slug: 'eval-runner-chat-enum-scoring', milestone: 'v1.7', tag: 'enhancement',
     title: {
