@@ -51,6 +51,35 @@ const MILESTONE_LABELS = {
 const RELEASE_LOG = [
   // ─── v1.7 — Retrieval Quality Fix (5/13–5/16) ───
   {
+    date: '2026-05-16', slug: 'r3-3-chat-enum-grounding', milestone: 'v1.7', tag: 'enhancement',
+    title: {
+      zh: 'Chat 答案文字現在會對齊「相關集數」卡片數字 + 主題型問題也能列出集數',
+      en: 'Chat answer text now aligns with the Related Episodes card count + topic-only queries also surface the list',
+    },
+    summary: {
+      zh: 'R3.3 metadata-filter 上線後我們抓到三個交織的痛點：(1) 問「楊大正是哪幾集的來賓？」chat 文字回「1 集」但下方卡片其實顯示 2 集 — 因為回答模型只看到搜尋撿出的 8 段對話片段，沒看到完整的「相關集數」清單，硬從片段子集推論集數；(2) 單獨輸入「歌單」沒有列出相關集數 — 因為主題詞欄位早就由 LLM 抽出來了，但決定「要不要列集數」的程式沒用它；(3) 問「歌單哪幾集」結果列出全節目 164 集 — 因為原本 spec 寫要做的「主題詞篩集數」我那時偷懶沒寫。這次三件一起補：(a) 回答模型的 prompt 現在會在前面預先注入「共 N 集」的結構化清單，模型答案數字直接對齊卡片；(b) 主題詞欄位也能觸發列舉，不再閒置；(c) 主題詞會去比對每集簡介內容，「歌單那幾集」現在精準回 23 集（節目裡真的做歌單的集數），不是傻列 164 集。前端配合做了階段式顯示：相關集數預設只顯示 10 集，「再顯示 10 集」按鈕點一次加 10，全部顯示完才停 — 手機看 100+ 集的列表不會被灌爆。後端架構也順便重構成 tool-like 三個獨立函式（依來賓 / 主題 / 日期分別找），為未來 agentic RAG 升級留好接口。Prod 實測：「楊大正」回 2 集對齊、「歌單那幾集」回 23 集精準、「林志炫」（不存在的來賓）誠實回 0 集 + 文字明說沒找到。',
+      en: 'After R3.3 metadata-filter shipped we caught three interlocked pain points: (1) "Which episodes featured 楊大正?" — chat text said "1 episode" but the card list below correctly showed 2, because the answer model only ever saw the top-8 retrieval chunks and guessed the count from that subset; (2) typing just "歌單" produced no enumeration list because the topic field was already extracted by the LLM but the "should we list episodes?" function ignored it; (3) "歌單哪幾集" returned all 164 episodes of the show because the topic-keyword SQL filter the spec called for was never written. This release fixes all three together: (a) the answer prompt now prepends a structured grounding block listing the matched episodes BEFORE the chunk citations, so the model grounds its prose count on the enumeration list; (b) topics now trigger the enumeration path; (c) topic terms run against per-episode descriptions, so "歌單哪幾集" returns 23 real playlist episodes rather than the entire show. Frontend gained stepwise display: the enumeration card list defaults to 10 visible, with a "Show 10 more" button incrementing by 10 — mobile no longer gets dumped with 100+ cards at once. Backend refactored into three tool-like finder functions (by guest / by topic / by date) preparing the seam for future agentic-RAG upgrades. Prod verified: "楊大正" returns 2 (aligned), "歌單那幾集" returns 23 precisely, "林志炫" (non-existent guest) honestly returns 0 + answer text says no match.',
+    },
+    summaryBullets: {
+      zh: [
+        'Chat 答案文字數字現在與相關集數卡片一致：回答模型 prompt 預先注入「共 N 集」結構化清單，不再從片段子集亂推',
+        '主題型問題（譬如「歌單」「高雄美食」）也能觸發相關集數列舉 — 之前 LLM 抽出來的 topic 欄位被閒置，現在接上 SQL',
+        '「歌單哪幾集」現在精準回 23 集（節目裡真的做歌單的集數），不是傻列全節目 164 集',
+        '相關集數階段式顯示：預設 10 集 + 「再顯示 10 集」按鈕，手機不會被 100+ 集列表灌爆',
+        '來賓+主題複合題（譬如「馬世芳那幾集講過烤肉」）走 AND；交集 0 集時自動 fallback 給來賓的全部集數並標警告',
+        '後端拆成 tool-like 三函式（by guest / topic / date），為未來 agentic RAG 留接口；74 個單元測試全綠',
+      ],
+      en: [
+        'Chat answer count now matches the Related Episodes card count: answer prompt prepends a structured grounding block listing "N episodes" before the chunk citations, no more guessing from a subset',
+        'Topic-only queries (e.g. "歌單", "高雄美食") trigger the enumeration list too — the LLM-extracted topics field was previously idle, now wired to SQL',
+        '"歌單哪幾集" returns 23 real playlist episodes precisely (was: every episode of the show, 164)',
+        'Stepwise display: card list defaults to 10, "Show 10 more" button increments by 10 — mobile no longer gets dumped with a 100+ card list',
+        'Guest + topic combination (e.g. "馬世芳那幾集講過烤肉") AND-intersects; on empty intersection auto-falls back to guest-only with a warning header',
+        'Backend refactored into three tool-like finder functions (by guest / topic / date) — preps the seam for future agentic RAG; 74 unit tests passing',
+      ],
+    },
+  },
+  {
     date: '2026-05-16', slug: 'chat-input-ime-composition-fix', milestone: 'v1.7', tag: 'fix',
     title: {
       zh: '注音輸入法 Enter 選字不再誤送 — 對話框與語意搜尋框 IME safety',

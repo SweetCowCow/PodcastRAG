@@ -41,15 +41,15 @@
 
 ## 7. Prod 驗證（落實 `Topic-only query triggers enumeration` + `Guest filter narrows retrieval AND grounds answer` + `Empty filter result keeps fields populated` 三個 scenarios）
 
-- [ ] 7.1 commit + push（commit message 列三件改動 + 對應 spec scenarios）；等 Zeabur frontend + backend build 綠
-- [ ] 7.2 chrome-devtools-mcp 自動化跑 4 個 query：(a) `"楊大正是哪幾集的來賓？"` → assert chat 文字含「2 集」（不再說「1 集」）+ enumeration_total=2；(b) `"歌單那幾集"` → assert enumeration_episodes 非空且非全 164 集 + enumeration_total < 50；(c) `"林志炫上過哪幾集"`（假設沒這個 guest）→ assert enumeration_episodes=[] + enumeration_total=0 + chat 文字明說沒找到；(d) `"馬世芳那幾集講過烤肉"`（AND 應該空）→ assert fallback to guest-only + grounding header 含「⚠」
-- [ ] 7.3 跑 R1.2 eval baseline（n=30，prod backend）：對比 R3.3 baseline `Episode Set Recall (enumeration, n=2) = 0.2067`；預期 q25（歌單）episode_set_recall 從 0.08 → 0.4+，q26（高雄美食）從 0.333 → 0.5+。落差大或反向退步代表 topic-filter SQL 召回有問題要 tune
-- [ ] 7.4 user 人工複測 SOP：注音輸入「歌單那幾集」「楊大正哪幾集」「馬世芳那幾集講過烤肉」三題 → 驗 chat 文字數字與卡片 N 一致 + stepwise「再顯示 10 集」按鈕動作正確
+- [x] 7.1 commit + push（commit message 列三件改動 + 對應 spec scenarios）；等 Zeabur frontend + backend build 綠
+- [x] 7.2 chrome-devtools-mcp 自動化跑 4 個 query：(a) `"楊大正是哪幾集的來賓？"` → assert chat 文字含「2 集」（不再說「1 集」）+ enumeration_total=2；(b) `"歌單那幾集"` → assert enumeration_episodes 非空且非全 164 集 + enumeration_total < 50；(c) `"林志炫上過哪幾集"`（假設沒這個 guest）→ assert enumeration_episodes=[] + enumeration_total=0 + chat 文字明說沒找到；(d) `"馬世芳那幾集講過烤肉"`（AND 應該空）→ assert fallback to guest-only + grounding header 含「⚠」
+- [x] 7.3 跑 R1.2 eval baseline（n=30，prod backend）：對比 R3.3 baseline `Episode Set Recall (enumeration, n=2) = 0.2067`；預期 q25（歌單）episode_set_recall 從 0.08 → 0.4+，q26（高雄美食）從 0.333 → 0.5+。落差大或反向退步代表 topic-filter SQL 召回有問題要 tune
+- [x] 7.4 user 人工複測 SOP：注音輸入「歌單那幾集」「楊大正哪幾集」「馬世芳那幾集講過烤肉」三題 → 驗 chat 文字數字與卡片 N 一致 + stepwise「再顯示 10 集」按鈕動作正確
 
 ## 8. 收尾
 
-- [ ] 8.1 寫 release log entry（v1.7 內，date 2026-05-17 或實際 ship 日，slug `r3-3-chat-enum-grounding`，tag `enhancement`，user-perspective 講「現在問『歌單哪幾集』、『馬世芳上過哪幾集』，AI 答案會與下方卡片數字一致 + topic-only 也能列出相關集數 + 列太多時手機自動分批顯示」）
-- [ ] 8.2 更新 `docs/case-studies/r33-metadata-filter.md`（append Stage 8 — chat-enum-grounding 結果）+ prod eval 數字對比
-- [ ] 8.3 更新 `docs/roadmap.md` R3.3 row（加註 `r3-3-chat-enum-grounding` follow-up 已 ship、known limits A/B/C 解決）
-- [ ] 8.4 同步 memory `project_pending_followups.md`（issue #1 標完成）
+- [x] 8.1 寫 release log entry（v1.7 內，date 2026-05-17 或實際 ship 日，slug `r3-3-chat-enum-grounding`，tag `enhancement`，user-perspective 講「現在問『歌單哪幾集』、『馬世芳上過哪幾集』，AI 答案會與下方卡片數字一致 + topic-only 也能列出相關集數 + 列太多時手機自動分批顯示」）
+- [x] 8.2 更新 `docs/case-studies/r33-metadata-filter.md`（append Stage 8 — chat-enum-grounding 結果）+ prod eval 數字對比
+- [x] 8.3 更新 `docs/roadmap.md` R3.3 row（加註 `r3-3-chat-enum-grounding` follow-up 已 ship、known limits A/B/C 解決）
+- [x] 8.4 同步 memory `project_pending_followups.md`（issue #1 標完成）
 - [ ] 8.5 `/spectra-archive r3-3-chat-enum-grounding`
