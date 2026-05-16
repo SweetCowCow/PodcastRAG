@@ -462,7 +462,7 @@ const QueryPage = ({ lang, show, onBack, onOpenEpisode, queryMode, user, onUserC
                 <div style={{ display: 'flex', gap: 8 }}>
                   <Input value={chatInput} onChange={e => setChatInput(e.target.value)}
                     placeholder={quotaExhausted ? (t ? '查詢額度已用完' : 'Quota exhausted') : (t ? '針對此節目內容提問...' : 'Ask anything about this show...')}
-                    onSubmit={handleSend} />
+                    onSubmit={() => handleSend()} />
                   <Btn onClick={handleSend} disabled={sending || !chatInput.trim() || quotaExhausted} icon="send">{t ? '送出' : 'Send'}</Btn>
                 </div>
                 <p style={{ margin: '7px 0 0', fontSize: 12, color: quotaExhausted ? TOKEN.danger : TOKEN.textMuted }}>
@@ -483,7 +483,7 @@ const QueryPage = ({ lang, show, onBack, onOpenEpisode, queryMode, user, onUserC
             <div style={{ display: 'flex', gap: 8 }}>
               <Input value={searchQ} onChange={e => setSearchQ(e.target.value)}
                 placeholder={t ? '輸入關鍵字或語意搜尋...' : 'Keyword or semantic search...'}
-                icon="search" onSubmit={handleSearch} />
+                icon="search" onSubmit={() => handleSearch()} />
               <Btn onClick={() => handleSearch()} disabled={searching || !searchQ.trim()}>{t ? '搜尋' : 'Search'}</Btn>
             </div>
             {!user && (
