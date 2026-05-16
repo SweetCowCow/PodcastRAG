@@ -39,14 +39,24 @@ from app.services.rag import ChunkHit as RagHit, MetadataFilters
 
 logger = logging.getLogger(__name__)
 
-# R3.3 Phase 9: substring trigger for the enumeration UI when the entity
-# extractor returns empty. Spec scenario "Enumeration rule pattern triggers
-# enumeration response" lists 哪幾集 / 哪集 / 哪些集 — but Traditional
-# Chinese users routinely type 那 (that) where 哪 (which) is meant
-# (homophones, both pronounced 'na'). Prod verification 2026-05-16 caught
-# 「歌單那幾集講過什麼」 silently dropping out of the enumeration path,
-# so the trigger accepts both characters.
-_ENUMERATION_RULE_PATTERN = re.compile(r"[哪那]幾集|[哪那]集|[哪那]些集")
+# R3.3 Phase 9 + enumeration-rule-pattern-broaden: substring trigger for the
+# enumeration UI when the entity extractor returns empty.
+#
+# Forward structure: 哪/那 followed by 集 — covers
+#   「馬世芳是哪幾集的來賓？」「歌單那幾集」「節目裡有哪些集是歌單」
+# Reversed structure: 集 followed by 哪/那些 — covers
+#   「高雄美食的集數有哪些？」「歌單的集有哪些」
+#
+# We require 集 to be adjacent (forward) or within `集數?有` prefix
+# (reversed). Bare 「有哪些」without 集 is intentionally NOT matched —
+# that risks false positives on questions like 「主持人有哪些」 where
+# the subject is not necessarily an episode list.
+#
+# `那` 同義詞遮蔽 `哪` is a Bopomofo-IME typo Traditional Chinese users
+# make routinely (homophones, both pronounced 'na'). Prod 2026-05-16
+# caught both 「歌單那幾集」 and 「集數有哪些」 silently dropping out
+# of enumeration before the pattern was widened.
+_ENUMERATION_RULE_PATTERN = re.compile(r"[哪那]幾集|[哪那]集|[哪那]些集|集數?有[哪那]些")
 
 router = APIRouter(tags=["query"])
 

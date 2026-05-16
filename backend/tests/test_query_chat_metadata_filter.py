@@ -195,15 +195,29 @@ async def test_enumeration_triggers_on_rule_pattern_with_no_entity(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_enumeration_rule_pattern_variants():
-    """All three substrings (哪幾集 / 哪集 / 哪些集) trigger the rule path.
+    """Forward + reversed structures + both 哪/那 typo variants all trigger.
 
-    Both 哪 (which) and 那 (that) work — Taiwan users commonly type 那
-    where 哪 is meant. Prod 2026-05-16: 「歌單那幾集」 silently dropped
-    out of enumeration before this widening.
+    Forward: 哪 / 那 followed by 集 — covers most natural CJK question
+    structures (「馬世芳是哪幾集」「歌單那幾集」「有哪些集」).
+
+    Reversed (added by enumeration-rule-pattern-broaden 2026-05-16):
+    集 followed by 哪/那些 — covers 「集數有哪些」「集有哪些」, a
+    structure that golden set q26 used and that the original pattern
+    missed.
+
+    False-positive guard: bare 「有哪些」without 集 must NOT match,
+    because the subject (主持人 / 歌單 / 來賓) isn't necessarily an
+    episode list.
     """
+    # Forward structure (existing pattern, regression guard)
     for q in ("哪幾集", "哪集", "哪些集", "那幾集", "那集", "那些集"):
-        assert query_mod._ENUMERATION_RULE_PATTERN.search(q) is not None
+        assert query_mod._ENUMERATION_RULE_PATTERN.search(q) is not None, q
+    # Reversed structure (new)
+    for q in ("集數有哪些", "集有哪些", "集數有那些", "集有那些"):
+        assert query_mod._ENUMERATION_RULE_PATTERN.search(q) is not None, q
+    # False-positive guard
     assert query_mod._ENUMERATION_RULE_PATTERN.search("主持人是誰") is None
+    assert query_mod._ENUMERATION_RULE_PATTERN.search("主持人有哪些人？") is None
 
 
 # ---------------------------------------------------------------------------
