@@ -161,7 +161,38 @@ async def find_episodes_by_topic(
             safe_terms.append(s)
     if not safe_terms:
         return []
-    tsquery_text = " | ".join(safe_terms)
+
+    # enumeration-rule-pattern-broaden bugfix: the LLM entity extractor
+    # often returns multi-character phrases like "高雄美食" that Postgres'
+    # `simple` analyzer keeps as a single token. But
+    # `episode_description_chunks.text_tsvector` was built from a
+    # jieba-tokenised stream (per `description_indexer.py` R3.1 design),
+    # so the chunks store the individual lexemes "高雄" + "美食" — the
+    # tsquery for the phrase as one token matches zero rows. We jieba-
+    # tokenise each topic term here (filtering single-char and stopword
+    # noise) so a phrase contributes its component words to the OR query.
+    # Concrete impact (prod 2026-05-17): "高雄美食" went from 0 matches
+    # to 37 matches against the same description corpus.
+    expanded: list[str] = []
+    seen: set[str] = set()
+    for t in safe_terms:
+        toks = [tk for tk in tokenizer.tokenize(t) if tk and tk.strip()]
+        # Drop noise: single-char tokens (particles like 的、了、是) and
+        # stopwords from TOPIC_STOPWORDS. If jieba produces nothing useful
+        # for a term (e.g. all-stopword input), fall back to the original
+        # term so we don't silently drop the LLM's signal.
+        kept = [
+            tk for tk in toks
+            if len(tk) >= 2 and tk not in TOPIC_STOPWORDS
+        ]
+        if not kept:
+            kept = [t]
+        for tk in kept:
+            if tk not in seen:
+                seen.add(tk)
+                expanded.append(tk)
+
+    tsquery_text = " | ".join(expanded)
     params = {
         "show_id": show_id,
         "tsquery_text": tsquery_text,

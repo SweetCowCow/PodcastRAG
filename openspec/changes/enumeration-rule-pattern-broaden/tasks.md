@@ -4,9 +4,17 @@
 - [x] 1.2 修改 `backend/tests/test_query_chat_metadata_filter.py` `test_enumeration_rule_pattern_variants`：加 4 個正例 case（「集數有哪些」「集有哪些」「集數有那些」「集有那些」）+ 1 個反例 case（「主持人有哪些」**不**應命中）；既有 6 個 case 保留
 - [x] 1.3 跑 `python -m pytest tests/test_query_chat_metadata_filter.py::test_enumeration_rule_pattern_variants -v` 確認全綠
 
+## 1.5 同 change 順手修：topic terms 對應的 SQL 該先 jieba 切（落實 `Topic-driven enumeration finder pre-tokenises LLM phrases with jieba`）
+
+實作期間 prod 驗證發現：rule pattern 擴張後 q26 確實 trigger 了，但 `find_episodes_by_topic` 把 LLM 抽出的多字 phrase（譬如「高雄美食」）整段塞進 `to_tsquery('simple', ...)`，Postgres simple analyzer 不切 CJK → SQL 命中 0 集。Description tsvector 是 jieba 切過存的單字 token，phrase 整段 query 對不上。獨立但同條 chain 的 bug，順手修。
+
+- [x] 1.5.1 修改 `backend/app/services/episode_finders.py` `find_episodes_by_topic` 落實 `Topic-driven enumeration finder pre-tokenises LLM phrases with jieba`：在 tsquery 組裝前對每個 `topic_terms` entry 跑 `tokenizer.tokenize`，per-term 取長度 ≥ 2 且不在 `TOPIC_STOPWORDS` 的 token；跨 term 去重保留首次出現；某 term jieba 切後全 strip 光則 fallback 留原 term 不丟訊號
+- [x] 1.5.2 在 `backend/tests/test_episode_finders.py` 加 3 個新 test：(a) `test_find_by_topic_jieba_splits_phrase`（mock db；input `["高雄美食"]` → 驗 `:tsquery_text == "高雄 | 美食"`）；(b) `test_find_by_topic_all_stopword_term_falls_back_to_raw`（input `["節目"]` → 驗 tsquery 為 `"節目"` 而非空）；(c) `test_find_by_topic_dedupes_across_terms`（input `["高雄美食", "美食地圖"]` → 驗 `:tsquery_text == "高雄 | 美食 | 地圖"`）
+- [x] 1.5.3 跑廣域 chat-enum 套件確認 zero regression：`tests/test_episode_finders.py` + `tests/test_query_chat_metadata_filter.py` + `tests/test_chat_enum_grounding.py` + `tests/test_compute_enumeration_combiner.py`
+
 ## 2. Prod 驗證
 
-- [ ] 2.1 commit + push backend 變動（無 frontend / migration）；等 Zeabur backend build 綠
+- [x] 2.1 commit + push backend 變動（無 frontend / migration）；等 Zeabur backend build 綠
 - [ ] 2.2 chrome-devtools-mcp 自動化驗證 q26 句型：登入後直接打 chat endpoint with question `"節目裡有講過高雄美食的集數有哪些？"`，assert response.enumeration_episodes 非 null + enumeration_total > 0
 - [ ] 2.3 同樣對 q25 句型「節目裡有哪些集是歌單？」打一次（regression check），assert 行為 byte-identical 到 ship 前
 - [ ] 2.4 跑 false-positive 檢核：打 `"主持人有哪些人？"`，assert enumeration_episodes 為 null（rule pattern 不該命中、entity extractor 抽不出 guests/topics/date）

@@ -161,6 +161,48 @@ async def test_find_by_topic_or_joins_multiple_terms():
 
 
 @pytest.mark.asyncio
+async def test_find_by_topic_jieba_splits_phrase():
+    """enumeration-rule-pattern-broaden bugfix: a multi-character LLM topic
+    phrase like "高雄美食" MUST be jieba-split into ["高雄", "美食"] before
+    being OR-joined into the tsquery. Without this, Postgres simple
+    analyzer keeps "高雄美食" as a single lexeme that never matches the
+    jieba-tokenised description corpus."""
+    tokenizer.reset_for_tests()
+    db = _mock_db_with_rows([])
+    await episode_finders.find_episodes_by_topic(db, uuid.uuid4(), ["高雄美食"])
+    params = db.execute.call_args[0][1]
+    assert params["tsquery_text"] == "高雄 | 美食"
+
+
+@pytest.mark.asyncio
+async def test_find_by_topic_all_stopword_term_falls_back_to_raw():
+    """If jieba produces only stopword tokens for a term (e.g. the LLM
+    surfaces "節目" which is in TOPIC_STOPWORDS), the finder MUST retain
+    the raw term in the tsquery — silently dropping a term the LLM chose
+    to surface erases signal. Fallback target: literal raw term."""
+    tokenizer.reset_for_tests()
+    db = _mock_db_with_rows([])
+    await episode_finders.find_episodes_by_topic(db, uuid.uuid4(), ["節目"])
+    params = db.execute.call_args[0][1]
+    assert params["tsquery_text"] == "節目"
+
+
+@pytest.mark.asyncio
+async def test_find_by_topic_dedupes_across_terms():
+    """When jieba splits two input terms that share a component (e.g.
+    [高雄美食, 美食地圖] both produce 美食), the shared token MUST appear
+    exactly once in the final OR list, with first-occurrence order
+    preserved."""
+    tokenizer.reset_for_tests()
+    db = _mock_db_with_rows([])
+    await episode_finders.find_episodes_by_topic(
+        db, uuid.uuid4(), ["高雄美食", "美食地圖"]
+    )
+    params = db.execute.call_args[0][1]
+    assert params["tsquery_text"] == "高雄 | 美食 | 地圖"
+
+
+@pytest.mark.asyncio
 async def test_find_by_topic_escapes_tsquery_operators():
     """Stray tsquery operators inside a LLM-extracted topic must not
     blow up to_tsquery — they are replaced with whitespace."""
