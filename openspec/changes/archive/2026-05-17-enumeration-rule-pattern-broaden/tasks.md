@@ -22,7 +22,7 @@
 
 ## 3. 收尾
 
-- [ ] 3.1 補 release log entry（v1.7 內，date 2026-05-16 或 ship 日，slug `enumeration-rule-pattern-broaden`，tag `fix`，user-perspective 講「問『高雄美食的集數有哪些』現在也能列出相關集數了 — 之前只認得『哪幾集』這類問法」）
-- [ ] 3.2 更新 `docs/case-studies/r33-metadata-filter.md` 補 Stage 10（regex 擴張 + q26 eval lift 數字）
-- [ ] 3.3 同步 memory `project_pending_followups.md`：把 q26 持平的 follow-up 標完成
-- [ ] 3.4 `/spectra-archive enumeration-rule-pattern-broaden`
+- [x] 3.1 補 release log entry（v1.7 內，date 2026-05-16 或 ship 日，slug `enumeration-rule-pattern-broaden`，tag `fix`，user-perspective 講「問『高雄美食的集數有哪些』現在也能列出相關集數了 — 之前只認得『哪幾集』這類問法」）
+- [x] 3.2 更新 `docs/case-studies/r33-metadata-filter.md` 補 Stage 10（regex 擴張 + q26 eval lift 數字）
+- [x] 3.3 同步 memory `project_pending_followups.md`：把 q26 持平的 follow-up 標完成
+- [x] 3.4 `/spectra-archive enumeration-rule-pattern-broaden`

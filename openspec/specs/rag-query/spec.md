@@ -337,6 +337,36 @@ The backend SHALL expose `POST /shows/{show_id}/query` guarded by `require_authe
 - **THEN** the prompt SHALL contain a block matching this shape (literal first line, then numbered list of episodes):
 
 ```
+
+---
+### Requirement: Topic-driven enumeration finder pre-tokenises LLM phrases with jieba
+
+`find_episodes_by_topic(db, show_id, topic_terms)` SHALL jieba-tokenise each input `topic_terms` entry before constructing the `to_tsquery('simple', :tsquery_text)` argument. Each per-term jieba token of length ≥ 2 that is NOT in `TOPIC_STOPWORDS` SHALL contribute to the tsquery; per-term tokens are deduplicated across all input terms (first occurrence wins). When jieba produces zero useful tokens for a given term (e.g. the term is all stopwords or all single-char particles), the raw term SHALL be retained as a fallback so the LLM's signal is not silently dropped.
+
+Rationale: `episode_description_chunks.text_tsvector` is built from a jieba-tokenised stream (per R3.1 `description_indexer.py`), so the lexemes stored are per-word tokens like `高雄` and `美食`. Postgres `simple` analyzer does NOT segment CJK, so passing a multi-character LLM-extracted phrase like `"高雄美食"` directly to `to_tsquery('simple', '高雄美食')` matches ZERO rows even when descriptions clearly contain those topics — the corpus stores `高雄` and `美食` as separate lexemes. Pre-tokenising at the finder level closes the impedance mismatch.
+
+#### Scenario: Multi-character LLM topic phrase is split into component words
+
+- **GIVEN** `find_episodes_by_topic(db, show_id, ["高雄美食"])` invoked against descriptions whose tsvectors store `高雄` and `美食` as separate jieba tokens
+- **WHEN** the finder constructs the tsquery
+- **THEN** the `:tsquery_text` parameter SHALL be `"高雄 | 美食"` (jieba split + OR-joined), NOT `"高雄美食"` (the raw phrase)
+- **AND** rows whose `text_tsvector` matches either token SHALL be returned
+
+#### Scenario: All-stopword topic term falls back to raw term
+
+- **GIVEN** `find_episodes_by_topic(db, show_id, ["節目"])` where `節目` is in `TOPIC_STOPWORDS`
+- **WHEN** the finder constructs the tsquery
+- **THEN** the per-term jieba pass produces zero kept tokens (the single token `節目` is stopword-filtered)
+- **AND** the finder SHALL retain the raw term `"節目"` so the tsquery is `"節目"` rather than empty (the corpus may still match the lexeme even though it's a generic word — the LLM chose to surface it for a reason)
+- **AND** the call SHALL NOT short-circuit to an empty result
+
+#### Scenario: Cross-term deduplication preserves first occurrence
+
+- **GIVEN** `find_episodes_by_topic(db, show_id, ["高雄美食", "美食地圖"])` where jieba splits to `[高雄, 美食]` and `[美食, 地圖]` respectively
+- **WHEN** the finder constructs the tsquery
+- **THEN** `美食` SHALL appear exactly once in the final OR list (first occurrence kept)
+- **AND** the `:tsquery_text` parameter SHALL be `"高雄 | 美食 | 地圖"`
+
 ## 相關集數清單（共 2 集）
 這個問題的搜尋結果鎖定以下集數，作為你回答的依據：
 1. EP143「從餐廳請客到自家廚房」(2026-04-29, ft. 馬世芳)
@@ -416,6 +446,14 @@ The backend SHALL expose `POST /shows/{show_id}/query` guarded by `require_authe
 <!-- @trace
 source: r3-3-chat-enum-grounding
 updated: 2026-05-16
+code:
+  - backend/eval/datasets/this-not-that-cool.json.bak-20260515T060258Z
+-->
+
+
+<!-- @trace
+source: enumeration-rule-pattern-broaden
+updated: 2026-05-17
 code:
   - backend/eval/datasets/this-not-that-cool.json.bak-20260515T060258Z
 -->
@@ -1815,6 +1853,14 @@ The chat endpoint response SHALL include an optional `enumeration_episodes` fiel
 <!-- @trace
 source: r3-3-chat-enum-grounding
 updated: 2026-05-16
+code:
+  - backend/eval/datasets/this-not-that-cool.json.bak-20260515T060258Z
+-->
+
+
+<!-- @trace
+source: enumeration-rule-pattern-broaden
+updated: 2026-05-17
 code:
   - backend/eval/datasets/this-not-that-cool.json.bak-20260515T060258Z
 -->
