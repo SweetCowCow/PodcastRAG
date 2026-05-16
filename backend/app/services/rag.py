@@ -7,11 +7,13 @@ in parallel and merge by RRF score before returning the top-K.
 """
 from __future__ import annotations
 
+import json as _stdlib_json
 import os
 import re
 import time
 import uuid
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Literal
 
 from openai import OpenAI
@@ -27,6 +29,35 @@ RRF_PER_SIDE = 50
 DESCRIPTION_CAP = 3
 ROUTE_EPISODES_K = 10
 HISTORY_WINDOW = 10
+
+# R3.3 Phase 8: per-pool RRF weights for the three-pool lexical fusion. The
+# semantic pool always contributes with weight 1.0 (not listed here). Editing
+# these values + redeploying is the only step required to tune lexical signal
+# strength — no tsvector rebuild or DB migration.
+RRF_WEIGHTS: dict[str, float] = {
+    "chunk": 1.0,
+    "description": 0.7,
+    "title": 0.5,
+}
+# Title pool corpus is at most 1 row per episode (~hundreds), so it ranks
+# fast. A small per-side cap keeps the union bounded.
+TITLE_RRF_PER_SIDE = 20
+
+
+@dataclass
+class MetadataFilters:
+    """Episode-level hard filters extracted from the user question.
+
+    Both fields are optional; `is_empty()` true means "no metadata filter"
+    and retrieval SQL skips the WHERE clause entirely (fail-open path also
+    routes through here when entity extraction yields nothing).
+    """
+
+    guests: list[str] = field(default_factory=list)
+    date_range: tuple[datetime, datetime] | None = None
+
+    def is_empty(self) -> bool:
+        return not self.guests and self.date_range is None
 
 
 def _parse_runtime_description_cap() -> int:
@@ -153,7 +184,7 @@ class ChunkHit:
     text: str
     distance: float | None = None
     chunk_id: uuid.UUID | None = None
-    source: Literal["transcript", "description"] = "transcript"
+    source: Literal["transcript", "description", "title"] = "transcript"
     rrf_score: float = 0.0
     # R2.1 citation infra fields, populated by `enrich_hits()` after retrieval.
     # Default to empty so retrieval-only callers (eval scripts, etc.) keep
@@ -235,6 +266,7 @@ WITH semantic AS (
       AND t.status = 'completed'
       AND __EMB_NN_C__
       {episode_filter}
+      {metadata_filter}
     LIMIT :per_side
 ),
 lexical AS (
@@ -250,12 +282,13 @@ lexical AS (
       AND c.text_tsvector IS NOT NULL
       AND c.text_tsvector @@ to_tsquery('simple', :ts_query)
       {episode_filter}
+      {metadata_filter}
     LIMIT :per_side
 ),
 combined AS (
     SELECT COALESCE(s.chunk_id, l.chunk_id) AS chunk_id,
            1.0 / (:rrf_k + COALESCE(s.rank_s, 999))
-         + 1.0 / (:rrf_k + COALESCE(l.rank_l, 999)) AS rrf_score
+         + :weight_chunk * 1.0 / (:rrf_k + COALESCE(l.rank_l, 999)) AS rrf_score
     FROM semantic s
     FULL OUTER JOIN lexical l USING (chunk_id)
 )
@@ -289,6 +322,7 @@ WHERE e.show_id = :show_id
   AND t.status = 'completed'
   AND __EMB_NN_C__
   {episode_filter}
+  {metadata_filter}
 ORDER BY distance
 LIMIT :k
 """
@@ -318,6 +352,7 @@ WITH semantic AS (
         )
       )
       {episode_filter}
+      {metadata_filter}
     LIMIT :per_side
 ),
 lexical AS (
@@ -340,12 +375,13 @@ lexical AS (
         )
       )
       {episode_filter}
+      {metadata_filter}
     LIMIT :per_side
 ),
 combined AS (
     SELECT COALESCE(s.chunk_id, l.chunk_id) AS chunk_id,
            1.0 / (:rrf_k + COALESCE(s.rank_s, 999))
-         + 1.0 / (:rrf_k + COALESCE(l.rank_l, 999)) AS rrf_score
+         + :weight_desc * 1.0 / (:rrf_k + COALESCE(l.rank_l, 999)) AS rrf_score
     FROM semantic s
     FULL OUTER JOIN lexical l USING (chunk_id)
 )
@@ -386,7 +422,36 @@ WHERE e.show_id = :show_id
     )
   )
   {episode_filter}
+  {metadata_filter}
 ORDER BY distance
+LIMIT :k
+"""
+
+
+# R3.3 Phase 8.3: title-only lexical pool. Episodes table is small (~hundreds
+# per show) so a single ts_rank scan is cheap. The semantic side has no
+# title-level embedding (we don't embed titles separately); title pool is
+# purely lexical and contributes via RRF weighted by `:weight_title`.
+_TITLE_LEXICAL_SQL = """
+WITH lexical AS (
+    SELECT e.id AS episode_id,
+           e.title AS episode_title,
+           ROW_NUMBER() OVER (
+               ORDER BY ts_rank(e.title_tsvector, to_tsquery('simple', :ts_query)) DESC
+           ) AS rank_l
+    FROM episodes e
+    WHERE e.show_id = :show_id
+      AND e.title_tsvector IS NOT NULL
+      AND e.title_tsvector @@ to_tsquery('simple', :ts_query)
+      {episode_filter}
+      {metadata_filter}
+    LIMIT :per_side
+)
+SELECT episode_id,
+       episode_title,
+       :weight_title * 1.0 / (:rrf_k + rank_l) AS rrf_score
+FROM lexical
+ORDER BY rrf_score DESC
 LIMIT :k
 """
 
@@ -427,6 +492,39 @@ def _episode_filter_clause(table_alias: str, params: dict, eps: list[uuid.UUID] 
     return f"AND {table_alias}.id = ANY(CAST(:episode_ids AS uuid[]))"
 
 
+def _metadata_filter_clause(
+    table_alias: str,
+    params: dict,
+    filters: MetadataFilters | None,
+) -> str:
+    """Build the optional metadata WHERE clause for guests / date_range filters.
+
+    Binds `:metadata_guests`, `:metadata_date_start`, `:metadata_date_end` as
+    needed. Returns an empty string when no filter is set (fail-open path).
+
+    Guest semantics: `episodes.guests @> :metadata_guests::jsonb` — JSONB
+    containment, so a list `["馬世芳"]` matches any episode whose `guests`
+    array contains "馬世芳" (a list of more than one name behaves as AND).
+    """
+    if filters is None or filters.is_empty():
+        return ""
+    clauses: list[str] = []
+    if filters.guests:
+        clauses.append(
+            f"{table_alias}.guests @> CAST(:metadata_guests AS jsonb)"
+        )
+        params["metadata_guests"] = _stdlib_json.dumps(filters.guests)
+    if filters.date_range is not None:
+        start, end = filters.date_range
+        clauses.append(
+            f"{table_alias}.published_at BETWEEN "
+            ":metadata_date_start AND :metadata_date_end"
+        )
+        params["metadata_date_start"] = start
+        params["metadata_date_end"] = end
+    return "AND " + " AND ".join(clauses)
+
+
 async def retrieve(
     db: AsyncSession,
     show_id: uuid.UUID,
@@ -434,13 +532,16 @@ async def retrieve(
     question: str = "",
     k: int = RETRIEVAL_TOP_K,
     episode_id_filter: list[uuid.UUID] | None = None,
+    metadata_filters: MetadataFilters | None = None,
 ) -> list[ChunkHit]:
     """Hybrid (RRF) retrieval over `transcript_chunks` for one show.
 
     If the question yields no usable lexical query, falls back to
     semantic-only ranking. Optional `episode_id_filter` restricts both
     semantic and lexical CTEs to the given episode set (used by the
-    R3.2 two-layer routing flow).
+    R3.2 two-layer routing flow). Optional `metadata_filters` adds
+    `episodes.guests` / `episodes.published_at` hard-filter clauses
+    (R3.3 Phase 8).
     """
     _validate_query_dim(query_embedding)
     ts_query = _build_ts_query(question) if question else None
@@ -451,16 +552,19 @@ async def retrieve(
         "k": k,
     }
     ep_filter = _episode_filter_clause("e", base_params, episode_id_filter)
+    md_filter = _metadata_filter_clause("e", base_params, metadata_filters)
 
     if ts_query:
         sql = text(
             _resolve_embed_placeholders(_TRANSCRIPT_RRF_SQL).format(
-                episode_filter=ep_filter
+                episode_filter=ep_filter,
+                metadata_filter=md_filter,
             )
         )
         base_params["ts_query"] = ts_query
         base_params["per_side"] = RRF_PER_SIDE
         base_params["rrf_k"] = RRF_K
+        base_params["weight_chunk"] = RRF_WEIGHTS["chunk"]
         result = await db.execute(sql, base_params)
         return [
             ChunkHit(
@@ -479,7 +583,8 @@ async def retrieve(
     # No lexical signal — fall back to pure semantic.
     sql = text(
         _resolve_embed_placeholders(_TRANSCRIPT_SEMANTIC_ONLY_SQL).format(
-            episode_filter=ep_filter
+            episode_filter=ep_filter,
+            metadata_filter=md_filter,
         )
     )
     result = await db.execute(sql, base_params)
@@ -505,6 +610,7 @@ async def retrieve_descriptions(
     question: str = "",
     k: int = RETRIEVAL_TOP_K,
     episode_id_filter: list[uuid.UUID] | None = None,
+    metadata_filters: MetadataFilters | None = None,
 ) -> list[ChunkHit]:
     """Hybrid (RRF) retrieval over `episode_description_chunks` for one show.
 
@@ -520,16 +626,19 @@ async def retrieve_descriptions(
         "k": k,
     }
     ep_filter = _episode_filter_clause("e", base_params, episode_id_filter)
+    md_filter = _metadata_filter_clause("e", base_params, metadata_filters)
 
     if ts_query:
         sql = text(
             _resolve_embed_placeholders(_DESC_RRF_SQL).format(
-                episode_filter=ep_filter
+                episode_filter=ep_filter,
+                metadata_filter=md_filter,
             )
         )
         base_params["ts_query"] = ts_query
         base_params["per_side"] = RRF_PER_SIDE
         base_params["rrf_k"] = RRF_K
+        base_params["weight_desc"] = RRF_WEIGHTS["description"]
         result = await db.execute(sql, base_params)
         return [
             ChunkHit(
@@ -549,7 +658,8 @@ async def retrieve_descriptions(
 
     sql = text(
         _resolve_embed_placeholders(_DESC_SEMANTIC_ONLY_SQL).format(
-            episode_filter=ep_filter
+            episode_filter=ep_filter,
+            metadata_filter=md_filter,
         )
     )
     result = await db.execute(sql, base_params)
@@ -565,6 +675,58 @@ async def retrieve_descriptions(
             source="description",
             chunking_version=int(row["chunking_version"]),
             chunk_index=int(row["chunk_index"]),
+        )
+        for row in result.mappings()
+    ]
+
+
+async def retrieve_titles(
+    db: AsyncSession,
+    show_id: uuid.UUID,
+    question: str,
+    k: int = RETRIEVAL_TOP_K,
+    episode_id_filter: list[uuid.UUID] | None = None,
+    metadata_filters: MetadataFilters | None = None,
+) -> list[ChunkHit]:
+    """Lexical-only retrieval over `episodes.title_tsvector` (R3.3 Phase 8.3).
+
+    Returns at most `k` hits with `source='title'`, `text=<episode title>`,
+    and `chunk_id=None` (title pool is episode-keyed, not chunk-keyed).
+    Yields empty list when the question produces no usable lexical query
+    or when no episode title matches.
+    """
+    ts_query = _build_ts_query(question) if question else None
+    if not ts_query:
+        return []
+
+    base_params: dict = {
+        "show_id": show_id,
+        "k": k,
+        "ts_query": ts_query,
+        "per_side": TITLE_RRF_PER_SIDE,
+        "rrf_k": RRF_K,
+        "weight_title": RRF_WEIGHTS["title"],
+    }
+    ep_filter = _episode_filter_clause("e", base_params, episode_id_filter)
+    md_filter = _metadata_filter_clause("e", base_params, metadata_filters)
+
+    sql = text(
+        _TITLE_LEXICAL_SQL.format(
+            episode_filter=ep_filter,
+            metadata_filter=md_filter,
+        )
+    )
+    result = await db.execute(sql, base_params)
+    return [
+        ChunkHit(
+            chunk_id=None,
+            episode_id=row["episode_id"],
+            episode_title=row["episode_title"],
+            start_time=0.0,
+            end_time=0.0,
+            text=row["episode_title"],
+            rrf_score=float(row["rrf_score"]),
+            source="title",
         )
         for row in result.mappings()
     ]
@@ -622,25 +784,38 @@ async def retrieve_hybrid(
     question: str = "",
     k: int = RETRIEVAL_TOP_K,
     episode_id_filter: list[uuid.UUID] | None = None,
+    metadata_filters: MetadataFilters | None = None,
 ) -> list[ChunkHit]:
-    """Run transcript + description retrieval and merge by RRF score.
+    """Run transcript + description + title retrieval and merge by RRF score.
 
     Applies DESCRIPTION_CAP: at most `DESCRIPTION_CAP` description hits in
     the returned top-K. Excess description hits are replaced (in rank
-    order) by the next-best transcript hits if any are available.
+    order) by the next-best transcript hits if any are available. Title
+    hits (R3.3 Phase 8) join the merge weighted by `RRF_WEIGHTS["title"]`
+    and are not subject to DESCRIPTION_CAP.
     """
     transcript_hits = await retrieve(
-        db, show_id, query_embedding, question, k=k, episode_id_filter=episode_id_filter
+        db, show_id, query_embedding, question, k=k,
+        episode_id_filter=episode_id_filter,
+        metadata_filters=metadata_filters,
     )
     desc_hits = await retrieve_descriptions(
-        db, show_id, query_embedding, question, k=k, episode_id_filter=episode_id_filter
+        db, show_id, query_embedding, question, k=k,
+        episode_id_filter=episode_id_filter,
+        metadata_filters=metadata_filters,
+    )
+    title_hits = await retrieve_titles(
+        db, show_id, question, k=k,
+        episode_id_filter=episode_id_filter,
+        metadata_filters=metadata_filters,
     )
 
-    # Merge by RRF score (existing behaviour).
+    # Merge by RRF score (existing behaviour). Title hits have chunk_id=None
+    # so they bypass the chunk_id dedupe set.
     seen: set[uuid.UUID] = set()
     ranked: list[ChunkHit] = []
     for h in sorted(
-        transcript_hits + desc_hits,
+        transcript_hits + desc_hits + title_hits,
         key=lambda x: (x.rrf_score, -(x.distance or 0.0)),
         reverse=True,
     ):

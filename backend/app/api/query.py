@@ -1,8 +1,12 @@
 import asyncio
+import json as _stdlib_json
+import logging
+import re
 import uuid
 
 import openai
 from fastapi import APIRouter, Cookie, Depends, HTTPException, status
+from sqlalchemy import text
 from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,22 +18,31 @@ from app.schemas.errors import ErrorCode, ErrorResponse
 from app.schemas.query import (
     ChatResponse,
     ChunkHit,
+    EpisodeRef,
     PublicSearchRequest,
     PublicSearchResponse,
     QueryRequest,
     SearchResponse,
     SentenceCitations,
 )
-from openai import OpenAI
+from app.schemas.query_entity import QueryEntities
+from openai import AsyncOpenAI, OpenAI
 
-from app.services import citation_parser, rag
+from app.services import citation_parser, query_entity, rag
 from app.services.ai_step_resolver import (
     AiStepNotConfiguredError,
     get_step_config,
     infer_provider_label,
 )
 from app.services.embedding import embed_texts
-from app.services.rag import ChunkHit as RagHit
+from app.services.rag import ChunkHit as RagHit, MetadataFilters
+
+logger = logging.getLogger(__name__)
+
+# R3.3 Phase 9: substring trigger for the enumeration UI when the entity
+# extractor returns empty. Spec scenario "Enumeration rule pattern triggers
+# enumeration response" lists these three substrings.
+_ENUMERATION_RULE_PATTERN = re.compile(r"哪幾集|哪集|哪些集")
 
 router = APIRouter(tags=["query"])
 
@@ -169,6 +182,107 @@ async def public_search_show(
     return PublicSearchResponse(results=[_to_schema_hit(h) for h in hits])
 
 
+def _entities_to_metadata_filters(entities: QueryEntities) -> MetadataFilters | None:
+    """Lift `QueryEntities` into the rag-side `MetadataFilters` (guests +
+    date_range only). Returns None when there is nothing to filter on, so
+    callers can fall through to no-filter retrieval (fail-open path).
+    """
+    if not entities.guests and entities.date_range is None:
+        return None
+    return MetadataFilters(
+        guests=list(entities.guests),
+        date_range=entities.date_range,
+    )
+
+
+async def _extract_entities_fail_open(
+    db: AsyncSession, question: str
+) -> QueryEntities:
+    """Best-effort wrapper around `query_entity.extract_entities`.
+
+    Per R3.3 spec "Entity extraction fails-open without breaking retrieval":
+    every failure path — step not configured, client construction, LLM
+    error, schema mismatch — returns `QueryEntities.empty()` so retrieval
+    proceeds with no metadata filter. The chat endpoint MUST NOT 5xx
+    because entity extraction failed.
+    """
+    try:
+        entity_cfg = await get_step_config(db, "entity_extraction")
+    except AiStepNotConfiguredError as exc:
+        logger.warning("entity_extraction step not configured; fail-open: %s", exc)
+        return QueryEntities.empty()
+    try:
+        client = AsyncOpenAI(base_url=entity_cfg.base_url, api_key=entity_cfg.api_key)
+    except Exception as exc:  # noqa: BLE001 — fail-open
+        logger.warning("entity_extraction AsyncOpenAI ctor failed; fail-open: %s", exc)
+        return QueryEntities.empty()
+    entities, _status = await query_entity.extract_entities(
+        client, model=entity_cfg.model, question=question
+    )
+    return entities
+
+
+_ENUMERATION_SQL_BASE = """
+SELECT id, title, published_at, guests, ai_summary
+FROM episodes
+WHERE show_id = :show_id
+"""
+
+
+async def _compute_enumeration_episodes(
+    db: AsyncSession,
+    show_id: uuid.UUID,
+    question: str,
+    entities: QueryEntities,
+) -> list[EpisodeRef] | None:
+    """Build the `enumeration_episodes` list when the question is an
+    enumeration-type query (R3.3 Phase 9 / Decision 4).
+
+    Trigger:
+      - non-empty `entities.guests` OR `entities.date_range`, OR
+      - question contains the enumeration rule substring `哪幾集/哪集/哪些集`
+
+    Filters: guests `@>` containment, published_at BETWEEN endpoints.
+    When the trigger is rule-pattern-only (no entity filter) the SQL has
+    no extra WHERE clauses — the response lists every episode of the show
+    sorted by `published_at DESC`, matching the spec scenario "rule pattern
+    triggers enumeration response".
+
+    Returns None when no trigger matched.
+    """
+    rule_match = bool(_ENUMERATION_RULE_PATTERN.search(question or ""))
+    has_entity = bool(entities.guests) or entities.date_range is not None
+    if not has_entity and not rule_match:
+        return None
+
+    params: dict = {"show_id": show_id}
+    extra_clauses: list[str] = []
+    if entities.guests:
+        extra_clauses.append("guests @> CAST(:enum_guests AS jsonb)")
+        params["enum_guests"] = _stdlib_json.dumps(entities.guests)
+    if entities.date_range is not None:
+        extra_clauses.append(
+            "published_at BETWEEN :enum_date_start AND :enum_date_end"
+        )
+        params["enum_date_start"] = entities.date_range[0]
+        params["enum_date_end"] = entities.date_range[1]
+    sql_str = _ENUMERATION_SQL_BASE
+    for c in extra_clauses:
+        sql_str += f"  AND {c}\n"
+    sql_str += "ORDER BY published_at DESC NULLS LAST"
+    result = await db.execute(text(sql_str), params)
+    return [
+        EpisodeRef(
+            episode_id=row["id"],
+            title=row["title"],
+            published_at=row["published_at"],
+            guests=list(row["guests"] or []),
+            ai_summary=row["ai_summary"],
+        )
+        for row in result.mappings()
+    ]
+
+
 def _resolve_lang(raw: str | None) -> str:
     """Map the `lang` cookie value to either 'zh' or 'en' (default 'zh').
 
@@ -287,6 +401,14 @@ async def query_show(
         openai.APITimeoutError,
     ) as exc:
         _raise_openai_http_error(exc, "OpenAI")
+
+    # R3.3 Phase 9: extract entities from the rewritten question for
+    # metadata-filter-aware retrieval + cross-episode enumeration. Fail-open:
+    # any extractor error → empty entities → no filter, retrieval runs as
+    # before.
+    entities = await _extract_entities_fail_open(db, rewritten)
+    metadata_filters = _entities_to_metadata_filters(entities)
+
     routed_eps = (
         None
         if rag._should_skip_routing(rewritten)
@@ -298,8 +420,13 @@ async def query_show(
         query_embedding[0],
         rewritten,
         episode_id_filter=routed_eps,
+        metadata_filters=metadata_filters,
     )
     await rag.enrich_hits(db, hits, rewritten)
+
+    enumeration = await _compute_enumeration_episodes(
+        db, show_id, rewritten, entities
+    )
 
     answer_client = OpenAI(
         base_url=answer_cfg.base_url, api_key=answer_cfg.api_key
@@ -348,6 +475,7 @@ async def query_show(
         citations=[_to_schema_hit(h) for h in cited_hits],
         quota_remaining=quota_remaining,
         citations_meta=citations_meta,
+        enumeration_episodes=enumeration,
     )
 
 

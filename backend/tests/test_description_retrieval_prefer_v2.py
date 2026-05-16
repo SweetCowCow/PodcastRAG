@@ -40,7 +40,7 @@ def test_desc_rrf_sql_carries_prefer_v2_clause_in_both_ctes():
     Without this, ts_rank short-chunk bias floods the lexical CTE with v1
     long rows and evicts v2 (Phase 2 root cause #1/#2)."""
     # Two CTEs, two NOT IN sub-selects scoped by show_id.
-    formatted = _DESC_RRF_SQL.format(episode_filter="")
+    formatted = _DESC_RRF_SQL.format(episode_filter="", metadata_filter="")
     assert formatted.count("d.chunking_version = 2") >= 2
     assert formatted.count("d.episode_id NOT IN (") >= 2
     # Sub-selects must constrain by show to keep the semi-join cheap.
@@ -48,7 +48,7 @@ def test_desc_rrf_sql_carries_prefer_v2_clause_in_both_ctes():
 
 
 def test_desc_semantic_only_sql_carries_prefer_v2_clause():
-    formatted = _DESC_SEMANTIC_ONLY_SQL.format(episode_filter="")
+    formatted = _DESC_SEMANTIC_ONLY_SQL.format(episode_filter="", metadata_filter="")
     assert "d.chunking_version = 2" in formatted
     assert "d.episode_id NOT IN (" in formatted
     assert "e2.show_id = :show_id" in formatted
@@ -75,16 +75,17 @@ def test_modified_sqls_parameter_binding_compiles():
     `{episode_filter}` placeholder (empty + non-empty). If the prefer-v2
     sub-select accidentally introduces a new bind name or quoting issue,
     this catches it before deploy."""
-    assert text(_DESC_RRF_SQL.format(episode_filter="")) is not None
+    assert text(_DESC_RRF_SQL.format(episode_filter="", metadata_filter="")) is not None
     assert (
         text(
             _DESC_RRF_SQL.format(
-                episode_filter="AND e.id = ANY(CAST(:episode_ids AS uuid[]))"
+                episode_filter="AND e.id = ANY(CAST(:episode_ids AS uuid[]))",
+                metadata_filter="",
             )
         )
         is not None
     )
-    assert text(_DESC_SEMANTIC_ONLY_SQL.format(episode_filter="")) is not None
+    assert text(_DESC_SEMANTIC_ONLY_SQL.format(episode_filter="", metadata_filter="")) is not None
     assert text(_ROUTE_EPISODES_SQL) is not None
 
 
@@ -92,9 +93,15 @@ def test_no_new_bind_params_introduced():
     """Prefer-v2 must reuse :show_id — adding a new bind (e.g.
     :show_id_v2) would force the call-site to bind it explicitly. Keep
     binding surface stable."""
-    formatted = _DESC_RRF_SQL.format(episode_filter="")
+    formatted = _DESC_RRF_SQL.format(episode_filter="", metadata_filter="")
     # Allowed binds.
-    allowed = {":query_embedding", ":show_id", ":per_side", ":ts_query", ":rrf_k", ":k"}
+    # R3.3 Phase 8 adds :weight_desc; metadata bind params (:metadata_guests
+    # / :metadata_date_*) only appear when MetadataFilters injects the clause,
+    # so they are not part of the bare-template surface checked here.
+    allowed = {
+        ":query_embedding", ":show_id", ":per_side", ":ts_query",
+        ":rrf_k", ":k", ":weight_desc",
+    }
     # Find all ":<word>" bind references.
     import re
 

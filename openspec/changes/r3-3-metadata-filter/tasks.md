@@ -60,29 +60,29 @@
 
 實作 Decision 3：BM25 多欄位走「per-query rank summation」而非 setweight bitmap。
 
-- [ ] 8.1 在 `app/services/rag.py` 新增 module-level constant `RRF_WEIGHTS = {"chunk": 1.0, "description": 0.7, "title": 0.5}`（`RRF pool weights configurable in Python`）；semantic pool 永遠 1.0 不在這
-- [ ] 8.2 改 `_TRANSCRIPT_RRF_SQL` + `_DESC_RRF_SQL` 兩個 CTE 落實 `Semantic search endpoint returns ranked chunks` 變更：在 `combined` 階段把 RRF 分量乘上 weight 參數（傳 `:weight_chunk`, `:weight_desc`, `:weight_title`）
-- [ ] 8.3 新增 `_TITLE_LEXICAL_SQL`：對 `episodes.title_tsvector @@ to_tsquery(...)` 做 ts_rank ROW_NUMBER，產生 title pool ranks 併入 RRF（補完 `Semantic search endpoint returns ranked chunks` 三池融合）
-- [ ] 8.4 修改 `retrieve_hybrid` 函式 signature：接受 `metadata_filters: MetadataFilters | None`（含 guests / date_range），把 SQL `WHERE` clause 加上 `episodes.guests @> :guests` / `episodes.published_at BETWEEN :start AND :end`；title pool 一併合併進 final RRF
-- [ ] 8.5 修改 `retrieve_descriptions` 同步加 metadata_filters 支援
-- [ ] 8.6 寫 `tests/test_rag_multi_column_bm25.py`：以 fixture seed title-only match / desc-only match / chunk-only match 三集，verify 三池融合 ranking 順序符合 weight 預期
+- [x] 8.1 在 `app/services/rag.py` 新增 module-level constant `RRF_WEIGHTS = {"chunk": 1.0, "description": 0.7, "title": 0.5}`（`RRF pool weights configurable in Python`）；semantic pool 永遠 1.0 不在這
+- [x] 8.2 改 `_TRANSCRIPT_RRF_SQL` + `_DESC_RRF_SQL` 兩個 CTE 落實 `Semantic search endpoint returns ranked chunks` 變更：在 `combined` 階段把 RRF 分量乘上 weight 參數（傳 `:weight_chunk`, `:weight_desc`, `:weight_title`）
+- [x] 8.3 新增 `_TITLE_LEXICAL_SQL`：對 `episodes.title_tsvector @@ to_tsquery(...)` 做 ts_rank ROW_NUMBER，產生 title pool ranks 併入 RRF（補完 `Semantic search endpoint returns ranked chunks` 三池融合）
+- [x] 8.4 修改 `retrieve_hybrid` 函式 signature：接受 `metadata_filters: MetadataFilters | None`（含 guests / date_range），把 SQL `WHERE` clause 加上 `episodes.guests @> :guests` / `episodes.published_at BETWEEN :start AND :end`；title pool 一併合併進 final RRF
+- [x] 8.5 修改 `retrieve_descriptions` 同步加 metadata_filters 支援
+- [x] 8.6 寫 `tests/test_rag_multi_column_bm25.py`：以 fixture seed title-only match / desc-only match / chunk-only match 三集，verify 三池融合 ranking 順序符合 weight 預期
 
 ## 9. Chat Endpoint 整合 Entity Extractor + Enumeration（Chat endpoint answers with citations using Tier 2 RAG / Cross-episode enumeration response shape / Entity 抽取整合進 chat path）
 
 實作 Decision 4：cross-episode 列舉題型走「response shape 擴充」而非新 endpoint。
 
-- [ ] 9.1 修改 `app/api/query.py` chat path 落實 `Chat endpoint answers with citations using Tier 2 RAG` (modified) 與 `Entity 抽取整合進 chat path`：在 `rewrite` 之後、`route_episodes` 之前 await `query_entity.extract_entities(...)`；entity 結果傳入 `retrieve_hybrid(metadata_filters=...)`
-- [ ] 9.2 新增 `_compute_enumeration_episodes` 函式落實 `Cross-episode enumeration response shape`：當 entity 非空 OR question regex match `"哪幾集|哪集|哪些集"` → 跑 SQL `SELECT id, title, published_at, guests, ai_summary FROM episodes WHERE show_id=:show_id AND <entity filters>` 回 list；空時回 None
-- [ ] 9.3 修改 `app/schemas/query.py` `ChatResponse`：加 `enumeration_episodes: list[EpisodeRef] | None = None`；新增 `EpisodeRef` schema
-- [ ] 9.4 寫 `tests/test_query_chat_metadata_filter.py`：(a) entity 抽出 guest 觸發 filter + enumeration、(b) entity 抽出 date 觸發 filter + enumeration、(c) entity 失敗 fail-open（mock raise 看回 200）、(d) 純 topic 列舉 rule pattern 觸發 enumeration
+- [x] 9.1 修改 `app/api/query.py` chat path 落實 `Chat endpoint answers with citations using Tier 2 RAG` (modified) 與 `Entity 抽取整合進 chat path`：在 `rewrite` 之後、`route_episodes` 之前 await `query_entity.extract_entities(...)`；entity 結果傳入 `retrieve_hybrid(metadata_filters=...)`
+- [x] 9.2 新增 `_compute_enumeration_episodes` 函式落實 `Cross-episode enumeration response shape`：當 entity 非空 OR question regex match `"哪幾集|哪集|哪些集"` → 跑 SQL `SELECT id, title, published_at, guests, ai_summary FROM episodes WHERE show_id=:show_id AND <entity filters>` 回 list；空時回 None
+- [x] 9.3 修改 `app/schemas/query.py` `ChatResponse`：加 `enumeration_episodes: list[EpisodeRef] | None = None`；新增 `EpisodeRef` schema
+- [x] 9.4 寫 `tests/test_query_chat_metadata_filter.py`：(a) entity 抽出 guest 觸發 filter + enumeration、(b) entity 抽出 date 觸發 filter + enumeration、(c) entity 失敗 fail-open（mock raise 看回 200）、(d) 純 topic 列舉 rule pattern 觸發 enumeration
 
 ## 10. 前端 Cross-Episode Enumeration UI（Cross-episode enumeration response shape — frontend）
 
 實作 Decision 4：前端 cross-episode 列舉 UI。
 
-- [ ] 10.1 在 `src/QueryPage.jsx` ChatBubble 渲染：當 response 帶 `enumeration_episodes` 非空，顯示「相關集數」section（在 answer 下、citations 上）
-- [ ] 10.2 每集 row：title + 發佈日期 + guests chip + 60-150 字 ai_summary + 「跳到這集」button（navigate 到 TranscriptPage）
-- [ ] 10.3 雙語：「相關集數」/「Related Episodes」，「跳到這集」/「Jump to this episode」
+- [x] 10.1 在 `src/QueryPage.jsx` ChatBubble 渲染：當 response 帶 `enumeration_episodes` 非空，顯示「相關集數」section（在 answer 下、citations 上）
+- [x] 10.2 每集 row：title + 發佈日期 + guests chip + 60-150 字 ai_summary + 「跳到這集」button（navigate 到 TranscriptPage）
+- [x] 10.3 雙語：「相關集數」/「Related Episodes」，「跳到這集」/「Jump to this episode」
 - [ ] 10.4 verify mobile-friendly（窄螢幕 ai_summary 截斷 + 展開）
 
 ## 11. Eval 對照 R3.2 Baseline

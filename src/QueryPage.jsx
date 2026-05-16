@@ -279,7 +279,13 @@ const QueryPage = ({ lang, show, onBack, onOpenEpisode, queryMode, user, onUserC
         throw new Error(formatError(body, lang));
       }
       const data = await res.json();
-      setMessages(m => [...m, { role: 'assistant', text: data.answer, citations: data.citations || [], query_id: data.query_id }]);
+      setMessages(m => [...m, {
+        role: 'assistant',
+        text: data.answer,
+        citations: data.citations || [],
+        query_id: data.query_id,
+        enumeration_episodes: data.enumeration_episodes || null,
+      }]);
       if (typeof data.quota_remaining === 'number' && onUserChange) onUserChange();
     } catch (err) {
       setMessages(m => [...m, { role: 'assistant', text: err.message, citations: [] }]);
@@ -446,6 +452,7 @@ const QueryPage = ({ lang, show, onBack, onOpenEpisode, queryMode, user, onUserC
                 {messages.map((msg, i) => (
                   <ChatBubble key={i} msg={msg} lang={lang} user={user}
                     onCitationClick={onCitationClick}
+                    onOpenEpisode={onOpenEpisode}
                     voted={msg.query_id ? votes[msg.query_id] : undefined}
                     onVote={submitVote} />
                 ))}
@@ -564,10 +571,90 @@ const QueryPage = ({ lang, show, onBack, onOpenEpisode, queryMode, user, onUserC
 };
 
 // ── Sub-components ──
-const ChatBubble = ({ msg, lang, user, onCitationClick, voted, onVote }) => {
+// R3.3 Phase 10: cross-episode enumeration block. Rendered between the AI
+// answer text and the chunk citations when the backend returns
+// `enumeration_episodes` (entity-driven OR rule-pattern). Each row carries
+// title, publish date, guest chips, a 60-150 char ai_summary (expandable),
+// and a jump button that calls onOpenEpisode at t=0.
+const EnumerationSection = ({ episodes, lang, onOpenEpisode }) => {
+  const t = lang === 'zh';
+  const [expanded, setExpanded] = React.useState({});
+  const toggleExpand = (id) => setExpanded(s => ({ ...s, [id]: !s[id] }));
+  const fmtDate = (iso) => {
+    if (!iso) return '';
+    try {
+      const d = new Date(iso);
+      if (Number.isNaN(d.getTime())) return '';
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${day}`;
+    } catch (_) { return ''; }
+  };
+  const summaryPreview = (s) => {
+    if (!s) return '';
+    const trimmed = s.trim();
+    if (trimmed.length <= 150) return trimmed;
+    return trimmed.slice(0, 150) + '…';
+  };
+  return (
+    <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${TOKEN.surfaceBorder}` }}>
+      <div style={{ fontSize: 12, fontWeight: 600, color: TOKEN.textSecondary, marginBottom: 8 }}>
+        {t ? `相關集數（${episodes.length}）` : `Related Episodes (${episodes.length})`}
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {episodes.map((ep) => {
+          const id = ep.episode_id;
+          const isOpen = !!expanded[id];
+          const fullSummary = (ep.ai_summary || '').trim();
+          const showToggle = fullSummary.length > 150;
+          const summary = isOpen ? fullSummary : summaryPreview(fullSummary);
+          return (
+            <div key={id} style={{ background: TOKEN.bg, border: `1px solid ${TOKEN.surfaceBorder}`, borderRadius: 8, padding: '10px 12px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, flexWrap: 'wrap' }}>
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <div style={{ color: TOKEN.text, fontSize: 13, fontWeight: 600, wordBreak: 'break-word' }}>
+                    {ep.title || (t ? '未命名集數' : 'Untitled episode')}
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
+                    {ep.published_at && (
+                      <span style={{ fontSize: 11, color: TOKEN.textMuted }}>{fmtDate(ep.published_at)}</span>
+                    )}
+                    {Array.isArray(ep.guests) && ep.guests.map((g, gi) => (
+                      <span key={gi} style={{ fontSize: 11, padding: '1px 6px', borderRadius: 4, background: TOKEN.accentDim, color: TOKEN.accent, border: `1px solid ${TOKEN.accent}33` }}>
+                        {g}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+                <Btn size="sm" variant="secondary" icon="play" onClick={() => onOpenEpisode && onOpenEpisode({ id, title: ep.title }, 0)}>
+                  {t ? '跳到這集' : 'Jump to this episode'}
+                </Btn>
+              </div>
+              {fullSummary && (
+                <div style={{ marginTop: 8, fontSize: 12, color: TOKEN.textSecondary, lineHeight: 1.6, wordBreak: 'break-word' }}>
+                  {summary}
+                  {showToggle && (
+                    <button type="button" onClick={() => toggleExpand(id)}
+                      style={{ marginLeft: 6, background: 'transparent', border: 'none', color: TOKEN.accent, cursor: 'pointer', fontSize: 12, padding: 0, fontFamily: 'inherit' }}>
+                      {isOpen ? (t ? '收合' : 'Less') : (t ? '展開' : 'More')}
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+const ChatBubble = ({ msg, lang, user, onCitationClick, onOpenEpisode, voted, onVote }) => {
   const t = lang === 'zh';
   const isUser = msg.role === 'user';
   const citations = msg.citations || [];
+  const enumerationEpisodes = msg.enumeration_episodes || null;
   const queryId = msg.query_id;
   const [showCommentBox, setShowCommentBox] = React.useState(false);
   const [commentText, setCommentText] = React.useState('');
@@ -613,6 +700,13 @@ const ChatBubble = ({ msg, lang, user, onCitationClick, voted, onVote }) => {
       </div>
       <div style={{ maxWidth: '80%', background: isUser ? TOKEN.accentDim : TOKEN.surfaceRaised, border: `1px solid ${isUser ? TOKEN.accent + '33' : TOKEN.surfaceBorder}`, borderRadius: isUser ? '14px 4px 14px 14px' : '4px 14px 14px 14px', padding: '10px 14px' }}>
         <pre style={{ margin: 0, color: TOKEN.text, fontSize: 13, lineHeight: 1.7, fontFamily: 'inherit', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{msg.text}</pre>
+        {!isUser && Array.isArray(enumerationEpisodes) && enumerationEpisodes.length > 0 && (
+          <EnumerationSection
+            episodes={enumerationEpisodes}
+            lang={lang}
+            onOpenEpisode={onOpenEpisode}
+          />
+        )}
         {citations.length > 0 && (
           <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
             {citations.map((c, i) => (

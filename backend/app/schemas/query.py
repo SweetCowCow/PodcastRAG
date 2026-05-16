@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -22,7 +23,7 @@ class ChunkHit(BaseModel):
     end_time: float
     text: str
     distance: float | None = None
-    source: Literal["transcript", "description"] = "transcript"
+    source: Literal["transcript", "description", "title"] = "transcript"
     # R2.1 citation infra: extra context fields. Default to empty so older
     # callers that don't pass them still construct a valid model.
     before_text: str = ""
@@ -59,6 +60,23 @@ class SearchResponse(BaseModel):
     sources_schema_version: int = SOURCES_SCHEMA_VERSION
 
 
+class EpisodeRef(BaseModel):
+    """Episode-level reference returned by cross-episode enumeration queries.
+
+    R3.3 Phase 9: populated only for chat queries whose entity extractor
+    flagged a `guests` / `date_range` constraint, or whose question matched
+    the enumeration rule pattern (`哪幾集 / 哪集 / 哪些集`). Carries enough
+    fields for the frontend to render a clickable episode card without an
+    extra round-trip.
+    """
+
+    episode_id: uuid.UUID
+    title: str
+    published_at: datetime | None = None
+    guests: list[str] = Field(default_factory=list)
+    ai_summary: str | None = None
+
+
 class ChatResponse(BaseModel):
     query_id: str
     answer: str
@@ -66,6 +84,10 @@ class ChatResponse(BaseModel):
     quota_remaining: int
     citations_meta: list[SentenceCitations] = Field(default_factory=list)
     sources_schema_version: int = SOURCES_SCHEMA_VERSION
+    # R3.3 Phase 9: present only when the query is an enumeration question
+    # (entity-driven OR rule-pattern). `None` for non-enumeration queries
+    # so the frontend can switch UI mode without inspecting `citations`.
+    enumeration_episodes: list[EpisodeRef] | None = None
 
 
 class PublicSearchRequest(BaseModel):
