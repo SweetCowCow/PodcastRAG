@@ -576,9 +576,18 @@ const QueryPage = ({ lang, show, onBack, onOpenEpisode, queryMode, user, onUserC
 // `enumeration_episodes` (entity-driven OR rule-pattern). Each row carries
 // title, publish date, guest chips, a 60-150 char ai_summary (expandable),
 // and a jump button that calls onOpenEpisode at t=0.
+// r3-3-chat-enum-grounding: stepwise +10 button protects mobile from
+// dumping a 100+ card list on expand. `episodes === []` means the filter
+// triggered but matched 0 episodes (display the "no match" message);
+// `episodes === null/undefined` means enum did not trigger (caller
+// shouldn't render the section at all).
+const DEFAULT_DISPLAY_COUNT = 10;
+const DISPLAY_INCREMENT = 10;
+
 const EnumerationSection = ({ episodes, lang, onOpenEpisode }) => {
   const t = lang === 'zh';
   const [expanded, setExpanded] = React.useState({});
+  const [displayCount, setDisplayCount] = React.useState(DEFAULT_DISPLAY_COUNT);
   const toggleExpand = (id) => setExpanded(s => ({ ...s, [id]: !s[id] }));
   const fmtDate = (iso) => {
     if (!iso) return '';
@@ -597,13 +606,32 @@ const EnumerationSection = ({ episodes, lang, onOpenEpisode }) => {
     if (trimmed.length <= 150) return trimmed;
     return trimmed.slice(0, 150) + '…';
   };
+  // Empty-list case: enum triggered but matched zero episodes. Render a
+  // friendly placeholder instead of an empty card region so the user sees
+  // the filter ran.
+  if (episodes.length === 0) {
+    return (
+      <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${TOKEN.surfaceBorder}` }}>
+        <div style={{ fontSize: 12, fontWeight: 600, color: TOKEN.textSecondary, marginBottom: 8 }}>
+          {t ? '相關集數' : 'Related Episodes'}
+        </div>
+        <div style={{ fontSize: 12, color: TOKEN.textMuted, padding: '8px 12px', background: TOKEN.bg, border: `1px dashed ${TOKEN.surfaceBorder}`, borderRadius: 8 }}>
+          {t ? '沒有完全相符的集數' : 'No matching episodes'}
+        </div>
+      </div>
+    );
+  }
+
+  const visible = episodes.slice(0, displayCount);
+  const remaining = episodes.length - displayCount;
+  const allShown = remaining <= 0;
   return (
     <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${TOKEN.surfaceBorder}` }}>
       <div style={{ fontSize: 12, fontWeight: 600, color: TOKEN.textSecondary, marginBottom: 8 }}>
-        {t ? `相關集數（${episodes.length}）` : `Related Episodes (${episodes.length})`}
+        {t ? `相關集數（共 ${episodes.length} 集）` : `Related Episodes (${episodes.length} total)`}
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {episodes.map((ep) => {
+        {visible.map((ep) => {
           const id = ep.episode_id;
           const isOpen = !!expanded[id];
           const fullSummary = (ep.ai_summary || '').trim();
@@ -645,6 +673,20 @@ const EnumerationSection = ({ episodes, lang, onOpenEpisode }) => {
             </div>
           );
         })}
+      </div>
+      <div style={{ marginTop: 10, textAlign: 'center' }}>
+        {allShown ? (
+          <button type="button" disabled
+            style={{ background: 'transparent', border: 'none', color: TOKEN.textMuted, cursor: 'not-allowed', fontSize: 12, padding: '6px 12px', fontFamily: 'inherit' }}>
+            {t ? `已全部列出（共 ${episodes.length} 集）` : `All listed (${episodes.length} total)`}
+          </button>
+        ) : (
+          <button type="button"
+            onClick={() => setDisplayCount(c => c + DISPLAY_INCREMENT)}
+            style={{ background: TOKEN.accentDim, border: `1px solid ${TOKEN.accent}55`, color: TOKEN.accent, cursor: 'pointer', fontSize: 12, padding: '6px 14px', borderRadius: 6, fontFamily: 'inherit', transition: 'background 0.12s' }}>
+            {t ? `再顯示 ${Math.min(DISPLAY_INCREMENT, remaining)} 集（共 ${episodes.length} 集）` : `Show ${Math.min(DISPLAY_INCREMENT, remaining)} more (${episodes.length} total)`}
+          </button>
+        )}
       </div>
     </div>
   );
@@ -700,7 +742,7 @@ const ChatBubble = ({ msg, lang, user, onCitationClick, onOpenEpisode, voted, on
       </div>
       <div style={{ maxWidth: '80%', background: isUser ? TOKEN.accentDim : TOKEN.surfaceRaised, border: `1px solid ${isUser ? TOKEN.accent + '33' : TOKEN.surfaceBorder}`, borderRadius: isUser ? '14px 4px 14px 14px' : '4px 14px 14px 14px', padding: '10px 14px' }}>
         <pre style={{ margin: 0, color: TOKEN.text, fontSize: 13, lineHeight: 1.7, fontFamily: 'inherit', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{msg.text}</pre>
-        {!isUser && Array.isArray(enumerationEpisodes) && enumerationEpisodes.length > 0 && (
+        {!isUser && Array.isArray(enumerationEpisodes) && (
           <EnumerationSection
             episodes={enumerationEpisodes}
             lang={lang}

@@ -87,7 +87,15 @@ class ChatResponse(BaseModel):
     # R3.3 Phase 9: present only when the query is an enumeration question
     # (entity-driven OR rule-pattern). `None` for non-enumeration queries
     # so the frontend can switch UI mode without inspecting `citations`.
+    # Empty list `[]` means "enumeration triggered but no episode matched"
+    # (distinct from null = "did not trigger").
     enumeration_episodes: list[EpisodeRef] | None = None
+    # r3-3-chat-enum-grounding: full count of episodes the enumeration
+    # path matched. Equal to `len(enumeration_episodes)` today (no backend
+    # cap); kept as a separate field so future paginated backends can
+    # surface "showing X of N" without changing the list shape. `None`
+    # mirrors `enumeration_episodes is None` (enum did not trigger).
+    enumeration_total: int | None = None
 
 
 class PublicSearchRequest(BaseModel):

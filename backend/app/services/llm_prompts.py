@@ -128,14 +128,24 @@ def _render_template(lang: Lang, chunks_block: str) -> str:
 def render_answer_prompt(
     chunks: list[tuple[str, str, str]],
     lang: Lang = "zh",
+    enumeration_block: str | None = None,
 ) -> str:
     """Render the answer system prompt with `[1] [2] [3]…` numbered sources.
 
     `chunks` is the list of source rows (key, title, text) in retrieval order.
     Numbering is 1-based. An empty `chunks` list is allowed — the prompt then
     instructs the model to answer with a natural-language refusal.
+
+    `enumeration_block` (r3-3-chat-enum-grounding) is an optional pre-rendered
+    block listing the cross-episode enumeration results. When non-None it is
+    prepended BEFORE the source chunks so the answer model grounds its prose
+    count on the enumeration list instead of inferring "N episodes" from the
+    top-K chunk subset it happened to retrieve. See
+    `app.services.episode_finders` for the producer and
+    `format_enumeration_block` in `app.services.rag` for the renderer.
     """
     block = _format_chunks_block(chunks)
     rendered = _render_template(lang, block)
-    # No `.format()` call needed — we already substituted `chunks_block`.
+    if enumeration_block:
+        rendered = enumeration_block.rstrip() + "\n\n" + rendered
     return rendered

@@ -28,7 +28,7 @@ from app.schemas.query import (
 from app.schemas.query_entity import QueryEntities
 from openai import AsyncOpenAI, OpenAI
 
-from app.services import citation_parser, query_entity, rag
+from app.services import citation_parser, episode_finders, query_entity, rag
 from app.services.ai_step_resolver import (
     AiStepNotConfiguredError,
     get_step_config,
@@ -226,65 +226,112 @@ async def _extract_entities_fail_open(
     return entities
 
 
-_ENUMERATION_SQL_BASE = """
-SELECT id, title, published_at, guests, ai_summary
-FROM episodes
-WHERE show_id = :show_id
-"""
-
-
 async def _compute_enumeration_episodes(
     db: AsyncSession,
     show_id: uuid.UUID,
     question: str,
     entities: QueryEntities,
-) -> list[EpisodeRef] | None:
-    """Build the `enumeration_episodes` list when the question is an
-    enumeration-type query (R3.3 Phase 9 / Decision 4).
+) -> tuple[list[EpisodeRef] | None, str]:
+    """Build the `enumeration_episodes` list for an enumeration query.
 
-    Trigger:
-      - non-empty `entities.guests` OR `entities.date_range`, OR
-      - question contains the enumeration rule substring `哪幾集/哪集/哪些集`
+    R3.3 + r3-3-chat-enum-grounding: dispatches to the tool-like finder
+    functions in `app.services.episode_finders` and combines results.
 
-    Filters: guests `@>` containment, published_at BETWEEN endpoints.
-    When the trigger is rule-pattern-only (no entity filter) the SQL has
-    no extra WHERE clauses — the response lists every episode of the show
-    sorted by `published_at DESC`, matching the spec scenario "rule pattern
-    triggers enumeration response".
+    Trigger (any one fires the path):
+      - `entities.guests` non-empty
+      - `entities.date_range` non-empty
+      - `entities.topics` non-empty
+      - question matches `[哪那]幾集 / [哪那]集 / [哪那]些集` rule pattern
+        (and the question itself becomes the topic-term source via jieba)
 
-    Returns None when no trigger matched.
+    Combination semantics:
+      - guests + topics both non-empty → AND-intersect by episode_id;
+        empty intersection → fallback to guests-only (returns
+        fallback_marker = "guest_only") so the answer prompt can warn
+        the user that no episode satisfied both constraints.
+      - guests + date_range both → AND-intersect (no fallback today).
+      - topics + date_range → AND-intersect.
+      - rule pattern matched but every entities field empty → use
+        `extract_topic_terms_from_question(question)` as topic_terms and
+        run the topic finder. We no longer fall back to "list every
+        episode in the show".
+
+    Returns:
+      (episodes_or_None, fallback_marker)
+        - episodes_or_None is `None` when no trigger matched (callers
+          should set enumeration_episodes / enumeration_total to None),
+          empty list when trigger matched but 0 episodes survived
+          filtering, populated list otherwise.
+        - fallback_marker is one of "none" (no fallback applied) or
+          "guest_only" (AND was empty, fell back to guests-only).
     """
     rule_match = bool(_ENUMERATION_RULE_PATTERN.search(question or ""))
-    has_entity = bool(entities.guests) or entities.date_range is not None
-    if not has_entity and not rule_match:
-        return None
+    has_guests = bool(entities.guests)
+    has_date = entities.date_range is not None
+    has_topics = bool(entities.topics)
+    if not (has_guests or has_date or has_topics or rule_match):
+        return None, "none"
 
-    params: dict = {"show_id": show_id}
-    extra_clauses: list[str] = []
-    if entities.guests:
-        extra_clauses.append("guests @> CAST(:enum_guests AS jsonb)")
-        params["enum_guests"] = _stdlib_json.dumps(entities.guests)
-    if entities.date_range is not None:
-        extra_clauses.append(
-            "published_at BETWEEN :enum_date_start AND :enum_date_end"
+    # Collect results from each entity-driven finder. We invoke at most
+    # three SQL roundtrips; combine in Python by episode_id.
+    guest_eps: list[EpisodeRef] | None = None
+    topic_eps: list[EpisodeRef] | None = None
+    date_eps: list[EpisodeRef] | None = None
+
+    if has_guests:
+        guest_eps = await episode_finders.find_episodes_by_guest(
+            db, show_id, list(entities.guests)
         )
-        params["enum_date_start"] = entities.date_range[0]
-        params["enum_date_end"] = entities.date_range[1]
-    sql_str = _ENUMERATION_SQL_BASE
-    for c in extra_clauses:
-        sql_str += f"  AND {c}\n"
-    sql_str += "ORDER BY published_at DESC NULLS LAST"
-    result = await db.execute(text(sql_str), params)
-    return [
-        EpisodeRef(
-            episode_id=row["id"],
-            title=row["title"],
-            published_at=row["published_at"],
-            guests=list(row["guests"] or []),
-            ai_summary=row["ai_summary"],
+    if has_topics:
+        topic_eps = await episode_finders.find_episodes_by_topic(
+            db, show_id, list(entities.topics)
         )
-        for row in result.mappings()
-    ]
+    if has_date:
+        start, end = entities.date_range
+        date_eps = await episode_finders.find_episodes_by_date_range(
+            db, show_id, start, end
+        )
+
+    # Rule-pattern-only path: derive topic_terms from the question itself.
+    # Only kicks in when the LLM extracted nothing usable; otherwise the
+    # entity-driven results above already covered the intent.
+    if rule_match and guest_eps is None and topic_eps is None and date_eps is None:
+        terms = episode_finders.extract_topic_terms_from_question(question)
+        topic_eps = await episode_finders.find_episodes_by_topic(
+            db, show_id, terms
+        )
+
+    # Combine. AND-intersect every non-None group.
+    fallback_marker = "none"
+    groups = [g for g in (guest_eps, topic_eps, date_eps) if g is not None]
+    if not groups:
+        # All triggers fired but every finder declined (e.g. empty
+        # rule-pattern terms after stopword filter). Surface empty list.
+        return [], "none"
+
+    if len(groups) == 1:
+        combined = groups[0]
+    else:
+        # Intersect by episode_id, preserve first group's ordering.
+        common_ids = set(e.episode_id for e in groups[0])
+        for g in groups[1:]:
+            common_ids &= set(e.episode_id for e in g)
+        combined = [e for e in groups[0] if e.episode_id in common_ids]
+
+    # AND-with-fallback: if guest+topic intersected to nothing, fall
+    # back to guest-only (date_range stays AND if present — date is a
+    # hard temporal scope, not a soft filter we should drop).
+    if not combined and has_guests and has_topics and guest_eps:
+        # Preserve any date_range filter on the fallback set.
+        if date_eps is not None:
+            date_ids = {e.episode_id for e in date_eps}
+            combined = [e for e in guest_eps if e.episode_id in date_ids]
+        else:
+            combined = list(guest_eps)
+        if combined:
+            fallback_marker = "guest_only"
+
+    return combined, fallback_marker
 
 
 def _resolve_lang(raw: str | None) -> str:
@@ -428,8 +475,23 @@ async def query_show(
     )
     await rag.enrich_hits(db, hits, rewritten)
 
-    enumeration = await _compute_enumeration_episodes(
+    enumeration, fallback_marker = await _compute_enumeration_episodes(
         db, show_id, rewritten, entities
+    )
+    enumeration_total = len(enumeration) if enumeration is not None else None
+    # Build the grounding block when enumeration was triggered (None = not
+    # triggered; [] = triggered but 0 matches). Both cases produce a block,
+    # but the empty case uses a "沒有找到相符的集數" header so the answer
+    # model knows there was a real filter that returned nothing.
+    enumeration_block = (
+        rag.format_enumeration_block(
+            episodes=enumeration,
+            total=enumeration_total or 0,
+            fallback_marker=fallback_marker,
+            entities=entities,
+        )
+        if enumeration is not None
+        else None
     )
 
     answer_client = OpenAI(
@@ -447,6 +509,7 @@ async def query_show(
             payload.question,
             hits,
             _resolve_lang(lang),
+            enumeration_block,
         )
     except (
         openai.RateLimitError,
@@ -480,6 +543,7 @@ async def query_show(
         quota_remaining=quota_remaining,
         citations_meta=citations_meta,
         enumeration_episodes=enumeration,
+        enumeration_total=enumeration_total,
     )
 
 
