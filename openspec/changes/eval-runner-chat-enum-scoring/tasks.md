@@ -13,9 +13,9 @@
 
 ## 3. Prod 驗證
 
-- [ ] 3.1 commit + push（commit message 列改動 + 對應 spec 的 modified/added 區塊）；無 frontend 變更不用等 frontend build
-- [ ] 3.2 對 prod 重跑 R1.2 eval（n=30）：對比 r3-3-chat-enum-grounding 那輪 `Episode Set Recall (enumeration, n=2) = 0.1867`，預期 q25 從 0.04 → ≥ 0.85、q26 從 0.333 → ≥ 0.5、aggregate ≥ 0.7（這條代表 chat enumeration_episodes 真的被納入了）
-- [ ] 3.3 對比 `Recall@5 (chunk, episode, n=28) = 0.86` byte-identical（驗 chunk_id / open_set_lenient 不受影響）
+- [x] 3.1 commit + push（commit message 列改動 + 對應 spec 的 modified/added 區塊）；無 frontend 變更不用等 frontend build
+- [x] 3.2 對 prod 重跑 R1.2 eval（n=30）：對比 r3-3-chat-enum-grounding 那輪 `Episode Set Recall (enumeration, n=2) = 0.1867`，預期 q25 從 0.04 → ≥ 0.85、q26 從 0.333 → ≥ 0.5、aggregate ≥ 0.7（這條代表 chat enumeration_episodes 真的被納入了）
+- [x] 3.3 對比 `Recall@5 (chunk, episode, n=28) = 0.86` byte-identical（驗 chunk_id / open_set_lenient 不受影響）
 
 ## 4. 收尾
 

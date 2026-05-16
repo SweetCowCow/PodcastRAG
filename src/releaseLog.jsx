@@ -51,6 +51,33 @@ const MILESTONE_LABELS = {
 const RELEASE_LOG = [
   // ─── v1.7 — Retrieval Quality Fix (5/13–5/16) ───
   {
+    date: '2026-05-16', slug: 'eval-runner-chat-enum-scoring', milestone: 'v1.7', tag: 'enhancement',
+    title: {
+      zh: '量測補洞：「歌單那幾集」分數從 0.04 跳到 0.76 — 不是系統變好，是過去我們算錯了',
+      en: 'Measurement Fix: "Playlist" Score Jumped from 0.04 to 0.76 — Not Because the System Got Better, but Because We Were Mis-Scoring',
+    },
+    summary: {
+      zh: '今天稍早 ship r3-3-chat-enum-grounding（讓 chat 回應正確列出相關集數）後我們跑 eval baseline 抓到一個尷尬數字：q25「節目裡有哪些集是歌單？」episode_set_recall = 0.04（命中 1/25 集），看起來像沒進步。但實際打 chat endpoint 拿到 23 集相關集數列表中真的有 19 集在 expected 集合內 — 0.76 的命中率。差距 19 倍。原因：eval runner 從一開始就只看 search endpoint 回的 top-5 chunks 推算 episode_set_recall，從來不打 chat endpoint，所以 chat 路徑新加的 enumeration_episodes 欄位完全沒進計分。這次補洞：runner 對 enumeration 題型同時打 search + chat 兩條路徑，episode_id 聯集後計算 recall。所有非 enumeration 題型保持只打 search（cost 不變）。每題 JSON 報表額外帶 enumeration_episodes_count + episode_set_recall_chat_only 兩個 diagnostic 欄位，方便追蹤 chat / search 兩條路徑的差異。Prod 重跑結果：q25 從 0.04 → 0.76（+19 倍）、aggregate enumeration recall 從 0.1867 → 0.5467（+3 倍）、chunk_id 題目 Recall@5 byte-identical 0.86（零 regression）。**對使用者體驗沒有任何 behavior 改動** — 這純粹是量測工具補完整，讓接下來任何 retrieval / enumeration 改動的 lift 能被正確量化，避免再瞎子飛。',
+      en: 'Earlier today after shipping r3-3-chat-enum-grounding (which lets chat responses list relevant episodes correctly), we ran the eval baseline and saw an awkward number: q25 "Which episodes are playlist episodes?" scored episode_set_recall = 0.04 (1 of 25 matched), looking like no improvement. But directly hitting the chat endpoint, the enumeration_episodes list contained 23 episodes, of which 19 were in the expected set — 0.76 hit rate. 19x gap. Root cause: the eval runner only ever scored enumeration items against the search endpoint top-5 chunks and never called the chat endpoint, so the new enumeration_episodes field shipped by R3.3 + r3-3-chat-enum-grounding was completely invisible to scoring. This release closes the gap: the runner now calls BOTH search and chat for enumeration items, unions the episode_ids, and computes recall against the union. Non-enumeration items continue to only hit search (cost unchanged). Per-item JSON gains two diagnostic fields (enumeration_episodes_count + episode_set_recall_chat_only) to make search-vs-chat divergence trackable. Prod re-run: q25 went 0.04 → 0.76 (+19x), aggregate enumeration recall 0.1867 → 0.5467 (+3x), chunk_id Recall@5 stays byte-identical at 0.86 (zero regression). **No user-facing behavior change** — this is pure measurement infrastructure, so any future retrieval / enumeration improvement can be properly quantified instead of flying blind.',
+    },
+    summaryBullets: {
+      zh: [
+        'Eval runner 對 enumeration 題型現在同時打 search + chat 兩條路徑，episode_id 聯集計算 recall',
+        '非 enumeration 題目（chunk_id / open_set_lenient）保持只打 search，cost + 行為與之前 byte-identical',
+        'Prod 重跑：q25 歌單 0.04 → 0.76 (+19x)、aggregate enumeration 0.1867 → 0.5467 (+3x)、chunk_id Recall@5 0.86 零 regression',
+        'JSON 報表每題多 enumeration_episodes_count + episode_set_recall_chat_only 兩欄位，讓 chat / search 兩條路徑差異可追蹤',
+        '使用者體驗零變化；純量測工具補完整，讓接下來改動的 lift 能被正確算出來',
+      ],
+      en: [
+        'Eval runner now calls BOTH search + chat for enumeration items and unions the episode_ids for recall scoring',
+        'Non-enumeration items (chunk_id / open_set_lenient) keep search-only path; cost + behavior byte-identical to before',
+        'Prod re-run: q25 playlist 0.04 → 0.76 (+19x), aggregate enumeration 0.1867 → 0.5467 (+3x), chunk_id Recall@5 0.86 zero regression',
+        'Per-item JSON gains enumeration_episodes_count + episode_set_recall_chat_only diagnostic fields so chat-vs-search divergence is trackable',
+        'No user-facing behavior change; pure measurement infra so future improvements can be quantified',
+      ],
+    },
+  },
+  {
     date: '2026-05-16', slug: 'r3-3-chat-enum-grounding', milestone: 'v1.7', tag: 'enhancement',
     title: {
       zh: 'Chat 答案文字現在會對齊「相關集數」卡片數字 + 主題型問題也能列出集數',
