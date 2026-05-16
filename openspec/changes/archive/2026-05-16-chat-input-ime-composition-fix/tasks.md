@@ -12,14 +12,14 @@
 
 ## 3. Prod 驗證
 
-- [ ] 3.1 commit + push（commit message 含 spec scenario 對應、Phase C case study 不適用因 R3.x 範圍外）
-- [ ] 3.2 等 Zeabur frontend build 綠（static deploy 快）
-- [ ] 3.3 chrome-devtools-mcp 自動化驗證：登入 prod → 進「這又沒有很屌」chat 輸入框 → 用 `evaluate_script` 模擬 IME 流程：dispatchEvent compositionstart → 輸入字 → dispatchEvent Enter keydown with `isComposing: true` → 驗證 `handleSend` 沒呼叫（chat history 沒增加 user bubble）→ 結束 composition → dispatchEvent 一般 Enter → 驗證 handleSend 觸發
-- [ ] 3.4 同樣對語意搜尋輸入框跑一次（驗 spec scenario「Semantic search input uses onSubmit prop」）
-- [ ] 3.5 Regression check：輸入英文「abc」按 Enter → 送出（驗 spec scenario「Plain Enter DOES submit」）；空字串按 Enter → 按鈕仍 disabled、handleSend 不執行（驗 spec scenario「Empty-value Enter is no-op」）
-- [ ] 3.6 把實際使用者手動複測 SOP 列給 user：用注音輸入「歌單那幾集講過什麼」逐字打 + 中途按 Enter 選字驗證不送出 → 完整句子按 Enter 才送出
+- [x] 3.1 commit + push（commit message 含 spec scenario 對應、Phase C case study 不適用因 R3.x 範圍外）
+- [x] 3.2 等 Zeabur frontend build 綠（static deploy 快）
+- [x] 3.3 chrome-devtools-mcp 自動化驗證：登入 prod → 進「這又沒有很屌」chat 輸入框 → 用 `evaluate_script` 模擬 IME 流程：dispatchEvent compositionstart → 輸入字 → dispatchEvent Enter keydown with `isComposing: true` → 驗證 `handleSend` 沒呼叫（chat history 沒增加 user bubble）→ 結束 composition → dispatchEvent 一般 Enter → 驗證 handleSend 觸發
+- [x] 3.4 同樣對語意搜尋輸入框跑一次（驗 spec scenario「Semantic search input uses onSubmit prop」）
+- [x] 3.5 Regression check：輸入英文「abc」按 Enter → 送出（驗 spec scenario「Plain Enter DOES submit」）；空字串按 Enter → 按鈕仍 disabled、handleSend 不執行（驗 spec scenario「Empty-value Enter is no-op」）
+- [x] 3.6 把實際使用者手動複測 SOP 列給 user：用注音輸入「歌單那幾集講過什麼」逐字打 + 中途按 Enter 選字驗證不送出 → 完整句子按 Enter 才送出
 
 ## 4. 收尾
 
-- [ ] 4.1 寫 release log entry（v1.7 內，date 2026-05-16，slug `chat-input-ime-composition-fix`，tag `fix`，user-perspective 講「用注音輸入時 Enter 選字不再誤觸送出」）
-- [ ] 4.2 `/spectra-archive chat-input-ime-composition-fix` + 同步 memory `project_pending_followups.md` 把 issue #3 標完成
+- [x] 4.1 寫 release log entry（v1.7 內，date 2026-05-16，slug `chat-input-ime-composition-fix`，tag `fix`，user-perspective 講「用注音輸入時 Enter 選字不再誤觸送出」）
+- [x] 4.2 `/spectra-archive chat-input-ime-composition-fix` + 同步 memory `project_pending_followups.md` 把 issue #3 標完成
