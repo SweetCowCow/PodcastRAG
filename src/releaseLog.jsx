@@ -51,6 +51,31 @@ const MILESTONE_LABELS = {
 const RELEASE_LOG = [
   // ─── v1.7 — Retrieval Quality Fix (5/13–5/16) ───
   {
+    date: '2026-05-16', slug: 'chat-input-ime-composition-fix', milestone: 'v1.7', tag: 'fix',
+    title: {
+      zh: '注音輸入法 Enter 選字不再誤送 — 對話框與語意搜尋框 IME safety',
+      en: 'Bopomofo / CJK IME: Enter no Longer Hijacks Candidate-Confirm in Chat + Semantic-Search Inputs',
+    },
+    summary: {
+      zh: '注音、倉頡、拼音這類 CJK 輸入法的選字流程靠按 Enter 確認候選字。先前 QueryPage 的對話框和語意搜尋框 onKeyDown 抓到 Enter 就直接 handleSend/handleSearch，沒有區分「Enter 選字」與「Enter 送出」兩種語意 — 結果使用者打到一半（譬如打「歌單那幾集」打到「歌單」就按 Enter 選「單」字）→ 整句被半途送出，要重打。對台灣使用者根本天天卡。這次把 IME composition guard（檢查 `e.isComposing` 與 legacy `keyCode === 229`，後者覆蓋 Safari / iOS）集中到共用的 `<Input>` 元件，新增 `onSubmit` prop 內建這層保護。對話框與語意搜尋框遷移到新介面；未來新增任何輸入框只要用 `onSubmit={handler}` 就自動享有 IME 安全。Prod 使用者實測：注音逐字選字 Enter 都不送出、純英文 Enter 立刻送、語意搜尋 Enter 也正常觸發 — 全綠。',
+      en: 'CJK input methods (Bopomofo, Cangjie, Pinyin etc.) use Enter to confirm the highlighted candidate in their popup. The chat + semantic-search inputs on QueryPage had a naive `onKeyDown={e.key === "Enter" && submit()}` handler with no composition guard — pressing Enter to confirm a Bopomofo character mid-typing would submit a half-finished query and force the user to start over. Every-day blocker for the project\'s near-100% CJK userbase. This release centralizes the IME composition guard (`e.isComposing` + legacy `keyCode === 229` for Safari/iOS) into the shared `<Input>` component, exposed via a new `onSubmit` prop. Chat + semantic-search inputs migrated to the new interface; any future input that uses `<Input onSubmit={…}>` now gets IME safety for free. Real-user IME verification on prod: Bopomofo candidate-confirm Enter does NOT submit, plain English Enter DOES submit, semantic-search Enter triggers search — all clear.',
+    },
+    summaryBullets: {
+      zh: [
+        '對話框 + 語意搜尋框 Enter 改走 IME composition guard：`e.isComposing` 為真或 `keyCode === 229`（Safari/iOS legacy 路徑）時跳過送出',
+        '保護集中到共用 `<Input>` 元件新增 `onSubmit` prop — 未來任何 input 用這個介面自動享有 IME 安全',
+        '修補 follow-up：QueryPage 兩個 handler signature 對齊（handleSearch 的 overrideQuestion arg 被 KeyboardEvent 污染導致 `.trim()` 拋錯靜默失敗，包一層 `() => handler()` drop event arg）',
+        '使用者實測：注音逐字選字 Enter 不誤送 ✅、英文純 Enter 送出 ✅、語意搜尋 Enter 觸發 ✅',
+      ],
+      en: [
+        'Chat + semantic-search Enter now goes through IME composition guard: when `e.isComposing` is true or `keyCode === 229` (Safari/iOS legacy path), submission is skipped',
+        'Guard centralized in shared `<Input>` via new `onSubmit` prop — any future input that uses this interface gets IME safety for free',
+        'Follow-up fix: QueryPage handlers wrapped as `() => handler()` so the KeyboardEvent never leaks into `handleSearch(overrideQuestion?: string)`, which was silently throwing on `event.trim()` inside async',
+        'Real-user verification: Bopomofo candidate-confirm Enter does NOT misfire submit ✅, plain English Enter DOES submit ✅, semantic search Enter triggers ✅',
+      ],
+    },
+  },
+  {
     date: '2026-05-16', slug: 'r3-3-metadata-filter', milestone: 'v1.7', tag: 'enhancement',
     title: {
       zh: '問「馬世芳上過哪幾集？」可以直接看到清單了 — 加上來賓清單、發佈日期、跨集列舉',
