@@ -130,14 +130,30 @@ const Btn = ({ children, onClick, variant = 'primary', size = 'md', disabled, st
 };
 
 // --- Input ---
-const Input = ({ value, onChange, placeholder, type = 'text', icon, style: extraStyle = {}, ...rest }) => {
+// `onSubmit` (optional) fires when the user presses Enter AND no IME composition
+// is active. CJK input methods (注音 / 倉頡 / 拼音 etc.) use Enter to confirm
+// candidate characters mid-composition — the guard (`e.isComposing` plus legacy
+// `keyCode === 229` for Safari/iOS) prevents that keystroke from triggering
+// submit. Any caller-supplied `onKeyDown` still fires *after* the submit logic
+// so existing listeners keep working.
+const Input = ({ value, onChange, onSubmit, onKeyDown, placeholder, type = 'text', icon, style: extraStyle = {}, ...rest }) => {
   const [focused, setFocused] = React.useState(false);
+  const handleKey = (e) => {
+    if (!(e.isComposing || e.keyCode === 229)) {
+      if (e.key === 'Enter' && onSubmit) {
+        e.preventDefault();
+        onSubmit(e);
+      }
+    }
+    if (onKeyDown) onKeyDown(e);
+  };
   return (
     <div style={{ position: 'relative', width: '100%' }}>
       {icon && <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: TOKEN.textMuted }}><Icon name={icon} size={16} /></span>}
       <input value={value} onChange={onChange} placeholder={placeholder} type={type}
         onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}
         {...rest}
+        onKeyDown={handleKey}
         style={{ width: '100%', boxSizing: 'border-box', background: TOKEN.surfaceRaised, border: `1px solid ${focused ? TOKEN.accent : TOKEN.surfaceBorder}`, borderRadius: 8, padding: icon ? '9px 12px 9px 36px' : '9px 12px', color: TOKEN.text, fontSize: 14, outline: 'none', fontFamily: 'inherit', transition: 'border 0.15s', ...extraStyle }} />
     </div>
   );
