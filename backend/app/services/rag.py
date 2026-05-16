@@ -1131,6 +1131,33 @@ def _hit_key(hit: ChunkHit) -> str:
 # `citation_parser.parse` already strips invalid tokens for the API path).
 _CITATION_TOKEN_RE = re.compile(r"\s*\[\d+(?:\s*,\s*\d+)*\]")
 
+# Fallback extractor for the answer_with_chunks JSON parse failure path:
+# the LLM occasionally returns malformed JSON (e.g. `"used_chunk_ids": }`
+# from an over-aggressive truncation). The `try/except` below used to return
+# the raw string verbatim, which leaked the JSON wrapping (`{"answer": "...",
+# "used_chunk_ids":`) into the chat bubble shown to the user. This regex
+# pulls the `answer` string field out even when surrounding JSON is invalid,
+# so the user-visible text stays clean. DOTALL so `\n` inside the answer
+# survives; non-greedy with negative-lookbehind handling for escaped quotes.
+_ANSWER_FIELD_RE = re.compile(
+    r'"answer"\s*:\s*"((?:[^"\\]|\\.)*)"', re.DOTALL
+)
+
+
+def _extract_answer_from_malformed_json(raw: str) -> str | None:
+    """Try to pull just the `"answer": "..."` value out of a malformed JSON
+    string. Returns None if no answer field is found. Unescapes JSON-style
+    `\\n` / `\\"` so the user sees real newlines / quotes."""
+    m = _ANSWER_FIELD_RE.search(raw)
+    if not m:
+        return None
+    try:
+        return _stdlib_json.loads('"' + m.group(1) + '"')
+    except ValueError:
+        # Last-ditch manual unescape — covers the common cases.
+        s = m.group(1)
+        return s.replace("\\n", "\n").replace('\\"', '"').replace("\\\\", "\\")
+
 
 def strip_citations(text: str) -> str:
     """Remove every `[N]` / `[N,M,...]` bracket token (incl. preceding spaces).
@@ -1189,4 +1216,11 @@ def answer_with_chunks(
         used_ids = [str(k) for k in parsed.get("used_chunk_ids", [])]
         return answer, strip_citations(answer), used_ids
     except (ValueError, KeyError):
+        # JSON parse failed (often `"used_chunk_ids": }` malformed by LLM).
+        # Salvage the `answer` field via regex so the chat bubble shows clean
+        # prose instead of the JSON wrapping. used_chunk_ids stays empty so
+        # all retrieved chunks fall through as citations.
+        salvaged = _extract_answer_from_malformed_json(raw)
+        if salvaged is not None:
+            return salvaged, strip_citations(salvaged), []
         return raw, strip_citations(raw), []

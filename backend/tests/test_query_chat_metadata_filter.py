@@ -177,8 +177,13 @@ async def test_enumeration_triggers_on_rule_pattern_with_no_entity():
 
 @pytest.mark.asyncio
 async def test_enumeration_rule_pattern_variants():
-    """All three substrings (哪幾集 / 哪集 / 哪些集) trigger the rule path."""
-    for q in ("哪幾集", "哪集", "哪些集"):
+    """All three substrings (哪幾集 / 哪集 / 哪些集) trigger the rule path.
+
+    Both 哪 (which) and 那 (that) work — Taiwan users commonly type 那
+    where 哪 is meant. Prod 2026-05-16: 「歌單那幾集」 silently dropped
+    out of enumeration before this widening.
+    """
+    for q in ("哪幾集", "哪集", "哪些集", "那幾集", "那集", "那些集"):
         assert query_mod._ENUMERATION_RULE_PATTERN.search(q) is not None
     assert query_mod._ENUMERATION_RULE_PATTERN.search("主持人是誰") is None
 

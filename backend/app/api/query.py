@@ -41,8 +41,12 @@ logger = logging.getLogger(__name__)
 
 # R3.3 Phase 9: substring trigger for the enumeration UI when the entity
 # extractor returns empty. Spec scenario "Enumeration rule pattern triggers
-# enumeration response" lists these three substrings.
-_ENUMERATION_RULE_PATTERN = re.compile(r"哪幾集|哪集|哪些集")
+# enumeration response" lists 哪幾集 / 哪集 / 哪些集 — but Traditional
+# Chinese users routinely type 那 (that) where 哪 (which) is meant
+# (homophones, both pronounced 'na'). Prod verification 2026-05-16 caught
+# 「歌單那幾集講過什麼」 silently dropping out of the enumeration path,
+# so the trigger accepts both characters.
+_ENUMERATION_RULE_PATTERN = re.compile(r"[哪那]幾集|[哪那]集|[哪那]些集")
 
 router = APIRouter(tags=["query"])
 
