@@ -151,6 +151,104 @@ def _retrieve(
     return [_to_chunk_id(h) for h in hits], [h.get("text", "") for h in hits], latency_ms
 
 
+# Per-token one-time warning when chat-CSRF is unavailable. Avoids spamming
+# stderr per enumeration item when the auth token is unusable.
+_CHAT_CSRF_WARNED: set[str] = set()
+
+
+def _retrieve_chat_enumeration(
+    backend_url: str, show_id: str, question: str, token: str,
+) -> tuple[list[str], int | None]:
+    """Call the chat endpoint and extract `enumeration_episodes` episode_ids.
+
+    R3.3 + r3-3-chat-enum-grounding shipped a chat-only enumeration path that
+    `episode_finders.find_episodes_by_topic` / guest / date populate into the
+    `ChatResponse.enumeration_episodes` field. This helper pulls those
+    episode_ids so the eval runner can union them with the search-side
+    chunks when scoring `eval_mode: "enumeration"` items.
+
+    Fail-open contract (per spec `Chat endpoint failures fail-open with empty
+    episode set`):
+      - Returns `([], None)` on any failure (HTTP 5xx, missing CSRF, network
+        timeout, malformed JSON, no auth token). `None` total signals "chat
+        scoring inconclusive" so the diagnostic field downstream is `None`,
+        not 0.
+      - Returns `([], 0)` when the chat call succeeded BUT the response has
+        no `enumeration_episodes` (chat path did NOT classify this question
+        as enumeration). Distinct from failure — total=0 means "we asked
+        and the answer is zero", not "we couldn't ask".
+      - Returns `(episode_ids, total)` on success. `total` mirrors
+        `enumeration_total` if present, else `len(episode_ids)`.
+    """
+    if not token:
+        return [], None
+
+    # CSRF gate. _post caches /me results in _CSRF_CACHE for performance;
+    # we piggyback on the same cache. If the CSRF can't be obtained, fail
+    # open once per token with a single startup-style warning, then quietly
+    # skip subsequent enumeration items so prior search-only behavior is
+    # preserved without spamming stderr.
+    if token not in _CSRF_CACHE:
+        _CSRF_CACHE[token] = _fetch_csrf(backend_url, token)
+    if not _CSRF_CACHE.get(token):
+        if token not in _CHAT_CSRF_WARNED:
+            print(
+                "[warn] chat-enum scoring disabled — CSRF token unavailable "
+                "via /me. Falling back to search-only enumeration recall "
+                "for the rest of this run.",
+                file=sys.stderr,
+            )
+            _CHAT_CSRF_WARNED.add(token)
+        return [], None
+
+    try:
+        resp = _post(
+            f"{backend_url}/shows/{show_id}/query",
+            {"question": question, "mode": "chat", "messages": []},
+            token,
+            timeout=60.0,
+        )
+    except urllib.error.HTTPError as exc:
+        print(
+            f"[warn] chat-enum query HTTP {exc.code} for question={question!r}",
+            file=sys.stderr,
+        )
+        return [], None
+    except (
+        urllib.error.URLError, json.JSONDecodeError, TimeoutError, OSError,
+    ) as exc:
+        print(
+            f"[warn] chat-enum query failed for question={question!r}: {exc}",
+            file=sys.stderr,
+        )
+        return [], None
+    except Exception as exc:  # noqa: BLE001 — fail-open contract
+        print(
+            f"[warn] chat-enum query unexpected error for question={question!r}: {exc}",
+            file=sys.stderr,
+        )
+        return [], None
+
+    enum_eps = resp.get("enumeration_episodes")
+    if enum_eps is None:
+        # Chat path saw the question but did NOT classify it as enumeration.
+        # Distinct from a failure path; surfaces a dataset/path mismatch.
+        return [], 0
+
+    episode_ids: list[str] = []
+    for ep in enum_eps:
+        if not isinstance(ep, dict):
+            continue
+        eid = ep.get("episode_id")
+        if eid:
+            episode_ids.append(str(eid))
+
+    total = resp.get("enumeration_total")
+    if not isinstance(total, int):
+        total = len(episode_ids)
+    return episode_ids, total
+
+
 # R2.1-fix Fix 1.3: strip `[N]` / `[N,M,...]` ref tokens before sending the
 # answer to the judge. The backend serves `[N]` brackets so the frontend can
 # render source cards on hover, but LLM judges treat the brackets as noise
@@ -401,12 +499,31 @@ def run_eval(
         rec: float | None
         rr: float | None
         ep_recall: float | None = None
+        # eval-runner-chat-enum-scoring diagnostics — populated only on
+        # enumeration items, included in the per-item record below.
+        enum_episodes_count: int = 0
+        ep_recall_chat_only: float | None = None
 
         if eval_mode == "enumeration":
-            # Episode-set recall against expected_episode_ids; chunk-based metrics N/A.
-            retrieved_eps = _to_episode_ids(chunk_ids)
+            # Episode-set recall now unions search-side episode_ids (from
+            # top-K chunks) with chat-side episode_ids (from
+            # ChatResponse.enumeration_episodes). chat call fails open;
+            # see _retrieve_chat_enumeration for contract.
+            retrieved_eps_search = _to_episode_ids(chunk_ids)
+            chat_eps, chat_total = _retrieve_chat_enumeration(
+                backend_url, show_id, item["question"], token,
+            )
             expected_eps = item.get("expected_episode_ids", [])
-            ep_recall = episode_set_recall(retrieved_eps, expected_eps)
+            retrieved_eps_union = list(set(retrieved_eps_search) | set(chat_eps))
+            ep_recall = episode_set_recall(retrieved_eps_union, expected_eps)
+            # Diagnostic split: chat_total is None on chat failure,
+            # 0 when chat path didn't classify as enumeration, len(chat_eps) on success.
+            if chat_total is None:
+                enum_episodes_count = 0
+                ep_recall_chat_only = None
+            else:
+                enum_episodes_count = chat_total
+                ep_recall_chat_only = episode_set_recall(chat_eps, expected_eps)
             rec = None
             rr = None
         else:
@@ -451,6 +568,12 @@ def run_eval(
             "judge_score": judge_val,
             "latency_ms": round(latency_ms, 1),
         }
+        # eval-runner-chat-enum-scoring: per-item diagnostic fields for
+        # enumeration items only. Lets RCA tell search-only vs chat-only
+        # path divergence apart from the union number.
+        if eval_mode == "enumeration":
+            record["enumeration_episodes_count"] = enum_episodes_count
+            record["episode_set_recall_chat_only"] = ep_recall_chat_only
         if persist_answers:
             record["question"] = item["question"]
             record["retrieved_chunk_ids"] = chunk_ids
