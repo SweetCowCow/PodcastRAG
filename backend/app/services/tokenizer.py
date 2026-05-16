@@ -60,6 +60,22 @@ def tokenize(text: str) -> list[str]:
     return tokens
 
 
+def title_tsv_text(title: str | None) -> str:
+    """Jieba-tokenise an episode title and return the space-joined token
+    stream used by `to_tsvector('simple', :tsv_text)`.
+
+    R3.3 Phase 8 follow-up: episodes.title_tsvector is populated Python-side
+    on insert / title-change update (mirrors the R3.1 pattern used for
+    transcript_chunks.text_tsvector and episode_description_chunks.text_tsvector).
+    Returns "" for blank / None input so callers can write a NULL-equivalent
+    empty tsvector without branching.
+    """
+    if not title:
+        return ""
+    tokens = tokenize(title)
+    return " ".join(t for t in tokens if t and t.strip())
+
+
 async def load_dictionary(db: AsyncSession) -> int:
     """Load custom terms from DB and register with jieba. Idempotent."""
     global _loaded

@@ -4,7 +4,16 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.episode import Episode
+from app.services import tokenizer
 from app.services.rss_parser import fetch_and_parse
+
+
+def _title_tsv_expr(title: str | None):
+    """Build the `to_tsvector('simple', <jieba-tokens>)` SQL expression for
+    a given episode title. Returns a SQLAlchemy expression to assign to
+    `Episode.title_tsvector` at INSERT / UPDATE time.
+    """
+    return func.to_tsvector("simple", tokenizer.title_tsv_text(title))
 
 
 async def sync_show_episodes(show_id: uuid.UUID, db: AsyncSession) -> dict:
@@ -20,6 +29,11 @@ async def sync_show_episodes(show_id: uuid.UUID, db: AsyncSession) -> dict:
         raise LookupError(f"Show {show_id} not found")
 
     parsed = await fetch_and_parse(show.rss_url)
+
+    # R3.3 Phase 8 follow-up: jieba dict must be loaded so title_tsv_text
+    # uses the show-name custom terms (otherwise compound titles like
+    # 「異世界美食家」 break apart into single chars).
+    await tokenizer.load_dictionary(db)
 
     existing_rows = (
         await db.execute(select(Episode).where(Episode.show_id == show_id))
@@ -44,6 +58,12 @@ async def sync_show_episodes(show_id: uuid.UUID, db: AsyncSession) -> dict:
             if title_changed and ep.guests and existing_ep.guests != ep.guests:
                 existing_ep.guests = ep.guests
                 changed = True
+            # R3.3 Phase 8 follow-up: re-tokenise title_tsvector whenever the
+            # title actually changes so the lexical title pool stays in sync
+            # with the published title.
+            if title_changed:
+                existing_ep.title_tsvector = _title_tsv_expr(ep.title)
+                changed = True
             if changed:
                 updated += 1
         else:
@@ -57,6 +77,7 @@ async def sync_show_episodes(show_id: uuid.UUID, db: AsyncSession) -> dict:
                     published_at=ep.published_at,
                     guid=ep.guid,
                     guests=ep.guests,
+                    title_tsvector=_title_tsv_expr(ep.title),
                 )
             )
             added += 1

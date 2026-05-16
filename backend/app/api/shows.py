@@ -27,7 +27,15 @@ from app.schemas.transcription_status import (
     TranscriptionStatusCounts,
     TranscriptionStatusResponse,
 )
+from app.services import tokenizer
 from app.services.rss_parser import RssParseError, fetch_and_parse
+
+
+def _title_tsv_expr(title: str | None):
+    """Build the `to_tsvector('simple', <jieba-tokens>)` SQL expression for
+    an episode title (mirrors `app.services.sync._title_tsv_expr` — kept as
+    a local helper to avoid an extra import layer)."""
+    return func.to_tsvector("simple", tokenizer.title_tsv_text(title))
 from app.services.sync import sync_show_episodes
 
 router = APIRouter(prefix="/shows", tags=["shows"])
@@ -134,6 +142,9 @@ async def create_show(payload: ShowCreate, db: AsyncSession = Depends(get_db)):
             ).model_dump(),
         ) from exc
 
+    # R3.3 Phase 8 follow-up: load jieba dict so the show-name custom
+    # terms apply when tokenising titles into title_tsvector.
+    await tokenizer.load_dictionary(db)
     for ep in parsed.episodes:
         db.add(
             Episode(
@@ -144,6 +155,8 @@ async def create_show(payload: ShowCreate, db: AsyncSession = Depends(get_db)):
                 duration_seconds=ep.duration_seconds,
                 published_at=ep.published_at,
                 guid=ep.guid,
+                guests=ep.guests,
+                title_tsvector=_title_tsv_expr(ep.title),
             )
         )
 
