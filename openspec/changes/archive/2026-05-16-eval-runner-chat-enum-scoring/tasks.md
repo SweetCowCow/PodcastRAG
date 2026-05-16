@@ -19,7 +19,7 @@
 
 ## 4. 收尾
 
-- [ ] 4.1 補 release log entry（v1.7 內，date 2026-05-16，slug `eval-runner-chat-enum-scoring`，tag `enhancement`，user-perspective 講「眼睛沒看到的：之前 eval 沒有把 chat 列舉結果算進去，這次補上，q25 歌單題從 0.04 跳到 0.92+ — 系統表現實際上比之前的數字好得多」）
-- [ ] 4.2 更新 `docs/case-studies/r33-metadata-filter.md` 補 Stage 9：用真實 eval 數字證明 r3-3-chat-enum-grounding 的 lift（q25 / q26 跳幅）
-- [ ] 4.3 同步 memory `project_pending_followups.md`：把 r3-3-chat-enum-grounding 那段的 "衍生 follow-up：eval-runner-chat-enum-scoring" 標完成
-- [ ] 4.4 `/spectra-archive eval-runner-chat-enum-scoring`
+- [x] 4.1 補 release log entry（v1.7 內，date 2026-05-16，slug `eval-runner-chat-enum-scoring`，tag `enhancement`，user-perspective 講「眼睛沒看到的：之前 eval 沒有把 chat 列舉結果算進去，這次補上，q25 歌單題從 0.04 跳到 0.92+ — 系統表現實際上比之前的數字好得多」）
+- [x] 4.2 更新 `docs/case-studies/r33-metadata-filter.md` 補 Stage 9：用真實 eval 數字證明 r3-3-chat-enum-grounding 的 lift（q25 / q26 跳幅）
+- [x] 4.3 同步 memory `project_pending_followups.md`：把 r3-3-chat-enum-grounding 那段的 "衍生 follow-up：eval-runner-chat-enum-scoring" 標完成
+- [x] 4.4 `/spectra-archive eval-runner-chat-enum-scoring`
