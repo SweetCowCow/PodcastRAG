@@ -83,21 +83,21 @@
 - [x] 10.1 在 `src/QueryPage.jsx` ChatBubble 渲染：當 response 帶 `enumeration_episodes` 非空，顯示「相關集數」section（在 answer 下、citations 上）
 - [x] 10.2 每集 row：title + 發佈日期 + guests chip + 60-150 字 ai_summary + 「跳到這集」button（navigate 到 TranscriptPage）
 - [x] 10.3 雙語：「相關集數」/「Related Episodes」，「跳到這集」/「Jump to this episode」
-- [ ] 10.4 verify mobile-friendly（窄螢幕 ai_summary 截斷 + 展開）
+- [x] 10.4 verify mobile-friendly（窄螢幕 ai_summary 截斷 + 展開）
 
 ## 11. Eval 對照 R3.2 Baseline
 
 實作 Decision 5：Eval 對照範圍。
 
-- [ ] 11.1 跑 R1.2 dataset eval：`python -m backend.eval.runners.run --dataset backend/eval/datasets/this-not-that-cool.json --backend-url https://api.podcastrag.app --top-k 5 --metric-level episode --skip-judge`，存進 `backend/eval/runs/r33-baseline/`
-- [ ] 11.2 對比 R3.2 baseline 數字（從 R3.2 case study 抓），算 absolute pp 差距 + per-category breakdown（fact / comprehension / cross-episode / negative / code-switch）
-- [ ] 11.3 額外針對 cross-episode 列舉題（從 dataset 挑或新增 5 題）測 `enumeration_episodes` precision / recall
+- [x] 11.1 跑 R1.2 dataset eval：`python -m backend.eval.runners.run --dataset backend/eval/datasets/this-not-that-cool.json --backend-url https://api.podcastrag.app --top-k 5 --metric-level episode --skip-judge`，存進 `backend/eval/runs/r33-baseline/`
+- [x] 11.2 對比 R3.2 baseline 數字（從 R3.2 case study 抓），算 absolute pp 差距 + per-category breakdown（fact / comprehension / cross-episode / negative / code-switch）
+- [x] 11.3 額外針對 cross-episode 列舉題（從 dataset 挑或新增 5 題）測 `enumeration_episodes` precision / recall
 
 ## 12. Case Study + Release Log + Archive
 
-- [ ] 12.1 寫 `docs/case-studies/r33-metadata-filter.md`（不入 git per rule）：含 4 section（schema decisions / entity extractor bake-off / RRF weights tuning / final eval）
-- [ ] 12.2 跑 `gitleaks detect` 確認新 commits 無 secret
-- [ ] 12.3 commit 全部 R3.3 變動（spectra-commit r3-3-metadata-filter 走流程）
-- [ ] 12.4 push + verify Zeabur build 綠 + chrome-devtools-mcp prod 驗證 Guests admin tab + 隨機問一個列舉題確認 enumeration_episodes 正確
-- [ ] 12.5 補 Release Log v1.6 entry（per `feedback_release_log_maintenance.md`）：使用者視角講「現在可以問『馬世芳上過哪幾集』『2024 那集』」
+- [x] 12.1 寫 `docs/case-studies/r33-metadata-filter.md`（不入 git per rule）：含 4 section（schema decisions / entity extractor bake-off / RRF weights tuning / final eval）
+- [x] 12.2 跑 `gitleaks detect` 確認新 commits 無 secret
+- [x] 12.3 commit 全部 R3.3 變動（spectra-commit r3-3-metadata-filter 走流程）
+- [x] 12.4 push + verify Zeabur build 綠 + chrome-devtools-mcp prod 驗證 Guests admin tab + 隨機問一個列舉題確認 enumeration_episodes 正確
+- [x] 12.5 補 Release Log v1.6 entry（per `feedback_release_log_maintenance.md`）：使用者視角講「現在可以問『馬世芳上過哪幾集』『2024 那集』」
 - [ ] 12.6 `/spectra-archive r3-3-metadata-filter` + 更新 `docs/roadmap.md` + 同步 memory `project_pending_changes.md`

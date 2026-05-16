@@ -49,7 +49,34 @@ const MILESTONE_LABELS = {
 
 // Entries — newest milestone first; within each milestone newest date first.
 const RELEASE_LOG = [
-  // ─── v1.7 — Retrieval Quality Fix (5/13–5/14) ───
+  // ─── v1.7 — Retrieval Quality Fix (5/13–5/16) ───
+  {
+    date: '2026-05-16', slug: 'r3-3-metadata-filter', milestone: 'v1.7', tag: 'enhancement',
+    title: {
+      zh: '問「馬世芳上過哪幾集？」可以直接看到清單了 — 加上來賓清單、發佈日期、跨集列舉',
+      en: 'Ask "Which Episodes Featured 馬世芳?" and Get the Actual List — Guest Names, Publish Dates, Cross-Episode Enumeration',
+    },
+    summary: {
+      zh: '之前查詢只能拉「跟你的問題相關的逐字稿片段」回答，沒辦法直接告訴你「這個來賓在哪幾集出現過」或「2024 年那集是哪集」。這次把節目層級的 metadata 補進 RAG：(1) 從 RSS 標題自動抽 guests（譬如「Ft. 馬世芳」→ 寫進 episodes.guests JSONB），約 93/164 集有 guests；(2) 後台新增「來賓管理」分頁，標題沒寫 Ft. 但實際有來賓的集數可以手動補；(3) chat 查詢時 LLM 會抽出問題裡的 guest 名稱 + 日期區間，retrieval SQL 加上 hard filter 縮小範圍；(4) 對話結果新增「相關集數」section — 條件是問題裡包含 guest 名 / 日期 / 「哪幾集」這類 rule pattern 任一即觸發，每集卡片含 title + 發佈日期 + guests chips + AI 摘要 + 「跳到這集」按鈕。Backend retrieval 同時做了三池 RRF 重構（transcript / description / 標題各自獨立 lexical 池，權重可線上調整不需要重 index）。Prod 驗證：「馬世芳上過哪幾集」回 1 集 EP143（這 show 只有一集 ft. 馬世芳）；「楊大正是哪幾集的來賓」回 2 集。**已知限制**：chat 答案文字目前看不到 enumeration list（會說「1 集」即使下面列了 2 集），「歌單」topic 單獨輸入不會觸發列舉 — 這兩件下個 change `chat-enum-grounding` 處理。',
+      en: 'Until now, chat queries could only fetch transcript snippets relevant to your question — there was no way to directly answer "which episodes featured guest X?" or "the episode from 2024 — which one?". This release adds show-level metadata into RAG: (1) extract guests from RSS titles automatically (e.g. "Ft. 馬世芳" → `episodes.guests` JSONB), roughly 93/164 episodes carry guests; (2) new admin "Guests" tab for episodes whose titles do not use Ft. but have real guests — can be filled manually; (3) chat queries run an LLM entity extractor on the question to pull guest names + date ranges, applied as SQL hard filters; (4) chat response gains a "Related Episodes" section — triggered when the question carries a guest name / date / rule-pattern phrases like 「哪幾集」 — each card shows title + publish date + guest chips + AI summary + a "Jump to this episode" button. Backend retrieval also gained a three-pool RRF refactor (transcript / description / episode-title lexical pools each ranked independently with tunable weights, no re-indexing required). Prod verified: "Which episodes featured 馬世芳?" returns 1 (EP143, the only ft.-馬世芳 episode); "Which episodes did 楊大正 guest on?" returns 2. **Known limits**: the chat answer text does not yet see the enumeration list (it may say "1 episode" even when the card list below shows 2), and topic-only queries like "歌單" do not trigger the list — both will be handled by the next change `chat-enum-grounding`.',
+    },
+    summaryBullets: {
+      zh: [
+        'RSS 自動抽 guests 寫進 `episodes.guests` JSONB（約 93/164 集），後台新增「來賓管理」tab 可手動補',
+        'Chat query LLM 抽 guest / date entity，retrieval SQL 加 hard filter；同時加 BM25 三池 RRF（transcript / description / 標題）權重可線上 tune',
+        '對話結果新增「相關集數」section：guest 名 / 日期 / 「哪幾集」rule pattern 任一觸發，每集卡片含 title + 發佈日期 + guests chip + 跳到這集 button',
+        '相容雙寫：「哪」「那」都觸發（注音輸入常打錯）；LLM 偶發回 malformed JSON 也不會把 JSON 殘骸顯示給使用者',
+        '已知限制：chat 答案文字不知道 enumeration list 內容（會說「1 集」但下面列 2 集）+ topic-only 不觸發列舉，下個 change `chat-enum-grounding` 解決',
+      ],
+      en: [
+        'RSS auto-extracts guests into `episodes.guests` JSONB (~93/164 episodes); new admin "Guests" tab lets operators backfill the rest by hand',
+        'Chat queries run an LLM extractor pulling guest / date entities → SQL hard filter; backend also gains 3-pool BM25 RRF (transcript / description / episode title) with tunable weights, no re-index needed',
+        'Chat response gains a "Related Episodes" section: triggered by guest name / date / phrases like 「哪幾集」 — each card has title + publish date + guest chips + a "Jump to this episode" button',
+        'Compatibility fixes: both 哪 and 那 trigger the enumeration path (common Bopomofo IME typo); malformed-JSON answers from the model no longer leak the JSON wrapping into the chat bubble',
+        'Known limits: the chat answer text does not yet see the enumeration list (may say "1 episode" while the card list below shows 2), and topic-only queries do not trigger the list — addressed by the next change `chat-enum-grounding`',
+      ],
+    },
+  },
   {
     date: '2026-05-14', slug: 'eval-runner-enumeration-scope', milestone: 'v1.7', tag: 'enhancement',
     title: {
