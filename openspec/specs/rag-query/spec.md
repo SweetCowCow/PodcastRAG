@@ -172,233 +172,291 @@ code:
 ---
 ### Requirement: Semantic search endpoint returns ranked chunks
 
-The backend SHALL expose `POST /shows/{show_id}/search` guarded by `optional_auth_with_ip_limit`. The endpoint accepts body `{"question": "<non-empty string>", "k": <optional int 1-50, default 8>}`. The endpoint SHALL embed the question, jieba-tokenise it, **invoke `route_episodes()` (with skip rule for short queries)**, and run `retrieve_hybrid()` with the routed `episode_id_filter`. Each result SHALL carry a `source` discriminator equal to `"transcript"` or `"description"`. The endpoint SHALL NOT include any LLM-generated answer. The endpoint SHALL NOT decrement `quota_remaining` even for authenticated callers. The `DESCRIPTION_CAP` rule SHALL apply.
+The backend SHALL expose `POST /shows/{show_id}/search` which SHALL be guarded by the `optional_auth_with_ip_limit` dependency (see auth-system + ip-rate-limit capabilities). The endpoint accepts body `{"question": "<non-empty string>", "k": <optional int 1-50, default 8>}`. The endpoint SHALL embed the question using the configured embedding step, jieba-tokenise the question for lexical matching using the current custom dictionary (see tokenizer-dictionary capability), and perform hybrid retrieval combining semantic (pgvector cosine distance) and lexical (PostgreSQL tsvector ts_rank) signals via Reciprocal Rank Fusion. Retrieval SHALL be performed against three lexical pools — `transcript_chunks.text_tsvector`, `episode_description_chunks.text_tsvector`, AND `episodes.title_tsvector` — combined with the semantic pool over `transcript_chunks` AND `episode_description_chunks`, with each pool weighted by a configurable Python-side constant (default: chunk × 1.0, description × 0.7, title × 0.5). All pools SHALL be filtered to the specified `show_id`, ranked individually, then unioned by RRF score. Each result SHALL carry a `source` discriminator equal to `"transcript"`, `"description"`, or `"title"`. The endpoint SHALL NOT include any LLM-generated answer. The endpoint SHALL NOT decrement `quota_remaining` even for authenticated callers.
 
-#### Scenario: Anonymous request returns top-K with capped description mix
+#### Scenario: RRF combines semantic and lexical ranks across three pools
 
-- **GIVEN** an unauthenticated visitor under the IP daily limit and a question yielding ≥ 2 multi-char jieba tokens
-- **WHEN** the visitor calls `POST /shows/{show_id}/search`
-- **THEN** routing SHALL run, hybrid retrieval SHALL apply the episode filter
-- **AND** the result SHALL contain at most 3 description hits within the returned 8
+- **GIVEN** chunk `A` ranks 3 in semantic, 25 in chunk-lexical, absent from description-lexical, absent from title-lexical
+- **AND** the configured RRF weights are chunk=1.0, description=0.7, title=0.5
+- **WHEN** the endpoint computes RRF scores with constant `k=60`
+- **THEN** chunk `A`'s RRF score SHALL be `1/(60+3) + 1.0 × 1/(60+25) + 0.7 × 1/(60+999) + 0.5 × 1/(60+999)` (absent-side ranks are sentinel 999)
 
-#### Scenario: Short-query bypass for entity-only queries
+#### Scenario: Title-pool match contributes lexical signal
 
-- **GIVEN** a question whose jieba tokenisation yields < 2 tokens of length ≥ 2 (e.g. just "迪拉胖")
-- **WHEN** the search endpoint runs
-- **THEN** routing SHALL be skipped
-- **AND** `retrieve_hybrid()` SHALL run with `episode_id_filter=None`
+- **GIVEN** episode `E1` has title `"Ft. 馬世芳"` and the user query is `"馬世芳"`
+- **WHEN** the title lexical pool is queried via jieba tokeniser
+- **THEN** `E1`'s title SHALL match the tsquery and the corresponding result SHALL appear in the union with `source = "title"`
+- **AND** all transcript chunks belonging to `E1` SHALL retain their original `source` discriminator
 
-#### Scenario: Search excludes other shows after routing
+#### Scenario: Description and transcript results unified by RRF score
 
-- **WHEN** routing returns 10 `episode_id` for `show_id=A` and the second-layer query is issued
-- **THEN** the response SHALL NOT include any chunk whose owning episode belongs to `show_id=B`, regardless of similarity
+- **GIVEN** a transcript chunk with RRF score 0.020 and a description chunk with RRF score 0.025
+- **WHEN** the endpoint constructs the final ranked list
+- **THEN** the description chunk SHALL appear before the transcript chunk in the response
+- **AND** each result SHALL include `source: "transcript"`, `"description"`, or `"title"` matching its origin
 
-#### Scenario: Anonymous request over rate limit is rejected without embedding call
+#### Scenario: Anonymous request under rate limit returns top-K hybrid results
 
-- **GIVEN** an unauthenticated visitor whose IP counter is at the daily limit
-- **WHEN** the visitor calls `POST /shows/{show_id}/search`
-- **THEN** the response SHALL be HTTP 429
-- **AND** no embedding API call SHALL be made
+- **GIVEN** an unauthenticated visitor whose IP counter is 5 and `ip_search_rate_limit_per_day=20`
+- **WHEN** the visitor calls `POST /shows/{show_id}/search` with body `{"question": "歌單"}`
+- **THEN** the response SHALL be 200 with up to 8 ranked results
 
 
 <!-- @trace
-source: r3-2-two-layer-topic-seg
-updated: 2026-05-13
+source: r3-3-metadata-filter
+updated: 2026-05-16
 code:
-  - backend/app/models/episode.py
-  - backend/app/models/transcript_segment.py
-  - backend/app/api/admin/__init__.py
-  - backend/alembic/versions/u9b0c1d2e3f4_add_embedding_v2_columns.py
-  - backend/app/schemas/tokenizer.py
-  - backend/app/services/rag.py
-  - src/TranscriptPage.jsx
-  - src/ReleaseLogPage.jsx
-  - backend/app/services/topic_segmentation.py
-  - backend/app/models/transcript_chunk.py
+  - backend/scripts/pilot_reembed_descriptions.py
   - backend/eval/datasets/this-not-that-cool.json
-  - backend/app/services/description_rechunker.py
-  - backend/app/models/show.py
-  - backend/app/services/description_indexer.py
-  - backend/app/workers/tasks.py
+  - docs/ai-steps.md
+  - src/AdminEpisodeGuestsTab.jsx
   - backend/app/services/embedding.py
-  - backend/app/models/tokenizer_term.py
-  - backend/app/api/admin/tokenizer.py
-  - backend/app/api/admin/topic_seg.py
+  - backend/app/services/rag.py
+  - src/AdminTokenizerTab.jsx
+  - index.html
+  - backend/app/api/admin/__init__.py
+  - backend/app/models/episode_description_chunk.py
+  - backend/alembic/versions/t8a9b0c1d2e3_chunking_version_description_chunks.py
+  - backend/app/services/tokenizer.py
+  - backend/app/api/admin/ai_steps.py
+  - backend/app/services/llm_prompts.py
   - src/App.jsx
   - backend/app/services/citation_parser.py
-  - backend/app/workers/celery_app.py
-  - src/AdminTopicSegAuditTab.jsx
-  - backend/scripts/backfill_topic_labels.py
-  - CLAUDE.md
-  - backend/alembic/versions/t8a9b0c1d2e3_chunking_version_description_chunks.py
-  - src/Shared.jsx
-  - backend/alembic/versions/s7f8a9b0c1d2_r32_topic_seg.py
-  - backend/app/api/admin/chunking_status.py
-  - src/releaseLog.jsx
   - backend/app/schemas/query.py
-  - backend/app/schemas/topic_seg.py
-  - backend/eval/scripts/build_golden_set.py
+  - backend/app/models/ai_step.py
+  - src/AdminPage.jsx
+  - backend/app/services/query_entity.py
+  - backend/app/services/topic_segmentation.py
+  - backend/app/models/episode.py
+  - src/TranscriptPage.jsx
+  - backend/scripts/backfill_guests.py
+  - backend/alembic/versions/w1d2e3f4a5b6_r33_add_entity_extraction_step.py
+  - backend/eval/datasets/_pending_review.json
+  - CLAUDE.md
+  - backend/eval/scripts/bakeoff_entity_extractor.py
+  - backend/eval/datasets/_schema.json
   - backend/app/workers/topic_task.py
   - src/QueryPage.jsx
-  - backend/eval/runners/run.py
-  - backend/app/models/episode_description_chunk.py
+  - backend/scripts/backfill_topic_labels.py
+  - backend/alembic/versions/v0c1d2e3f4a5_r33_episodes_guests_and_title_tsv.py
+  - backend/app/schemas/episode_guests.py
   - backend/scripts/backfill_embedding_v2.py
-  - .github/workflows/backend-tests.yml
-  - backend/scripts/pilot_reembed_descriptions.py
-  - src/AdminTokenizerTab.jsx
-  - backend/app/services/key_resolver.py
-  - backend/scripts/cleanup_v1_description_chunks.py
+  - backend/alembic/versions/u9b0c1d2e3f4_add_embedding_v2_columns.py
+  - backend/app/api/shows.py
   - backend/app/api/query.py
+  - backend/eval/metrics/recall.py
+  - backend/eval/datasets/README.md
+  - backend/app/services/rss_parser.py
   - docs/roadmap.md
-  - backend/app/services/llm_prompts.py
-  - index.html
-  - src/AdminPage.jsx
-  - backend/app/services/tokenizer.py
+  - backend/app/services/sync.py
+  - backend/eval/scripts/validate_schema.py
+  - src/ReleaseLogPage.jsx
+  - backend/app/services/description_rechunker.py
+  - src/releaseLog.jsx
+  - backend/eval/runners/run.py
+  - backend/app/api/admin/episode_guests.py
+  - backend/app/api/admin/chunking_status.py
+  - backend/scripts/backfill_title_tsv.py
+  - backend/app/services/key_resolver.py
+  - backend/app/models/transcript_chunk.py
+  - backend/eval/datasets/this-not-that-cool.json.bak-20260515T060258Z
+  - src/Shared.jsx
+  - backend/app/workers/celery_app.py
+  - backend/scripts/cleanup_v1_description_chunks.py
+  - backend/app/workers/tasks.py
   - backend/eval/scripts/embedding_bakeoff.py
-  - backend/app/core/csrf.py
+  - backend/app/services/description_indexer.py
+  - backend/app/schemas/query_entity.py
+  - backend/eval/scripts/build_golden_set.py
 tests:
-  - backend/tests/test_eval_metric_level.py
-  - backend/tests/test_description_retrieval_prefer_v2.py
-  - backend/tests/test_rag_embedding_v2_flag.py
-  - backend/tests/test_qa_feedback_api.py
-  - backend/tests/test_description_chunker_120.py
-  - backend/tests/test_rag_rrf.py
-  - backend/tests/test_description_rechunker.py
-  - backend/tests/test_topic_segmentation_persist.py
-  - backend/tests/test_tokenizer_show_name_filter.py
-  - backend/tests/test_ai_summary_full_field.py
-  - backend/tests/test_llm_prompts.py
-  - backend/tests/test_topic_segmentation.py
-  - backend/tests/test_citation_parser.py
-  - backend/tests/test_route_episodes.py
-  - backend/tests/test_admin_topic_seg.py
-  - backend/tests/test_embedding_v2_dual_write.py
-  - backend/tests/test_rag_retrieval_flags.py
-  - backend/tests/test_key_resolver.py
-  - backend/tests/test_error_responses.py
-  - backend/tests/test_strip_citations.py
-  - backend/tests/test_chunking_version_coexistence.py
-  - backend/tests/test_eval_runner_flags.py
   - backend/tests/test_golden_set_dataset.py
+  - backend/tests/test_strip_citations.py
+  - backend/tests/test_eval_dataset_schema.py
+  - backend/tests/test_citation_parser.py
+  - backend/tests/test_eval_runner_flags.py
+  - backend/tests/test_description_retrieval_prefer_v2.py
+  - backend/tests/test_rss_guests_extraction.py
+  - backend/tests/test_backfill_guests.py
   - backend/tests/test_rag_query_response_shape.py
+  - backend/tests/test_answer_malformed_json_salvage.py
+  - backend/tests/test_rag_embedding_v2_flag.py
+  - backend/tests/test_chunking_version_coexistence.py
+  - backend/tests/test_query_chat_metadata_filter.py
+  - backend/tests/test_rag_retrieval_flags.py
+  - backend/tests/test_rag_multi_column_bm25.py
+  - backend/tests/test_topic_segmentation_persist.py
+  - backend/tests/test_admin_episode_guests.py
+  - backend/tests/test_key_resolver.py
+  - backend/tests/test_eval_runner_dispatch.py
+  - backend/tests/test_description_chunker_120.py
+  - backend/tests/test_embedding_v2_dual_write.py
+  - backend/tests/test_ai_summary_full_field.py
+  - backend/tests/test_episode_guests_schema.py
+  - backend/tests/test_llm_prompts.py
+  - backend/tests/test_description_rechunker.py
+  - backend/tests/test_query_entity.py
 -->
 
 ---
 ### Requirement: Chat endpoint answers with citations using Tier 2 RAG
 
-The backend SHALL expose `POST /shows/{show_id}/query` guarded by `require_authenticated_user` and atomic quota decrement (see user-quota). The endpoint SHALL execute the Tier 2 RAG pipeline: (1) if the request includes a non-empty `messages` history, rewrite the question to a standalone form using the configured rewrite model; (2) embed the (rewritten) question AND jieba-tokenise it; (3) **invoke `route_episodes()` to obtain a top-10 episode filter (skipping routing for short queries per the routing-skip rule)**; (4) retrieve top 8 results via `retrieve_hybrid()` with the episode filter and the `DESCRIPTION_CAP` mix; (5) generate an answer using the configured answer model with the retrieved chunks as grounding, requesting structured JSON output containing `answer` and `used_chunk_ids`; (6) return the answer together with only the citation chunks referenced in `used_chunk_ids`. Description-source citations SHALL be presented to the answer model with a clear marker (e.g. `desc:<episode_id>`) distinguishing them from transcript citations (`ep:<episode_id>@<start_time>`). If JSON parsing of the model output fails, the endpoint SHALL fall back to returning the raw text as `answer` with all retrieved chunks as `citations`. This endpoint SHALL NOT accept anonymous callers and SHALL NOT consult the IP rate limit.
-
-#### Scenario: First turn skips rewrite but uses two-layer retrieval
-
-- **WHEN** a client calls `POST /shows/{show_id}/query` with an empty or missing `messages` array
-- **THEN** the endpoint SHALL NOT call the rewrite model, SHALL embed the original `question` directly, SHALL invoke `route_episodes()` then `retrieve_hybrid()` with the routing result as filter, and SHALL return an answer
-
-#### Scenario: Follow-up turn rewrites and re-routes
-
-- **WHEN** a client calls with non-empty `messages` history and a follow-up `question`
-- **THEN** the endpoint SHALL call the rewrite model, embed the rewrite, invoke `route_episodes()` with the rewritten embedding, then `retrieve_hybrid()` with that filter
+The backend SHALL expose `POST /shows/{show_id}/query` guarded by `require_authenticated_user` and atomic quota decrement (see user-quota). The endpoint SHALL execute the Tier 2 RAG pipeline: (1) if the request includes a non-empty `messages` history, rewrite the question to a standalone form using the configured rewrite model; (2) call the `entity_extraction` AI step (see query-entity-extraction capability) to extract `{date_range, guests, topics}` from the rewritten question — failure to extract SHALL fail-open with empty entities, NOT raise 5xx; (3) embed the rewritten question AND jieba-tokenise it; (4) perform retrieval combining semantic + three-pool lexical RRF across `transcript_chunks`, `episode_description_chunks`, AND `episodes.title_tsvector`, applying any extracted entity hard filters (`episodes.guests @> :guest_list` and/or `episodes.published_at BETWEEN :start AND :end`); (5) if the extracted entities indicate an enumeration query (non-empty guests OR non-empty date_range OR question matches enumeration rule pattern), populate `enumeration_episodes` field listing all matched episodes (not limited to top-K chunks); (6) generate an answer using the configured answer model with the retrieved chunks as grounding, requesting structured JSON output containing `answer` and `used_chunk_ids`; (7) return the answer together with only the citation chunks referenced in `used_chunk_ids`, plus `enumeration_episodes` when applicable. Description-source citations SHALL be presented to the answer model with a clear marker (e.g. `desc:<episode_id>`) distinguishing them from transcript citations (`ep:<episode_id>@<start_time>`). If JSON parsing of the model output fails, the endpoint SHALL fall back to returning the raw text as `answer` with all retrieved chunks as `citations`. This endpoint SHALL NOT accept anonymous callers and SHALL NOT consult the IP rate limit.
 
 #### Scenario: Hybrid retrieval result feeds answer prompt
 
-- **WHEN** a chat-mode query yields 5 transcript chunks and 3 description chunks (post-cap)
-- **THEN** the answer prompt SHALL list all 8 results with `ep:<episode_id>@<start_time>` and `desc:<episode_id>` prefixes respectively
+- **WHEN** a chat-mode query is issued and hybrid retrieval returns 5 transcript chunks and 3 description chunks
+- **THEN** the answer prompt SHALL list all 8 results, each prefixed with `ep:<episode_id>@<start_time>` for transcripts or `desc:<episode_id>` for descriptions
+- **AND** the model is permitted to cite either form in `used_chunk_ids`
+
+#### Scenario: Entity extraction fails-open without breaking retrieval
+
+- **WHEN** chat query is processed and the `entity_extraction` step raises an exception or returns invalid JSON
+- **THEN** the endpoint SHALL log a warning, treat extracted entities as empty, and continue retrieval without metadata filter
+- **AND** the response SHALL be HTTP 200 (not 5xx) with normal `answer` + `citations`
+
+#### Scenario: Guest filter narrows retrieval
+
+- **WHEN** chat query `"馬世芳上過哪幾集"` extracts `guests = ["馬世芳"]`
+- **THEN** retrieval SQL SHALL include `episodes.guests @> '["馬世芳"]'::jsonb` filter clause
+- **AND** the response SHALL include `enumeration_episodes` listing all episodes where guests contains `"馬世芳"`
+
+#### Scenario: Date filter narrows retrieval
+
+- **WHEN** chat query `"2024 那集講過什麼"` extracts `date_range = (2024-01-01T00:00:00Z, 2024-12-31T23:59:59Z)`
+- **THEN** retrieval SQL SHALL include `episodes.published_at BETWEEN :start AND :end` filter clause
+- **AND** the response SHALL include `enumeration_episodes` listing all episodes published within the range
+
+#### Scenario: Empty entity result triggers no enumeration
+
+- **WHEN** chat query `"主持人有什麼興趣"` extracts empty entities and does NOT match enumeration rule pattern
+- **THEN** `enumeration_episodes` SHALL be `null` in the response
+- **AND** retrieval SHALL run with no metadata filter (R3.2 two-layer routing path)
+
+#### Scenario: First turn skips rewrite
+
+- **WHEN** a client calls `POST /shows/{show_id}/query` with an empty or missing `messages` array
+- **THEN** the endpoint SHALL NOT call the rewrite model, SHALL embed the original `question` directly, SHALL retrieve via RRF, and SHALL return an answer
+
+#### Scenario: Follow-up turn uses rewritten question for retrieval
+
+- **WHEN** a client calls with a non-empty `messages` history and a new `question` containing a pronoun
+- **THEN** the endpoint SHALL call the rewrite model, SHALL use the rewrite output as the retrieval query, and the answer model SHALL receive the original messages plus the new question (not the rewritten form) as conversation input
 
 #### Scenario: Response includes only used citations
 
 - **WHEN** chat mode completes successfully and the model returns valid JSON with `used_chunk_ids`
-- **THEN** the response body SHALL contain `answer` and `citations` (chunks whose key appears in `used_chunk_ids`)
+- **THEN** the response body SHALL contain `answer` (string) and `citations` (array containing only the chunks whose key appears in `used_chunk_ids`)
 
 #### Scenario: Structured output parse failure falls back to full citations
 
-- **WHEN** the answer model returns output that cannot be parsed as JSON or lacks `answer`
-- **THEN** the endpoint SHALL return the raw text as `answer` and all retrieved chunks as `citations`
+- **WHEN** the answer model returns output that cannot be parsed as JSON or lacks the `answer` key
+- **THEN** the endpoint SHALL treat the entire model output as the `answer` string and SHALL return all retrieved chunks as `citations`
+
+#### Scenario: Sliding window limit enforced
+
+- **WHEN** a client sends a `messages` array longer than 10 entries
+- **THEN** the endpoint SHALL use only the most recent 10 entries when building prompts
 
 #### Scenario: Anonymous request rejected with 401
 
 - **WHEN** an unauthenticated request reaches `POST /shows/{show_id}/query`
-- **THEN** the response SHALL be HTTP 401
+- **THEN** the response SHALL be HTTP 401 with `error_code='not_authenticated'`
+- **AND** no embedding or LLM API SHALL be called
 
 
 <!-- @trace
-source: r3-2-two-layer-topic-seg
-updated: 2026-05-13
+source: r3-3-metadata-filter
+updated: 2026-05-16
 code:
-  - backend/app/models/episode.py
-  - backend/app/models/transcript_segment.py
-  - backend/app/api/admin/__init__.py
-  - backend/alembic/versions/u9b0c1d2e3f4_add_embedding_v2_columns.py
-  - backend/app/schemas/tokenizer.py
-  - backend/app/services/rag.py
-  - src/TranscriptPage.jsx
-  - src/ReleaseLogPage.jsx
-  - backend/app/services/topic_segmentation.py
-  - backend/app/models/transcript_chunk.py
+  - backend/scripts/pilot_reembed_descriptions.py
   - backend/eval/datasets/this-not-that-cool.json
-  - backend/app/services/description_rechunker.py
-  - backend/app/models/show.py
-  - backend/app/services/description_indexer.py
-  - backend/app/workers/tasks.py
+  - docs/ai-steps.md
+  - src/AdminEpisodeGuestsTab.jsx
   - backend/app/services/embedding.py
-  - backend/app/models/tokenizer_term.py
-  - backend/app/api/admin/tokenizer.py
-  - backend/app/api/admin/topic_seg.py
+  - backend/app/services/rag.py
+  - src/AdminTokenizerTab.jsx
+  - index.html
+  - backend/app/api/admin/__init__.py
+  - backend/app/models/episode_description_chunk.py
+  - backend/alembic/versions/t8a9b0c1d2e3_chunking_version_description_chunks.py
+  - backend/app/services/tokenizer.py
+  - backend/app/api/admin/ai_steps.py
+  - backend/app/services/llm_prompts.py
   - src/App.jsx
   - backend/app/services/citation_parser.py
-  - backend/app/workers/celery_app.py
-  - src/AdminTopicSegAuditTab.jsx
-  - backend/scripts/backfill_topic_labels.py
-  - CLAUDE.md
-  - backend/alembic/versions/t8a9b0c1d2e3_chunking_version_description_chunks.py
-  - src/Shared.jsx
-  - backend/alembic/versions/s7f8a9b0c1d2_r32_topic_seg.py
-  - backend/app/api/admin/chunking_status.py
-  - src/releaseLog.jsx
   - backend/app/schemas/query.py
-  - backend/app/schemas/topic_seg.py
-  - backend/eval/scripts/build_golden_set.py
+  - backend/app/models/ai_step.py
+  - src/AdminPage.jsx
+  - backend/app/services/query_entity.py
+  - backend/app/services/topic_segmentation.py
+  - backend/app/models/episode.py
+  - src/TranscriptPage.jsx
+  - backend/scripts/backfill_guests.py
+  - backend/alembic/versions/w1d2e3f4a5b6_r33_add_entity_extraction_step.py
+  - backend/eval/datasets/_pending_review.json
+  - CLAUDE.md
+  - backend/eval/scripts/bakeoff_entity_extractor.py
+  - backend/eval/datasets/_schema.json
   - backend/app/workers/topic_task.py
   - src/QueryPage.jsx
-  - backend/eval/runners/run.py
-  - backend/app/models/episode_description_chunk.py
+  - backend/scripts/backfill_topic_labels.py
+  - backend/alembic/versions/v0c1d2e3f4a5_r33_episodes_guests_and_title_tsv.py
+  - backend/app/schemas/episode_guests.py
   - backend/scripts/backfill_embedding_v2.py
-  - .github/workflows/backend-tests.yml
-  - backend/scripts/pilot_reembed_descriptions.py
-  - src/AdminTokenizerTab.jsx
-  - backend/app/services/key_resolver.py
-  - backend/scripts/cleanup_v1_description_chunks.py
+  - backend/alembic/versions/u9b0c1d2e3f4_add_embedding_v2_columns.py
+  - backend/app/api/shows.py
   - backend/app/api/query.py
+  - backend/eval/metrics/recall.py
+  - backend/eval/datasets/README.md
+  - backend/app/services/rss_parser.py
   - docs/roadmap.md
-  - backend/app/services/llm_prompts.py
-  - index.html
-  - src/AdminPage.jsx
-  - backend/app/services/tokenizer.py
+  - backend/app/services/sync.py
+  - backend/eval/scripts/validate_schema.py
+  - src/ReleaseLogPage.jsx
+  - backend/app/services/description_rechunker.py
+  - src/releaseLog.jsx
+  - backend/eval/runners/run.py
+  - backend/app/api/admin/episode_guests.py
+  - backend/app/api/admin/chunking_status.py
+  - backend/scripts/backfill_title_tsv.py
+  - backend/app/services/key_resolver.py
+  - backend/app/models/transcript_chunk.py
+  - backend/eval/datasets/this-not-that-cool.json.bak-20260515T060258Z
+  - src/Shared.jsx
+  - backend/app/workers/celery_app.py
+  - backend/scripts/cleanup_v1_description_chunks.py
+  - backend/app/workers/tasks.py
   - backend/eval/scripts/embedding_bakeoff.py
-  - backend/app/core/csrf.py
+  - backend/app/services/description_indexer.py
+  - backend/app/schemas/query_entity.py
+  - backend/eval/scripts/build_golden_set.py
 tests:
-  - backend/tests/test_eval_metric_level.py
-  - backend/tests/test_description_retrieval_prefer_v2.py
-  - backend/tests/test_rag_embedding_v2_flag.py
-  - backend/tests/test_qa_feedback_api.py
-  - backend/tests/test_description_chunker_120.py
-  - backend/tests/test_rag_rrf.py
-  - backend/tests/test_description_rechunker.py
-  - backend/tests/test_topic_segmentation_persist.py
-  - backend/tests/test_tokenizer_show_name_filter.py
-  - backend/tests/test_ai_summary_full_field.py
-  - backend/tests/test_llm_prompts.py
-  - backend/tests/test_topic_segmentation.py
-  - backend/tests/test_citation_parser.py
-  - backend/tests/test_route_episodes.py
-  - backend/tests/test_admin_topic_seg.py
-  - backend/tests/test_embedding_v2_dual_write.py
-  - backend/tests/test_rag_retrieval_flags.py
-  - backend/tests/test_key_resolver.py
-  - backend/tests/test_error_responses.py
-  - backend/tests/test_strip_citations.py
-  - backend/tests/test_chunking_version_coexistence.py
-  - backend/tests/test_eval_runner_flags.py
   - backend/tests/test_golden_set_dataset.py
+  - backend/tests/test_strip_citations.py
+  - backend/tests/test_eval_dataset_schema.py
+  - backend/tests/test_citation_parser.py
+  - backend/tests/test_eval_runner_flags.py
+  - backend/tests/test_description_retrieval_prefer_v2.py
+  - backend/tests/test_rss_guests_extraction.py
+  - backend/tests/test_backfill_guests.py
   - backend/tests/test_rag_query_response_shape.py
+  - backend/tests/test_answer_malformed_json_salvage.py
+  - backend/tests/test_rag_embedding_v2_flag.py
+  - backend/tests/test_chunking_version_coexistence.py
+  - backend/tests/test_query_chat_metadata_filter.py
+  - backend/tests/test_rag_retrieval_flags.py
+  - backend/tests/test_rag_multi_column_bm25.py
+  - backend/tests/test_topic_segmentation_persist.py
+  - backend/tests/test_admin_episode_guests.py
+  - backend/tests/test_key_resolver.py
+  - backend/tests/test_eval_runner_dispatch.py
+  - backend/tests/test_description_chunker_120.py
+  - backend/tests/test_embedding_v2_dual_write.py
+  - backend/tests/test_ai_summary_full_field.py
+  - backend/tests/test_episode_guests_schema.py
+  - backend/tests/test_llm_prompts.py
+  - backend/tests/test_description_rechunker.py
+  - backend/tests/test_query_entity.py
 -->
 
 ---
@@ -1649,4 +1707,231 @@ tests:
   - backend/tests/test_eval_runner_flags.py
   - backend/tests/test_golden_set_dataset.py
   - backend/tests/test_rag_query_response_shape.py
+-->
+
+---
+### Requirement: RRF pool weights configurable in Python
+
+The backend SHALL define RRF pool weights as a Python module-level constant `RRF_WEIGHTS` in `app/services/rag.py`, mapping pool name to weight float. The constant SHALL be passed into RRF SQL as a parameter so weights can be tuned without rebuilding any tsvector or DB index.
+
+#### Scenario: Default weights documented
+
+- **WHEN** the system starts with default configuration
+- **THEN** `RRF_WEIGHTS` MUST equal `{"chunk": 1.0, "description": 0.7, "title": 0.5}` (semantic pool always 1.0, no override)
+
+#### Scenario: Weight change does not require schema migration
+
+- **WHEN** an operator edits `RRF_WEIGHTS` in source code from 0.5 to 0.3 for the title pool and redeploys
+- **THEN** the next chat / search query MUST use the new weight without any alembic migration or tsvector rebuild
+
+
+<!-- @trace
+source: r3-3-metadata-filter
+updated: 2026-05-16
+code:
+  - backend/scripts/pilot_reembed_descriptions.py
+  - backend/eval/datasets/this-not-that-cool.json
+  - docs/ai-steps.md
+  - src/AdminEpisodeGuestsTab.jsx
+  - backend/app/services/embedding.py
+  - backend/app/services/rag.py
+  - src/AdminTokenizerTab.jsx
+  - index.html
+  - backend/app/api/admin/__init__.py
+  - backend/app/models/episode_description_chunk.py
+  - backend/alembic/versions/t8a9b0c1d2e3_chunking_version_description_chunks.py
+  - backend/app/services/tokenizer.py
+  - backend/app/api/admin/ai_steps.py
+  - backend/app/services/llm_prompts.py
+  - src/App.jsx
+  - backend/app/services/citation_parser.py
+  - backend/app/schemas/query.py
+  - backend/app/models/ai_step.py
+  - src/AdminPage.jsx
+  - backend/app/services/query_entity.py
+  - backend/app/services/topic_segmentation.py
+  - backend/app/models/episode.py
+  - src/TranscriptPage.jsx
+  - backend/scripts/backfill_guests.py
+  - backend/alembic/versions/w1d2e3f4a5b6_r33_add_entity_extraction_step.py
+  - backend/eval/datasets/_pending_review.json
+  - CLAUDE.md
+  - backend/eval/scripts/bakeoff_entity_extractor.py
+  - backend/eval/datasets/_schema.json
+  - backend/app/workers/topic_task.py
+  - src/QueryPage.jsx
+  - backend/scripts/backfill_topic_labels.py
+  - backend/alembic/versions/v0c1d2e3f4a5_r33_episodes_guests_and_title_tsv.py
+  - backend/app/schemas/episode_guests.py
+  - backend/scripts/backfill_embedding_v2.py
+  - backend/alembic/versions/u9b0c1d2e3f4_add_embedding_v2_columns.py
+  - backend/app/api/shows.py
+  - backend/app/api/query.py
+  - backend/eval/metrics/recall.py
+  - backend/eval/datasets/README.md
+  - backend/app/services/rss_parser.py
+  - docs/roadmap.md
+  - backend/app/services/sync.py
+  - backend/eval/scripts/validate_schema.py
+  - src/ReleaseLogPage.jsx
+  - backend/app/services/description_rechunker.py
+  - src/releaseLog.jsx
+  - backend/eval/runners/run.py
+  - backend/app/api/admin/episode_guests.py
+  - backend/app/api/admin/chunking_status.py
+  - backend/scripts/backfill_title_tsv.py
+  - backend/app/services/key_resolver.py
+  - backend/app/models/transcript_chunk.py
+  - backend/eval/datasets/this-not-that-cool.json.bak-20260515T060258Z
+  - src/Shared.jsx
+  - backend/app/workers/celery_app.py
+  - backend/scripts/cleanup_v1_description_chunks.py
+  - backend/app/workers/tasks.py
+  - backend/eval/scripts/embedding_bakeoff.py
+  - backend/app/services/description_indexer.py
+  - backend/app/schemas/query_entity.py
+  - backend/eval/scripts/build_golden_set.py
+tests:
+  - backend/tests/test_golden_set_dataset.py
+  - backend/tests/test_strip_citations.py
+  - backend/tests/test_eval_dataset_schema.py
+  - backend/tests/test_citation_parser.py
+  - backend/tests/test_eval_runner_flags.py
+  - backend/tests/test_description_retrieval_prefer_v2.py
+  - backend/tests/test_rss_guests_extraction.py
+  - backend/tests/test_backfill_guests.py
+  - backend/tests/test_rag_query_response_shape.py
+  - backend/tests/test_answer_malformed_json_salvage.py
+  - backend/tests/test_rag_embedding_v2_flag.py
+  - backend/tests/test_chunking_version_coexistence.py
+  - backend/tests/test_query_chat_metadata_filter.py
+  - backend/tests/test_rag_retrieval_flags.py
+  - backend/tests/test_rag_multi_column_bm25.py
+  - backend/tests/test_topic_segmentation_persist.py
+  - backend/tests/test_admin_episode_guests.py
+  - backend/tests/test_key_resolver.py
+  - backend/tests/test_eval_runner_dispatch.py
+  - backend/tests/test_description_chunker_120.py
+  - backend/tests/test_embedding_v2_dual_write.py
+  - backend/tests/test_ai_summary_full_field.py
+  - backend/tests/test_episode_guests_schema.py
+  - backend/tests/test_llm_prompts.py
+  - backend/tests/test_description_rechunker.py
+  - backend/tests/test_query_entity.py
+-->
+
+---
+### Requirement: Cross-episode enumeration response shape
+
+The chat endpoint response SHALL include an optional `enumeration_episodes` field containing a list of episode references when the query is an enumeration-type question.
+
+#### Scenario: Enumeration episodes returned alongside chunk citations
+
+- **WHEN** chat query extracts non-empty guests entity AND the show has 4 episodes matching `guests @> :guest_list`
+- **THEN** the response body SHALL contain `enumeration_episodes` with all 4 entries, each `{episode_id, title, published_at, guests, ai_summary}`
+- **AND** `citations` SHALL still contain the answer-model-cited chunks (separate field)
+
+#### Scenario: Non-enumeration query has null enumeration field
+
+- **WHEN** chat query produces empty entities and no enumeration rule pattern match
+- **THEN** the response body SHALL set `enumeration_episodes = null`
+
+#### Scenario: Enumeration rule pattern triggers enumeration response
+
+- **WHEN** chat query contains the substring `"哪幾集"` or `"哪集"` or `"哪些集"` even when entity extractor returns empty
+- **THEN** the endpoint SHALL run a topic-keyword based filter against `episode_description_chunks` and populate `enumeration_episodes` with matched episodes
+
+<!-- @trace
+source: r3-3-metadata-filter
+updated: 2026-05-16
+code:
+  - backend/scripts/pilot_reembed_descriptions.py
+  - backend/eval/datasets/this-not-that-cool.json
+  - docs/ai-steps.md
+  - src/AdminEpisodeGuestsTab.jsx
+  - backend/app/services/embedding.py
+  - backend/app/services/rag.py
+  - src/AdminTokenizerTab.jsx
+  - index.html
+  - backend/app/api/admin/__init__.py
+  - backend/app/models/episode_description_chunk.py
+  - backend/alembic/versions/t8a9b0c1d2e3_chunking_version_description_chunks.py
+  - backend/app/services/tokenizer.py
+  - backend/app/api/admin/ai_steps.py
+  - backend/app/services/llm_prompts.py
+  - src/App.jsx
+  - backend/app/services/citation_parser.py
+  - backend/app/schemas/query.py
+  - backend/app/models/ai_step.py
+  - src/AdminPage.jsx
+  - backend/app/services/query_entity.py
+  - backend/app/services/topic_segmentation.py
+  - backend/app/models/episode.py
+  - src/TranscriptPage.jsx
+  - backend/scripts/backfill_guests.py
+  - backend/alembic/versions/w1d2e3f4a5b6_r33_add_entity_extraction_step.py
+  - backend/eval/datasets/_pending_review.json
+  - CLAUDE.md
+  - backend/eval/scripts/bakeoff_entity_extractor.py
+  - backend/eval/datasets/_schema.json
+  - backend/app/workers/topic_task.py
+  - src/QueryPage.jsx
+  - backend/scripts/backfill_topic_labels.py
+  - backend/alembic/versions/v0c1d2e3f4a5_r33_episodes_guests_and_title_tsv.py
+  - backend/app/schemas/episode_guests.py
+  - backend/scripts/backfill_embedding_v2.py
+  - backend/alembic/versions/u9b0c1d2e3f4_add_embedding_v2_columns.py
+  - backend/app/api/shows.py
+  - backend/app/api/query.py
+  - backend/eval/metrics/recall.py
+  - backend/eval/datasets/README.md
+  - backend/app/services/rss_parser.py
+  - docs/roadmap.md
+  - backend/app/services/sync.py
+  - backend/eval/scripts/validate_schema.py
+  - src/ReleaseLogPage.jsx
+  - backend/app/services/description_rechunker.py
+  - src/releaseLog.jsx
+  - backend/eval/runners/run.py
+  - backend/app/api/admin/episode_guests.py
+  - backend/app/api/admin/chunking_status.py
+  - backend/scripts/backfill_title_tsv.py
+  - backend/app/services/key_resolver.py
+  - backend/app/models/transcript_chunk.py
+  - backend/eval/datasets/this-not-that-cool.json.bak-20260515T060258Z
+  - src/Shared.jsx
+  - backend/app/workers/celery_app.py
+  - backend/scripts/cleanup_v1_description_chunks.py
+  - backend/app/workers/tasks.py
+  - backend/eval/scripts/embedding_bakeoff.py
+  - backend/app/services/description_indexer.py
+  - backend/app/schemas/query_entity.py
+  - backend/eval/scripts/build_golden_set.py
+tests:
+  - backend/tests/test_golden_set_dataset.py
+  - backend/tests/test_strip_citations.py
+  - backend/tests/test_eval_dataset_schema.py
+  - backend/tests/test_citation_parser.py
+  - backend/tests/test_eval_runner_flags.py
+  - backend/tests/test_description_retrieval_prefer_v2.py
+  - backend/tests/test_rss_guests_extraction.py
+  - backend/tests/test_backfill_guests.py
+  - backend/tests/test_rag_query_response_shape.py
+  - backend/tests/test_answer_malformed_json_salvage.py
+  - backend/tests/test_rag_embedding_v2_flag.py
+  - backend/tests/test_chunking_version_coexistence.py
+  - backend/tests/test_query_chat_metadata_filter.py
+  - backend/tests/test_rag_retrieval_flags.py
+  - backend/tests/test_rag_multi_column_bm25.py
+  - backend/tests/test_topic_segmentation_persist.py
+  - backend/tests/test_admin_episode_guests.py
+  - backend/tests/test_key_resolver.py
+  - backend/tests/test_eval_runner_dispatch.py
+  - backend/tests/test_description_chunker_120.py
+  - backend/tests/test_embedding_v2_dual_write.py
+  - backend/tests/test_ai_summary_full_field.py
+  - backend/tests/test_episode_guests_schema.py
+  - backend/tests/test_llm_prompts.py
+  - backend/tests/test_description_rechunker.py
+  - backend/tests/test_query_entity.py
 -->

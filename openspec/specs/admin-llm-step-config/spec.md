@@ -81,17 +81,17 @@ tests:
 
 The backend SHALL maintain an `ai_steps` table where each row represents one AI processing endpoint used by the application. Columns SHALL include `step_key` (VARCHAR(50), PK), `step_type` (VARCHAR(20), one of `chat` / `embedding` / `whisper`), `base_url` (VARCHAR(500), nullable for whisper-local), `model` (VARCHAR(200)), `api_key_id` (UUID FK to `api_keys.id`, nullable for whisper-local), `extra_config` (JSONB, default `{}`), `updated_at` (TIMESTAMP UTC).
 
-A CHECK constraint SHALL restrict `step_key` to exactly the following five values: `answer`, `rewrite`, `summary`, `embedding`, `transcription`. The migration that creates this table SHALL pre-insert one row per `step_key` so callers always observe exactly five rows. The CRUD API SHALL expose only LIST and UPDATE; CREATE and DELETE SHALL return `405 Method Not Allowed`.
+A CHECK constraint SHALL restrict `step_key` to exactly the following six values: `answer`, `rewrite`, `summary`, `embedding`, `transcription`, `entity_extraction`. The migration that creates this table SHALL pre-insert one row per `step_key` so callers always observe exactly six rows. The CRUD API SHALL expose only LIST and UPDATE; CREATE and DELETE SHALL return `405 Method Not Allowed`.
 
-#### Scenario: Pre-existing five rows after migration
+#### Scenario: Pre-existing six rows after migration
 
-- **WHEN** the migration that creates `ai_steps` finishes
-- **THEN** `SELECT step_key FROM ai_steps ORDER BY step_key` SHALL return exactly: `answer`, `embedding`, `rewrite`, `summary`, `transcription`
+- **WHEN** the migration that adds `entity_extraction` step finishes
+- **THEN** `SELECT step_key FROM ai_steps ORDER BY step_key` SHALL return exactly: `answer`, `embedding`, `entity_extraction`, `rewrite`, `summary`, `transcription`
 
-#### Scenario: List returns all five rows even if some are unconfigured
+#### Scenario: List returns all six rows even if some are unconfigured
 
 - **WHEN** an admin GETs `/admin/ai-steps`
-- **THEN** the backend SHALL return a JSON array of five objects, each with `{ step_key, step_type, base_url, model, api_key_id, extra_config, updated_at }`. Unconfigured rows SHALL still be present with `base_url`, `model`, `api_key_id` possibly null
+- **THEN** the backend SHALL return a JSON array of six objects, each with `{ step_key, step_type, base_url, model, api_key_id, extra_config, updated_at }`. Unconfigured rows SHALL still be present, with `base_url` / `model` / `api_key_id` set to null when the admin has not configured them yet
 
 #### Scenario: Reject CREATE attempt
 
@@ -103,6 +103,11 @@ A CHECK constraint SHALL restrict `step_key` to exactly the following five value
 - **WHEN** an admin PUTs `/admin/ai-steps/foo`
 - **THEN** the backend SHALL return `404 Not Found`
 
+#### Scenario: entity_extraction defaults to gpt-4o-mini at OpenAI direct
+
+- **WHEN** the migration that adds `entity_extraction` step runs
+- **THEN** the inserted row MUST have `step_type='chat'`, `model='gpt-4o-mini'`, `base_url=NULL` (OpenAI default), `api_key_id` pointing to the OpenAI provider key (if exactly one OpenAI api_key exists; otherwise left NULL for admin to configure)
+
 ##### Example: step_type assignment
 
 | step_key | step_type |
@@ -110,56 +115,104 @@ A CHECK constraint SHALL restrict `step_key` to exactly the following five value
 | answer | chat |
 | rewrite | chat |
 | summary | chat |
+| entity_extraction | chat |
 | embedding | embedding |
 | transcription | whisper |
 
 
 <!-- @trace
-source: admin-llm-step-config
-updated: 2026-05-03
+source: r3-3-metadata-filter
+updated: 2026-05-16
 code:
-  - backend/alembic/versions/m1b2c3d4e5f6_drop_llm_config.py
-  - backend/app/services/transcription/openai_provider.py
-  - src/Shared.jsx
-  - backend/app/main.py
+  - backend/scripts/pilot_reembed_descriptions.py
+  - backend/eval/datasets/this-not-that-cool.json
+  - docs/ai-steps.md
+  - src/AdminEpisodeGuestsTab.jsx
   - backend/app/services/embedding.py
-  - backend/app/services/transcription/factory.py
-  - docs/research/competitive-analysis.md
-  - backend/app/schemas/api_key.py
-  - backend/app/api/admin/api_keys.py
-  - backend/app/schemas/ai_step.py
-  - backend/app/services/transcription/faster_whisper_provider.py
-  - backend/app/core/config.py
-  - aisteps-tab.png
-  - backend/app/core/bootstrap.py
-  - docs/case-studies/dual-write-migration-defeated-by-entrypoint.md
-  - backend/app/api/query.py
-  - backend/app/models/__init__.py
-  - backend/app/api/admin/__init__.py
-  - backend/app/schemas/admin.py
-  - backend/alembic/versions/l0a1b2c3d4e5_add_api_keys_and_ai_steps.py
-  - backend/app/services/ai_step_resolver.py
+  - backend/app/services/rag.py
+  - src/AdminTokenizerTab.jsx
   - index.html
-  - src/AdminPage.jsx
-  - docs/research/competitive-feature-plan.md
-  - docs/case-studies/transcription-queue-discussion.md
+  - backend/app/api/admin/__init__.py
+  - backend/app/models/episode_description_chunk.py
+  - backend/alembic/versions/t8a9b0c1d2e3_chunking_version_description_chunks.py
+  - backend/app/services/tokenizer.py
   - backend/app/api/admin/ai_steps.py
-  - backend/app/models/llm_config.py
-  - backend/app/api/admin.py
-  - backend/app/workers/tasks.py
+  - backend/app/services/llm_prompts.py
+  - src/App.jsx
+  - backend/app/services/citation_parser.py
+  - backend/app/schemas/query.py
   - backend/app/models/ai_step.py
-  - backend/app/services/llm_config.py
-  - src/releaseLog.jsx
-  - backend/app/models/api_key.py
-  - docs/case-studies/local-vs-prod-verification-violation.md
+  - src/AdminPage.jsx
+  - backend/app/services/query_entity.py
+  - backend/app/services/topic_segmentation.py
+  - backend/app/models/episode.py
+  - src/TranscriptPage.jsx
+  - backend/scripts/backfill_guests.py
+  - backend/alembic/versions/w1d2e3f4a5b6_r33_add_entity_extraction_step.py
+  - backend/eval/datasets/_pending_review.json
+  - CLAUDE.md
+  - backend/eval/scripts/bakeoff_entity_extractor.py
+  - backend/eval/datasets/_schema.json
+  - backend/app/workers/topic_task.py
+  - src/QueryPage.jsx
+  - backend/scripts/backfill_topic_labels.py
+  - backend/alembic/versions/v0c1d2e3f4a5_r33_episodes_guests_and_title_tsv.py
+  - backend/app/schemas/episode_guests.py
+  - backend/scripts/backfill_embedding_v2.py
+  - backend/alembic/versions/u9b0c1d2e3f4_add_embedding_v2_columns.py
+  - backend/app/api/shows.py
+  - backend/app/api/query.py
+  - backend/eval/metrics/recall.py
+  - backend/eval/datasets/README.md
+  - backend/app/services/rss_parser.py
   - docs/roadmap.md
+  - backend/app/services/sync.py
+  - backend/eval/scripts/validate_schema.py
+  - src/ReleaseLogPage.jsx
+  - backend/app/services/description_rechunker.py
+  - src/releaseLog.jsx
+  - backend/eval/runners/run.py
+  - backend/app/api/admin/episode_guests.py
+  - backend/app/api/admin/chunking_status.py
+  - backend/scripts/backfill_title_tsv.py
+  - backend/app/services/key_resolver.py
+  - backend/app/models/transcript_chunk.py
+  - backend/eval/datasets/this-not-that-cool.json.bak-20260515T060258Z
+  - src/Shared.jsx
+  - backend/app/workers/celery_app.py
+  - backend/scripts/cleanup_v1_description_chunks.py
+  - backend/app/workers/tasks.py
+  - backend/eval/scripts/embedding_bakeoff.py
+  - backend/app/services/description_indexer.py
+  - backend/app/schemas/query_entity.py
+  - backend/eval/scripts/build_golden_set.py
 tests:
-  - backend/tests/test_ai_step_resolver.py
-  - backend/tests/test_admin_ai_steps.py
-  - backend/tests/test_admin_llm_step_migration.py
-  - backend/tests/test_error_responses.py
-  - backend/tests/test_admin_api_keys.py
-  - backend/tests/test_provider_label.py
+  - backend/tests/test_golden_set_dataset.py
+  - backend/tests/test_strip_citations.py
+  - backend/tests/test_eval_dataset_schema.py
+  - backend/tests/test_citation_parser.py
+  - backend/tests/test_eval_runner_flags.py
+  - backend/tests/test_description_retrieval_prefer_v2.py
+  - backend/tests/test_rss_guests_extraction.py
+  - backend/tests/test_backfill_guests.py
+  - backend/tests/test_rag_query_response_shape.py
+  - backend/tests/test_answer_malformed_json_salvage.py
+  - backend/tests/test_rag_embedding_v2_flag.py
+  - backend/tests/test_chunking_version_coexistence.py
+  - backend/tests/test_query_chat_metadata_filter.py
+  - backend/tests/test_rag_retrieval_flags.py
+  - backend/tests/test_rag_multi_column_bm25.py
+  - backend/tests/test_topic_segmentation_persist.py
+  - backend/tests/test_admin_episode_guests.py
+  - backend/tests/test_key_resolver.py
+  - backend/tests/test_eval_runner_dispatch.py
+  - backend/tests/test_description_chunker_120.py
+  - backend/tests/test_embedding_v2_dual_write.py
+  - backend/tests/test_ai_summary_full_field.py
+  - backend/tests/test_episode_guests_schema.py
+  - backend/tests/test_llm_prompts.py
+  - backend/tests/test_description_rechunker.py
+  - backend/tests/test_query_entity.py
 -->
 
 ---

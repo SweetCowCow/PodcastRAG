@@ -100,4 +100,4 @@
 - [x] 12.3 commit 全部 R3.3 變動（spectra-commit r3-3-metadata-filter 走流程）
 - [x] 12.4 push + verify Zeabur build 綠 + chrome-devtools-mcp prod 驗證 Guests admin tab + 隨機問一個列舉題確認 enumeration_episodes 正確
 - [x] 12.5 補 Release Log v1.6 entry（per `feedback_release_log_maintenance.md`）：使用者視角講「現在可以問『馬世芳上過哪幾集』『2024 那集』」
-- [ ] 12.6 `/spectra-archive r3-3-metadata-filter` + 更新 `docs/roadmap.md` + 同步 memory `project_pending_changes.md`
+- [x] 12.6 `/spectra-archive r3-3-metadata-filter` + 更新 `docs/roadmap.md` + 同步 memory `project_pending_changes.md`

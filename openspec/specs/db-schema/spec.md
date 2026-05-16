@@ -1234,3 +1234,230 @@ tests:
   - backend/tests/test_golden_set_dataset.py
   - backend/tests/test_rag_query_response_shape.py
 -->
+
+---
+### Requirement: episodes.guests JSONB column
+
+The `episodes` table SHALL include a `guests` JSONB column storing a list of guest name strings, with default value `'[]'::jsonb`, NOT NULL.
+
+#### Scenario: Migration adds column with default
+
+- **WHEN** alembic migration `r33_episodes_guests_and_title_tsvector` runs against an existing database
+- **THEN** the `episodes` table MUST gain a `guests` column of type `jsonb`, default `'[]'::jsonb`, NOT NULL
+- **AND** all existing rows MUST have `guests = '[]'::jsonb` after migration
+
+#### Scenario: GIN index supports containment query
+
+- **WHEN** the migration runs
+- **THEN** an index `idx_episodes_guests` MUST be created as `GIN (guests jsonb_path_ops)` to support efficient `@>` containment queries
+
+
+<!-- @trace
+source: r3-3-metadata-filter
+updated: 2026-05-16
+code:
+  - backend/scripts/pilot_reembed_descriptions.py
+  - backend/eval/datasets/this-not-that-cool.json
+  - docs/ai-steps.md
+  - src/AdminEpisodeGuestsTab.jsx
+  - backend/app/services/embedding.py
+  - backend/app/services/rag.py
+  - src/AdminTokenizerTab.jsx
+  - index.html
+  - backend/app/api/admin/__init__.py
+  - backend/app/models/episode_description_chunk.py
+  - backend/alembic/versions/t8a9b0c1d2e3_chunking_version_description_chunks.py
+  - backend/app/services/tokenizer.py
+  - backend/app/api/admin/ai_steps.py
+  - backend/app/services/llm_prompts.py
+  - src/App.jsx
+  - backend/app/services/citation_parser.py
+  - backend/app/schemas/query.py
+  - backend/app/models/ai_step.py
+  - src/AdminPage.jsx
+  - backend/app/services/query_entity.py
+  - backend/app/services/topic_segmentation.py
+  - backend/app/models/episode.py
+  - src/TranscriptPage.jsx
+  - backend/scripts/backfill_guests.py
+  - backend/alembic/versions/w1d2e3f4a5b6_r33_add_entity_extraction_step.py
+  - backend/eval/datasets/_pending_review.json
+  - CLAUDE.md
+  - backend/eval/scripts/bakeoff_entity_extractor.py
+  - backend/eval/datasets/_schema.json
+  - backend/app/workers/topic_task.py
+  - src/QueryPage.jsx
+  - backend/scripts/backfill_topic_labels.py
+  - backend/alembic/versions/v0c1d2e3f4a5_r33_episodes_guests_and_title_tsv.py
+  - backend/app/schemas/episode_guests.py
+  - backend/scripts/backfill_embedding_v2.py
+  - backend/alembic/versions/u9b0c1d2e3f4_add_embedding_v2_columns.py
+  - backend/app/api/shows.py
+  - backend/app/api/query.py
+  - backend/eval/metrics/recall.py
+  - backend/eval/datasets/README.md
+  - backend/app/services/rss_parser.py
+  - docs/roadmap.md
+  - backend/app/services/sync.py
+  - backend/eval/scripts/validate_schema.py
+  - src/ReleaseLogPage.jsx
+  - backend/app/services/description_rechunker.py
+  - src/releaseLog.jsx
+  - backend/eval/runners/run.py
+  - backend/app/api/admin/episode_guests.py
+  - backend/app/api/admin/chunking_status.py
+  - backend/scripts/backfill_title_tsv.py
+  - backend/app/services/key_resolver.py
+  - backend/app/models/transcript_chunk.py
+  - backend/eval/datasets/this-not-that-cool.json.bak-20260515T060258Z
+  - src/Shared.jsx
+  - backend/app/workers/celery_app.py
+  - backend/scripts/cleanup_v1_description_chunks.py
+  - backend/app/workers/tasks.py
+  - backend/eval/scripts/embedding_bakeoff.py
+  - backend/app/services/description_indexer.py
+  - backend/app/schemas/query_entity.py
+  - backend/eval/scripts/build_golden_set.py
+tests:
+  - backend/tests/test_golden_set_dataset.py
+  - backend/tests/test_strip_citations.py
+  - backend/tests/test_eval_dataset_schema.py
+  - backend/tests/test_citation_parser.py
+  - backend/tests/test_eval_runner_flags.py
+  - backend/tests/test_description_retrieval_prefer_v2.py
+  - backend/tests/test_rss_guests_extraction.py
+  - backend/tests/test_backfill_guests.py
+  - backend/tests/test_rag_query_response_shape.py
+  - backend/tests/test_answer_malformed_json_salvage.py
+  - backend/tests/test_rag_embedding_v2_flag.py
+  - backend/tests/test_chunking_version_coexistence.py
+  - backend/tests/test_query_chat_metadata_filter.py
+  - backend/tests/test_rag_retrieval_flags.py
+  - backend/tests/test_rag_multi_column_bm25.py
+  - backend/tests/test_topic_segmentation_persist.py
+  - backend/tests/test_admin_episode_guests.py
+  - backend/tests/test_key_resolver.py
+  - backend/tests/test_eval_runner_dispatch.py
+  - backend/tests/test_description_chunker_120.py
+  - backend/tests/test_embedding_v2_dual_write.py
+  - backend/tests/test_ai_summary_full_field.py
+  - backend/tests/test_episode_guests_schema.py
+  - backend/tests/test_llm_prompts.py
+  - backend/tests/test_description_rechunker.py
+  - backend/tests/test_query_entity.py
+-->
+
+---
+### Requirement: episodes.title_tsvector generated column
+
+The `episodes` table SHALL include a `title_tsvector` generated column whose value is `to_tsvector('simple', tokenize_for_tsvector(title))` using the jieba tokenizer (see tokenizer-dictionary capability), maintained automatically by the database.
+
+#### Scenario: Generated column populated on existing rows
+
+- **WHEN** alembic migration runs against an existing database with ~400 episode rows
+- **THEN** the `episodes` table MUST gain a `title_tsvector` column populated for every existing row by the database engine
+
+#### Scenario: Generated column updates on title change
+
+- **WHEN** an episode's `title` is UPDATEd
+- **THEN** the `title_tsvector` value MUST automatically reflect the new tokenised title without an explicit UPDATE statement
+
+#### Scenario: GIN index supports tsquery match
+
+- **WHEN** the migration runs
+- **THEN** an index `idx_episodes_title_tsv` MUST be created as `GIN (title_tsvector)` to support `@@` tsquery matches
+
+<!-- @trace
+source: r3-3-metadata-filter
+updated: 2026-05-16
+code:
+  - backend/scripts/pilot_reembed_descriptions.py
+  - backend/eval/datasets/this-not-that-cool.json
+  - docs/ai-steps.md
+  - src/AdminEpisodeGuestsTab.jsx
+  - backend/app/services/embedding.py
+  - backend/app/services/rag.py
+  - src/AdminTokenizerTab.jsx
+  - index.html
+  - backend/app/api/admin/__init__.py
+  - backend/app/models/episode_description_chunk.py
+  - backend/alembic/versions/t8a9b0c1d2e3_chunking_version_description_chunks.py
+  - backend/app/services/tokenizer.py
+  - backend/app/api/admin/ai_steps.py
+  - backend/app/services/llm_prompts.py
+  - src/App.jsx
+  - backend/app/services/citation_parser.py
+  - backend/app/schemas/query.py
+  - backend/app/models/ai_step.py
+  - src/AdminPage.jsx
+  - backend/app/services/query_entity.py
+  - backend/app/services/topic_segmentation.py
+  - backend/app/models/episode.py
+  - src/TranscriptPage.jsx
+  - backend/scripts/backfill_guests.py
+  - backend/alembic/versions/w1d2e3f4a5b6_r33_add_entity_extraction_step.py
+  - backend/eval/datasets/_pending_review.json
+  - CLAUDE.md
+  - backend/eval/scripts/bakeoff_entity_extractor.py
+  - backend/eval/datasets/_schema.json
+  - backend/app/workers/topic_task.py
+  - src/QueryPage.jsx
+  - backend/scripts/backfill_topic_labels.py
+  - backend/alembic/versions/v0c1d2e3f4a5_r33_episodes_guests_and_title_tsv.py
+  - backend/app/schemas/episode_guests.py
+  - backend/scripts/backfill_embedding_v2.py
+  - backend/alembic/versions/u9b0c1d2e3f4_add_embedding_v2_columns.py
+  - backend/app/api/shows.py
+  - backend/app/api/query.py
+  - backend/eval/metrics/recall.py
+  - backend/eval/datasets/README.md
+  - backend/app/services/rss_parser.py
+  - docs/roadmap.md
+  - backend/app/services/sync.py
+  - backend/eval/scripts/validate_schema.py
+  - src/ReleaseLogPage.jsx
+  - backend/app/services/description_rechunker.py
+  - src/releaseLog.jsx
+  - backend/eval/runners/run.py
+  - backend/app/api/admin/episode_guests.py
+  - backend/app/api/admin/chunking_status.py
+  - backend/scripts/backfill_title_tsv.py
+  - backend/app/services/key_resolver.py
+  - backend/app/models/transcript_chunk.py
+  - backend/eval/datasets/this-not-that-cool.json.bak-20260515T060258Z
+  - src/Shared.jsx
+  - backend/app/workers/celery_app.py
+  - backend/scripts/cleanup_v1_description_chunks.py
+  - backend/app/workers/tasks.py
+  - backend/eval/scripts/embedding_bakeoff.py
+  - backend/app/services/description_indexer.py
+  - backend/app/schemas/query_entity.py
+  - backend/eval/scripts/build_golden_set.py
+tests:
+  - backend/tests/test_golden_set_dataset.py
+  - backend/tests/test_strip_citations.py
+  - backend/tests/test_eval_dataset_schema.py
+  - backend/tests/test_citation_parser.py
+  - backend/tests/test_eval_runner_flags.py
+  - backend/tests/test_description_retrieval_prefer_v2.py
+  - backend/tests/test_rss_guests_extraction.py
+  - backend/tests/test_backfill_guests.py
+  - backend/tests/test_rag_query_response_shape.py
+  - backend/tests/test_answer_malformed_json_salvage.py
+  - backend/tests/test_rag_embedding_v2_flag.py
+  - backend/tests/test_chunking_version_coexistence.py
+  - backend/tests/test_query_chat_metadata_filter.py
+  - backend/tests/test_rag_retrieval_flags.py
+  - backend/tests/test_rag_multi_column_bm25.py
+  - backend/tests/test_topic_segmentation_persist.py
+  - backend/tests/test_admin_episode_guests.py
+  - backend/tests/test_key_resolver.py
+  - backend/tests/test_eval_runner_dispatch.py
+  - backend/tests/test_description_chunker_120.py
+  - backend/tests/test_embedding_v2_dual_write.py
+  - backend/tests/test_ai_summary_full_field.py
+  - backend/tests/test_episode_guests_schema.py
+  - backend/tests/test_llm_prompts.py
+  - backend/tests/test_description_rechunker.py
+  - backend/tests/test_query_entity.py
+-->

@@ -8,12 +8,12 @@ TBD - created by archiving change 'rss-feed'. Update Purpose after archive.
 
 ### Requirement: RSS feed parser
 
-The backend SHALL provide an async function that accepts an RSS feed URL and returns structured show metadata plus a list of episode metadata, supporting RSS 2.0 with iTunes extensions.
+The backend SHALL provide an async function that accepts an RSS feed URL and returns structured show metadata plus a list of episode metadata, supporting RSS 2.0 with iTunes extensions. For each parsed episode, the parser SHALL apply a guests-extraction regex against the episode title and populate the resulting `guests` field as a list of strings (empty list when no pattern matches).
 
 #### Scenario: Valid RSS feed parsed
 
 - **WHEN** the parser is called with a URL returning a valid RSS 2.0 feed
-- **THEN** it SHALL return a show object (title, description, image_url, language) and a list of episode objects (title, description, audio_url, duration_seconds, published_at, guid)
+- **THEN** it SHALL return a show object (title, description, image_url, language) and a list of episode objects (title, description, audio_url, duration_seconds, published_at, guid, guests)
 
 #### Scenario: Invalid feed URL rejected
 
@@ -25,42 +25,110 @@ The backend SHALL provide an async function that accepts an RSS feed URL and ret
 - **WHEN** the parser is called with a plain RSS 2.0 feed lacking iTunes tags
 - **THEN** it SHALL still return show and episode data, leaving iTunes-specific fields (duration_seconds, image_url) as null when absent
 
+#### Scenario: Episode title with Ft. pattern populates guests
+
+- **WHEN** the parser processes an entry whose title contains `"Ft. 馬世芳 / 裴社長"`
+- **THEN** the returned ParsedEpisode object MUST have `guests = ["馬世芳", "裴社長"]`
+
+#### Scenario: Episode title without guest pattern populates empty guests
+
+- **WHEN** the parser processes an entry whose title is `"EP100｜年終回顧"`
+- **THEN** the returned ParsedEpisode object MUST have `guests = []` (NOT None, NOT missing field)
+
 
 <!-- @trace
-source: rss-feed
-updated: 2026-04-21
+source: r3-3-metadata-filter
+updated: 2026-05-16
 code:
-  - backend/app/api/health.py
-  - backend/app/models/transcript.py
-  - backend/.dockerignore
-  - backend/app/models/show.py
-  - backend/alembic/versions/91e48beb1237_initial_schema.py
-  - backend/app/core/config.py
-  - backend/app/models/__init__.py
-  - backend/app/services/__init__.py
-  - backend/app/api/shows.py
-  - backend/app/api/episodes.py
-  - backend/app/schemas/episode.py
-  - backend/alembic.ini
-  - backend/app/core/__init__.py
-  - backend/Dockerfile
-  - backend/app/models/transcript_segment.py
-  - backend/app/schemas/show.py
-  - backend/alembic/script.py.mako
-  - backend/app/api/__init__.py
-  - backend/app/schemas/__init__.py
-  - backend/.env.example
-  - backend/requirements.txt
-  - backend/app/__init__.py
-  - backend/app/services/rss_parser.py
-  - backend/alembic/README
-  - .spectra/spectra.db
-  - backend/app/core/database.py
-  - backend/app/schemas/sync.py
-  - backend/alembic/env.py
-  - backend/app/main.py
-  - backend/docker-compose.yml
+  - backend/scripts/pilot_reembed_descriptions.py
+  - backend/eval/datasets/this-not-that-cool.json
+  - docs/ai-steps.md
+  - src/AdminEpisodeGuestsTab.jsx
+  - backend/app/services/embedding.py
+  - backend/app/services/rag.py
+  - src/AdminTokenizerTab.jsx
+  - index.html
+  - backend/app/api/admin/__init__.py
+  - backend/app/models/episode_description_chunk.py
+  - backend/alembic/versions/t8a9b0c1d2e3_chunking_version_description_chunks.py
+  - backend/app/services/tokenizer.py
+  - backend/app/api/admin/ai_steps.py
+  - backend/app/services/llm_prompts.py
+  - src/App.jsx
+  - backend/app/services/citation_parser.py
+  - backend/app/schemas/query.py
+  - backend/app/models/ai_step.py
+  - src/AdminPage.jsx
+  - backend/app/services/query_entity.py
+  - backend/app/services/topic_segmentation.py
   - backend/app/models/episode.py
+  - src/TranscriptPage.jsx
+  - backend/scripts/backfill_guests.py
+  - backend/alembic/versions/w1d2e3f4a5b6_r33_add_entity_extraction_step.py
+  - backend/eval/datasets/_pending_review.json
+  - CLAUDE.md
+  - backend/eval/scripts/bakeoff_entity_extractor.py
+  - backend/eval/datasets/_schema.json
+  - backend/app/workers/topic_task.py
+  - src/QueryPage.jsx
+  - backend/scripts/backfill_topic_labels.py
+  - backend/alembic/versions/v0c1d2e3f4a5_r33_episodes_guests_and_title_tsv.py
+  - backend/app/schemas/episode_guests.py
+  - backend/scripts/backfill_embedding_v2.py
+  - backend/alembic/versions/u9b0c1d2e3f4_add_embedding_v2_columns.py
+  - backend/app/api/shows.py
+  - backend/app/api/query.py
+  - backend/eval/metrics/recall.py
+  - backend/eval/datasets/README.md
+  - backend/app/services/rss_parser.py
+  - docs/roadmap.md
+  - backend/app/services/sync.py
+  - backend/eval/scripts/validate_schema.py
+  - src/ReleaseLogPage.jsx
+  - backend/app/services/description_rechunker.py
+  - src/releaseLog.jsx
+  - backend/eval/runners/run.py
+  - backend/app/api/admin/episode_guests.py
+  - backend/app/api/admin/chunking_status.py
+  - backend/scripts/backfill_title_tsv.py
+  - backend/app/services/key_resolver.py
+  - backend/app/models/transcript_chunk.py
+  - backend/eval/datasets/this-not-that-cool.json.bak-20260515T060258Z
+  - src/Shared.jsx
+  - backend/app/workers/celery_app.py
+  - backend/scripts/cleanup_v1_description_chunks.py
+  - backend/app/workers/tasks.py
+  - backend/eval/scripts/embedding_bakeoff.py
+  - backend/app/services/description_indexer.py
+  - backend/app/schemas/query_entity.py
+  - backend/eval/scripts/build_golden_set.py
+tests:
+  - backend/tests/test_golden_set_dataset.py
+  - backend/tests/test_strip_citations.py
+  - backend/tests/test_eval_dataset_schema.py
+  - backend/tests/test_citation_parser.py
+  - backend/tests/test_eval_runner_flags.py
+  - backend/tests/test_description_retrieval_prefer_v2.py
+  - backend/tests/test_rss_guests_extraction.py
+  - backend/tests/test_backfill_guests.py
+  - backend/tests/test_rag_query_response_shape.py
+  - backend/tests/test_answer_malformed_json_salvage.py
+  - backend/tests/test_rag_embedding_v2_flag.py
+  - backend/tests/test_chunking_version_coexistence.py
+  - backend/tests/test_query_chat_metadata_filter.py
+  - backend/tests/test_rag_retrieval_flags.py
+  - backend/tests/test_rag_multi_column_bm25.py
+  - backend/tests/test_topic_segmentation_persist.py
+  - backend/tests/test_admin_episode_guests.py
+  - backend/tests/test_key_resolver.py
+  - backend/tests/test_eval_runner_dispatch.py
+  - backend/tests/test_description_chunker_120.py
+  - backend/tests/test_embedding_v2_dual_write.py
+  - backend/tests/test_ai_summary_full_field.py
+  - backend/tests/test_episode_guests_schema.py
+  - backend/tests/test_llm_prompts.py
+  - backend/tests/test_description_rechunker.py
+  - backend/tests/test_query_entity.py
 -->
 
 ---
