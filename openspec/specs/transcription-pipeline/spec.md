@@ -739,3 +739,435 @@ tests:
   - backend/tests/test_status_endpoints.py
   - backend/tests/conftest.py
 -->
+
+---
+### Requirement: OpenAI Whisper provider rejects oversized uploads with explicit error
+
+Before issuing any HTTP request to `audio.transcriptions.create`, the OpenAI Whisper provider SHALL verify that the file (or chunk) about to be uploaded is at most 25 MiB (25 × 1024 × 1024 = 26,214,400 bytes — the OpenAI documented hard limit). If the file size exceeds this limit, the provider SHALL raise a typed exception `OversizedAudioError` with the message containing the actual file size and the configured `openai_whisper_chunk_size_mb` value, and SHALL NOT make the HTTP call.
+
+This guard SHALL apply to BOTH the single-file upload path AND every chunk produced by `_split_audio`. The chunking code path's intent is to keep each chunk under the configured threshold, but the explicit guard catches edge cases (ffmpeg keyframe alignment overshoot, multipart overhead pushing close to limit) before they consume retry budget against an irrecoverable upstream rejection.
+
+#### Scenario: File at exactly 25 MiB allowed
+
+- **GIVEN** an audio file of size 26,214,400 bytes
+- **WHEN** the provider attempts to upload it
+- **THEN** the upload SHALL proceed (size <= limit)
+
+#### Scenario: File above 25 MiB raises OversizedAudioError before upload
+
+- **GIVEN** an audio file of size 26,214,401 bytes (1 byte over limit)
+- **WHEN** the provider's `_transcribe_sync` runs
+- **THEN** an `OversizedAudioError` SHALL be raised
+- **AND** no `audio.transcriptions.create` HTTP call SHALL be made
+- **AND** the exception message SHALL contain the file size in bytes and the current `openai_whisper_chunk_size_mb` value
+
+#### Scenario: Chunk produced by _split_audio above 25 MiB raises OversizedAudioError
+
+- **GIVEN** `openai_whisper_chunk_size_mb=24` and `_split_audio` produces a chunk that ended up at 25.1 MiB due to ffmpeg keyframe overshoot
+- **WHEN** the provider tries to upload that chunk
+- **THEN** an `OversizedAudioError` SHALL be raised for that chunk before the HTTP call
+- **AND** the error message SHALL include the chunk index and size
+
+
+<!-- @trace
+source: whisper-chunking-fix
+updated: 2026-05-18
+code:
+  - docs/ai-steps.md
+  - docs/roadmap.md
+  - backend/app/models/episode_description_chunk.py
+  - backend/app/services/exceptions.py
+  - backend/app/api/admin/ai_steps.py
+  - backend/app/models/ai_step.py
+  - backend/app/services/rag.py
+  - backend/app/workers/celery_app.py
+  - src/TranscriptPage.jsx
+  - backend/app/schemas/episode_guests.py
+  - backend/app/services/transcription/openai_provider.py
+  - backend/.env.example
+  - backend/eval/scripts/bakeoff_entity_extractor.py
+  - backend/eval/datasets/this-not-that-cool.json.bak-20260515T060258Z
+  - backend/eval/datasets/_schema.json
+  - backend/app/services/key_resolver.py
+  - backend/app/services/llm_prompts.py
+  - backend/alembic/versions/w1d2e3f4a5b6_r33_add_entity_extraction_step.py
+  - backend/app/schemas/query_entity.py
+  - backend/app/models/episode.py
+  - backend/scripts/backfill_embedding_v2.py
+  - backend/app/api/query.py
+  - backend/app/models/transcript_chunk.py
+  - backend/eval/scripts/build_golden_set.py
+  - index.html
+  - backend/app/services/provider_usage/__init__.py
+  - backend/app/main.py
+  - backend/app/services/zsend.py
+  - backend/alembic/versions/u9b0c1d2e3f4_add_embedding_v2_columns.py
+  - backend/eval/metrics/recall.py
+  - src/QueueTab.jsx
+  - backend/eval/datasets/README.md
+  - backend/scripts/backfill_guests.py
+  - backend/app/services/episode_finders.py
+  - backend/app/api/shows.py
+  - backend/eval/datasets/this-not-that-cool.json
+  - backend/app/services/embedding.py
+  - backend/alembic/versions/v0c1d2e3f4a5_r33_episodes_guests_and_title_tsv.py
+  - backend/app/services/description_indexer.py
+  - backend/app/services/rss_parser.py
+  - backend/app/services/provider_usage/zeabur_aihub_adapter.py
+  - src/releaseLog.jsx
+  - backend/app/schemas/query.py
+  - backend/eval/datasets/_pending_review.json
+  - backend/app/workers/usage_collector.py
+  - backend/scripts/cleanup_v1_description_chunks.py
+  - backend/scripts/pilot_reembed_descriptions.py
+  - backend/app/api/admin/chunking_status.py
+  - backend/app/models/__init__.py
+  - backend/eval/scripts/embedding_bakeoff.py
+  - backend/scripts/backfill_title_tsv.py
+  - backend/alembic/versions/x2e3f4a5b6c7_provider_usage_monitoring.py
+  - backend/app/services/provider_usage/openai_adapter.py
+  - backend/app/services/query_entity.py
+  - backend/alembic/versions/t8a9b0c1d2e3_chunking_version_description_chunks.py
+  - src/AdminPage.jsx
+  - src/App.jsx
+  - backend/app/api/admin/__init__.py
+  - backend/app/workers/tasks.py
+  - backend/app/workers/usage_alert.py
+  - src/AdminTokenizerTab.jsx
+  - backend/app/models/provider_usage_snapshot.py
+  - backend/app/api/admin/episode_guests.py
+  - backend/eval/scripts/validate_schema.py
+  - backend/app/core/config.py
+  - backend/app/services/sync.py
+  - backend/app/api/admin_provider_usage.py
+  - backend/app/services/citation_parser.py
+  - src/QueryPage.jsx
+  - CLAUDE.md
+  - backend/app/api/admin_processing_stats.py
+  - src/ProviderUsageTab.jsx
+  - backend/app/services/tokenizer.py
+  - backend/app/services/description_rechunker.py
+  - backend/eval/runners/run.py
+  - src/AdminEpisodeGuestsTab.jsx
+  - src/Shared.jsx
+tests:
+  - backend/tests/test_admin_episode_guests.py
+  - backend/tests/test_rss_guests_extraction.py
+  - backend/tests/test_description_chunker_120.py
+  - backend/tests/test_key_resolver.py
+  - backend/tests/test_description_rechunker.py
+  - backend/tests/test_llm_prompts.py
+  - backend/tests/test_rag_retrieval_flags.py
+  - backend/tests/test_compute_enumeration_combiner.py
+  - backend/tests/test_golden_set_dataset.py
+  - backend/tests/test_chat_enum_grounding.py
+  - backend/tests/test_strip_citations.py
+  - backend/tests/test_admin_processing_stats_api.py
+  - backend/tests/test_rag_query_response_shape.py
+  - backend/tests/test_eval_dataset_schema.py
+  - backend/tests/test_backfill_guests.py
+  - backend/tests/test_description_retrieval_prefer_v2.py
+  - backend/tests/test_answer_malformed_json_salvage.py
+  - backend/tests/test_eval_runner_dispatch.py
+  - backend/tests/test_embedding_v2_dual_write.py
+  - backend/tests/test_rag_multi_column_bm25.py
+  - backend/tests/test_runner_chat_enumeration.py
+  - backend/tests/test_rag_embedding_v2_flag.py
+  - backend/tests/test_episode_finders.py
+  - backend/tests/test_answer_unwrap.py
+  - backend/tests/test_usage_collector.py
+  - backend/tests/test_admin_provider_usage_api.py
+  - backend/tests/test_eval_runner_flags.py
+  - backend/tests/test_episode_guests_schema.py
+  - backend/tests/test_citation_parser.py
+  - backend/tests/test_query_entity.py
+  - backend/tests/test_query_chat_metadata_filter.py
+  - backend/tests/test_usage_alert.py
+  - backend/tests/test_ai_summary_full_field.py
+  - backend/tests/test_chunking_version_coexistence.py
+  - backend/tests/test_provider_usage_adapters.py
+  - backend/tests/test_openai_provider_chunking.py
+-->
+
+---
+### Requirement: Audio path resolution ensures local file before chunking
+
+Before `_transcribe_sync` reads `os.path.getsize(audio_path)` to decide chunking, the worker SHALL ensure `audio_path` refers to a local file (not a presigned URL or remote URI) by:
+
+1. Calling `os.path.exists(audio_path)` and confirming True.
+2. Verifying `audio_path` does not start with `http://` or `https://` or `s3://`.
+3. Logging the resolved path + size at INFO level so prod can audit any subsequent chunking decision.
+
+If the path fails the local-file check, the provider SHALL raise a typed exception `RemoteAudioPathError` indicating the audio_path was not downloaded to local disk before transcription was attempted. The worker layer (`tasks.py`) SHALL catch this and download the file to a temp path before retrying.
+
+#### Scenario: Local temp file proceeds normally
+
+- **GIVEN** `audio_path = /tmp/podcast_abc.mp3` exists and `getsize` returns 26,400,000
+- **WHEN** `_transcribe_sync` runs
+- **THEN** the provider SHALL log `audio_path=/tmp/... size=26400000 chunk_size_bytes=23068672`
+- **AND** SHALL proceed to chunking branch (size > chunk threshold)
+
+#### Scenario: Remote URL raises RemoteAudioPathError
+
+- **GIVEN** `audio_path = https://r2.example.com/audio/abc.mp3?signature=...`
+- **WHEN** `_transcribe_sync` runs
+- **THEN** a `RemoteAudioPathError` SHALL be raised before any further processing
+- **AND** the worker SHALL catch it and download to local temp before retrying
+
+
+<!-- @trace
+source: whisper-chunking-fix
+updated: 2026-05-18
+code:
+  - docs/ai-steps.md
+  - docs/roadmap.md
+  - backend/app/models/episode_description_chunk.py
+  - backend/app/services/exceptions.py
+  - backend/app/api/admin/ai_steps.py
+  - backend/app/models/ai_step.py
+  - backend/app/services/rag.py
+  - backend/app/workers/celery_app.py
+  - src/TranscriptPage.jsx
+  - backend/app/schemas/episode_guests.py
+  - backend/app/services/transcription/openai_provider.py
+  - backend/.env.example
+  - backend/eval/scripts/bakeoff_entity_extractor.py
+  - backend/eval/datasets/this-not-that-cool.json.bak-20260515T060258Z
+  - backend/eval/datasets/_schema.json
+  - backend/app/services/key_resolver.py
+  - backend/app/services/llm_prompts.py
+  - backend/alembic/versions/w1d2e3f4a5b6_r33_add_entity_extraction_step.py
+  - backend/app/schemas/query_entity.py
+  - backend/app/models/episode.py
+  - backend/scripts/backfill_embedding_v2.py
+  - backend/app/api/query.py
+  - backend/app/models/transcript_chunk.py
+  - backend/eval/scripts/build_golden_set.py
+  - index.html
+  - backend/app/services/provider_usage/__init__.py
+  - backend/app/main.py
+  - backend/app/services/zsend.py
+  - backend/alembic/versions/u9b0c1d2e3f4_add_embedding_v2_columns.py
+  - backend/eval/metrics/recall.py
+  - src/QueueTab.jsx
+  - backend/eval/datasets/README.md
+  - backend/scripts/backfill_guests.py
+  - backend/app/services/episode_finders.py
+  - backend/app/api/shows.py
+  - backend/eval/datasets/this-not-that-cool.json
+  - backend/app/services/embedding.py
+  - backend/alembic/versions/v0c1d2e3f4a5_r33_episodes_guests_and_title_tsv.py
+  - backend/app/services/description_indexer.py
+  - backend/app/services/rss_parser.py
+  - backend/app/services/provider_usage/zeabur_aihub_adapter.py
+  - src/releaseLog.jsx
+  - backend/app/schemas/query.py
+  - backend/eval/datasets/_pending_review.json
+  - backend/app/workers/usage_collector.py
+  - backend/scripts/cleanup_v1_description_chunks.py
+  - backend/scripts/pilot_reembed_descriptions.py
+  - backend/app/api/admin/chunking_status.py
+  - backend/app/models/__init__.py
+  - backend/eval/scripts/embedding_bakeoff.py
+  - backend/scripts/backfill_title_tsv.py
+  - backend/alembic/versions/x2e3f4a5b6c7_provider_usage_monitoring.py
+  - backend/app/services/provider_usage/openai_adapter.py
+  - backend/app/services/query_entity.py
+  - backend/alembic/versions/t8a9b0c1d2e3_chunking_version_description_chunks.py
+  - src/AdminPage.jsx
+  - src/App.jsx
+  - backend/app/api/admin/__init__.py
+  - backend/app/workers/tasks.py
+  - backend/app/workers/usage_alert.py
+  - src/AdminTokenizerTab.jsx
+  - backend/app/models/provider_usage_snapshot.py
+  - backend/app/api/admin/episode_guests.py
+  - backend/eval/scripts/validate_schema.py
+  - backend/app/core/config.py
+  - backend/app/services/sync.py
+  - backend/app/api/admin_provider_usage.py
+  - backend/app/services/citation_parser.py
+  - src/QueryPage.jsx
+  - CLAUDE.md
+  - backend/app/api/admin_processing_stats.py
+  - src/ProviderUsageTab.jsx
+  - backend/app/services/tokenizer.py
+  - backend/app/services/description_rechunker.py
+  - backend/eval/runners/run.py
+  - src/AdminEpisodeGuestsTab.jsx
+  - src/Shared.jsx
+tests:
+  - backend/tests/test_admin_episode_guests.py
+  - backend/tests/test_rss_guests_extraction.py
+  - backend/tests/test_description_chunker_120.py
+  - backend/tests/test_key_resolver.py
+  - backend/tests/test_description_rechunker.py
+  - backend/tests/test_llm_prompts.py
+  - backend/tests/test_rag_retrieval_flags.py
+  - backend/tests/test_compute_enumeration_combiner.py
+  - backend/tests/test_golden_set_dataset.py
+  - backend/tests/test_chat_enum_grounding.py
+  - backend/tests/test_strip_citations.py
+  - backend/tests/test_admin_processing_stats_api.py
+  - backend/tests/test_rag_query_response_shape.py
+  - backend/tests/test_eval_dataset_schema.py
+  - backend/tests/test_backfill_guests.py
+  - backend/tests/test_description_retrieval_prefer_v2.py
+  - backend/tests/test_answer_malformed_json_salvage.py
+  - backend/tests/test_eval_runner_dispatch.py
+  - backend/tests/test_embedding_v2_dual_write.py
+  - backend/tests/test_rag_multi_column_bm25.py
+  - backend/tests/test_runner_chat_enumeration.py
+  - backend/tests/test_rag_embedding_v2_flag.py
+  - backend/tests/test_episode_finders.py
+  - backend/tests/test_answer_unwrap.py
+  - backend/tests/test_usage_collector.py
+  - backend/tests/test_admin_provider_usage_api.py
+  - backend/tests/test_eval_runner_flags.py
+  - backend/tests/test_episode_guests_schema.py
+  - backend/tests/test_citation_parser.py
+  - backend/tests/test_query_entity.py
+  - backend/tests/test_query_chat_metadata_filter.py
+  - backend/tests/test_usage_alert.py
+  - backend/tests/test_ai_summary_full_field.py
+  - backend/tests/test_chunking_version_coexistence.py
+  - backend/tests/test_provider_usage_adapters.py
+  - backend/tests/test_openai_provider_chunking.py
+-->
+
+---
+### Requirement: Chunking decisions are observable in worker logs
+
+Each invocation of `_transcribe_sync` SHALL emit a structured log line at INFO level containing: episode_id (if available via task context), audio_path basename, file size in bytes, configured `chunk_size_bytes`, decision taken (`single` or `chunked` and chunk count). This log SHALL be present even on success paths so prod operators can audit the chunking behaviour without enabling debug-level logging globally.
+
+#### Scenario: Single-file path emits decision log
+
+- **GIVEN** a 22 MB file processed without chunking
+- **WHEN** `_transcribe_sync` completes
+- **THEN** worker logs SHALL contain a line like `transcription: ep=<id> file=abc.mp3 size=22500000 chunk_threshold=23068672 decision=single`
+
+#### Scenario: Chunked path emits decision log with chunk count
+
+- **GIVEN** a 50 MB file split into 3 chunks
+- **WHEN** `_transcribe_sync` completes
+- **THEN** worker logs SHALL contain a line like `transcription: ep=<id> file=abc.mp3 size=52000000 chunk_threshold=23068672 decision=chunked chunks=3`
+
+<!-- @trace
+source: whisper-chunking-fix
+updated: 2026-05-18
+code:
+  - docs/ai-steps.md
+  - docs/roadmap.md
+  - backend/app/models/episode_description_chunk.py
+  - backend/app/services/exceptions.py
+  - backend/app/api/admin/ai_steps.py
+  - backend/app/models/ai_step.py
+  - backend/app/services/rag.py
+  - backend/app/workers/celery_app.py
+  - src/TranscriptPage.jsx
+  - backend/app/schemas/episode_guests.py
+  - backend/app/services/transcription/openai_provider.py
+  - backend/.env.example
+  - backend/eval/scripts/bakeoff_entity_extractor.py
+  - backend/eval/datasets/this-not-that-cool.json.bak-20260515T060258Z
+  - backend/eval/datasets/_schema.json
+  - backend/app/services/key_resolver.py
+  - backend/app/services/llm_prompts.py
+  - backend/alembic/versions/w1d2e3f4a5b6_r33_add_entity_extraction_step.py
+  - backend/app/schemas/query_entity.py
+  - backend/app/models/episode.py
+  - backend/scripts/backfill_embedding_v2.py
+  - backend/app/api/query.py
+  - backend/app/models/transcript_chunk.py
+  - backend/eval/scripts/build_golden_set.py
+  - index.html
+  - backend/app/services/provider_usage/__init__.py
+  - backend/app/main.py
+  - backend/app/services/zsend.py
+  - backend/alembic/versions/u9b0c1d2e3f4_add_embedding_v2_columns.py
+  - backend/eval/metrics/recall.py
+  - src/QueueTab.jsx
+  - backend/eval/datasets/README.md
+  - backend/scripts/backfill_guests.py
+  - backend/app/services/episode_finders.py
+  - backend/app/api/shows.py
+  - backend/eval/datasets/this-not-that-cool.json
+  - backend/app/services/embedding.py
+  - backend/alembic/versions/v0c1d2e3f4a5_r33_episodes_guests_and_title_tsv.py
+  - backend/app/services/description_indexer.py
+  - backend/app/services/rss_parser.py
+  - backend/app/services/provider_usage/zeabur_aihub_adapter.py
+  - src/releaseLog.jsx
+  - backend/app/schemas/query.py
+  - backend/eval/datasets/_pending_review.json
+  - backend/app/workers/usage_collector.py
+  - backend/scripts/cleanup_v1_description_chunks.py
+  - backend/scripts/pilot_reembed_descriptions.py
+  - backend/app/api/admin/chunking_status.py
+  - backend/app/models/__init__.py
+  - backend/eval/scripts/embedding_bakeoff.py
+  - backend/scripts/backfill_title_tsv.py
+  - backend/alembic/versions/x2e3f4a5b6c7_provider_usage_monitoring.py
+  - backend/app/services/provider_usage/openai_adapter.py
+  - backend/app/services/query_entity.py
+  - backend/alembic/versions/t8a9b0c1d2e3_chunking_version_description_chunks.py
+  - src/AdminPage.jsx
+  - src/App.jsx
+  - backend/app/api/admin/__init__.py
+  - backend/app/workers/tasks.py
+  - backend/app/workers/usage_alert.py
+  - src/AdminTokenizerTab.jsx
+  - backend/app/models/provider_usage_snapshot.py
+  - backend/app/api/admin/episode_guests.py
+  - backend/eval/scripts/validate_schema.py
+  - backend/app/core/config.py
+  - backend/app/services/sync.py
+  - backend/app/api/admin_provider_usage.py
+  - backend/app/services/citation_parser.py
+  - src/QueryPage.jsx
+  - CLAUDE.md
+  - backend/app/api/admin_processing_stats.py
+  - src/ProviderUsageTab.jsx
+  - backend/app/services/tokenizer.py
+  - backend/app/services/description_rechunker.py
+  - backend/eval/runners/run.py
+  - src/AdminEpisodeGuestsTab.jsx
+  - src/Shared.jsx
+tests:
+  - backend/tests/test_admin_episode_guests.py
+  - backend/tests/test_rss_guests_extraction.py
+  - backend/tests/test_description_chunker_120.py
+  - backend/tests/test_key_resolver.py
+  - backend/tests/test_description_rechunker.py
+  - backend/tests/test_llm_prompts.py
+  - backend/tests/test_rag_retrieval_flags.py
+  - backend/tests/test_compute_enumeration_combiner.py
+  - backend/tests/test_golden_set_dataset.py
+  - backend/tests/test_chat_enum_grounding.py
+  - backend/tests/test_strip_citations.py
+  - backend/tests/test_admin_processing_stats_api.py
+  - backend/tests/test_rag_query_response_shape.py
+  - backend/tests/test_eval_dataset_schema.py
+  - backend/tests/test_backfill_guests.py
+  - backend/tests/test_description_retrieval_prefer_v2.py
+  - backend/tests/test_answer_malformed_json_salvage.py
+  - backend/tests/test_eval_runner_dispatch.py
+  - backend/tests/test_embedding_v2_dual_write.py
+  - backend/tests/test_rag_multi_column_bm25.py
+  - backend/tests/test_runner_chat_enumeration.py
+  - backend/tests/test_rag_embedding_v2_flag.py
+  - backend/tests/test_episode_finders.py
+  - backend/tests/test_answer_unwrap.py
+  - backend/tests/test_usage_collector.py
+  - backend/tests/test_admin_provider_usage_api.py
+  - backend/tests/test_eval_runner_flags.py
+  - backend/tests/test_episode_guests_schema.py
+  - backend/tests/test_citation_parser.py
+  - backend/tests/test_query_entity.py
+  - backend/tests/test_query_chat_metadata_filter.py
+  - backend/tests/test_usage_alert.py
+  - backend/tests/test_ai_summary_full_field.py
+  - backend/tests/test_chunking_version_coexistence.py
+  - backend/tests/test_provider_usage_adapters.py
+  - backend/tests/test_openai_provider_chunking.py
+-->

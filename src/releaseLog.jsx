@@ -75,6 +75,33 @@ const RELEASE_LOG = [
       ],
     },
   },
+  {
+    date: '2026-05-18', slug: 'whisper-chunking-fix', milestone: 'v1.7', tag: 'fix',
+    title: {
+      zh: '修掉長集（>22 MB）轉錄會悄悄 retry 到 fail 的 bug，並加上明確錯誤訊息',
+      en: 'Fix Long Episodes (>22 MB) Silently Retrying to Failure — Now With Explicit Errors',
+    },
+    summary: {
+      zh: '之前 prod 觀察到 EP20（Axios 80 分鐘集，26.3 MB）跟其他 4-5 個大檔卡住：worker 把整檔送進 OpenAI Whisper API、被 25 MiB 上限退回 HTTP 413、然後反覆 retry，每輪燒掉一個 worker slot ~30 秒，最後 MaxRetries 失敗。表面上看 chunking 設定（`OPENAI_WHISPER_CHUNK_SIZE_MB=22`）有開但 split 邏輯沒被走到。這版加了兩道防線：(1) `RemoteAudioPathError` — `_transcribe_sync` 一偵測到 audio_path 是 R2 URL 而非本地檔就立刻 raise，worker 層 catch 再重新下載成 temp 檔，徹底防 path resolution 漏掉的情況；(2) `OversizedAudioError` — 上傳前 + 每個 chunk 上傳前都 hard guard 25 MiB，超過直接 raise 明確 exception，不再 silent 413 燒 retry。再加 3 條 unit test 鎖住 chunking 真的會 fire、超過上限會擋、URL path 會擋三條 path。EP57（96.85 分鐘，比 EP20 還長）2026-05-17 跑只用了 8 分 5 秒完整轉錄、3414 段覆蓋整段音檔，間接證實 chunking 已就位。',
+      en: 'Earlier in prod, EP20 (Axios 80-min episode, 26.3 MB) and 4-5 other large files got stuck: the worker uploaded the whole file to OpenAI Whisper, hit the 25 MiB ceiling with HTTP 413, and retried in a loop — each retry burned a worker slot ~30s before eventually failing with MaxRetries. Chunking was configured (`OPENAI_WHISPER_CHUNK_SIZE_MB=22`) but the split branch was never reached. This release adds two defensive guards: (1) `RemoteAudioPathError` — `_transcribe_sync` raises immediately if `audio_path` looks like an R2 URL instead of a local file; worker layer catches and re-downloads to a temp file, eliminating the path-resolution gap; (2) `OversizedAudioError` — hard 25 MiB guard before the initial upload AND before every chunk upload; oversized files raise an explicit exception instead of silently 413-looping. Three new unit tests lock in that chunking actually fires, oversized files are rejected, and URL paths are rejected. EP57 (96.85 minutes, longer than EP20) ran on 2026-05-17 in 8 min 5 sec end-to-end, producing 3414 segments covering the full audio — strong indirect evidence chunking is now in place.',
+    },
+    summaryBullets: {
+      zh: [
+        '加 `RemoteAudioPathError`：偵測 audio_path 非本地檔直接 raise，worker 重下載成 temp 檔',
+        '加 `OversizedAudioError`：上傳前 + 每 chunk 25 MiB hard guard，不再 silent 413',
+        'INFO log `decision=chunked chunks=N` 進場印出，方便日後 triage',
+        '3 條 unit test：chunking fire / oversized reject / remote URL reject',
+        '間接驗證：EP57（96.85 分鐘）8 分 5 秒跑完、3414 段完整覆蓋；直接 log 因 worker 6hr retention 沒搶到原文',
+      ],
+      en: [
+        'Added `RemoteAudioPathError` — non-local audio_path raises immediately; worker re-downloads to local temp file',
+        'Added `OversizedAudioError` — hard 25 MiB guard before initial upload AND before every chunk; no more silent 413 retry loops',
+        'INFO log `decision=chunked chunks=N` at entry for future triage visibility',
+        '3 unit tests: chunking fires / oversized rejected / remote URL rejected',
+        'Indirect verification: EP57 (96.85 min) transcribed end-to-end in 8m 5s, 3414 segments covering full audio; direct log line not captured due to 6hr worker log retention',
+      ],
+    },
+  },
   // ─── v1.7 — Retrieval Quality Fix (5/13–5/17) ───
   {
     date: '2026-05-17', slug: 'fix-eval-dataset-com-004-json-leak', milestone: 'v1.7', tag: 'fix',

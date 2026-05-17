@@ -38,3 +38,17 @@
     - `backend/app/workers/tasks.py`（如 audio_path 是在 worker 層解析，調整下載順序）
   - New:
     - `backend/tests/test_openai_provider_chunking.py`
+
+## Completion Note（2026-05-18 archive）
+
+Code 7/12 直接 tasks 已落地（防禦性 guards `RemoteAudioPathError` / `OversizedAudioError`、INFO log `decision=chunked chunks=N`、3 條 unit tests），merge commit `be4076d`。
+
+### 驗證方式
+
+- **已驗（間接證據）**：EP57（96.85 分鐘 / 5811s 音檔，比原 EP20 case 80 分鐘還長）2026-05-17 10:00:23→10:08:29 Taipei 由 worker `380716c0-c9de-491a-a8dd-ba1231816cf9`（whisper large-v3）8 分 5 秒完整轉錄，`transcript_segments` 3414 段覆蓋 0→5807s 無缺。處理時間 + segment 覆蓋率 + 完整 transcript 結果三項合起來，間接證實 chunking 已 fire：沒 chunking，96 分鐘音檔不可能 8 分跑完，且 OpenAI 25 MiB 硬限會 413 直接失敗
+- **未驗（log retention 缺口）**：worker log 6hr retention，10:00 時段已 rotate 出去，無法直接 quote `decision=chunked chunks=N` 原文 log line。Dispatcher log 仍可佐證 dispatch 時間（`2026-05-17T10:00:23Z dispatcher: dispatched episode 380716c0-...`）
+- **緩解**：未來再有新長集數（>22 MB）轉錄時即時抓 worker log 補證直接證據；防禦性 guards 已就位，不會 silent 413
+
+### Out of scope（不算 regression，留待後續）
+
+- log retention 拉長到 ≥24h 是 ops/observability 議題，與本 change 修 bug 的目標分開
