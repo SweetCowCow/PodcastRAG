@@ -21,6 +21,7 @@ at WARNING) but do not abort the whole fetch.
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 from datetime import date, datetime
@@ -36,7 +37,12 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 AIHUB_USAGE_URL = "https://aihub.zeabur.app/v1/usage"
-DEFAULT_TIMEOUT_SECONDS = 30.0
+# Split timeout: AI Hub usage endpoint can be slow to compute aggregates
+# (observed > 10s p95). Give read 30s, total budget 45s. Connect/write fast.
+DEFAULT_TIMEOUT = httpx.Timeout(connect=10.0, read=30.0, write=10.0, pool=10.0)
+DEFAULT_TOTAL_BUDGET_SECONDS = 45.0
+MAX_ATTEMPTS = 3  # 1 initial + 2 retries
+BACKOFF_BASE_SECONDS = 2.0  # exponential: 2s, 4s
 
 
 def _key() -> str | None:
@@ -59,12 +65,43 @@ async def fetch_daily_usage(start: date, end: date) -> list["UsageSnapshot"]:
     headers = {"Authorization": f"Bearer {token}"}
     params = {"start": start.isoformat(), "end": end.isoformat()}
 
-    try:
-        async with httpx.AsyncClient(timeout=DEFAULT_TIMEOUT_SECONDS) as client:
-            resp = await client.get(AIHUB_USAGE_URL, headers=headers, params=params)
-    except (httpx.TimeoutException, httpx.HTTPError) as exc:
-        logger.error("aihub usage fetch failed: %r", exc)
-        raise
+    resp: httpx.Response | None = None
+    last_exc: Exception | None = None
+    async with httpx.AsyncClient(timeout=DEFAULT_TIMEOUT) as client:
+        for attempt in range(1, MAX_ATTEMPTS + 1):
+            try:
+                resp = await asyncio.wait_for(
+                    client.get(AIHUB_USAGE_URL, headers=headers, params=params),
+                    timeout=DEFAULT_TOTAL_BUDGET_SECONDS,
+                )
+                break
+            except (
+                httpx.TimeoutException,
+                httpx.TransportError,
+                asyncio.TimeoutError,
+            ) as exc:
+                last_exc = exc
+                if attempt >= MAX_ATTEMPTS:
+                    logger.error(
+                        "aihub usage fetch failed after %d attempts: %r",
+                        attempt,
+                        exc,
+                    )
+                    raise
+                backoff = BACKOFF_BASE_SECONDS ** attempt  # 2s, 4s
+                logger.warning(
+                    "aihub usage attempt %d/%d failed (%r); retrying in %.1fs",
+                    attempt,
+                    MAX_ATTEMPTS,
+                    exc,
+                    backoff,
+                )
+                await asyncio.sleep(backoff)
+            except httpx.HTTPError as exc:
+                logger.error("aihub usage fetch failed (non-retryable): %r", exc)
+                raise
+    if resp is None:  # pragma: no cover — defensive
+        raise RuntimeError(f"aihub usage fetch returned no response: {last_exc!r}")
 
     if resp.status_code != 200:
         logger.error(
