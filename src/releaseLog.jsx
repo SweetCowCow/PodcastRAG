@@ -51,6 +51,31 @@ const MILESTONE_LABELS = {
 const RELEASE_LOG = [
   // ─── v1.7 — Retrieval Quality Fix (5/13–5/17) ───
   {
+    date: '2026-05-17', slug: 'fix-eval-dataset-com-004-json-leak', milestone: 'v1.7', tag: 'fix',
+    title: {
+      zh: '修掉答案偶爾長得像 `{"answer":"..."}` 這種亂碼的小 bug',
+      en: 'Fix Occasional Self-Referential JSON Wrapper in Chat Answers',
+    },
+    summary: {
+      zh: '對話模式偶爾會回出長得像 `{"answer":"真正的答案在這裡"}` 這種亂碼字串，前端看起來像 LLM 故障、判分 judge 也會誤判（R2.1 RCA 抓到 thisno-core-com-004 那題就是這個原因）。根因：LLM 回傳的 JSON 裡，answer 欄位自己又是一段完整 JSON（自我包裝），post-process 沒拆解。修法：answer 後處理新增 `_unwrap_self_referential_json` 保守 helper — 只在 answer 開頭是 `{` 且能 parse 成功且含 `"answer"` key 時取裡層字串，否則完全 noop（不會誤改純文本）。新增 3 個 unit test，套用在「JSON parse 成功」與「malformed JSON salvage」兩條 path。Prod smoke：對 EP140 高雄美食那題打對話，answer 是純文字「EP140 高雄美食第二彈的來賓包括樂團大佬楊大正以及張凱婷」沒任何 wrapper。',
+      en: 'Chat mode occasionally returned weird-looking strings like `{"answer":"the real answer goes here"}`, which looked like an LLM failure to users and confused the judge during eval (R2.1 RCA pinned this to thisno-core-com-004). Root cause: the LLM occasionally double-wraps the `answer` field — the outer JSON parses cleanly but the inner `answer` value is itself another JSON string. Fix: conservative `_unwrap_self_referential_json` helper in answer post-process — only triggers when the answer string starts with `{` AND parses as a dict AND contains an `"answer"` key, otherwise pure no-op (won\'t touch plain prose). 3 new unit tests cover both the normal JSON-parse path and the malformed-JSON salvage path. Prod smoke: asking "Who were the guests on EP140 Kaohsiung Food round 2" returns clean prose "EP140 高雄美食第二彈的來賓包括樂團大佬楊大正以及張凱婷" with no wrapper.',
+    },
+    summaryBullets: {
+      zh: [
+        '對話模式 answer 加 `_unwrap_self_referential_json` 保守 helper：偵測 `{"answer":"..."}` 自我包裝結構後取出裡層字串；非此 shape 完全 noop',
+        '套用在「JSON parse 成功」與「malformed JSON salvage」兩條 path — 不論 LLM 回哪種包裝形式都會被攔下',
+        '3 個 unit test：純文本不變動 / JSON wrapped 拆解 / JSON 但沒 answer key 不動',
+        'Prod smoke：EP140 高雄美食那題對話回答是純文字，無 `{"answer":...}` wrapper',
+      ],
+      en: [
+        'Chat answer post-process gains `_unwrap_self_referential_json` conservative helper — detects `{"answer":"..."}` self-wrapped shape and extracts the inner string; non-matching answers pass through untouched',
+        'Applied at both the JSON-parse-success path and malformed-JSON salvage path so no matter which wrapper form the LLM returns, it gets caught',
+        '3 unit tests cover plain prose (no-op), JSON wrapped (unwrap), and JSON without answer key (no-op)',
+        'Prod smoke: EP140 Kaohsiung Food query returns plain prose answer with no wrapper visible',
+      ],
+    },
+  },
+  {
     date: '2026-05-17', slug: 'enumeration-topic-finder-include-title', milestone: 'v1.7', tag: 'fix',
     title: {
       zh: '標題寫了主題、內文沒寫的集數，現在也會列進「相關集數」清單',
