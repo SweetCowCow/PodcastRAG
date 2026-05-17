@@ -18,7 +18,7 @@
 ## 3. 部署 + smoke
 
 - [x] 3.1 commit + push → Zeabur backend redeploy
-- [ ] 3.2 admin 開 Queue Tab → 三個 progress bar 顯示對 + 數字跟手動 SQL query 對得上
-- [ ] 3.3 觀察 30s polling：等 30 秒 + 觸發新轉錄完成，數字應自動更新
-- [ ] 3.4 故意把網路斷一下（或關掉 backend）→ 確認 warning text 出現 + queue table 仍可見
-- [ ] 3.5 release log 補對應 entry：「admin Queue Tab 上方多了「進度概覽」，三個 progress bar 看轉錄 / 摘要 / 分類進度，30 秒自動更新」
+- [x] 3.2 admin 開 Queue Tab → 三個 progress bar 顯示對 + 數字跟手動 SQL query 對得上
+- [x] 3.3 觀察 30s polling：等 30 秒 + 觸發新轉錄完成，數字應自動更新
+- [x] 3.4 故意把網路斷一下（或關掉 backend）→ 確認 warning text 出現 + queue table 仍可見
+- [x] 3.5 release log 補對應 entry：「admin Queue Tab 上方多了「進度概覽」，三個 progress bar 看轉錄 / 摘要 / 分類進度，30 秒自動更新」

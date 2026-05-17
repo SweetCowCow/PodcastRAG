@@ -49,6 +49,32 @@ const MILESTONE_LABELS = {
 
 // Entries — newest milestone first; within each milestone newest date first.
 const RELEASE_LOG = [
+  // ─── v1.7 — Retrieval Quality Fix (5/13–5/18) ───
+  {
+    date: '2026-05-18', slug: 'backfill-progress-admin-tab', milestone: 'v1.7', tag: 'enhancement',
+    title: {
+      zh: '後台 Queue 分頁上方多了「進度概覽」，一眼看出轉錄／摘要／分類做到哪',
+      en: 'Admin Queue Tab Gains "Processing Overview" — See Transcription / Summary / Topic Progress at a Glance',
+    },
+    summary: {
+      zh: '以前要知道「現在所有節目轉錄到第幾集了、AI 摘要補到哪、主題分類進度多少」，得自己下 SQL 或翻 log。這版在後台 Queue 分頁最上方加了「進度概覽」區塊：三條 progress bar 分別顯示轉錄、AI 摘要、主題分類的完成比例（分母是已 publish 的集數），下面再給最近 24 小時的新增量跟失敗任務數，需要時可展開看失敗的 task 名稱跟錯誤訊息範例。整塊每 30 秒自動更新一次，網路斷掉會顯示「更新失敗，重試中」但不影響底下原本的 queue 排程表。對 admin 來說，平常巡視一眼就知道 backfill 進度健不健康，不用再開 DB query。',
+      en: 'Previously, checking "how many episodes are transcribed across all shows, how many have AI summaries, how far along is topic classification" required ad-hoc SQL or log spelunking. This release adds a "Processing Overview" panel at the top of the admin Queue tab: three progress bars for transcription, AI summary, and topic classification (denominator = published episodes), plus a Last-24-Hours section showing newly-completed counts and any failed tasks, with an expandable view for task name + sample error message. Refreshes every 30 seconds; on network failure it shows a soft "Refresh failed, retrying" warning without disrupting the queue table below. Admins now get health-at-a-glance for backfill progress without opening a DB client.',
+    },
+    summaryBullets: {
+      zh: [
+        '新 endpoint `GET /admin/processing-stats`：admin role gate + CSRF，回傳轉錄／摘要／topic_seg 三維度的 episode/segment count 與 24h 變化、失敗統計',
+        '前端 `<ProcessingOverview>` 子元件接在 QueueTab 最上方，純 CSS progress bar，沒裝新 chart 套件',
+        '30 秒 polling，斷網時顯示警告 text 但不影響底下 queue 表',
+        '失敗清單可展開看 task_name × count × sample_error，方便快速 triage',
+      ],
+      en: [
+        'New `GET /admin/processing-stats` endpoint (admin role gate + CSRF) returns episode/segment counts, 24h deltas, and failure stats across transcription / summary / topic_seg dimensions',
+        'New `<ProcessingOverview>` component renders at the top of the Queue tab — pure-CSS progress bars, no new chart library added',
+        '30s polling with a soft "Refresh failed, retrying" warning on network errors that does not disrupt the queue table below',
+        'Expandable failure list shows task_name × count × sample_error for quick triage',
+      ],
+    },
+  },
   // ─── v1.7 — Retrieval Quality Fix (5/13–5/17) ───
   {
     date: '2026-05-17', slug: 'fix-eval-dataset-com-004-json-leak', milestone: 'v1.7', tag: 'fix',
