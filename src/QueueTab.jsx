@@ -1,3 +1,255 @@
+// ── Processing Overview block ──
+// Renders at the top of the Queue Tab. Shows three progress bars
+// (transcription / summary / topic segmentation) sourced from
+// GET /admin/processing-stats, polling every 30 seconds. On poll error
+// shows a small warning text without breaking the queue table below.
+// Spec: openspec/changes/backfill-progress-admin-tab/specs/...
+const PO_POLL_INTERVAL_MS = 30000;
+
+const _formatInt = (n) => {
+  if (typeof n !== 'number' || !Number.isFinite(n)) return '—';
+  return n.toLocaleString('en-US');
+};
+
+const _formatPct = (ratio) => {
+  if (typeof ratio !== 'number' || !Number.isFinite(ratio)) return '0.0%';
+  return (ratio * 100).toFixed(1) + '%';
+};
+
+const _formatTaipeiTime = (iso) => {
+  if (!iso) return '—';
+  try {
+    const d = new Date(iso);
+    // Convert to Asia/Taipei (UTC+8). toLocaleTimeString lets us pick the zone.
+    return d.toLocaleTimeString('en-GB', {
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZone: 'Asia/Taipei',
+    });
+  } catch {
+    return '—';
+  }
+};
+
+const ProgressRow = ({ label, sublabel, ratio, primary, secondary }) => {
+  const pct = Math.max(0, Math.min(1, ratio || 0)) * 100;
+  return (
+    <div style={{ marginBottom: 14 }}>
+      <div style={{
+        display: 'flex', alignItems: 'baseline', justifyContent: 'space-between',
+        gap: 12, marginBottom: 6, flexWrap: 'wrap',
+      }}>
+        <div style={{ color: TOKEN.text, fontSize: 13, fontWeight: 600 }}>
+          {label}
+          {sublabel && (
+            <span style={{ color: TOKEN.textMuted, fontWeight: 400, marginLeft: 8, fontSize: 12 }}>
+              {sublabel}
+            </span>
+          )}
+        </div>
+        <div style={{ color: TOKEN.textSecondary, fontSize: 12, fontVariantNumeric: 'tabular-nums' }}>
+          {primary}
+        </div>
+      </div>
+      <div style={{
+        height: 8, background: TOKEN.surfaceRaised, borderRadius: 4,
+        overflow: 'hidden', border: `1px solid ${TOKEN.surfaceBorder}`,
+      }}>
+        <div style={{
+          width: pct + '%',
+          height: '100%',
+          background: TOKEN.accent,
+          transition: 'width 0.3s ease',
+        }} />
+      </div>
+      {secondary && (
+        <div style={{ color: TOKEN.textMuted, fontSize: 11, marginTop: 4 }}>
+          {secondary}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const ProcessingOverview = ({ lang }) => {
+  const t = lang === 'zh';
+  const [stats, setStats] = React.useState(null);
+  const [pollError, setPollError] = React.useState(false);
+  const [showFailures, setShowFailures] = React.useState(false);
+  const [lastUpdated, setLastUpdated] = React.useState(null);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    const poll = async () => {
+      try {
+        const res = await apiFetch('/admin/processing-stats');
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const body = await res.json();
+        if (cancelled) return;
+        setStats(body);
+        setLastUpdated(body.as_of || new Date().toISOString());
+        setPollError(false);
+      } catch (e) {
+        if (!cancelled) setPollError(true);
+      }
+    };
+    poll();
+    const id = setInterval(poll, PO_POLL_INTERVAL_MS);
+    return () => { cancelled = true; clearInterval(id); };
+  }, []);
+
+  const containerStyle = {
+    background: TOKEN.surface,
+    border: `1px solid ${TOKEN.surfaceBorder}`,
+    borderRadius: 10,
+    padding: '16px 18px',
+    marginBottom: 20,
+  };
+
+  if (!stats && !pollError) {
+    return (
+      <div style={containerStyle}>
+        <div style={{ color: TOKEN.textMuted, fontSize: 13 }}>
+          {t ? '載入進度中…' : 'Loading progress…'}
+        </div>
+      </div>
+    );
+  }
+
+  const tx = stats?.transcription || { completed_episodes: 0, total_episodes: 0, ratio: 0 };
+  const sm = stats?.summary || { completed_episodes: 0, total_episodes: 0, ratio: 0 };
+  const tp = stats?.topic_seg || {
+    completed_segments: 0, total_segments: 0, ratio: 0,
+    completed_episodes: 0, total_episodes_with_transcript: 0, episode_ratio: 0,
+  };
+  const l24 = stats?.last_24h || { transcribed_episodes: 0, labeled_segments: 0, failures: [] };
+  const failures = l24.failures || [];
+  const failTotal = failures.reduce((acc, f) => acc + (f.count || 0), 0);
+
+  return (
+    <div style={containerStyle}>
+      <div style={{
+        display: 'flex', alignItems: 'baseline', justifyContent: 'space-between',
+        gap: 12, marginBottom: 14, flexWrap: 'wrap',
+      }}>
+        <div style={{ color: TOKEN.text, fontSize: 15, fontWeight: 700 }}>
+          {t ? '進度概覽' : 'Processing Overview'}
+        </div>
+        {pollError && (
+          <div style={{ color: '#f59e0b', fontSize: 11 }}>
+            {t ? '更新失敗，重試中…' : 'Update failed, retrying…'}
+          </div>
+        )}
+      </div>
+
+      {stats && (
+        <>
+          <ProgressRow
+            label={t ? '轉錄' : 'Transcription'}
+            ratio={tx.ratio}
+            primary={`${_formatInt(tx.completed_episodes)} / ${_formatInt(tx.total_episodes)} ${t ? '集' : 'eps'} (${_formatPct(tx.ratio)})`}
+          />
+          <ProgressRow
+            label={t ? '摘要' : 'Summary'}
+            ratio={sm.ratio}
+            primary={`${_formatInt(sm.completed_episodes)} / ${_formatInt(sm.total_episodes)} ${t ? '集' : 'eps'} (${_formatPct(sm.ratio)})`}
+          />
+          <ProgressRow
+            label={t ? '分類' : 'Topic'}
+            ratio={tp.ratio}
+            primary={`${_formatInt(tp.completed_segments)} / ${_formatInt(tp.total_segments)} ${t ? '段' : 'segs'} (${_formatPct(tp.ratio)})`}
+            secondary={
+              t
+                ? `(${_formatInt(tp.completed_episodes)} / ${_formatInt(tp.total_episodes_with_transcript)} 集已完整標完)`
+                : `(${_formatInt(tp.completed_episodes)} / ${_formatInt(tp.total_episodes_with_transcript)} eps fully labelled)`
+            }
+          />
+
+          <div style={{
+            borderTop: `1px solid ${TOKEN.surfaceBorder}`,
+            marginTop: 14, paddingTop: 12,
+            color: TOKEN.textSecondary, fontSize: 12,
+          }}>
+            <div style={{ marginBottom: 6, color: TOKEN.text, fontWeight: 600 }}>
+              {t ? '最近 24 小時' : 'Last 24 Hours'}
+            </div>
+            <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'center' }}>
+              <span>
+                {t ? `轉錄 +${_formatInt(l24.transcribed_episodes)} 集` : `Transcribed +${_formatInt(l24.transcribed_episodes)} eps`}
+              </span>
+              <span>
+                {t ? `分類 +${_formatInt(l24.labeled_segments)} 段` : `Labelled +${_formatInt(l24.labeled_segments)} segs`}
+              </span>
+              <span>
+                {t ? `失敗 ${_formatInt(failTotal)} 件` : `Failures ${_formatInt(failTotal)}`}
+              </span>
+              {failures.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setShowFailures(s => !s)}
+                  style={{
+                    background: 'transparent',
+                    border: `1px solid ${TOKEN.surfaceBorder}`,
+                    borderRadius: 6,
+                    padding: '4px 10px',
+                    color: TOKEN.textSecondary,
+                    fontSize: 11,
+                    cursor: 'pointer',
+                    fontFamily: 'inherit',
+                  }}
+                >
+                  {showFailures
+                    ? (t ? '收起失敗清單' : 'Hide Failures')
+                    : (t ? '查看失敗清單' : 'Show Failures')}
+                </button>
+              )}
+            </div>
+            {showFailures && failures.length > 0 && (
+              <div style={{
+                marginTop: 10, background: TOKEN.surfaceRaised,
+                border: `1px solid ${TOKEN.surfaceBorder}`, borderRadius: 6,
+                padding: '8px 12px',
+              }}>
+                <table style={{ width: '100%', fontSize: 11, color: TOKEN.textSecondary, borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr style={{ textAlign: 'left', color: TOKEN.textMuted }}>
+                      <th style={{ padding: '4px 8px', fontWeight: 600 }}>{t ? '任務' : 'Task'}</th>
+                      <th style={{ padding: '4px 8px', fontWeight: 600, width: 60 }}>{t ? '次數' : 'Count'}</th>
+                      <th style={{ padding: '4px 8px', fontWeight: 600 }}>{t ? '範例錯誤' : 'Sample Error'}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {failures.map((f, i) => (
+                      <tr key={i} style={{ borderTop: `1px solid ${TOKEN.surfaceBorder}` }}>
+                        <td style={{ padding: '4px 8px', wordBreak: 'break-all' }}>
+                          <code style={{ fontSize: 10 }}>{f.task_name}</code>
+                        </td>
+                        <td style={{ padding: '4px 8px', fontVariantNumeric: 'tabular-nums' }}>{f.count}</td>
+                        <td style={{ padding: '4px 8px', wordBreak: 'break-word' }}>
+                          {(f.sample_error || '').slice(0, 100)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          {lastUpdated && (
+            <div style={{
+              color: TOKEN.textMuted, fontSize: 11, marginTop: 10,
+              textAlign: 'right',
+            }}>
+              {t ? '上次更新：' : 'Last Updated: '}{_formatTaipeiTime(lastUpdated)} {t ? '台北' : 'Taipei'}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+};
+
 // Summary status badge — admin only. Hidden when transcript not yet completed.
 const SummaryBadge = ({ status, error, lang }) => {
   if (!status) return null;
@@ -477,6 +729,9 @@ const QueueTab = ({ lang }) => {
 
   return (
     <div>
+      {/* Processing progress overview — three progress bars + 24h delta */}
+      <ProcessingOverview lang={lang} />
+
       {/* Header: max_concurrent input */}
       <div style={{ display: 'flex', alignItems: 'flex-end', gap: 16, marginBottom: 24, padding: '16px 18px', background: TOKEN.surface, border: `1px solid ${TOKEN.surfaceBorder}`, borderRadius: 10 }}>
         <div>
