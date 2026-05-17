@@ -1222,6 +1222,35 @@ def _extract_answer_from_malformed_json(raw: str) -> str | None:
         return s.replace("\\n", "\n").replace('\\"', '"').replace("\\\\", "\\")
 
 
+def _unwrap_self_referential_json(answer: str) -> str:
+    """Unwrap a self-referential JSON answer string.
+
+    The LLM occasionally returns the entire chat-completion payload as a
+    JSON string assigned to the `answer` field, i.e. the outer JSON parses
+    cleanly but `answer` is itself `'{"answer":"<real answer>"}'`. When this
+    happens the judge sees the JSON wrapper instead of the prose and scores
+    the item incorrectly (R2.1 RCA found this on `thisno-core-com-004`).
+
+    Strategy: if `answer` looks like a JSON object (starts with `{`) and
+    parses to a dict containing a string `"answer"` key, return that inner
+    value. Otherwise return the original string untouched.
+    """
+    if not isinstance(answer, str):
+        return answer
+    s = answer.strip()
+    if not s.startswith("{"):
+        return answer
+    try:
+        parsed = _stdlib_json.loads(s)
+    except ValueError:
+        return answer
+    if isinstance(parsed, dict):
+        inner = parsed.get("answer")
+        if isinstance(inner, str):
+            return inner
+    return answer
+
+
 def strip_citations(text: str) -> str:
     """Remove every `[N]` / `[N,M,...]` bracket token (incl. preceding spaces).
 
@@ -1284,6 +1313,9 @@ def answer_with_chunks(
     try:
         parsed = _json.loads(raw)
         answer = parsed["answer"]
+        # Guard against LLM occasionally double-wrapping the answer as a
+        # JSON string (fix-eval-dataset-com-004-json-leak).
+        answer = _unwrap_self_referential_json(answer)
         used_ids = [str(k) for k in parsed.get("used_chunk_ids", [])]
         return answer, strip_citations(answer), used_ids
     except (ValueError, KeyError):
@@ -1293,5 +1325,6 @@ def answer_with_chunks(
         # all retrieved chunks fall through as citations.
         salvaged = _extract_answer_from_malformed_json(raw)
         if salvaged is not None:
+            salvaged = _unwrap_self_referential_json(salvaged)
             return salvaged, strip_citations(salvaged), []
         return raw, strip_citations(raw), []
