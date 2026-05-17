@@ -82,12 +82,17 @@ async def fetch_daily_usage(start: date, end: date) -> list["UsageSnapshot"]:
             ) as exc:
                 last_exc = exc
                 if attempt >= MAX_ATTEMPTS:
-                    logger.error(
-                        "aihub usage fetch failed after %d attempts: %r",
+                    # Upstream unreachable / unresponsive. Fail-open so the
+                    # hourly Beat tick still records openai etc. and we don't
+                    # spam alerts on a transient AI Hub outage. Loud WARNING
+                    # so the gap is visible in logs / dashboards.
+                    logger.warning(
+                        "aihub usage unreachable after %d attempts (%r); "
+                        "fail-open with empty snapshot list",
                         attempt,
                         exc,
                     )
-                    raise
+                    return []
                 backoff = BACKOFF_BASE_SECONDS ** attempt  # 2s, 4s
                 logger.warning(
                     "aihub usage attempt %d/%d failed (%r); retrying in %.1fs",
@@ -101,9 +106,19 @@ async def fetch_daily_usage(start: date, end: date) -> list["UsageSnapshot"]:
                 logger.error("aihub usage fetch failed (non-retryable): %r", exc)
                 raise
     if resp is None:  # pragma: no cover — defensive
-        raise RuntimeError(f"aihub usage fetch returned no response: {last_exc!r}")
+        return []
 
+    if resp.status_code >= 500:
+        # Upstream broken (502/503/504 etc). Same rationale as the timeout
+        # branch above: fail-open with WARNING, don't pollute alert pipeline.
+        logger.warning(
+            "aihub usage upstream %s (body=%s); fail-open with empty list",
+            resp.status_code,
+            resp.text[:200],
+        )
+        return []
     if resp.status_code != 200:
+        # 4xx — misconfiguration (auth, bad params). Stay loud so we notice.
         logger.error(
             "aihub usage non-200: status=%s body=%s",
             resp.status_code,

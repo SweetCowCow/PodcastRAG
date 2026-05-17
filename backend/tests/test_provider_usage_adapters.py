@@ -104,6 +104,58 @@ async def test_aihub_adapter_without_key_returns_empty(monkeypatch):
     assert snaps == []
 
 
+@pytest.mark.asyncio
+async def test_aihub_adapter_fails_open_on_5xx(monkeypatch, caplog):
+    monkeypatch.setenv("AIHUB_USAGE_KEY", "test-token")
+    _patch_client(monkeypatch, zeabur_aihub_adapter, _FakeResp(502, {}))
+    with caplog.at_level("WARNING"):
+        snaps = await zeabur_aihub_adapter.fetch_daily_usage(
+            date(2026, 5, 1), date(2026, 5, 10)
+        )
+    assert snaps == []
+    assert any("upstream 502" in r.message for r in caplog.records)
+
+
+@pytest.mark.asyncio
+async def test_aihub_adapter_raises_on_4xx(monkeypatch):
+    monkeypatch.setenv("AIHUB_USAGE_KEY", "test-token")
+    _patch_client(monkeypatch, zeabur_aihub_adapter, _FakeResp(401, {}))
+    with pytest.raises(httpx.HTTPStatusError):
+        await zeabur_aihub_adapter.fetch_daily_usage(
+            date(2026, 5, 1), date(2026, 5, 10)
+        )
+
+
+@pytest.mark.asyncio
+async def test_aihub_adapter_fails_open_on_timeout(monkeypatch, caplog):
+    monkeypatch.setenv("AIHUB_USAGE_KEY", "test-token")
+
+    class _TimeoutClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return False
+
+        async def get(self, *a, **kw):
+            raise httpx.ReadTimeout("")
+
+    monkeypatch.setattr(
+        zeabur_aihub_adapter.httpx, "AsyncClient", lambda *a, **kw: _TimeoutClient()
+    )
+    monkeypatch.setattr(zeabur_aihub_adapter.asyncio, "sleep", lambda *_: _noop())
+    with caplog.at_level("WARNING"):
+        snaps = await zeabur_aihub_adapter.fetch_daily_usage(
+            date(2026, 5, 1), date(2026, 5, 10)
+        )
+    assert snaps == []
+    assert any("unreachable" in r.message for r in caplog.records)
+
+
+async def _noop():
+    return None
+
+
 # ── OpenAI ────────────────────────────────────────────────────────────
 
 
