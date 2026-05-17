@@ -194,9 +194,68 @@ async def _revert_specific_rows_async(row_ids: set[str]) -> int:
     return reverted
 
 
+async def _revert_dispatcher_marked_rows_async() -> int:
+    """celery-routing-and-dispatcher-fix migration cutover hook.
+
+    Old dispatcher used to set status=running with started_at=NOW() and
+    later sometimes started_at=NULL during transitional bugs. New
+    dispatcher does NOT set status=running at all. Any row left in the
+    legacy state ``status=running AND started_at IS NULL`` after the
+    cutover is a ghost — reset it to pending so the new flow can re-pick.
+
+    This is conservative: rows with started_at set (even old) go through
+    the existing orphan-revert / stale-detect paths instead.
+    """
+    engine = create_async_engine(settings.database_url, poolclass=NullPool)
+    reverted = 0
+    try:
+        async with async_sessionmaker(engine, expire_on_commit=False)() as session:
+            rows = (
+                await session.execute(
+                    select(TranscriptionQueue).where(
+                        TranscriptionQueue.status == QueueStatus.running,
+                        TranscriptionQueue.started_at.is_(None),
+                    )
+                )
+            ).scalars().all()
+            for row in rows:
+                row.status = QueueStatus.pending
+                row.started_at = None
+                row.celery_task_id = None
+                row.error_message = None
+                try:
+                    release_global_slot(str(row.id))
+                except Exception:
+                    logger.exception(
+                        "lifecycle: release_global_slot failed for queue_id=%s",
+                        row.id,
+                    )
+                reverted += 1
+            if reverted:
+                await session.commit()
+    finally:
+        await engine.dispose()
+    return reverted
+
+
 @worker_ready.connect
 def _on_worker_ready(sender=None, **kwargs):
     try:
+        # celery-routing-and-dispatcher-fix: 先清掉 dispatcher 改寫前留下的
+        # status=running + started_at IS NULL ghost row，再跑既有 orphan-revert。
+        try:
+            n_legacy = asyncio.run(_revert_dispatcher_marked_rows_async())
+            if n_legacy:
+                logger.info(
+                    "lifecycle: worker_ready — reset %d dispatcher-marked rows "
+                    "(status=running, started_at IS NULL)",
+                    n_legacy,
+                )
+        except Exception:
+            logger.exception(
+                "lifecycle: worker_ready dispatcher-marked reset failed"
+            )
+
         active_ids, ok = _inspect_active_task_ids()
         n = _revert_orphan_rows(active_ids, ok)
         logger.info(

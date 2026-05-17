@@ -110,6 +110,9 @@ async def _mark_failed_from_on_failure(episode_id: str, exc: BaseException) -> N
     retry_backoff=True,
     retry_backoff_max=300,
     retry_jitter=True,
+    # celery-routing-and-dispatcher-fix: summary 走獨立 summary queue + 低 priority。
+    queue="summary",
+    priority=2,
 )
 def generate_episode_summary(self, episode_id: str) -> dict:
     return asyncio.run(_run(self, episode_id))

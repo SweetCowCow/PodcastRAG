@@ -35,6 +35,36 @@ celery_app.conf.update(
     timezone="UTC",
     enable_utc=True,
     broker_connection_retry_on_startup=True,
+    # ---- celery-routing-and-dispatcher-fix ----
+    # 4-queue routing: transcribe / topic / summary / control.
+    # control 收所有 cron / Beat / 雜事 task，不會被 backfill 擠住。
+    # task_default_queue=control 確保未來新 task 沒設 routes 時不會掉訊。
+    task_default_queue="control",
+    task_queue_max_priority=10,
+    task_default_priority=5,
+    # Redis broker priority sub-queue 粒度（low/default/medium/high）。
+    broker_transport_options={"priority_steps": [0, 3, 6, 9]},
+    task_routes={
+        "app.workers.tasks.transcribe_episode": {
+            "queue": "transcribe",
+            "priority": 9,
+        },
+        "app.workers.topic_task.classify_episode_topics": {
+            "queue": "topic",
+            "priority": 2,
+        },
+        "app.workers.summary_task.generate_episode_summary": {
+            "queue": "summary",
+            "priority": 2,
+        },
+        "app.workers.cron_tick.cron_tick": {"queue": "control"},
+        "app.workers.quota_digest.send_quota_digest": {"queue": "control"},
+        "app.workers.eval_reminder.send_eval_reminder": {"queue": "control"},
+        "app.workers.db_backup.run_db_backup": {"queue": "control"},
+        "app.workers.tokenizer_reload.broadcast_reload": {"queue": "control"},
+        "app.workers.usage_collector.collect_provider_usage": {"queue": "control"},
+        "app.workers.usage_alert.evaluate_usage_thresholds": {"queue": "control"},
+    },
     beat_schedule={
         "cron-tick": {
             "task": "app.workers.cron_tick.cron_tick",

@@ -49,6 +49,9 @@ TOPIC_TRANSIENT_ERRORS = (
     retry_backoff=True,
     retry_backoff_max=300,
     retry_jitter=True,
+    # celery-routing-and-dispatcher-fix: topic backfill 走獨立 topic queue + 低 priority。
+    queue="topic",
+    priority=2,
 )
 def classify_episode_topics(self, episode_id: str) -> dict:
     return asyncio.run(_run(episode_id))

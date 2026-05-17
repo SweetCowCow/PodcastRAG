@@ -3,7 +3,7 @@ import logging
 import os
 import subprocess
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import httpx
 import openai
@@ -39,6 +39,25 @@ logger = logging.getLogger(__name__)
 
 ERROR_MESSAGE_MAX_LEN = 2000
 
+# celery-routing-and-dispatcher-fix: worker idempotency window. 若 row 已
+# status=running 且 started_at 在這個區間內，視為仍在處理 → 直接 ack。
+WORKER_CLAIM_STALE_AFTER = timedelta(minutes=5)
+
+
+class ClaimDecision:
+    PROCEED = "proceed"
+    SKIP_DUPLICATE = "skip_duplicate"
+    SKIP_TERMINAL = "skip_terminal"
+    NOT_FOUND = "not_found"
+    RECLAIMED = "reclaimed"
+
+
+_TERMINAL_STATES = {
+    QueueStatus.completed,
+    QueueStatus.failed,
+    QueueStatus.cancelled,
+}
+
 TRANSIENT_ERRORS = (
     httpx.HTTPError,
     httpx.TimeoutException,
@@ -67,23 +86,28 @@ PERMANENT_ERRORS = (
     retry_backoff=True,
     retry_backoff_max=300,
     retry_jitter=True,
+    # celery-routing-and-dispatcher-fix: transcribe 走獨立 transcribe queue + 高 priority。
+    queue="transcribe",
+    priority=9,
 )
 def transcribe_episode(self, episode_id: str) -> dict:
-    queue_row_id, already_cancelled = asyncio.run(
-        _write_celery_task_id(episode_id, self.request.id)
+    # celery-routing-and-dispatcher-fix: atomic idempotent entry.
+    # 任何重複 task / cancelled row / 不存在 row 都在這裡 ack & exit，
+    # 後續才碰外部 I/O（Whisper / OpenAI）。
+    queue_row_id, decision = asyncio.run(
+        _claim_queue_row(episode_id, self.request.id)
     )
-    if already_cancelled:
-        logger.info(
-            "transcribe_episode: queue row for %s already cancelled — exiting",
-            episode_id,
-        )
-        return {"status": "cancelled", "episode_id": episode_id}
-    if queue_row_id is None:
+    if decision == ClaimDecision.NOT_FOUND:
         logger.error(
             "transcribe_episode: queue row for %s 不存在",
             episode_id,
         )
         return {"status": "not_found", "episode_id": episode_id}
+    if decision == ClaimDecision.SKIP_DUPLICATE:
+        return {"status": "duplicate_skipped", "episode_id": episode_id}
+    if decision == ClaimDecision.SKIP_TERMINAL:
+        return {"status": "cancelled", "episode_id": episode_id}
+    # PROCEED / RECLAIMED → continue. row now has status=running + this task_id.
 
     show_id = asyncio.run(_lookup_show_id(episode_id))
     if show_id is None:
@@ -98,7 +122,6 @@ def transcribe_episode(self, episode_id: str) -> dict:
         if not acquire_show_lock(show_id):
             raise self.retry(countdown=60, max_retries=None)
         try:
-            asyncio.run(_mark_queue_started(episode_id))
             return asyncio.run(_run(episode_id))
         finally:
             release_show_lock(show_id)
@@ -136,6 +159,84 @@ async def _write_celery_task_id(
             row.celery_task_id = task_id
             await session.commit()
             return str(row.id), row.status == QueueStatus.cancelled
+    finally:
+        await engine.dispose()
+
+
+async def _claim_queue_row(
+    episode_id: str, task_id: str
+) -> tuple[str | None, str]:
+    """Atomic idempotent entry: lock the queue row and decide whether to run.
+
+    celery-routing-and-dispatcher-fix: dispatcher 不再預先 set running，
+    所以 worker task 進場時必須自己 transition row。用 SELECT FOR UPDATE
+    防止同一 episode 兩個 task 同時通過 check。
+
+    Returns ``(queue_row_id, decision)`` where decision is one of:
+    - ``PROCEED`` — claimed pending row; row now status=running with this task id
+    - ``SKIP_DUPLICATE`` — another live task is already processing (within 5 min)
+    - ``RECLAIMED`` — row was running but went stale (>5 min); took ownership
+    - ``SKIP_TERMINAL`` — row is cancelled/completed/failed; nothing to do
+    - ``NOT_FOUND`` — no queue row exists for this episode
+    """
+    ep_uuid = uuid.UUID(episode_id)
+    engine = create_async_engine(settings.database_url, poolclass=NullPool)
+    try:
+        async with async_sessionmaker(engine, expire_on_commit=False)() as session:
+            row = (
+                await session.execute(
+                    select(TranscriptionQueue)
+                    .where(TranscriptionQueue.episode_id == ep_uuid)
+                    .with_for_update()
+                )
+            ).scalar_one_or_none()
+            if row is None:
+                return None, ClaimDecision.NOT_FOUND
+
+            row_id = str(row.id)
+            now = datetime.now(timezone.utc)
+
+            if row.status in _TERMINAL_STATES or row.status == QueueStatus.ignored:
+                # cancelled / completed / failed / ignored → ack & return
+                return row_id, ClaimDecision.SKIP_TERMINAL
+
+            if row.status == QueueStatus.running:
+                started_at = row.started_at
+                # 視同 live 的條件：started_at 在 5 min 內。
+                if started_at is not None:
+                    # Normalize tz so naive timestamps from old rows compare safely.
+                    if started_at.tzinfo is None:
+                        started_at = started_at.replace(tzinfo=timezone.utc)
+                    if now - started_at <= WORKER_CLAIM_STALE_AFTER:
+                        logger.warning(
+                            "transcribe_episode: duplicate task for episode=%s "
+                            "(existing_task=%s, this_task=%s, started_at=%s) — ack & skip",
+                            episode_id,
+                            row.celery_task_id,
+                            task_id,
+                            started_at.isoformat(),
+                        )
+                        return row_id, ClaimDecision.SKIP_DUPLICATE
+                # 視同 stale：started_at IS NULL 或 > 5 min → 取回所有權。
+                logger.warning(
+                    "transcribe_episode: reclaiming stale running row for "
+                    "episode=%s (prev_task=%s, this_task=%s, started_at=%s)",
+                    episode_id,
+                    row.celery_task_id,
+                    task_id,
+                    started_at.isoformat() if started_at else "NULL",
+                )
+                row.started_at = now
+                row.celery_task_id = task_id
+                await session.commit()
+                return row_id, ClaimDecision.RECLAIMED
+
+            # status == pending → 正常通路
+            row.status = QueueStatus.running
+            row.started_at = now
+            row.celery_task_id = task_id
+            await session.commit()
+            return row_id, ClaimDecision.PROCEED
     finally:
         await engine.dispose()
 

@@ -17,7 +17,6 @@ Run via:  ``python -m app.workers.dispatcher``
 import asyncio
 import logging
 import signal
-from datetime import datetime, timezone
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
@@ -41,7 +40,17 @@ def _request_shutdown(*_args) -> None:
 
 
 async def _try_pop_one(session) -> str | None:
-    """Pop the lowest-position pending row, transition to running.
+    """Pop the lowest-position pending row and send to Celery broker.
+
+    celery-routing-and-dispatcher-fix:
+    - Dispatcher 不再 set status=running / started_at / celery_task_id。
+      這些欄位 defer 給 worker task entry 的 idempotency routine 處理，
+      確保 DB status 真正反映 worker 狀態（stale-detect 才不會被騙）。
+    - Concurrency cap 仍以 `status='running'` row count 為分母（即真正被
+      worker pick up 的 row），dispatcher 只送 task，不預先佔位。
+    - 因為不再 update row，這裡用一般 SELECT 即可；下一輪 poll 看到同一
+      row 仍 pending 也沒關係（worker entry 的 SELECT FOR UPDATE 會
+      做唯一性檢查）。Celery broker priority 會避免短時間內無限 enqueue。
 
     Returns the popped episode_id (str) or None if nothing eligible.
     """
@@ -62,15 +71,12 @@ async def _try_pop_one(session) -> str | None:
         )
         .order_by(TranscriptionQueue.position.asc())
         .limit(1)
-        .with_for_update(skip_locked=True)
     )
     row = (await session.execute(stmt)).scalar_one_or_none()
     if row is None:
         return None
 
-    row.status = QueueStatus.running
-    row.started_at = datetime.now(timezone.utc)
-    await session.commit()
+    # No DB write — worker entry transitions row to running atomically.
     return str(row.episode_id)
 
 
