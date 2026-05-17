@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.api.admin import router as admin_router
+from app.api.admin_processing_stats import router as admin_processing_stats_router
 from app.api.auth import me_router as me_router
 from app.api.auth import router as auth_router
 from app.schemas.errors import ErrorCode, ErrorResponse
@@ -122,6 +123,7 @@ app.include_router(episodes_router)
 app.include_router(transcripts_router)
 app.include_router(query_router)
 app.include_router(admin_router)
+app.include_router(admin_processing_stats_router)
 app.include_router(queue_router)
 app.include_router(settings_router)
 app.include_router(users_router)
