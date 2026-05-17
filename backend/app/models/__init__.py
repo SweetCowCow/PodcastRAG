@@ -11,6 +11,10 @@ from app.models.tokenizer_term import TokenizerCustomTerm
 from app.models.transcript_chunk import TranscriptChunk
 from app.models.transcript_segment import TranscriptSegment
 from app.models.event import Event
+from app.models.provider_usage_snapshot import (
+    ProviderUsageSnapshot,
+    UsageAlertLog,
+)
 from app.models.qa_feedback import QAFeedback
 from app.models.quota_request import QuotaRequest, QuotaRequestStatus
 from app.models.transcription_queue import QueueStatus, TranscriptionQueue
@@ -43,4 +47,6 @@ __all__ = [
     "QuotaRequestStatus",
     "QAFeedback",
     "Event",
+    "ProviderUsageSnapshot",
+    "UsageAlertLog",
 ]

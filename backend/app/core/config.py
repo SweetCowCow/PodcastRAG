@@ -71,6 +71,16 @@ class Settings(BaseSettings):
     zsend_from_email: str | None = None
     zsend_admin_to_email: str | None = None  # comma-separated for multiple recipients
 
+    # Multi-provider usage monitoring (multi-provider-usage-monitoring change).
+    # - aihub_usage_key / openai_org_admin_key: provider auth tokens. When unset
+    #   the respective adapter logs a warning and returns [] (fail-open).
+    # - provider_budget_usd_monthly_*: per-provider monthly budgets in USD.
+    #   v1 hardcoded defaults; tuneable via env. v2 will add admin UI editor.
+    openai_org_admin_key: str | None = None
+    aihub_usage_key: str | None = None
+    provider_budget_usd_monthly_aihub: float = 80.0
+    provider_budget_usd_monthly_openai: float = 30.0
+
     @field_validator("e2e_login_token")
     @classmethod
     def _validate_e2e_login_token(cls, v: str | None) -> str | None:
@@ -89,6 +99,15 @@ class Settings(BaseSettings):
     @property
     def frontend_origin_list(self) -> list[str]:
         return [o.strip() for o in self.frontend_origin.split(",") if o.strip()]
+
+    @property
+    def provider_budget_usd_monthly(self) -> dict[str, float]:
+        """Per-provider monthly budget in USD. Returned as a dict so the
+        usage-alert task and admin REST endpoint can iterate generically."""
+        return {
+            "aihub": self.provider_budget_usd_monthly_aihub,
+            "openai": self.provider_budget_usd_monthly_openai,
+        }
 
     @property
     def admin_email_set(self) -> set[str]:
