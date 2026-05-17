@@ -149,11 +149,21 @@ const ProviderSummaryCard = ({ lang, provider, info, color }) => {
   const ratio = info.ratio || 0;
   const ratioPct = (ratio * 100).toFixed(1);
   const fillW = Math.min(100, ratio * 100);
+  const dashboardLink = PROVIDER_DASHBOARD_LINKS[provider];
+  const dashboardLabel = provider === 'openai'
+    ? (t ? 'OpenAI dashboard ↗' : 'OpenAI dashboard ↗')
+    : (t ? 'Zeabur AI Hub ↗' : 'Zeabur AI Hub ↗');
   return (
     <div style={{ background: TOKEN.surface, border: `1px solid ${TOKEN.surfaceBorder}`, borderRadius: 10, padding: 16 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
         <span style={{ width: 10, height: 10, background: color, borderRadius: '50%', display: 'inline-block' }} />
-        <span style={{ color: TOKEN.text, fontWeight: 700, fontSize: 14 }}>{provider}</span>
+        <span style={{ color: TOKEN.text, fontWeight: 700, fontSize: 14, flex: 1 }}>{provider}</span>
+        {dashboardLink && (
+          <a href={dashboardLink} target="_blank" rel="noopener noreferrer"
+            style={{ color: TOKEN.textSecondary, fontSize: 11, textDecoration: 'none' }}>
+            {dashboardLabel}
+          </a>
+        )}
       </div>
       <div style={{ color: TOKEN.text, fontSize: 22, fontWeight: 700, marginBottom: 2 }}>
         ${info.accumulated_usd.toFixed(2)}
