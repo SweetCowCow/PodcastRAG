@@ -534,11 +534,13 @@
         "599fd9d9-3880-4cae-93cf-fef40d9df74e",
         "92d7dea0-acca-4228-afcc-0a35a0d3f895",
         "38d496c3-98e2-48f4-ba3e-c19e74545653",
-        "de2b05eb-1842-4073-8137-fc065ffa9b53"
+        "de2b05eb-1842-4073-8137-fc065ffa9b53",
+        "b46bedb7-2832-4024-936e-60349fa60c55",
+        "ac0d81d7-9859-4984-93fc-31301335e2f6"
       ],
       "sentinel": false,
       "source_episode_id": "fa604fe3-20f5-47d4-a82c-2a48aa11028d",
-      "notes": "Cross-episode 子型 B（純 metadata 列舉）。Golden answer = 25 集標題含「歌單」（DB query 2026-05-13）。Cell: 歌單 × 混合（有/無來賓都含）。預期評估方式：retrieved chunks → unique episode set → recall vs expected_episode_ids；hit 門檻初步定 60%（15/25 集）。⚠️ 評估 runner 尚未實作 enumeration scope — 需要新 evaluator path 才能跑這題（建議併入 R3.3 metadata-filter 那個 change）。本題剛好驗證 R3.3 是否解掉 catalog-wide 召回痛點。2026-05-13 user co-drafted。"
+      "notes": "Cross-episode 子型 B（純 metadata 列舉）。Golden answer = 27 集（2026-05-17 audit 由 25 集擴成 27 集）。原 25 集 = 標題含「歌單」（DB query 2026-05-13）；新增 2 集為 EP43 金屬樂、EP12 KPOP — 標題沒「歌單」但 description 以「歌單 Playist 整理給大家」格式列出曲目，屬實質歌單集（user 確認）。對照排除：EP60「走正路」、EP93「從荷蘭回來」description 雖出現「歌單」但僅順帶提及（推 Spotify playlist / 閒聊夢幻名單），非歌單主題集，維持不列入。Cell: 歌單 × 混合（有/無來賓都含）。預期評估方式：retrieved chunks → unique episode set → recall vs expected_episode_ids；hit 門檻初步定 60%。⚠️ 評估 runner 尚未實作 enumeration scope — 需要新 evaluator path 才能跑這題（建議併入 R3.3 metadata-filter 那個 change）。本題剛好驗證 R3.3 是否解掉 catalog-wide 召回痛點。2026-05-13 user co-drafted；2026-05-17 user audit。"
     },
     {
       "id": "q30-no-yang-dazheng-opens-restaurant",
