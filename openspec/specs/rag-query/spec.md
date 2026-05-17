@@ -319,8 +319,8 @@ The backend SHALL expose `POST /shows/{show_id}/query` guarded by `require_authe
 
 - **GIVEN** a chat query `"歌單那幾集"` whose entity extractor returns `{guests: [], date_range: null, topics: ["歌單"]}`
 - **WHEN** the chat endpoint processes the query
-- **THEN** `enumeration_episodes` SHALL contain all episodes whose `episode_description_chunks.text_tsvector @@ to_tsquery('simple', '歌單')` matches
-- **AND** `enumeration_total` SHALL equal the length of that list
+- **THEN** `enumeration_episodes` SHALL contain all episodes whose `episodes.title_tsvector @@ to_tsquery('simple', '歌單')` matches, OR whose `episode_description_chunks.text_tsvector @@ to_tsquery('simple', '歌單')` matches (set union by `episodes.id`)
+- **AND** `enumeration_total` SHALL equal the length of that distinct list
 - **AND** the response SHALL NOT fall back to "list every episode of the show"
 
 #### Scenario: Guest filter narrows retrieval AND grounds answer
@@ -338,12 +338,29 @@ The backend SHALL expose `POST /shows/{show_id}/query` guarded by `require_authe
 
 ```
 
+## 相關集數清單（共 2 集）
+這個問題的搜尋結果鎖定以下集數，作為你回答的依據：
+1. EP143「從餐廳請客到自家廚房」(2026-04-29, ft. 馬世芳)
+2. EP140「高雄美食第二彈」(2026-04-15)
+
+```
+
+
+<!-- @trace
+source: enumeration-topic-finder-include-title
+updated: 2026-05-17
+code:
+  - backend/eval/datasets/this-not-that-cool.json.bak-20260515T060258Z
+-->
+
 ---
 ### Requirement: Topic-driven enumeration finder pre-tokenises LLM phrases with jieba
 
 `find_episodes_by_topic(db, show_id, topic_terms)` SHALL jieba-tokenise each input `topic_terms` entry before constructing the `to_tsquery('simple', :tsquery_text)` argument. Each per-term jieba token of length ≥ 2 that is NOT in `TOPIC_STOPWORDS` SHALL contribute to the tsquery; per-term tokens are deduplicated across all input terms (first occurrence wins). When jieba produces zero useful tokens for a given term (e.g. the term is all stopwords or all single-char particles), the raw term SHALL be retained as a fallback so the LLM's signal is not silently dropped.
 
-Rationale: `episode_description_chunks.text_tsvector` is built from a jieba-tokenised stream (per R3.1 `description_indexer.py`), so the lexemes stored are per-word tokens like `高雄` and `美食`. Postgres `simple` analyzer does NOT segment CJK, so passing a multi-character LLM-extracted phrase like `"高雄美食"` directly to `to_tsquery('simple', '高雄美食')` matches ZERO rows even when descriptions clearly contain those topics — the corpus stores `高雄` and `美食` as separate lexemes. Pre-tokenising at the finder level closes the impedance mismatch.
+The constructed tsquery SHALL be matched against BOTH `episodes.title_tsvector` AND `episode_description_chunks.text_tsvector`. An episode SHALL be returned if its `title_tsvector` matches the tsquery OR if at least one of its `episode_description_chunks.text_tsvector` rows matches. The returned `list[EpisodeRef]` SHALL be distinct by `episodes.id` (no episode appears twice when both pools match) and ordered by `published_at DESC NULLS LAST`.
+
+Rationale: `episode_description_chunks.text_tsvector` is built from a jieba-tokenised stream (per R3.1 `description_indexer.py`) and `episodes.title_tsvector` is built from the same jieba tokenizer (per R3.3 Phase 8 `sync._title_tsv_expr`), so the lexemes stored are per-word tokens like `高雄` and `美食`. Postgres `simple` analyzer does NOT segment CJK, so passing a multi-character LLM-extracted phrase like `"高雄美食"` directly to `to_tsquery('simple', '高雄美食')` matches ZERO rows even when descriptions clearly contain those topics — the corpus stores `高雄` and `美食` as separate lexemes. Pre-tokenising at the finder level closes the impedance mismatch. Including the title pool alongside description chunks closes a separate gap (observed in 2026-05-17 q25 audit): 6 episodes (EP19 / EP84 / EP87 / EP89 / EP96 / EP108) whose titles contain `歌單` but whose descriptions do not — these were silently missing from enumeration results when the finder only consulted description chunks.
 
 #### Scenario: Multi-character LLM topic phrase is split into component words
 
@@ -366,6 +383,31 @@ Rationale: `episode_description_chunks.text_tsvector` is built from a jieba-toke
 - **WHEN** the finder constructs the tsquery
 - **THEN** `美食` SHALL appear exactly once in the final OR list (first occurrence kept)
 - **AND** the `:tsquery_text` parameter SHALL be `"高雄 | 美食 | 地圖"`
+
+#### Scenario: Title-only match surfaces episode missing from description corpus
+
+- **GIVEN** an episode whose `title` contains `歌單` (its `title_tsvector` includes the `歌單` lexeme) AND whose `episode_description_chunks.text_tsvector` rows do NOT contain the `歌單` lexeme
+- **WHEN** `find_episodes_by_topic(db, show_id, ["歌單"])` is invoked
+- **THEN** the returned list SHALL include that episode
+- **AND** the episode SHALL appear exactly once (not duplicated)
+
+##### Example: q25 audit recovery
+
+- **GIVEN** the 6 episodes EP19 / EP84 / EP87 / EP89 / EP96 / EP108 whose titles contain `歌單` but whose descriptions do not
+- **WHEN** `find_episodes_by_topic(db, show_id, ["歌單"])` is invoked against the prod corpus
+- **THEN** all 6 episodes SHALL be present in the returned list (alongside the previously-matched description-only and title-and-description episodes)
+
+#### Scenario: Description-only match still returned (regression guard)
+
+- **GIVEN** an episode whose `title` does NOT contain the topic term AND at least one of its `episode_description_chunks.text_tsvector` rows DOES contain the term
+- **WHEN** `find_episodes_by_topic(db, show_id, [term])` is invoked
+- **THEN** the returned list SHALL include that episode (existing behavior preserved after the SQL rewrite)
+
+#### Scenario: Episode matching both pools appears exactly once
+
+- **GIVEN** an episode whose `title_tsvector` matches the tsquery AND whose `episode_description_chunks.text_tsvector` also matches the same tsquery
+- **WHEN** `find_episodes_by_topic(db, show_id, [term])` is invoked
+- **THEN** the returned list SHALL contain that episode exactly once (distinct by `episodes.id`)
 
 ## 相關集數清單（共 2 集）
 這個問題的搜尋結果鎖定以下集數，作為你回答的依據：
@@ -453,6 +495,14 @@ code:
 
 <!-- @trace
 source: enumeration-rule-pattern-broaden
+updated: 2026-05-17
+code:
+  - backend/eval/datasets/this-not-that-cool.json.bak-20260515T060258Z
+-->
+
+
+<!-- @trace
+source: enumeration-topic-finder-include-title
 updated: 2026-05-17
 code:
   - backend/eval/datasets/this-not-that-cool.json.bak-20260515T060258Z
