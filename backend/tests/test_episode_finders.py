@@ -203,6 +203,95 @@ async def test_find_by_topic_dedupes_across_terms():
 
 
 @pytest.mark.asyncio
+async def test_find_episodes_by_topic_title_only_match():
+    """enumeration-topic-finder-include-title: when an episode's title
+    contains the topic term but none of its description chunks do, the
+    finder MUST still return that episode. SQL-level assertion: the
+    rewritten _TOPIC_SQL MUST include `title_tsvector @@ to_tsquery(...)`
+    so the title pool is consulted; mock row assertion: when the DB
+    returns such an episode it is packaged into the EpisodeRef list."""
+    title_only_ep_id = uuid.uuid4()
+    db = _mock_db_with_rows([{
+        "id": title_only_ep_id,
+        "title": "EP19｜在通往世界最強的路上，意外撿到的動漫歌單",
+        "published_at": None,
+        "guests": [],
+        "ai_summary": None,
+    }])
+    out = await episode_finders.find_episodes_by_topic(
+        db, uuid.uuid4(), ["歌單"]
+    )
+    sql_str = str(db.execute.call_args[0][0])
+    # Title pool consulted in the new SQL
+    assert "title_tsvector @@ to_tsquery('simple', :tsquery_text)" in sql_str
+    # The title-only row is surfaced
+    assert len(out) == 1
+    assert out[0].episode_id == title_only_ep_id
+
+
+@pytest.mark.asyncio
+async def test_find_episodes_by_topic_description_only_match():
+    """Regression guard for enumeration-topic-finder-include-title: an
+    episode that previously matched via description chunks (title does
+    not contain the term) MUST still be returned after the SQL rewrite.
+    The new EXISTS clause MUST still query `episode_description_chunks`
+    with the same tsquery."""
+    desc_only_ep_id = uuid.uuid4()
+    db = _mock_db_with_rows([{
+        "id": desc_only_ep_id,
+        "title": "EP140｜高雄美食第二彈",
+        "published_at": None,
+        "guests": [],
+        "ai_summary": None,
+    }])
+    out = await episode_finders.find_episodes_by_topic(
+        db, uuid.uuid4(), ["美食"]
+    )
+    sql_str = str(db.execute.call_args[0][0])
+    # Description pool still consulted via EXISTS subquery
+    assert "EXISTS" in sql_str
+    assert "episode_description_chunks" in sql_str
+    assert "d.text_tsvector @@ to_tsquery('simple', :tsquery_text)" in sql_str
+    # The description-only row is surfaced
+    assert len(out) == 1
+    assert out[0].episode_id == desc_only_ep_id
+
+
+@pytest.mark.asyncio
+async def test_find_episodes_by_topic_both_match_dedup():
+    """When an episode's title AND its description chunks both contain
+    the topic term, the rewritten SQL MUST return the episode exactly
+    once (distinct by `episodes.id`). The EXISTS-OR form is distinct by
+    design (each `episodes` row evaluated once); this test pins that
+    contract by asserting the SQL drives off `episodes` without joining
+    description chunks (which would multiply rows on N matching chunks)
+    and uses a top-level OR rather than UNION ALL."""
+    both_ep_id = uuid.uuid4()
+    # If DB-level dedup were broken, a JOIN against description_chunks
+    # would surface N rows for N matching chunks. The EXISTS-OR form
+    # ensures one row per episode regardless of chunk count, so the
+    # mock returns one row to mirror that contract.
+    db = _mock_db_with_rows([{
+        "id": both_ep_id,
+        "title": "EP143｜歌單之夜",
+        "published_at": None,
+        "guests": [],
+        "ai_summary": None,
+    }])
+    out = await episode_finders.find_episodes_by_topic(
+        db, uuid.uuid4(), ["歌單"]
+    )
+    sql_str = str(db.execute.call_args[0][0])
+    # No JOIN on description_chunks (would multiply rows); only EXISTS
+    assert "JOIN episode_description_chunks" not in sql_str
+    # No UNION ALL (we picked EXISTS-OR per design Decision 1)
+    assert "UNION ALL" not in sql_str
+    # Episode surfaces exactly once
+    assert len(out) == 1
+    assert out[0].episode_id == both_ep_id
+
+
+@pytest.mark.asyncio
 async def test_find_by_topic_escapes_tsquery_operators():
     """Stray tsquery operators inside a LLM-extracted topic must not
     blow up to_tsquery — they are replaced with whitespace."""

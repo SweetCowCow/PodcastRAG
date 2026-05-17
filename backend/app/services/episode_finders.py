@@ -112,22 +112,20 @@ async def find_episodes_by_guest(
 
 
 _TOPIC_SQL = """
-SELECT DISTINCT ON (e.id)
-       e.id, e.title, e.published_at, e.guests, e.ai_summary
+SELECT e.id, e.title, e.published_at, e.guests, e.ai_summary
 FROM episodes e
-JOIN episode_description_chunks d ON d.episode_id = e.id
 WHERE e.show_id = :show_id
-  AND d.text_tsvector IS NOT NULL
-  AND d.text_tsvector @@ to_tsquery('simple', :tsquery_text)
-ORDER BY e.id, e.published_at DESC NULLS LAST
-"""
-
-
-_TOPIC_SQL_OUTER_ORDER = """
-SELECT * FROM (
-""" + _TOPIC_SQL + """
-) ranked
-ORDER BY published_at DESC NULLS LAST
+  AND (
+    (e.title_tsvector IS NOT NULL
+     AND e.title_tsvector @@ to_tsquery('simple', :tsquery_text))
+    OR EXISTS (
+      SELECT 1 FROM episode_description_chunks d
+      WHERE d.episode_id = e.id
+        AND d.text_tsvector IS NOT NULL
+        AND d.text_tsvector @@ to_tsquery('simple', :tsquery_text)
+    )
+  )
+ORDER BY e.published_at DESC NULLS LAST
 """
 
 
@@ -136,12 +134,16 @@ async def find_episodes_by_topic(
     show_id: uuid.UUID,
     topic_terms: list[str],
 ) -> list[EpisodeRef]:
-    """Episodes whose `episode_description_chunks.text_tsvector` matches
-    ANY of `topic_terms` (terms OR-joined into the tsquery).
+    """Episodes whose `episodes.title_tsvector` OR any of its
+    `episode_description_chunks.text_tsvector` rows match ANY of
+    `topic_terms` (terms OR-joined into the tsquery).
 
-    Hits `episode_description_chunks`, NOT `transcript_chunks` — see
-    design.md Decision 2: description chunks are summary-dense, transcript
-    chunks would over-match on every passing mention of a generic word.
+    Hits `episodes.title_tsvector` + `episode_description_chunks`, but
+    NOT `transcript_chunks` — both pools are metadata / summary-dense;
+    transcript chunks would over-match on every passing mention of a
+    generic word. Title was added by `enumeration-topic-finder-include-title`
+    to recover episodes whose topic appears only in the title (e.g. the
+    six 「歌單」 episodes from the 2026-05-17 q25 audit).
 
     Empty `topic_terms` returns `[]` (same safety contract as the guest
     finder). Falsy / whitespace-only terms are dropped before the
@@ -197,7 +199,7 @@ async def find_episodes_by_topic(
         "show_id": show_id,
         "tsquery_text": tsquery_text,
     }
-    result = await db.execute(text(_TOPIC_SQL_OUTER_ORDER), params)
+    result = await db.execute(text(_TOPIC_SQL), params)
     return [_row_to_episode_ref(row) for row in result.mappings()]
 
 
