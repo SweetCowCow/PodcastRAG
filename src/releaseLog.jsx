@@ -51,6 +51,31 @@ const MILESTONE_LABELS = {
 const RELEASE_LOG = [
   // ─── v1.7 — Retrieval Quality Fix (5/13–5/18) ───
   {
+    date: '2026-05-18', slug: 'multi-provider-usage-monitoring', milestone: 'v1.7', tag: 'enhancement',
+    title: {
+      zh: '後台多了「服務用量」分頁，看 OpenAI 月花費 + 預算超標自動寄信告警',
+      en: 'Admin Gets "Service Usage" Tab — OpenAI Monthly Spend + Auto Budget Alerts',
+    },
+    summary: {
+      zh: '以前 admin 要知道這個月在 OpenAI 跟 Zeabur AI Hub 上燒了多少錢，得分別開兩個外部後台手動翻。這版在後台多了「服務用量」分頁：上方雙 banner（黃色 ≥ 80%、紅色 ≥ 95%）即時顯示每個 provider 累積花費 vs 預算（v1 hardcoded：AI Hub $80 / OpenAI $30），下面是 30 天 stacked bar chart 視覺化日支出。每天台北 09:00 跑 alert worker，達 80% / 95% 自動寄信告警（per-day 去重不洗信箱）。OpenAI 那邊接通了直接從官方 organization/costs API 拉資料；AI Hub 那邊本來打算抓 `aihub.zeabur.app/v1/usage`，但發現是猜錯的 endpoint（正確是 Zeabur GraphQL `aihubMonthlyUsage`），所以這版 AI Hub 那一欄會空白、collector 走 fail-open 不阻塞 OpenAI 寫入，AI Hub 真實接入會在下個 follow-up change 補完。同場加映：每次 commit 前都會 gitleaks 掃 secret 不會把 key 寫進歷史。',
+      en: 'Previously, to know how much was spent on OpenAI and Zeabur AI Hub this month, admins had to open two separate external dashboards. This release adds a "Service Usage" tab: dual banners at the top (yellow ≥ 80%, red ≥ 95%) showing per-provider monthly spend vs budget (v1 hardcoded: AI Hub $80 / OpenAI $30), with a 30-day stacked bar chart below. An alert worker runs daily at 09:00 Taipei and sends email alerts at 80% / 95% thresholds (deduped per day so the inbox stays sane). OpenAI is fully wired up via the organization/costs API; AI Hub was initially pointed at `aihub.zeabur.app/v1/usage` which turned out to be a guessed endpoint that does not exist (the correct one is Zeabur GraphQL `aihubMonthlyUsage`), so AI Hub column will be blank in this version and the collector now fail-opens on 5xx/timeout instead of polluting alerts. The AI Hub real wiring lands in a follow-up change.',
+    },
+    summaryBullets: {
+      zh: [
+        '後台「服務用量」分頁：黃 80% / 紅 95% 兩級 banner + 30 天日花費 stacked bar chart（純 inline SVG，沒裝 chart 套件）',
+        'OpenAI 走 `organization/costs` API 自動每小時抓一次，admin 可即時看到月累積',
+        '達 80% / 95% 預算門檻會寄信告警（每天 09:00 台北跑、per-day 去重）',
+        'AI Hub adapter 改 fail-open：5xx / timeout 直接 skip 不阻塞 collector；真實接入待 follow-up change 用 GraphQL 重做',
+      ],
+      en: [
+        '"Service Usage" admin tab: yellow 80% / red 95% banners + 30-day stacked bar chart of daily spend (pure inline SVG, no chart library added)',
+        'OpenAI auto-collected hourly via `organization/costs` API; admins see running monthly total',
+        '80% / 95% budget thresholds trigger email alerts (runs daily 09:00 Taipei, deduped per day)',
+        'AI Hub adapter now fail-opens on 5xx/timeout — does not block the rest of the collector; real wiring lands in a follow-up via Zeabur GraphQL',
+      ],
+    },
+  },
+  {
     date: '2026-05-18', slug: 'backfill-progress-admin-tab', milestone: 'v1.7', tag: 'enhancement',
     title: {
       zh: '後台 Queue 分頁上方多了「進度概覽」，一眼看出轉錄／摘要／分類做到哪',

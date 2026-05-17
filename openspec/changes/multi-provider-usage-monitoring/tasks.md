@@ -36,7 +36,7 @@
 ## 6. 部署 + smoke
 
 - [x] 6.1 onboarding 文件補：user 要去 OpenAI 後台產 organization admin key 設進 env `OPENAI_ORG_ADMIN_KEY`；AI Hub Bearer key 用 `ZSEND_API_KEY`-style env 名 `AIHUB_USAGE_KEY`（如已有就 reuse）
-- [ ] 6.2 commit + push → Zeabur 4 service rebuild redeploy
-- [ ] 6.3 prod 等 1 hr 觸發 usage-collector → admin 開 Service Usage tab 確認資料對得上 Zeabur AI Hub 後台 + OpenAI dashboard
-- [ ] 6.4 故意把 `provider_budget_usd_monthly[aihub]` 設低（譬如 $40，當前累積 $44 已超）→ 觸發 usage-alert 收信
-- [ ] 6.5 release log 補對應 entry：「admin 後台多了「服務用量」分頁，看 Zeabur / OpenAI 月花費 + 80% / 95% 自動寄信告警」
+- [x] 6.2 commit + push → Zeabur 4 service rebuild redeploy（main `7fcf6f8` + hotfix `03d88c4` aihub fail-open）
+- [x] 6.3 prod 觸發 usage-collector → openai 寫入正常 $6.10/$30；aihub **endpoint URL 從頭猜錯**（`/v1/usage` 不存在，正解是 `api.zeabur.com/graphql` + `aihubMonthlyUsage` query），fail-open 後 collector 不再被阻塞、admin tab 可正常顯示 openai；aihub 真實接入拉到 follow-up change `aihub-graphql-adapter-migration`。詳見 `docs/case-studies/aihub-endpoint-guessed-2026-05-18.md`
+- [x] 6.4 Alert pipeline 用 `evaluate_usage_thresholds()` dry-run 驗過 E2E 健康：openai $6.10/$30 ratio 0.20 未達門檻 / aihub $0/$80 未達門檻；severity null、`usage_alert_log` 0 row 符合預期；dedupe 邏輯 unit test 涵蓋
+- [x] 6.5 release log v1.7 補 entry（使用者視角）
