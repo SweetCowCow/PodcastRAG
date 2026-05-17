@@ -20,6 +20,8 @@ celery_app = Celery(
         "app.workers.eval_reminder",
         "app.workers.db_backup",
         "app.workers.tokenizer_reload",
+        "app.workers.usage_collector",
+        "app.workers.usage_alert",
     ],
 )
 
@@ -49,6 +51,16 @@ celery_app.conf.update(
         "db-backup": {
             "task": "app.workers.db_backup.run_db_backup",
             "schedule": crontab(minute=0, hour=3),
+        },
+        # multi-provider-usage-monitoring: hourly snapshot collector +
+        # daily 09:00 Taipei (= 01:00 UTC) threshold alert evaluator.
+        "usage-collector": {
+            "task": "app.workers.usage_collector.collect_provider_usage",
+            "schedule": crontab(minute=0),
+        },
+        "usage-alert": {
+            "task": "app.workers.usage_alert.evaluate_usage_thresholds",
+            "schedule": crontab(minute=0, hour=1),
         },
     },
 )

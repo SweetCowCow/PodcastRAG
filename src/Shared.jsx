@@ -184,6 +184,7 @@ const TopNav = ({ lang, page, setPage, onToggleLang, onAdminClick, user, onSignI
     { id: 'admin-tokenizer', icon: 'wand', label: t ? '分詞詞典' : 'Tokenizer' },
     { id: 'admin-topic-seg-audit', icon: 'list', label: t ? '段落分類審核' : 'Topic Audit' },
     { id: 'admin-external-api', icon: 'globe', label: t ? '外部 API 狀態' : 'External API Status' },
+    { id: 'admin-provider-usage', icon: 'zap', label: t ? '服務用量' : 'Service Usage' },
   ];
 
   const onMainClick = (id) => {

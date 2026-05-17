@@ -81,3 +81,67 @@ async def send_email(to: str, subject: str, body_text: str) -> None:
         retryable=retryable,
         status_code=resp.status_code,
     )
+
+
+async def send_usage_threshold_alert(
+    *,
+    provider: str,
+    severity: str,
+    accumulated_usd: float,
+    budget_usd: float,
+    ratio: float,
+    top_models: list[tuple[str, float]],
+    taipei_date: str,
+) -> None:
+    """Send a multi-provider-usage-monitoring threshold alert email.
+
+    Severity is "yellow" (>= 80%) or "red" (>= 95%). The email body is
+    純文字繁中 so it renders cleanly in plain-text mail clients (no HTML
+    template). Recipient list comes from ``ZSEND_ADMIN_TO_EMAIL``.
+
+    Caller is responsible for ZSend pre-config check + dedupe (see
+    ``app.workers.usage_alert``).
+    """
+    severity_label = "緊急" if severity == "red" else "提醒"
+    ratio_pct = round(ratio * 100, 1)
+    subject = (
+        f"[PodcastRAG] {severity_label}：{provider} 用量已達 {ratio_pct}%"
+        f"（${accumulated_usd:.2f} / ${budget_usd:.2f}）"
+    )
+
+    lines: list[str] = []
+    lines.append(f"日期（台北）：{taipei_date}")
+    lines.append(f"Provider：{provider}")
+    lines.append(f"嚴重度：{severity}")
+    lines.append(
+        f"當月累積：${accumulated_usd:.2f} / 預算 ${budget_usd:.2f}"
+        f"（{ratio_pct}%）"
+    )
+    lines.append("")
+    if top_models:
+        lines.append("本月花費前 3 名 model：")
+        for i, (model, spend) in enumerate(top_models[:3], start=1):
+            lines.append(f"  {i}. {model}: ${spend:.2f}")
+        lines.append("")
+    if severity == "red":
+        lines.append(
+            "已達 95%，請立即至 Zeabur AI Hub / OpenAI dashboard 充值，"
+            "否則相關服務（轉錄 / 摘要 / 問答）可能中斷。"
+        )
+    else:
+        lines.append("已達 80%，請留意是否需要充值。")
+    lines.append("")
+    lines.append("詳細圖表：admin 後台 → 服務用量")
+
+    body = "\n".join(lines)
+    recipients_raw = settings.zsend_admin_to_email or ""
+    recipients = [s.strip() for s in recipients_raw.split(",") if s.strip()]
+    for to in recipients:
+        try:
+            await send_email(to, subject, body)
+        except ZSendError as exc:
+            if exc.retryable:
+                raise
+            logger.warning(
+                "usage_alert: non-retryable ZSend error for %s: %s", to, exc
+            )
