@@ -51,6 +51,33 @@ const MILESTONE_LABELS = {
 const RELEASE_LOG = [
   // ─── v1.7 — Retrieval Quality Fix (5/13–5/17) ───
   {
+    date: '2026-05-17', slug: 'enumeration-topic-finder-include-title', milestone: 'v1.7', tag: 'fix',
+    title: {
+      zh: '標題寫了主題、內文沒寫的集數，現在也會列進「相關集數」清單',
+      en: 'Episodes Whose Topic Lives Only in the Title Now Surface in Enumeration Results',
+    },
+    summary: {
+      zh: '今天先做了一輪 golden set audit — 拿「節目裡有哪些集是歌單？」這題的 expected 25 集對照 prod chat 實際回的 23 集，發現兩件事：(1) 有 2 集（EP43 金屬樂、EP12 KPOP）description 明明列了完整歌單但題目沒標進 expected → 補進去變成 27 集；(2) 真正的 retrieval bug：有 6 集（EP19 動漫歌單、EP84 嘻哈歌單、EP87 紀念歌單、EP89 搖滾歌單、EP96 夏日節拍歌單、EP108 雷鬼歌單）的「歌單」二字只出現在標題、description 完全沒寫，結果完全從相關集數清單中漏掉。根因：負責找「主題符合的集數」的程式只看每集 description 內文，從來沒看標題。修法：那段查詢加上「標題符合 OR 內文符合」就好，不引入新欄位、不做 backfill、不換 schema。考慮過用 ai_summary（LLM 寫的內容摘要）救援但只能救 6 漏撈集中的 1 集，且要新增欄位 + 回填 520 集 + 同步維護，成本高 10 倍效益 1/6，YAGNI；也驗證過要不要抓 RSS 的 itunes:keywords 但三個節目（這又沒有很屌、曼報、壹加壹電台）的 episode 層級全部空 — 台灣 podcast 託管平台常態，沒人手填這個 tag。Prod 結果：q25 歌單題 episode_set_recall 從 0.78 拉到 1.0（27/27 全命中）、aggregate enumeration 從 0.88 → 1.0、chunk_id 題 Recall@5 byte-identical 0.86 零 regression。抽樣其他 topic 題（動漫 / 雷鬼 / 高雄美食）：雷鬼題 EP108 雷鬼歌單也順帶救回來，其他題 0 false positive。',
+      en: 'Started today with a golden set audit — compared the expected 25 episodes for q25 "Which episodes are playlist episodes?" against the 23 episodes chat actually returns in prod, and found two things: (1) 2 episodes (EP43 metal, EP12 KPOP) clearly list a full playlist in their description but were never tagged as expected → bumped expected to 27; (2) the real retrieval bug: 6 episodes (EP19 anime, EP84 hiphop, EP87 memorial, EP89 rock, EP96 summer beats, EP108 reggae) have 「歌單」only in their TITLE — their descriptions never use the word — so they were silently missing from the Related Episodes list entirely. Root cause: the function that finds "episodes matching a topic" only ever consulted episode descriptions, never the title. Fix: add `OR title matches` to the query. No new column, no backfill, no schema change. Considered using `ai_summary` (LLM-generated content summary) as a fallback but it would only rescue 1 of the 6 missing episodes while needing a new column + 520-episode backfill + sync maintenance — 10x the cost for 1/6 the benefit, YAGNI. Also verified whether to ingest RSS `itunes:keywords` but all three shows (這又沒有很屌, 曼報, 壹加壹電台) ship empty at the episode level — Taiwan podcast platform norm, no one fills those tags. Prod result: q25 playlist episode_set_recall 0.78 → 1.0 (27/27 hit), aggregate enumeration 0.88 → 1.0, chunk_id Recall@5 byte-identical 0.86 zero regression. Sampled other topic queries (anime / reggae / Kaohsiung food): reggae also rescues EP108 reggae-playlist incidentally, other queries zero false positives.',
+    },
+    summaryBullets: {
+      zh: [
+        '主題型列舉問題現在會同時看每集標題與描述：「歌單那幾集」從 23 集 → 29 集，6 集標題寫「歌單」但描述沒寫的集數（EP19/EP84/EP87/EP89/EP96/EP108）不再被漏掉',
+        'Golden set q25 順手 audit：補 EP43 金屬樂 + EP12 KPOP 進 expected（描述列了完整歌單但題目沒標），expected 25 → 27 集',
+        'Prod 結果：q25 episode_set_recall 0.78 → 1.0、aggregate enumeration 0.88 → 1.0、chunk_id Recall@5 byte-identical 0.86 零 regression',
+        '評估排除過的選項：用 ai_summary（只能救 1/6 + 成本高 10 倍 = YAGNI）、抓 RSS itunes:keywords（三個 show 上游全空，這條路不存在）— 都記入 design.md 的 Alternatives Rejected',
+        '單一 SQL 改動、不新增欄位、不做 backfill；EXISTS-OR 形式天然 distinct by episode_id，比 UNION ALL 少一層 dedupe',
+      ],
+      en: [
+        'Topic-driven enumeration now consults BOTH per-episode title and description: "playlist" goes from 23 → 29 episodes, recovering all 6 title-only episodes (EP19/EP84/EP87/EP89/EP96/EP108) that were silently dropped before',
+        'Golden set q25 audit: added EP43 (metal) + EP12 (KPOP) to expected — their descriptions list full playlists but the dataset missed them. Expected 25 → 27',
+        'Prod result: q25 episode_set_recall 0.78 → 1.0, aggregate enumeration 0.88 → 1.0, chunk_id Recall@5 byte-identical 0.86 zero regression',
+        'Rejected alternatives (captured in design.md): using ai_summary (rescues only 1/6 at 10x cost = YAGNI), ingesting RSS itunes:keywords (all three shows ship empty at episode level — this avenue does not exist upstream)',
+        'Single SQL change, no new column, no backfill; EXISTS-OR form is naturally distinct by episode_id, one fewer dedup layer than UNION ALL',
+      ],
+    },
+  },
+  {
     date: '2026-05-17', slug: 'enumeration-rule-pattern-broaden', milestone: 'v1.7', tag: 'fix',
     title: {
       zh: '「高雄美食的集數有哪些」這種反序問法現在也能列出集數了 — 順便挖出更深的 CJK 切詞 bug',
