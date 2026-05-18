@@ -1,3 +1,4 @@
+from app.models.account_appeal import AccountAppeal
 from app.models.ai_step import STEP_KEY_TO_TYPE, AiStep, StepKey, StepType
 from app.models.api_key import ApiKey
 from app.models.app_settings import AppSettings
@@ -21,6 +22,7 @@ from app.models.transcription_queue import QueueStatus, TranscriptionQueue
 from app.models.user import User, UserRole, UserStatus
 
 __all__ = [
+    "AccountAppeal",
     "AiStep",
     "ApiKey",
     "STEP_KEY_TO_TYPE",

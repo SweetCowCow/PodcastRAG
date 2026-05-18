@@ -25,6 +25,9 @@ class ErrorCode:
     QUOTA_REQUEST_PENDING = "quota_request_pending"
     QUOTA_REQUEST_ALREADY_PROCESSED = "already_processed"
     IP_RATE_LIMITED = "ip_rate_limited"
+    # disabled-user-appeal-flow
+    INVALID_REASON = "invalid_reason"
+    RATE_LIMITED = "rate_limited"
 
 
 class ErrorResponse(BaseModel):

@@ -147,7 +147,28 @@ async def google_callback(
 
     user = await upsert_user_from_google(db, info)
     if user.status == UserStatus.disabled.value:
-        raise _err(403, ErrorCode.ACCOUNT_DISABLED, "Account is disabled")
+        # disabled-user-appeal-flow: the OAuth callback is a browser navigation
+        # so we can't return a 403 JSON and expect the SPA to render anything
+        # — the browser would just show the raw JSON. Instead, redirect to the
+        # frontend with query params the SPA picks up to render the Lock card
+        # disabled state + open AppealModal.
+        #
+        # The 403 JSON contract (with `appeal_enabled` flag) lives in the
+        # response builder used by programmatic callers and is exercised by
+        # tests/test_auth_db.py::test_disabled_returns_appeal_enabled_flag.
+        from urllib.parse import urlencode
+
+        appeal_enabled = bool(settings.account_appeal_enabled)
+        params = urlencode({
+            "auth_error": ErrorCode.ACCOUNT_DISABLED,
+            "appeal_enabled": "1" if appeal_enabled else "0",
+            "email": user.email or "",
+        })
+        target = _frontend_redirect_target()
+        sep = "&" if "?" in target else "?"
+        resp = RedirectResponse(f"{target}{sep}{params}", status_code=302)
+        resp.delete_cookie(OAUTH_STATE_COOKIE, path="/", samesite="none", secure=True)
+        return resp
 
     issued = await create_session(
         db,

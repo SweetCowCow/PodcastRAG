@@ -64,6 +64,15 @@ class Settings(BaseSettings):
     # Per-IP daily ceiling for the public segment-search endpoint. Anonymous
     # callers exceeding this limit get 429 ip_rate_limited.
     ip_search_rate_limit_per_day: int = 20
+    # disabled-user-appeal-flow: gate the POST /auth/appeal endpoint + the
+    # `appeal_enabled` flag in the 403 ACCOUNT_DISABLED response. Default True;
+    # set ACCOUNT_APPEAL_ENABLED=false to kill the appeal CTA platform-wide.
+    account_appeal_enabled: bool = True
+    # Per-IP daily ceiling for POST /auth/appeal. Counts every attempt
+    # (including silent-drop ones) so attackers cannot bypass by probing
+    # non-disabled emails.
+    appeal_ip_rate_limit_per_day: int = 5
+
     # ZSend email integration (used by the quota-digest beat task). All three
     # are optional — when zsend_api_key is unset, the digest task no-ops with
     # a log entry instead of erroring.

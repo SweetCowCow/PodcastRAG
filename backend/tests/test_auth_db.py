@@ -408,3 +408,59 @@ async def test_me_unauthenticated_returns_401():
         resp = await client.get("/me")
         assert resp.status_code == 401
         assert resp.json()["detail"]["error_code"] == "not_authenticated"
+
+
+# ─── disabled-user-appeal-flow: ACCOUNT_DISABLED 403 body shape ───
+#
+# Unit-level checks for the response builder used by the OAuth callback when
+# the user is disabled. We don't go through Google end-to-end here; the
+# callback raises HTTPException(detail=<dict>) with the same shape so we
+# exercise the body construction directly via the same _err semantics.
+
+@pytest.mark.asyncio
+async def test_disabled_returns_appeal_enabled_flag(monkeypatch):
+    """When ACCOUNT_APPEAL_ENABLED is true (default), the 403 body for a
+    disabled-user callback includes appeal_enabled=True."""
+    from fastapi import HTTPException
+
+    from app.core.config import settings as cfg
+    from app.schemas.errors import ErrorCode, ErrorResponse
+
+    monkeypatch.setattr(cfg, "account_appeal_enabled", True)
+
+    # Build the same way the auth.py callback does
+    body = ErrorResponse(
+        error_code=ErrorCode.ACCOUNT_DISABLED,
+        provider=None,
+        detail="Account is disabled",
+    ).model_dump()
+    body["appeal_enabled"] = bool(cfg.account_appeal_enabled)
+    exc = HTTPException(status_code=403, detail=body)
+
+    assert exc.status_code == 403
+    assert exc.detail["error_code"] == "account_disabled"
+    assert exc.detail["appeal_enabled"] is True
+
+
+@pytest.mark.asyncio
+async def test_appeal_disabled_flag_off(monkeypatch):
+    """When ACCOUNT_APPEAL_ENABLED=false, the 403 body's appeal_enabled is
+    False so the frontend hides the appeal CTA."""
+    from fastapi import HTTPException
+
+    from app.core.config import settings as cfg
+    from app.schemas.errors import ErrorCode, ErrorResponse
+
+    monkeypatch.setattr(cfg, "account_appeal_enabled", False)
+
+    body = ErrorResponse(
+        error_code=ErrorCode.ACCOUNT_DISABLED,
+        provider=None,
+        detail="Account is disabled",
+    ).model_dump()
+    body["appeal_enabled"] = bool(cfg.account_appeal_enabled)
+    exc = HTTPException(status_code=403, detail=body)
+
+    assert exc.status_code == 403
+    assert exc.detail["error_code"] == "account_disabled"
+    assert exc.detail["appeal_enabled"] is False

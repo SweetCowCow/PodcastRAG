@@ -17,6 +17,7 @@ celery_app = Celery(
         "app.workers.summary_task",
         "app.workers.topic_task",
         "app.workers.quota_digest",
+        "app.workers.appeal_digest",
         "app.workers.eval_reminder",
         "app.workers.db_backup",
         "app.workers.tokenizer_reload",
@@ -43,6 +44,11 @@ celery_app.conf.update(
         "quota-digest": {
             "task": "app.workers.quota_digest.send_quota_digest",
             "schedule": crontab(minute=0, hour="9,21"),
+        },
+        # disabled-user-appeal-flow: 01:00 UTC = 09:00 Asia/Taipei
+        "appeal-digest": {
+            "task": "app.workers.appeal_digest.send_appeal_digest",
+            "schedule": crontab(minute=0, hour=1),
         },
         "eval-reminder": {
             "task": "app.workers.eval_reminder.send_eval_reminder",

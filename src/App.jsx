@@ -19,6 +19,29 @@ const App = () => {
   const { user, loading: userLoading, refresh: refreshUser, logout: doLogout } = useCurrentUser();
   const isAdmin = user && user.role === 'admin' && user.status === 'active';
 
+  // ── disabled-user-appeal-flow: detect OAuth-callback redirect with auth_error ──
+  // Backend (auth.py) redirects disabled users to frontend with
+  // ?auth_error=account_disabled&appeal_enabled=1&email=... — we render the
+  // Lock card disabled state + open AppealModal on click.
+  const [disabledAuth, setDisabledAuth] = React.useState(null); // { email, appealEnabled }
+  const [appealOpen, setAppealOpen] = React.useState(false);
+  React.useEffect(() => {
+    try {
+      const params = new URL(window.location.href).searchParams;
+      if (params.get('auth_error') === 'account_disabled') {
+        const email = params.get('email') || '';
+        const appealEnabled = params.get('appeal_enabled') !== '0';
+        setDisabledAuth({ email, appealEnabled });
+        // Strip params so reload doesn't re-trigger.
+        const url = new URL(window.location.href);
+        url.searchParams.delete('auth_error');
+        url.searchParams.delete('appeal_enabled');
+        url.searchParams.delete('email');
+        window.history.replaceState({}, '', url.toString());
+      }
+    } catch (_) { /* ignore */ }
+  }, []);
+
   React.useEffect(() => {
     const handler = (e) => {
       if (e.data?.type === '__activate_edit_mode') setTweaksVisible(true);
@@ -167,7 +190,17 @@ const App = () => {
             ⏳
           </div>
         )}
-        {page === 'select' && !userLoading && !user && (
+        {page === 'select' && !userLoading && !user && disabledAuth && (
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+            <LockCard
+              lang={lang}
+              state="disabled"
+              appealEnabled={disabledAuth.appealEnabled}
+              onPrimaryClick={() => setAppealOpen(true)}
+            />
+          </div>
+        )}
+        {page === 'select' && !userLoading && !user && !disabledAuth && (
           <LandingPage
             lang={lang}
             onSearch={(q) => setLandingQuery(q)}
@@ -224,6 +257,16 @@ const App = () => {
           <AdminPage lang={lang} activePage={page} currentUser={user} onUserChange={refreshUser} />
         )}
       </div>
+
+      {/* disabled-user-appeal-flow: AppealModal */}
+      {disabledAuth && (
+        <AppealModal
+          open={appealOpen}
+          lang={lang}
+          email={disabledAuth.email}
+          onClose={() => setAppealOpen(false)}
+        />
+      )}
 
       {/* Tweaks panel */}
       {tweaksVisible && (

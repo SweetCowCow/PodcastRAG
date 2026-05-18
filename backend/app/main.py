@@ -133,6 +133,8 @@ app.include_router(stats_router)
 app.include_router(public_stats_router)
 from app.api.quota_requests import router as quota_requests_router  # noqa: E402
 app.include_router(quota_requests_router)
+from app.api.appeal import router as appeal_router  # noqa: E402
+app.include_router(appeal_router)
 app.include_router(qa_feedback_router)
 app.include_router(events_router)
 

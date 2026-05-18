@@ -30,6 +30,10 @@ UNSAFE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
 EXEMPT_PATHS = {
     "/auth/google/start",
     "/auth/google/callback",
+    # disabled-user-appeal-flow: disabled users have no session/cookie/CSRF,
+    # so this anonymous POST is exempt from the CSRF + Origin checks. Per-IP
+    # daily rate limit + payload validation are the protections.
+    "/auth/appeal",
 }
 
 # Paths that still enforce the Origin allowlist (so cross-origin abuse stays

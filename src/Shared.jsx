@@ -697,4 +697,77 @@ const SourceCard = ({ source, lang, onJump, position }) => {
   );
 };
 
-Object.assign(window, { API_BASE, TOKEN, Icon, Badge, Btn, Input, TopNav, ConfirmModal, FormModal, OverflowMenu, ProgressCounts, categoryToBadge, formatRelativeTime, useViewport, EpisodeBlurb, SourceCard, sanitiseMarkOnly });
+// ─── LockCard ───
+// Three-state lock card used by QueryPage + landing flows:
+//   state = 'anonymous'  → 🔒 + sign-in CTA
+//   state = 'quota'      → 🔋 + request-quota CTA (existing flow keeps inline copy)
+//   state = 'disabled'   → 🚫 + appeal CTA (disabled-user-appeal-flow)
+// For 'disabled' state, when appealEnabled=false the CTA is hidden and the
+// card shows contact-admin guidance instead.
+const LockCard = ({ lang, state = 'anonymous', appealEnabled = true, onPrimaryClick, primaryLabel, message, subtext }) => {
+  const t = lang === 'zh';
+  const presets = {
+    anonymous: {
+      icon: '🔒',
+      title: t ? '想看 AI 整段統整？' : 'Want the AI summary?',
+      subtext: t ? '不用一段段拼湊。' : 'Skip stitching segments together.',
+      primary: t ? '以 Google 登入解鎖' : 'Sign in with Google to unlock',
+      footnote: t ? '30 次免費' : '30 free uses',
+    },
+    quota: {
+      icon: '🔋',
+      title: t ? '免費額度用完了' : 'Free quota exhausted',
+      subtext: t ? '可以申請更多額度繼續使用。' : 'Request more quota to continue.',
+      primary: t ? '申請更多額度' : 'Request more quota',
+      footnote: null,
+    },
+    disabled: {
+      icon: '🚫',
+      title: t ? '帳號目前無法使用' : 'Account currently disabled',
+      subtext: t
+        ? '你的帳號目前無法使用，如果這是誤判可以提出申訴'
+        : 'Your account is currently disabled. If this is a mistake, you can submit an appeal.',
+      primary: t ? '提出申訴' : 'Submit Appeal',
+      footnote: appealEnabled
+        ? null
+        : (t ? '請透過 email 聯絡管理員' : 'Please contact the admin via email'),
+    },
+  };
+  const p = presets[state] || presets.anonymous;
+  const showButton = state !== 'disabled' || appealEnabled;
+  return (
+    <div style={{
+      maxWidth: 480,
+      width: '100%',
+      background: TOKEN.surface,
+      border: `1px solid ${TOKEN.surfaceBorder}`,
+      borderRadius: 12,
+      padding: '20px 24px',
+      textAlign: 'center',
+      display: 'flex',
+      flexDirection: 'column',
+      justifyContent: 'center',
+      gap: 8,
+    }}>
+      <div style={{ fontSize: 24 }}>{p.icon}</div>
+      <h3 style={{ margin: 0, color: TOKEN.text, fontSize: 16, fontWeight: 700 }}>
+        {p.title}
+      </h3>
+      <p style={{ margin: 0, color: TOKEN.textSecondary, fontSize: 13, lineHeight: 1.55 }}>
+        {subtext || p.subtext}
+      </p>
+      {showButton && (
+        <div style={{ marginTop: 6 }}>
+          <Btn variant="primary" size="sm" onClick={onPrimaryClick}>
+            {primaryLabel || p.primary}
+          </Btn>
+        </div>
+      )}
+      {p.footnote && (
+        <div style={{ fontSize: 11, color: TOKEN.textMuted }}>{p.footnote}</div>
+      )}
+    </div>
+  );
+};
+
+Object.assign(window, { API_BASE, TOKEN, Icon, Badge, Btn, Input, TopNav, ConfirmModal, FormModal, OverflowMenu, ProgressCounts, categoryToBadge, formatRelativeTime, useViewport, EpisodeBlurb, SourceCard, sanitiseMarkOnly, LockCard });
