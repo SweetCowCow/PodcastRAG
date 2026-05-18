@@ -113,8 +113,8 @@ async def test_regenerate_resets_status_and_enqueues(
     target = ep_ids[2]  # the 'done' one
 
     with patch(
-        "app.workers.summary_task.generate_episode_summary.delay"
-    ) as mock_delay:
+        "app.workers.summary_task.generate_episode_summary.apply_async"
+    ) as mock_apply:
         r = await client.post(
             f"/admin/episodes/{target}/regenerate-summary",
             cookies=auth_admin["cookies"],
@@ -122,7 +122,9 @@ async def test_regenerate_resets_status_and_enqueues(
         )
     assert r.status_code == 200
     assert r.json() == {"episode_id": str(target), "enqueued": True}
-    mock_delay.assert_called_once_with(str(target))
+    # celery-publish-routing-fix-and-f2-smoke: 改用 apply_async(retry=False)
+    # 讓 broker 斷線時 fail loud（503）而不是 silent OK。
+    mock_apply.assert_called_once_with(args=[str(target)], retry=False)
 
     # DB row reset to pending.
     async with AsyncSessionFactory() as db:
@@ -144,8 +146,8 @@ async def test_backfill_counts_only_eligible_rows(
     transcript is pending → excluded.
     """
     with patch(
-        "app.workers.summary_task.generate_episode_summary.delay"
-    ) as mock_delay:
+        "app.workers.summary_task.generate_episode_summary.apply_async"
+    ) as mock_apply:
         r = await client.post(
             "/admin/episodes/backfill-summary",
             cookies=auth_admin["cookies"],
@@ -156,7 +158,7 @@ async def test_backfill_counts_only_eligible_rows(
     # Account for other shows in dev DB that might also match. Assert at
     # least 2 from our fixture got enqueued.
     assert body["enqueued_count"] >= 2
-    assert mock_delay.call_count == body["enqueued_count"]
+    assert mock_apply.call_count == body["enqueued_count"]
 
 
 @pytest.mark.skipif(not _postgres_reachable(), reason="postgres not reachable")
@@ -177,15 +179,65 @@ async def test_backfill_idempotent_after_summaries_set(
         await db.commit()
 
     with patch(
-        "app.workers.summary_task.generate_episode_summary.delay"
-    ) as mock_delay:
+        "app.workers.summary_task.generate_episode_summary.apply_async"
+    ) as mock_apply:
         r = await client.post(
             "/admin/episodes/backfill-summary",
             cookies=auth_admin["cookies"],
             headers=csrf_headers(auth_admin["session_token"]),
         )
     assert r.status_code == 200
-    # Confirm none of OUR fixture's eligible rows got re-enqueued.
-    enqueued_ids = {call.args[0] for call in mock_delay.call_args_list}
+    # Confirm none of OUR fixture's eligible rows got re-enqueued. apply_async
+    # is called as apply_async(args=[str(ep_id)], retry=False).
+    enqueued_ids = {
+        call.kwargs.get("args", [None])[0]
+        for call in mock_apply.call_args_list
+    }
     assert str(ep_ids[0]) not in enqueued_ids
     assert str(ep_ids[1]) not in enqueued_ids
+
+
+# ─── Publish-side fail-loud regression ─────────────────────────────────
+# celery-publish-routing-fix-and-f2-smoke: 防 silent drop。broker 斷線時
+# endpoint 必須回 503 而不是 200 enqueued=true。
+
+
+@pytest.mark.skipif(not _postgres_reachable(), reason="postgres not reachable")
+async def test_regenerate_returns_503_when_broker_publish_fails(
+    client, auth_admin, show_with_episodes_summary_mix
+):
+    from kombu.exceptions import OperationalError as KombuOperationalError
+
+    _, ep_ids = show_with_episodes_summary_mix
+    target = ep_ids[0]
+
+    with patch(
+        "app.workers.summary_task.generate_episode_summary.apply_async",
+        side_effect=KombuOperationalError("broker unreachable"),
+    ):
+        r = await client.post(
+            f"/admin/episodes/{target}/regenerate-summary",
+            cookies=auth_admin["cookies"],
+            headers=csrf_headers(auth_admin["session_token"]),
+        )
+
+    assert r.status_code == 503, r.text
+
+
+@pytest.mark.skipif(not _postgres_reachable(), reason="postgres not reachable")
+async def test_backfill_returns_503_when_broker_publish_fails(
+    client, auth_admin, show_with_episodes_summary_mix
+):
+    from kombu.exceptions import OperationalError as KombuOperationalError
+
+    with patch(
+        "app.workers.summary_task.generate_episode_summary.apply_async",
+        side_effect=KombuOperationalError("broker unreachable"),
+    ):
+        r = await client.post(
+            "/admin/episodes/backfill-summary",
+            cookies=auth_admin["cookies"],
+            headers=csrf_headers(auth_admin["session_token"]),
+        )
+
+    assert r.status_code == 503, r.text
