@@ -1,11 +1,11 @@
-"""Unit tests for the v1 provider usage adapters.
+"""Unit tests for provider usage adapters (non-AI-Hub).
 
-Mocks httpx so no live HTTP traffic and no secret env required. Verifies:
+The AI Hub adapter tests live in ``tests/services/test_aihub_graphql_adapter.py``
+since the migration to Zeabur's GraphQL endpoint
+(aihub-graphql-adapter-migration change). This file now only covers the
+OpenAI direct adapter.
 
-- AI Hub adapter parses the documented JSON shape into UsageSnapshot
-- OpenAI adapter parses the costs API shape into UsageSnapshot
-- OpenAI adapter without OPENAI_ORG_ADMIN_KEY returns [] without raising
-- AI Hub adapter without AIHUB_USAGE_KEY returns [] without raising
+Mocks httpx so no live HTTP traffic and no secret env required.
 """
 from __future__ import annotations
 
@@ -15,8 +15,7 @@ from decimal import Decimal
 import httpx
 import pytest
 
-from app.services.provider_usage import UsageSnapshot
-from app.services.provider_usage import openai_adapter, zeabur_aihub_adapter
+from app.services.provider_usage import UsageSnapshot, openai_adapter
 
 
 class _FakeResp:
@@ -51,109 +50,6 @@ class _FakeClient:
 
 def _patch_client(monkeypatch, module, resp: _FakeResp):
     monkeypatch.setattr(module.httpx, "AsyncClient", lambda *a, **kw: _FakeClient(resp))
-
-
-# ── AI Hub ────────────────────────────────────────────────────────────
-
-
-@pytest.mark.asyncio
-async def test_aihub_adapter_parses_rows(monkeypatch):
-    monkeypatch.setenv("AIHUB_USAGE_KEY", "test-token")
-    payload = {
-        "data": [
-            {"date": "2026-05-09", "model": "gpt-4o-mini", "spend_usd": "1.23"},
-            {"date": "2026-05-10", "model": "claude-3-haiku", "spend_usd": "0.55"},
-        ]
-    }
-    _patch_client(monkeypatch, zeabur_aihub_adapter, _FakeResp(200, payload))
-    snaps = await zeabur_aihub_adapter.fetch_daily_usage(
-        date(2026, 5, 9), date(2026, 5, 10)
-    )
-    assert len(snaps) == 2
-    assert all(isinstance(s, UsageSnapshot) for s in snaps)
-    assert {s.provider for s in snaps} == {"aihub"}
-    assert snaps[0].spend_usd == Decimal("1.23")
-    assert snaps[0].model == "gpt-4o-mini"
-    assert snaps[0].date == date(2026, 5, 9)
-
-
-@pytest.mark.asyncio
-async def test_aihub_adapter_skips_malformed_row(monkeypatch):
-    monkeypatch.setenv("AIHUB_USAGE_KEY", "test-token")
-    payload = {
-        "data": [
-            {"date": "bad-date", "model": "m1", "spend_usd": "1.0"},
-            {"date": "2026-05-10", "model": "m2", "spend_usd": "2.0"},
-            {"date": "2026-05-11", "spend_usd": "not-a-decimal"},
-        ]
-    }
-    _patch_client(monkeypatch, zeabur_aihub_adapter, _FakeResp(200, payload))
-    snaps = await zeabur_aihub_adapter.fetch_daily_usage(
-        date(2026, 5, 1), date(2026, 5, 12)
-    )
-    assert len(snaps) == 1
-    assert snaps[0].model == "m2"
-
-
-@pytest.mark.asyncio
-async def test_aihub_adapter_without_key_returns_empty(monkeypatch):
-    monkeypatch.delenv("AIHUB_USAGE_KEY", raising=False)
-    snaps = await zeabur_aihub_adapter.fetch_daily_usage(
-        date(2026, 5, 1), date(2026, 5, 10)
-    )
-    assert snaps == []
-
-
-@pytest.mark.asyncio
-async def test_aihub_adapter_fails_open_on_5xx(monkeypatch, caplog):
-    monkeypatch.setenv("AIHUB_USAGE_KEY", "test-token")
-    _patch_client(monkeypatch, zeabur_aihub_adapter, _FakeResp(502, {}))
-    with caplog.at_level("WARNING"):
-        snaps = await zeabur_aihub_adapter.fetch_daily_usage(
-            date(2026, 5, 1), date(2026, 5, 10)
-        )
-    assert snaps == []
-    assert any("upstream 502" in r.message for r in caplog.records)
-
-
-@pytest.mark.asyncio
-async def test_aihub_adapter_raises_on_4xx(monkeypatch):
-    monkeypatch.setenv("AIHUB_USAGE_KEY", "test-token")
-    _patch_client(monkeypatch, zeabur_aihub_adapter, _FakeResp(401, {}))
-    with pytest.raises(httpx.HTTPStatusError):
-        await zeabur_aihub_adapter.fetch_daily_usage(
-            date(2026, 5, 1), date(2026, 5, 10)
-        )
-
-
-@pytest.mark.asyncio
-async def test_aihub_adapter_fails_open_on_timeout(monkeypatch, caplog):
-    monkeypatch.setenv("AIHUB_USAGE_KEY", "test-token")
-
-    class _TimeoutClient:
-        async def __aenter__(self):
-            return self
-
-        async def __aexit__(self, *a):
-            return False
-
-        async def get(self, *a, **kw):
-            raise httpx.ReadTimeout("")
-
-    monkeypatch.setattr(
-        zeabur_aihub_adapter.httpx, "AsyncClient", lambda *a, **kw: _TimeoutClient()
-    )
-    monkeypatch.setattr(zeabur_aihub_adapter.asyncio, "sleep", lambda *_: _noop())
-    with caplog.at_level("WARNING"):
-        snaps = await zeabur_aihub_adapter.fetch_daily_usage(
-            date(2026, 5, 1), date(2026, 5, 10)
-        )
-    assert snaps == []
-    assert any("unreachable" in r.message for r in caplog.records)
-
-
-async def _noop():
-    return None
 
 
 # ── OpenAI ────────────────────────────────────────────────────────────

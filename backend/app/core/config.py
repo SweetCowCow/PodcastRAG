@@ -77,7 +77,10 @@ class Settings(BaseSettings):
     # - provider_budget_usd_monthly_*: per-provider monthly budgets in USD.
     #   v1 hardcoded defaults; tuneable via env. v2 will add admin UI editor.
     openai_org_admin_key: str | None = None
-    aihub_usage_key: str | None = None
+    aihub_usage_key: str | None = None  # deprecated: 留作向前相容，新 adapter 改讀 zeabur_api_token
+    # AI Hub usage 改走 Zeabur 官方 GraphQL（aihub-graphql-adapter-migration）。
+    # 從 ~/.config/zeabur/cli.yaml 取得 token；未設則 adapter log warning + 回 []。
+    zeabur_api_token: str | None = None
     provider_budget_usd_monthly_aihub: float = 80.0
     provider_budget_usd_monthly_openai: float = 30.0
 

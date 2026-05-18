@@ -22,7 +22,7 @@ from typing import Awaitable, Callable
 from app.services.provider_usage.openai_adapter import (
     fetch_daily_usage as openai_fetch,
 )
-from app.services.provider_usage.zeabur_aihub_adapter import (
+from app.services.provider_usage.zeabur_aihub_graphql import (
     fetch_daily_usage as aihub_fetch,
 )
 
