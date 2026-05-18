@@ -742,26 +742,43 @@ const ChatBubble = ({ msg, lang, user, onCitationClick, onOpenEpisode, voted, on
       </div>
       <div style={{ maxWidth: '80%', background: isUser ? TOKEN.accentDim : TOKEN.surfaceRaised, border: `1px solid ${isUser ? TOKEN.accent + '33' : TOKEN.surfaceBorder}`, borderRadius: isUser ? '14px 4px 14px 14px' : '4px 14px 14px 14px', padding: '10px 14px' }}>
         <pre style={{ margin: 0, color: TOKEN.text, fontSize: 13, lineHeight: 1.7, fontFamily: 'inherit', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{msg.text}</pre>
-        {!isUser && Array.isArray(enumerationEpisodes) && (
-          <EnumerationSection
-            episodes={enumerationEpisodes}
-            lang={lang}
-            onOpenEpisode={onOpenEpisode}
-          />
-        )}
-        {citations.length > 0 && (
-          <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
-            {citations.map((c, i) => (
-              <span key={i} onClick={() => onCitationClick && onCitationClick(c, queryId, i)}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 8px', background: TOKEN.bg, border: `1px solid ${TOKEN.surfaceBorder}`, borderRadius: 6, color: TOKEN.accent, fontSize: 12, fontFamily: 'inherit', cursor: onCitationClick ? 'pointer' : 'default', transition: 'border-color 0.15s' }}
-                onMouseEnter={e => onCitationClick && (e.currentTarget.style.borderColor = TOKEN.accent)}
-                onMouseLeave={e => onCitationClick && (e.currentTarget.style.borderColor = TOKEN.surfaceBorder)}>
-                <Icon name="fileText" size={11} color={TOKEN.accent} />
-                {(c.episode_title || '').slice(0, 24) || (lang === 'zh' ? '片段' : 'Clip')} @ {formatTimestamp(c.start_time)}
-              </span>
-            ))}
-          </div>
-        )}
+        {/* citation-display-unify: 列舉題（enumeration_episodes?.length > 0）走主從佈局：
+            EnumerationSection 為主、chunk citations 摺疊為輔；內容題（enum 為空 / null）
+            維持既有 chip inline 渲染。citation_click 事件在兩種佈局下都正確觸發。 */}
+        {(() => {
+          if (isUser) return null;
+          const isEnumLayout = Array.isArray(enumerationEpisodes) && enumerationEpisodes.length > 0;
+          const chipList = citations.length > 0 ? (
+            <div style={{ display: 'flex', gap: 6, marginTop: isEnumLayout ? 0 : 10, flexWrap: 'wrap' }}>
+              {citations.map((c, i) => (
+                <span key={i} onClick={() => onCitationClick && onCitationClick(c, queryId, i)}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 8px', background: TOKEN.bg, border: `1px solid ${TOKEN.surfaceBorder}`, borderRadius: 6, color: TOKEN.accent, fontSize: 12, fontFamily: 'inherit', cursor: onCitationClick ? 'pointer' : 'default', transition: 'border-color 0.15s' }}
+                  onMouseEnter={e => onCitationClick && (e.currentTarget.style.borderColor = TOKEN.accent)}
+                  onMouseLeave={e => onCitationClick && (e.currentTarget.style.borderColor = TOKEN.surfaceBorder)}>
+                  <Icon name="fileText" size={11} color={TOKEN.accent} />
+                  {(c.episode_title || '').slice(0, 24) || (lang === 'zh' ? '片段' : 'Clip')} @ {formatTimestamp(c.start_time)}
+                </span>
+              ))}
+            </div>
+          ) : null;
+          if (isEnumLayout) {
+            return (
+              <React.Fragment>
+                <EnumerationSection
+                  episodes={enumerationEpisodes}
+                  lang={lang}
+                  onOpenEpisode={onOpenEpisode}
+                />
+                {chipList && (
+                  <CitationEvidenceCollapse count={citations.length} lang={lang}>
+                    {chipList}
+                  </CitationEvidenceCollapse>
+                )}
+              </React.Fragment>
+            );
+          }
+          return chipList;
+        })()}
         {!isUser && queryId && (
           <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
             <button type="button" onClick={handleUpClick} disabled={!canVote}
@@ -859,4 +876,4 @@ const EpisodeCard = ({ ep, lang, selected, onClick }) => {
   );
 };
 
-Object.assign(window, { QueryPage, MOCK_EPISODES });
+Object.assign(window, { QueryPage, MOCK_EPISODES, ChatBubble, EnumerationSection });
