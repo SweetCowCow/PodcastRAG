@@ -252,6 +252,50 @@ async def _revert_specific_rows_async(row_ids: set[str]) -> int:
     return reverted
 
 
+# task-failure-monitoring-and-circuit-breaker: known provider ids whose
+# circuit state we seed on startup. Order matters only for log readability.
+KNOWN_PROVIDER_IDS: tuple[str, ...] = ("openai", "aihub", "zsend")
+
+
+async def _seed_service_circuit_state_async() -> int:
+    """Ensure one ``service_circuit_state`` row per known provider exists.
+
+    Idempotent: existing rows are preserved untouched (even if their state
+    is ``open``). Missing rows are inserted as ``state='closed'`` defaults.
+
+    Returns the number of rows newly inserted.
+    """
+    from app.models.service_circuit_state import (
+        CircuitState,
+        ServiceCircuitState,
+    )
+
+    engine = create_async_engine(settings.database_url, poolclass=NullPool)
+    inserted = 0
+    try:
+        async with async_sessionmaker(engine, expire_on_commit=False)() as session:
+            existing = (
+                await session.execute(select(ServiceCircuitState.provider_id))
+            ).scalars().all()
+            existing_set = set(existing)
+            for pid in KNOWN_PROVIDER_IDS:
+                if pid in existing_set:
+                    continue
+                session.add(
+                    ServiceCircuitState(
+                        provider_id=pid,
+                        task_type=None,
+                        state=CircuitState.closed.value,
+                    )
+                )
+                inserted += 1
+            if inserted:
+                await session.commit()
+    finally:
+        await engine.dispose()
+    return inserted
+
+
 @worker_ready.connect
 def _on_worker_ready(sender=None, **kwargs):
     try:
@@ -271,6 +315,17 @@ def _on_worker_ready(sender=None, **kwargs):
         except Exception:
             logger.exception(
                 "lifecycle: worker_ready ambiguous/stuck reset raised"
+            )
+        # task-failure-monitoring-and-circuit-breaker: seed circuit rows
+        try:
+            k = asyncio.run(_seed_service_circuit_state_async())
+            logger.info(
+                "lifecycle: worker_ready — seeded %d service_circuit_state rows",
+                k,
+            )
+        except Exception:
+            logger.exception(
+                "lifecycle: worker_ready service_circuit_state seed raised"
             )
     except Exception:
         logger.exception("lifecycle: worker_ready handler raised")

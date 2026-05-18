@@ -18,6 +18,12 @@ from app.models.provider_usage_snapshot import (
 )
 from app.models.qa_feedback import QAFeedback
 from app.models.quota_request import QuotaRequest, QuotaRequestStatus
+from app.models.service_circuit_state import (
+    CircuitState,
+    ProbeResult,
+    ServiceCircuitState,
+)
+from app.models.task_failure_log import FailureType, TaskFailureLog
 from app.models.transcription_queue import QueueStatus, TranscriptionQueue
 from app.models.user import User, UserRole, UserStatus
 
@@ -51,4 +57,9 @@ __all__ = [
     "Event",
     "ProviderUsageSnapshot",
     "UsageAlertLog",
+    "TaskFailureLog",
+    "FailureType",
+    "ServiceCircuitState",
+    "CircuitState",
+    "ProbeResult",
 ]

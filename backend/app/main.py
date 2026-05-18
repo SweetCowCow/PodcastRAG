@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.api.admin import router as admin_router
+from app.api.admin_circuit import router as admin_circuit_router
 from app.api.admin_processing_stats import router as admin_processing_stats_router
 from app.api.admin_provider_usage import router as admin_provider_usage_router
 from app.api.auth import me_router as me_router
@@ -56,6 +57,19 @@ def _validate_web_env() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     _validate_web_env()
+    # task-failure-monitoring-and-circuit-breaker: ensure service_circuit_state
+    # has one row per known provider so admin UI / breaker code never sees a
+    # missing row. Idempotent — preserves existing open / paused rows.
+    try:
+        from app.workers.lifecycle import _seed_service_circuit_state_async
+
+        seeded = await _seed_service_circuit_state_async()
+        if seeded:
+            logger.info(
+                "startup: seeded %d service_circuit_state rows", seeded
+            )
+    except Exception:
+        logger.exception("startup: service_circuit_state seed raised")
     yield
 
 
@@ -126,6 +140,7 @@ app.include_router(query_router)
 app.include_router(admin_router)
 app.include_router(admin_processing_stats_router)
 app.include_router(admin_provider_usage_router)
+app.include_router(admin_circuit_router)
 app.include_router(queue_router)
 app.include_router(settings_router)
 app.include_router(users_router)
