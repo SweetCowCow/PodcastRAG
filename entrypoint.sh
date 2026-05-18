@@ -7,23 +7,28 @@ set -e
 # service 的 START_COMMAND 也應該顯式帶 --queues=transcribe,topic,summary,control
 # 以求清楚（見 docs/celery-queues.md）。
 if [ -n "$START_COMMAND" ]; then
+  # 用 word-boundary match：避免「app.workers.celery_app beat」的 workers
+  # substring 被誤判成 worker subcommand（會錯把 --queues append 到 beat）
+  is_celery_worker=0
   case "$START_COMMAND" in
-    *celery*worker*)
+    *celery*)
       case "$START_COMMAND" in
-        *--queues*|*-Q\ *)
-          # 已顯式帶 queue，照原樣跑
-          exec sh -c "$START_COMMAND"
-          ;;
-        *)
-          echo "entrypoint: START_COMMAND is celery worker without --queues; auto-appending --queues=transcribe,topic,summary,control" >&2
-          exec sh -c "$START_COMMAND --queues=transcribe,topic,summary,control"
-          ;;
+        *" worker "*|*" worker") is_celery_worker=1 ;;
       esac
       ;;
-    *)
-      exec sh -c "$START_COMMAND"
-      ;;
   esac
+  if [ "$is_celery_worker" = 1 ]; then
+    case "$START_COMMAND" in
+      *--queues*|*"-Q "*)
+        exec sh -c "$START_COMMAND"
+        ;;
+      *)
+        echo "entrypoint: START_COMMAND is celery worker without --queues; auto-appending --queues=transcribe,topic,summary,control" >&2
+        exec sh -c "$START_COMMAND --queues=transcribe,topic,summary,control"
+        ;;
+    esac
+  fi
+  exec sh -c "$START_COMMAND"
 fi
 
 alembic upgrade head
