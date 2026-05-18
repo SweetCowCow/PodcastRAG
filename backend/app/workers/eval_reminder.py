@@ -24,6 +24,10 @@ import httpx
 from app.core.config import settings
 from app.services.zsend import ZSendError, send_email
 from app.workers.celery_app import celery_app
+from app.workers.failure_hooks import (
+    check_circuit_or_retry,
+    record_task_failure_unless_logged,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -116,7 +120,22 @@ def _compose_email(stale: list[dict]) -> tuple[str, str]:
     return subject, "\n".join(lines)
 
 
+class _EvalReminderTask(celery_app.Task):
+    abstract = True
+
+    def on_failure(self, exc, task_id, args, kwargs, einfo):  # type: ignore[override]
+        record_task_failure_unless_logged(
+            task_name="app.workers.eval_reminder.send_eval_reminder",
+            args=args,
+            exc=exc,
+            provider_id="zsend",
+            retry_count=int(self.request.retries or 0),
+        )
+
+
 @celery_app.task(
+    base=_EvalReminderTask,
+    bind=True,
     name="app.workers.eval_reminder.send_eval_reminder",
     autoretry_for=(httpx.HTTPError, httpx.TimeoutException),
     max_retries=2,
@@ -124,7 +143,9 @@ def _compose_email(stale: list[dict]) -> tuple[str, str]:
     retry_backoff_max=120,
     retry_jitter=True,
 )
-def send_eval_reminder() -> dict:
+def send_eval_reminder(self) -> dict:
+    # task-failure-monitoring-and-circuit-breaker task 5.1: zsend circuit
+    check_circuit_or_retry(self, "zsend")
     return asyncio.run(_run())
 
 

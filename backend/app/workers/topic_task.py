@@ -26,8 +26,28 @@ from app.models.transcript import Transcript
 from app.models.transcript_segment import TranscriptSegment
 from app.services.topic_segmentation import classify_episode
 from app.workers.celery_app import celery_app
+from app.workers.failure_hooks import (
+    check_circuit_or_retry,
+    classify_and_short_circuit,
+    record_task_failure_unless_logged,
+)
 
 logger = logging.getLogger(__name__)
+
+
+class _TopicTask(celery_app.Task):
+    """task-failure-monitoring-and-circuit-breaker on_failure 寫 log。"""
+
+    abstract = True
+
+    def on_failure(self, exc, task_id, args, kwargs, einfo):  # type: ignore[override]
+        record_task_failure_unless_logged(
+            task_name="app.workers.topic_task.classify_episode_topics",
+            args=args,
+            exc=exc,
+            provider_id="aihub",
+            retry_count=int(self.request.retries or 0),
+        )
 
 TOPIC_TRANSIENT_ERRORS = (
     httpx.HTTPError,
@@ -42,6 +62,7 @@ TOPIC_TRANSIENT_ERRORS = (
 
 
 @celery_app.task(
+    base=_TopicTask,
     name="app.workers.topic_task.classify_episode_topics",
     bind=True,
     autoretry_for=TOPIC_TRANSIENT_ERRORS,
@@ -52,11 +73,31 @@ TOPIC_TRANSIENT_ERRORS = (
     priority=2,
 )
 def classify_episode_topics(self, episode_id: str) -> dict:
+    # task-failure-monitoring-and-circuit-breaker task 5.1: aihub circuit
+    # check —— open 時自我 retry 5 min 後再來。
+    check_circuit_or_retry(self, "aihub")
     # celery-routing-and-dispatcher-fix task 4.2 (defensive entry
     # idempotency): topic task 不寫 transcription_queue，自身的 entry
     # idempotency 由 `_run` 開頭「unlabelled == 0 短路」保證——重複 task
     # 進來時所有 segment 都已 labelled、會走 already_done 分支立刻 ack。
-    return asyncio.run(_run(episode_id))
+    try:
+        return asyncio.run(_run(episode_id))
+    except Exception as exc:
+        # task 3.3: permanent → log + re-raise without autoretry path.
+        if classify_and_short_circuit(
+            self,
+            exc,
+            task_name="app.workers.topic_task.classify_episode_topics",
+            args=(episode_id,),
+            provider_id="aihub",
+        ):
+            # Re-raise without calling self.retry to short-circuit
+            # Celery's autoretry. on_failure base class also fires; the
+            # duplicate-write is acceptable per spec (idempotent for
+            # threshold counting — both rows share same provider_id +
+            # failure_type so still trigger one open() transition).
+            raise
+        raise
 
 
 async def _run(episode_id: str) -> dict:

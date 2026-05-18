@@ -24,6 +24,9 @@ celery_app = Celery(
         "app.workers.tokenizer_reload",
         "app.workers.usage_collector",
         "app.workers.usage_alert",
+        # task-failure-monitoring-and-circuit-breaker
+        "app.workers.failure_alert",
+        "app.workers.circuit_probe",
     ],
 )
 
@@ -52,6 +55,9 @@ _TASK_ROUTES = {
     "app.workers.tokenizer_reload.broadcast_reload": {"queue": "control"},
     "app.workers.usage_collector.collect_provider_usage": {"queue": "control"},
     "app.workers.usage_alert.evaluate_usage_thresholds": {"queue": "control"},
+    # task-failure-monitoring-and-circuit-breaker
+    "app.workers.failure_alert.run_failure_alert": {"queue": "control"},
+    "app.workers.circuit_probe.run_circuit_probe": {"queue": "control"},
 }
 
 celery_app.conf.update(
@@ -106,6 +112,18 @@ celery_app.conf.update(
         "usage-alert": {
             "task": "app.workers.usage_alert.evaluate_usage_thresholds",
             "schedule": crontab(minute=0, hour=1),
+        },
+        # task-failure-monitoring-and-circuit-breaker:
+        # - failure-alert: every 5 min — sliding-window failure rate alert
+        #   + 04:00 UTC daily cleanup of rows older than 30 days
+        # - circuit-probe: every 30 min — sentinel probe on open circuits
+        "failure-alert": {
+            "task": "app.workers.failure_alert.run_failure_alert",
+            "schedule": crontab(minute="*/5"),
+        },
+        "circuit-probe": {
+            "task": "app.workers.circuit_probe.run_circuit_probe",
+            "schedule": crontab(minute="*/30"),
         },
     },
 )

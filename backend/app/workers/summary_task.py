@@ -23,6 +23,11 @@ from app.models.transcript_segment import TranscriptSegment
 from app.services.ai_step_resolver import get_step_config
 from app.services.summary_pipeline import SegmentInput, run_summary
 from app.workers.celery_app import celery_app
+from app.workers.failure_hooks import (
+    check_circuit_or_retry,
+    classify_and_short_circuit,
+    record_task_failure_unless_logged,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +56,16 @@ class SummaryTask(celery_app.Task):
     stale recovery have a clear signal."""
 
     def on_failure(self, exc, task_id, args, kwargs, einfo):  # type: ignore[override]
+        # task-failure-monitoring-and-circuit-breaker: record to
+        # task_failure_log first（去重 by _failure_logged tag），再做既有
+        # ai_summary_status=failed 寫回。
+        record_task_failure_unless_logged(
+            task_name="app.workers.summary_task.generate_episode_summary",
+            args=args,
+            exc=exc,
+            provider_id="aihub",
+            retry_count=int(self.request.retries or 0),
+        )
         episode_id = args[0] if args else kwargs.get("episode_id")
         if not episode_id:
             logger.warning(
@@ -113,6 +128,9 @@ async def _mark_failed_from_on_failure(episode_id: str, exc: BaseException) -> N
     priority=2,
 )
 def generate_episode_summary(self, episode_id: str) -> dict:
+    # task-failure-monitoring-and-circuit-breaker task 5.1: aihub circuit
+    # check —— open 時自我 retry 5 min 後再來。
+    check_circuit_or_retry(self, "aihub")
     # celery-routing-and-dispatcher-fix task 4.2 (defensive entry
     # idempotency): summary task 不寫 transcription_queue，由 `_run`
     # 開頭檢查 ai_summary_status in (done, running) 短路。重複 task
@@ -230,6 +248,16 @@ async def _run(task, episode_id: str) -> dict:
                 await _mark_failed(Session, ep_uuid, model_name=None, exc=exc)
             except Exception:
                 logger.exception("summary task: failed to mark row failed")
+        # task-failure-monitoring-and-circuit-breaker task 3.3: classify;
+        # if permanent → log + tag so base on_failure 不重複寫。Transient
+        # 走既有 autoretry path（Celery 會 re-raise + retry）。
+        classify_and_short_circuit(
+            task,
+            exc,
+            task_name="app.workers.summary_task.generate_episode_summary",
+            args=(episode_id,),
+            provider_id="aihub",
+        )
         raise
     finally:
         await engine.dispose()

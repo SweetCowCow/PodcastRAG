@@ -28,6 +28,10 @@ from app.models.quota_request import QuotaRequest, QuotaRequestStatus
 from app.models.user import User
 from app.services.zsend import ZSendError, send_email
 from app.workers.celery_app import celery_app
+from app.workers.failure_hooks import (
+    check_circuit_or_retry,
+    record_task_failure_unless_logged,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +39,22 @@ DIGEST_COOLDOWN_HOURS = 6
 ADMIN_TAB_URL = "https://podcastrag.zeabur.app/admin/quota-requests"
 
 
+class _QuotaDigestTask(celery_app.Task):
+    abstract = True
+
+    def on_failure(self, exc, task_id, args, kwargs, einfo):  # type: ignore[override]
+        record_task_failure_unless_logged(
+            task_name="app.workers.quota_digest.send_quota_digest",
+            args=args,
+            exc=exc,
+            provider_id="zsend",
+            retry_count=int(self.request.retries or 0),
+        )
+
+
 @celery_app.task(
+    base=_QuotaDigestTask,
+    bind=True,
     name="app.workers.quota_digest.send_quota_digest",
     autoretry_for=(httpx.HTTPError, httpx.TimeoutException),
     max_retries=2,
@@ -43,7 +62,9 @@ ADMIN_TAB_URL = "https://podcastrag.zeabur.app/admin/quota-requests"
     retry_backoff_max=120,
     retry_jitter=True,
 )
-def send_quota_digest() -> dict:
+def send_quota_digest(self) -> dict:
+    # task-failure-monitoring-and-circuit-breaker task 5.1: zsend circuit
+    check_circuit_or_retry(self, "zsend")
     return asyncio.run(_run())
 
 

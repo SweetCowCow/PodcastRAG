@@ -145,3 +145,128 @@ async def send_usage_threshold_alert(
             logger.warning(
                 "usage_alert: non-retryable ZSend error for %s: %s", to, exc
             )
+
+
+# ─────────────────────── task-failure-monitoring-and-circuit-breaker ───────
+
+ADMIN_SERVICE_STATUS_URL = (
+    "https://podcastrag.zeabur.app/admin/service-status"
+)
+
+
+def _taipei_iso(ts) -> str:
+    """Format a UTC datetime as Asia/Taipei ISO-ish (純文字易讀)。"""
+    if ts is None:
+        return "—"
+    from datetime import timezone, timedelta
+
+    taipei = ts.astimezone(timezone(timedelta(hours=8)))
+    return taipei.strftime("%Y-%m-%d %H:%M:%S (台北)")
+
+
+def _zsend_recipients() -> list[str]:
+    raw = settings.zsend_admin_to_email or ""
+    return [s.strip() for s in raw.split(",") if s.strip()]
+
+
+async def send_failure_alert(
+    *,
+    task_name: str,
+    count: int,
+    errors: list[str],
+    taipei_ts: list[str],
+    by_provider: dict[str, int] | None = None,
+) -> None:
+    """Sliding-window 失敗率告警信。失敗 ZSendError 直接 raise，
+    caller (failure_alert worker) 用此訊號決定是否 mark alerted_at。
+    """
+    if not settings.zsend_api_key:
+        raise ZSendError("ZSEND_API_KEY is not configured", retryable=False)
+
+    subject = f"[PodcastRAG] task 失敗告警：{task_name}（{count} 次 / 30 分鐘）"
+    lines = [
+        f"task：{task_name}",
+        f"30 分鐘內失敗次數：{count}",
+        "",
+    ]
+    if by_provider:
+        lines.append("按 provider 分組：")
+        for pid, n in by_provider.items():
+            lines.append(f"  • {pid or '（無）'}：{n}")
+        lines.append("")
+    lines.append("最近錯誤訊息（截斷至 200 字）：")
+    for i, (err, ts) in enumerate(zip(errors[:3], taipei_ts[:3]), start=1):
+        lines.append(f"  {i}. [{ts}] {err[:200]}")
+    lines.append("")
+    lines.append(f"後台：{ADMIN_SERVICE_STATUS_URL}")
+    body = "\n".join(lines)
+
+    for to in _zsend_recipients():
+        await send_email(to, subject, body)
+
+
+async def send_circuit_opened_alert(
+    *,
+    provider_id: str,
+    latest_error: str,
+    failure_count: int,
+) -> None:
+    """Circuit breaker 開啟通知信。"""
+    if not settings.zsend_api_key:
+        raise ZSendError("ZSEND_API_KEY is not configured", retryable=False)
+
+    from datetime import datetime, timezone
+
+    now_taipei = _taipei_iso(datetime.now(timezone.utc))
+    subject = f"[PodcastRAG] 服務暫停：{provider_id} circuit opened"
+    lines = [
+        f"Provider：{provider_id}",
+        f"暫停時間（台北）：{now_taipei}",
+        f"觸發原因：過去 5 分鐘累計 {failure_count} 次永久錯誤",
+        f"最近錯誤：{latest_error}",
+        "",
+        "預期行為：",
+        f"  • 所有使用 {provider_id} 的 task 會自動暫停（自我 retry 5 分鐘後再試）",
+        "  • 每 30 分鐘自動探測一次，若 provider 恢復會自動 close circuit + 寄恢復信",
+        "  • 也可以到 admin 後台手動恢復",
+        "",
+        f"後台：{ADMIN_SERVICE_STATUS_URL}",
+    ]
+    body = "\n".join(lines)
+    for to in _zsend_recipients():
+        await send_email(to, subject, body)
+
+
+async def send_recovery_notice(
+    *,
+    provider_id: str,
+    opened_at,
+    closed_at,
+    paused_count: int,
+    kind: str = "probe",
+) -> None:
+    """Circuit breaker 恢復通知信。``kind`` 為 probe / manual。"""
+    if not settings.zsend_api_key:
+        raise ZSendError("ZSEND_API_KEY is not configured", retryable=False)
+
+    downtime_str = "—"
+    if opened_at and closed_at:
+        delta = closed_at - opened_at
+        mins = int(delta.total_seconds() // 60)
+        downtime_str = f"{mins} 分鐘"
+
+    kind_label = "自動探測" if kind == "probe" else "管理員手動"
+    subject = f"[PodcastRAG] 服務恢復：{provider_id} circuit closed（{kind_label}）"
+    lines = [
+        f"Provider：{provider_id}",
+        f"暫停起時（台北）：{_taipei_iso(opened_at)}",
+        f"恢復時間（台北）：{_taipei_iso(closed_at)}",
+        f"暫停總時長：{downtime_str}",
+        f"暫停期間累計影響 task：{paused_count} 個（會在下次 retry 時自動執行）",
+        f"恢復方式：{kind_label}",
+        "",
+        f"後台：{ADMIN_SERVICE_STATUS_URL}",
+    ]
+    body = "\n".join(lines)
+    for to in _zsend_recipients():
+        await send_email(to, subject, body)

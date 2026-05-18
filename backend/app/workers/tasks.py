@@ -27,6 +27,12 @@ from app.services.rss_parser import RssParseError
 from app.services.storage import StorageError
 from app.services.transcription import get_provider
 from app.workers.celery_app import celery_app
+from app.workers.failure_hooks import (
+    check_circuit_or_retry,
+    classify_and_short_circuit,
+    record_task_failure,
+    record_task_failure_unless_logged,
+)
 from app.workers.lifecycle import deregister_active_row, register_active_row
 from app.workers.throttle import (
     acquire_global_slot,
@@ -72,7 +78,28 @@ PERMANENT_ERRORS = (
 )
 
 
+class _TranscribeEpisodeTask(celery_app.Task):
+    """task-failure-monitoring-and-circuit-breaker: 統一寫 task_failure_log。
+
+    on_failure 不分類 transient/permanent：那由 try/except 路徑決定。這裡
+    只負責「沒人接到的 final failure」也留下一筆紀錄。重複寫(短時間 retry
+    短路 + on_failure final 兩個入口)由 failure_log 的 cooldown 保證。
+    """
+
+    abstract = True
+
+    def on_failure(self, exc, task_id, args, kwargs, einfo):  # type: ignore[override]
+        record_task_failure_unless_logged(
+            task_name="app.workers.tasks.transcribe_episode",
+            args=args,
+            exc=exc,
+            provider_id="openai",
+            retry_count=int(self.request.retries or 0),
+        )
+
+
 @celery_app.task(
+    base=_TranscribeEpisodeTask,
     name="app.workers.tasks.transcribe_episode",
     bind=True,
     autoretry_for=TRANSIENT_ERRORS,
@@ -83,6 +110,10 @@ PERMANENT_ERRORS = (
     priority=9,
 )
 def transcribe_episode(self, episode_id: str) -> dict:
+    # task-failure-monitoring-and-circuit-breaker task 5.1: 若 openai
+    # circuit 已 open，self.retry(300s) 把 task 退回 broker 等恢復。
+    check_circuit_or_retry(self, "openai")
+
     # celery-routing-and-dispatcher-fix: 進場第一件事就 idempotency claim。
     # `_claim_queue_row` 是單一短交易（< 50ms，無外部 I/O）：用
     # SELECT FOR UPDATE 撈該 row，依 status / started_at 決定行為。
@@ -447,6 +478,21 @@ async def _run(episode_id: str) -> dict:
         except PERMANENT_ERRORS as exc:
             logger.exception(
                 "transcribe_episode permanent-failed episode=%s", episode_id
+            )
+            # task-failure-monitoring-and-circuit-breaker task 3.3:
+            # 不走 self.retry → on_failure 不會 fire → 這裡顯式寫 log。
+            # exception 已被 swallow（caller return 正常 dict），但保險起見
+            # 仍 mark 防 base on_failure 在某些 corner case 重複寫。
+            try:
+                setattr(exc, "_failure_logged", True)
+            except Exception:
+                pass
+            record_task_failure(
+                task_name="app.workers.tasks.transcribe_episode",
+                args=(episode_id,),
+                exc=exc,
+                provider_id="openai",
+                retry_count=int(self.request.retries or 0),
             )
             message = str(exc)[:ERROR_MESSAGE_MAX_LEN]
             async with Session() as session:
