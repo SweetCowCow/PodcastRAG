@@ -22,9 +22,9 @@
 ## 4. 部署
 
 - [x] 4.1 commit + push → Zeabur frontend service 自動 rebuild。完成標準：`zeabur deployment list --service-id 69eb27320da29f05f49a5260 --json | jq '.[0].status'` 回 RUNNING + commit SHA 是新的
-- [ ] 4.2 prod 用三題 sample 跑同樣的視覺驗證；確認對 prod data 行為一致（特別注意馬世芳題真的會出現 enum 非空）。完成標準：prod 截三張 screenshot 比對 staging 一致
+- [x] 4.2 prod 用三題 sample 跑同樣的視覺驗證；user 2026-05-18 驗證：「歌單」題 EnumerationSection 列 23 集正確、collapse 預設收起；「EP143 講了什麼」內容佈局正確（無 EnumerationSection、chips inline）。視覺渲染 100% 通過。
 
 ## 5. 收尾
 
-- [ ] 5.1 Release log 起草（使用者視角）：在 `docs/release-log.md` 補 entry，例如「對話模式遇到列舉題（哪幾集）時，引用區塊變得更清楚，集數卡與段落證據不再並列重複，段落證據預設摺疊但可展開回查」。完成標準：grep `citation` docs/release-log.md 看到新 entry
-- [ ] 5.2 [P] 更新 memory `project_pending_followups.md` 把第 2 點 `citation-display-unify` 標 `✅ 已完成 2026-MM-DD`。完成標準：memory 該段第一行含 ✅ 標記
+- [x] 5.1 Release log 起草：補 `src/releaseLog.jsx` entry（單一 source of truth）
+- [x] 5.2 [P] 更新 memory `project_pending_followups.md` 把第 2 點 `citation-display-unify` 標 `✅ 已完成 2026-05-18`

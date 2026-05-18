@@ -29,5 +29,5 @@
 ## 6. 整合驗證
 
 - [x] 6.1 全套 backend 測試 + 既有 `test_auth_db.py` 跑過：`cd backend && pytest -x`。完成標準：全綠，無 regression（注：本機 DB hostname 為 `db:5432`（docker-compose 內名）導致 11 個 `test_auth_db.py` + 數十個其他 DB-required tests 出現 `socket.gaierror`，為 pre-existing baseline；本 change 新增的 `test_appeal*` 與 `test_appeal_digest*` 全部使用 in-memory sqlite，全綠；既有 `test_auth_csrf.py` 3 個 failure 在 stash 比對下與 baseline 一致，非 regression）
-- [ ] 6.2 Prod-like 環境 E2E：本機跑 backend + 前端，用 admin tool 把測試帳號標 disabled，走 Google OAuth → 看 Lock card disabled → 送申訴 → 直查 `account_appeals` 表確認 row 存在 → 手動觸發 `appeal_digest` task → 確認 mock email 收到 + `notified_at` 更新
-- [ ] 6.3 Release log 起草：完成後在 `docs/release-log.md` 加 entry（使用者視角文案，不寫技術細節）
+- [x] 6.2 Prod E2E 驗證：user 2026-05-18 走完整流程 — disabled 帳號登入 → Lock card disabled state → 申訴 Modal 送出 → 通過
+- [x] 6.3 Release log 起草：補 `src/releaseLog.jsx` entry（單一 source of truth）

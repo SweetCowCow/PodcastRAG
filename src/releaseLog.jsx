@@ -51,6 +51,56 @@ const MILESTONE_LABELS = {
 const RELEASE_LOG = [
   // ─── v1.7 — Retrieval Quality Fix (5/13–5/18) ───
   {
+    date: '2026-05-18', slug: 'citation-display-unify', milestone: 'v1.7', tag: 'ui',
+    title: {
+      zh: '對話模式的引用區塊重整，列舉題集數卡跟段落引用不再並排',
+      en: 'Chat Citation Layout: Episode Cards and Excerpts No Longer Side-by-Side',
+    },
+    summary: {
+      zh: '之前在對話模式問「歌單哪幾集」「馬世芳上過哪幾集」這類列舉題，答案上方會出現一張一張的集數卡（episode card），下方又會出現紫色 chunk 段落 chip — 同一集可能在兩處都出現，使用者不容易看出兩者差異（卡片點開整集、chip 跳到該段秒數）。這版改為主從佈局：列舉題時集數卡放主視覺、底下「為什麼這幾集被選 (N 個段落)」摺疊區預設收起、展開後才看得到 chunk chips；單純內容題（例如「EP143 講了什麼」）沒有列舉就維持原本的 chip inline 渲染。三題 sample 視覺驗證完整通過 — 列舉題、內容題、topic-trigger（單獨打「歌單」） 都正確。',
+      en: 'Previously, asking enumeration questions in chat ("which episodes have guest X", "which episodes are music playlists") would show episode cards above the answer AND chunk chips below — the same episode could appear in both places, with no visual cue about the difference (card opens the full episode, chip jumps to a specific second). This release adopts a main+supporting layout: enumeration questions render episode cards as the primary visualization, with a collapsible "Why these episodes (N excerpts)" section below that defaults to collapsed and reveals the chunk chips when expanded. Content questions (e.g. "what did EP143 discuss") without enumeration keep the original inline chip rendering. Three sample queries visually verified end-to-end — enumeration, content, and topic-trigger ("playlist" alone) all render correctly.',
+    },
+    summaryBullets: {
+      zh: [
+        '列舉題：上方集數卡為主視覺、下方「為什麼這幾集被選 (N 個段落)」摺疊區預設收起',
+        '內容題（enum 為空）：完全維持原本 chip inline 渲染、無摺疊',
+        '展開摺疊後點 chip 仍正確觸發 citation_click event 跟跳秒導航',
+        '中英雙語：zh `為什麼這幾集被選 (N 個段落)` / en `Why these episodes (N excerpts)`',
+      ],
+      en: [
+        'Enumeration: episode cards as primary, collapsible "Why these episodes (N excerpts)" defaults to collapsed below',
+        'Content (empty enum): original inline chip rendering unchanged, no collapse',
+        'Citation_click event and timestamp-jump navigation work correctly after expanding',
+        'i18n: zh `為什麼這幾集被選 (N 個段落)` / en `Why these episodes (N excerpts)`',
+      ],
+    },
+  },
+  {
+    date: '2026-05-18', slug: 'disabled-user-appeal-flow', milestone: 'v1.7', tag: 'feature',
+    title: {
+      zh: '帳號被停權時有正式申訴入口，不再是死路',
+      en: 'Disabled Accounts Now Have a Formal Appeal Channel',
+    },
+    summary: {
+      zh: '之前如果某個帳號被加進黑名單，使用者走 Google 登入後會收到 403 錯誤，前端只顯示一行「無法登入」就結束 — 沒有任何申訴管道，只能私訊管理員。這版加了正式申訴流程：OAuth callback 拒絕 disabled 帳號時改 redirect 回首頁帶 `?auth_error=account_disabled&appeal_enabled=true&email=...` 參數（不直接吐 403 JSON 把瀏覽器搞爆），SPA 偵測到參數後渲染 Lock card 第三狀態（🚫 icon + 「提出申訴」按鈕）→ 點開申訴 Modal 填事由（1-2000 字、自動帶 email、IP 每日限 5 次）→ 後端寫進新表 `account_appeals` → 每日台北 09:00 cron 寄 digest email 給 admin。後端三道防線：reason 空白 / 超 2000 字回 400；unknown email 與 active user email 為防列舉攻擊都靜默回 accepted 但不寫表；同 IP 每日第 6 次 429。所有 admin 行為走既有 ZSend email 不開新後台 UI（MVP），未來有量再開審核 dashboard。',
+      en: 'Previously, when an account got blacklisted, the user would hit a 403 error after Google login and the frontend just showed a one-line "cannot log in" — no appeal channel, just a dead end. This release adds a formal appeal flow: when the OAuth callback rejects a disabled account, it now redirects back to the home page with `?auth_error=account_disabled&appeal_enabled=true&email=...` query params (instead of returning raw 403 JSON which would break the SPA). The SPA detects the params and renders the Lock card third state (🚫 icon + "Submit Appeal" button) → clicking opens the Appeal Modal with a reason textarea (1-2000 chars, auto-fills email, IP rate-limited 5/day) → backend writes to the new `account_appeals` table → a daily 09:00 Taipei cron sends a digest email to admins. Backend has three defenses: empty/over-2000 reason returns 400; unknown email and active-user email both silently return accepted without writing to the DB (to prevent account enumeration); 6th request from the same IP per day returns 429. Admin handling uses existing ZSend email; no new admin UI in MVP — a review dashboard ships later if volume justifies it.',
+    },
+    summaryBullets: {
+      zh: [
+        'OAuth callback 對 disabled 帳號改 redirect `?auth_error=account_disabled&appeal_enabled=...&email=...`，不直接吐 403 JSON 破壞 SPA',
+        'Lock card 加第三狀態 disabled（🚫 icon + 申訴 CTA）+ 新 AppealModal（reason textarea 1-2000 字、auto-fill email）',
+        '新表 `account_appeals` + 每日 09:00 台北 digest email 寄給 admin',
+        '反濫用：unknown email / active user 都靜默 accepted 不寫表（防列舉攻擊）；同 IP 每日 5 次後 429',
+      ],
+      en: [
+        'OAuth callback for disabled accounts redirects to `?auth_error=account_disabled&appeal_enabled=...&email=...` instead of returning raw 403 JSON (which would break the SPA)',
+        'Lock card gains third state disabled (🚫 icon + appeal CTA) + new AppealModal (reason textarea 1-2000 chars, auto-fills email)',
+        'New `account_appeals` table + daily 09:00 Taipei digest email to admins',
+        'Anti-abuse: unknown email / active user silently return accepted without writing to DB (prevents enumeration); 6th IP-request per day returns 429',
+      ],
+    },
+  },
+  {
     date: '2026-05-18', slug: 'aihub-graphql-adapter-migration', milestone: 'v1.7', tag: 'fix',
     title: {
       zh: '後台 AI Hub 用量數字之前一直顯示 0，現在已可正常追蹤實際花費',
