@@ -49,7 +49,57 @@ const MILESTONE_LABELS = {
 
 // Entries — newest milestone first; within each milestone newest date first.
 const RELEASE_LOG = [
-  // ─── v1.7 — Retrieval Quality Fix (5/13–5/18) ───
+  // ─── v1.7 — Retrieval Quality Fix (5/13–5/19) ───
+  {
+    date: '2026-05-19', slug: 'celery-publish-routing-fix-and-f2-smoke', milestone: 'v1.7', tag: 'fix',
+    title: {
+      zh: '外部服務告警系統補上兩個 silent drop 漏洞',
+      en: 'Fixed Two Silent-Drop Bugs Holding Back the Outage Alert System',
+    },
+    summary: {
+      zh: '前一版 ship 的「外部服務出問題自動暫停 + 寄信通知」(circuit breaker) 跑 prod smoke 時抓到兩個 silent drop bug：(1) 後台「重新生成摘要」按鈕回 200 enqueued=true，但 Celery worker 其實沒收到任務 — 原因是 FastAPI 的 async 路由直接呼叫 sync 的 Celery publisher，跟 asyncpg event loop 衝突；(2) worker 真的接到失敗任務後，本來要寫進 task_failure_log 表的 async coroutine 因為 worker 殘留的 closed event loop 沒被執行 → 失敗計數永遠是 0 → circuit 永遠不會自動 open → 告警信永遠不會寄。兩個 bug 都是把 async/sync 接合改用獨立的 thread + 新 event loop 隔離解掉。順手把 F1 殘留的 cron_tick 任務跑去 default queue 的 leak（beat schedule 沒指定 queue）一起補。實測：拿一把假 aihub key 灌 5 個摘要任務 → 90 秒內後台「服務狀態」aihub 變紅、出現「手動恢復」按鈕、點完按鈕後馬上變綠 + 出現「已手動恢復」提示。',
+      en: 'After the previous "external service auto-pause + email alert" (circuit breaker) shipped, prod smoke caught two silent-drop bugs: (1) the admin "regenerate summary" button returned 200 enqueued=true, but the Celery worker never actually received the task — caused by FastAPI\'s async route directly calling the sync Celery publisher, conflicting with the asyncpg event loop; (2) once a worker did receive a failing task, the async coroutine that should write to task_failure_log silently dropped because of the worker\'s residual closed event loop after task crash → failure count stayed at 0 → circuit never opened → alert email never sent. Both fixed by isolating the async/sync boundary into a dedicated thread with a fresh event loop. Also patched the F1 leftover where cron_tick leaked to the default queue (beat schedule entries missing options.queue). Verified end-to-end: feeding 5 summary tasks to a fake aihub key → within 90 seconds the admin Service Status page shows aihub as red with a "Manual Resume" button → clicking it flips back to green with a "Manually Resumed" toast.',
+    },
+    summaryBullets: {
+      zh: [
+        '後台「重新生成摘要」publish 從 silent drop 變成 fail-loud 503',
+        '失敗記錄與 circuit breaker 真的會在外部服務掛掉時自動 open',
+        '後台「服務狀態」分頁可看到紅綠狀態跟「手動恢復」按鈕',
+        'F1 cron_tick leak 一起補（beat schedule 顯式指定 control queue）',
+      ],
+      en: [
+        'Admin "regenerate summary" publish flipped from silent drop to fail-loud 503',
+        'Failure logging + circuit breaker now actually open when an external service goes down',
+        'Service Status admin tab shows green/red badges + "Manual Resume" button',
+        'Bundled fix for F1 cron_tick leak (beat schedule now explicitly routes to control queue)',
+      ],
+    },
+  },
+  {
+    date: '2026-05-19', slug: 'task-failure-monitoring-and-circuit-breaker', milestone: 'v1.7', tag: 'feature',
+    title: {
+      zh: '外部 LLM / 寄信服務出問題會自動暫停 + 寄信通知',
+      en: 'External LLM / Email Service Outage Auto-Pause + Email Notification',
+    },
+    summary: {
+      zh: '建立後端任務失敗監控 + circuit breaker：當 aihub / openai / zsend 任一外部服務在 5 分鐘內失敗超過閾值，自動把該服務的 circuit「open」、後續任務自動暫停 5 分鐘再 retry（不會 worker 一直空轉燒 quota），同時寄一封 ZSend 告警信通知 admin。每 30 分鐘自動探測一次外部服務、通則就自動恢復；也可在後台「服務狀態」分頁手動點「恢復」按鈕（會收到 recovery 信）。後台 admin 新增「服務狀態」分頁列出三個外部 provider 的當前狀態（綠/紅 badge + 暫停起時 + 影響任務數 + 最後探測時間 + 手動恢復按鈕）。失敗事件全部寫進新表 `task_failure_log` 留歷史紀錄。這版同時把 5/10 凌晨同日抓到的「EP2 transcribe 連續失敗無人察覺」「topic backfill 批次全失敗沒 alert」兩個 silent failure 漏洞補上。',
+      en: 'Built backend task failure monitoring + circuit breaker: when any external service (aihub / openai / zsend) fails more than the threshold within a 5-minute window, the breaker automatically "opens" for that service, subsequent tasks self-pause for 5 minutes and retry (no busy-spinning that burns quota), and a ZSend alert email goes out to admin. The system auto-probes every 30 minutes and recovers when the service responds; admin can also click "Manual Resume" in the Service Status tab (which sends a recovery email). Adds a new "Service Status" admin tab showing the three external providers\' current state (green/red badge + paused-since + affected task count + last probe + manual resume button). All failure events are recorded in a new `task_failure_log` table for historical reference. This release also closes the two silent-failure gaps caught on 5/10 morning ("EP2 transcribe failed repeatedly with nobody noticing" and "topic backfill batch all failed with no alert").',
+    },
+    summaryBullets: {
+      zh: [
+        '外部服務失敗超閾值自動暫停 + 寄信告警，不再 silent 燒 quota',
+        '後台「服務狀態」分頁可看綠/紅 badge + 暫停起時 + 一鍵手動恢復',
+        '每 30 分鐘自動探測，外部服務恢復後自動 close',
+        '全部失敗事件落 `task_failure_log` 表留歷史',
+      ],
+      en: [
+        'External service failures over threshold auto-pause + alert email — no more silent quota burn',
+        'Service Status admin tab shows green/red badge + paused-since + one-click manual resume',
+        'Auto-probes every 30 minutes, breaker auto-closes when service recovers',
+        'All failure events recorded in `task_failure_log` for history',
+      ],
+    },
+  },
   {
     date: '2026-05-18', slug: 'celery-routing-and-dispatcher-fix', milestone: 'v1.7', tag: 'fix',
     title: {

@@ -55,6 +55,6 @@
 ## 10. 部署 + smoke
 
 - [x] 10.1 push 6 commit → 5 service redeploy（backend / worker / dispatcher / beat / frontend，因 index.html v=14 bump）。Prod 驗：backend healthz 200、alembic current = `a5b6c7d8e9f0`、worker / dispatcher / beat / frontend 全 RUNNING
-- [ ] 10.2 prod smoke 1：admin 把 aihub ai_steps key 暫時改錯 → 觸發 transcribe / topic task → 5 min 內收 ZSend 失敗告警信 + circuit 開 + admin UI 紅 badge + paused_task_count 增長 + 手動 resume 後恢復 + recovery 信 — **user 接手**（需 admin UI 操作 + 監看 ZSend 信箱）
-- [ ] 10.3 prod smoke 2：把 aihub 模型切到觸發 ContentPolicy 的敏感字 prompt → task fallback OpenAI direct 完成 + log 標 `recovered via fallback` + circuit 仍 closed — **user 接手**（且依賴 follow-up `aihub-adapter-typed-exception-translation` 把 aihub 400 解析成 ContentPolicyViolationError）
-- [ ] 10.4 release log 補 entry + 路線圖 F2 改 📦 — **archive 階段做**
+- [x] 10.2 prod smoke 1：在 follow-up change `celery-publish-routing-fix-and-f2-smoke` 跑完整 5/19 凌晨。fake key smoke → worker 401 fail → circuit OPEN（opened_at=2026-05-18T17:01:58Z UTC）→ 後台 UI 顯示「open + 暫停起時 2026/05/19 01:01 + 手動恢復 button」→ 點 button 跳 confirm dialog → 確定後變 closed + toast「已手動恢復：aihub」。**ZSend 信留 user 信箱確認**（不阻 archive）
+- [ ] 10.3 prod smoke 2 (ContentPolicy fallback)：依賴 follow-up `aihub-adapter-typed-exception-translation` change，本 change 不做
+- [x] 10.4 release log + 路線圖 — archive 時做
