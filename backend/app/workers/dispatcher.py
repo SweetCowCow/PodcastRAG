@@ -41,7 +41,19 @@ def _request_shutdown(*_args) -> None:
 
 
 async def _try_pop_one(session) -> str | None:
-    """Pop the lowest-position pending row, transition to running.
+    """Pick the lowest-position pending row eligible for dispatch.
+
+    celery-routing-and-dispatcher-fix:
+    - dispatcher 不再 set status=running / started_at / celery_task_id;
+      那三個欄位由 worker task entry 自己 set，DB 狀態才會等於 worker
+      實際狀態（stale-detect 30 min 閾值才有意義）。
+    - 改寫成「set dispatched_at = NOW() 後 commit、再 send_task」。
+    - SELECT 條件加上 ``dispatched_at IS NULL`` + ``FOR UPDATE SKIP LOCKED``
+      防 dispatcher 自身 race（連續兩 tick 都選到同 row）以及
+      多 dispatcher instance（rolling deploy）同時 claim 同 row。
+
+    concurrency cap 仍以 ``status='running'`` row count 為分母——這現在
+    完全等於 worker 真實 in-flight 數量。
 
     Returns the popped episode_id (str) or None if nothing eligible.
     """
@@ -59,6 +71,7 @@ async def _try_pop_one(session) -> str | None:
         .where(
             TranscriptionQueue.status == QueueStatus.pending,
             TranscriptionQueue.ignored.is_(False),
+            TranscriptionQueue.dispatched_at.is_(None),
         )
         .order_by(TranscriptionQueue.position.asc())
         .limit(1)
@@ -68,8 +81,8 @@ async def _try_pop_one(session) -> str | None:
     if row is None:
         return None
 
-    row.status = QueueStatus.running
-    row.started_at = datetime.now(timezone.utc)
+    # 只 set dispatcher 自己的 memo pad，不動 status/started_at/celery_task_id。
+    row.dispatched_at = datetime.now(timezone.utc)
     await session.commit()
     return str(row.episode_id)
 

@@ -55,3 +55,9 @@ class TranscriptionQueue(Base):
     )
     whisper_model: Mapped[str] = mapped_column(String(50), nullable=False)
     celery_task_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # celery-routing-and-dispatcher-fix: dispatcher 自己的 memo pad；
+    # SELECT 排除 dispatched_at IS NOT NULL 防同 row 連發兩 task。
+    # worker entry + terminal transition 都會清回 NULL。
+    dispatched_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )

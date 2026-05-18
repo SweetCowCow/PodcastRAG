@@ -130,6 +130,7 @@ async def _revert_orphan_rows_async(
                 row.started_at = None
                 row.celery_task_id = None
                 row.error_message = None
+                row.dispatched_at = None
                 try:
                     release_global_slot(str(row.id))
                 except Exception:
@@ -158,6 +159,62 @@ def _revert_orphan_rows(
     )
 
 
+async def _reset_ambiguous_and_stuck_rows_async() -> int:
+    """celery-routing-and-dispatcher-fix: startup self-recovery 第 2、3 case。
+
+    處理兩種模稜兩可的狀態：
+
+    1. ``status='running' AND started_at IS NULL`` — 部署 cutover 後
+       legacy 行為（舊 dispatcher 會 set running 但 started_at 偶有漏）
+       或 worker entry 寫一半 crash。
+    2. ``status='pending' AND dispatched_at IS NOT NULL AND
+       dispatched_at < NOW - 5min`` — dispatcher commit 完
+       dispatched_at 但 send_task 前 crash；新 dispatcher 因為
+       SELECT 排除 dispatched_at IS NOT NULL，這 row 永遠卡死。
+
+    Reset 動作：status=pending、started_at=NULL、celery_task_id=NULL、
+    dispatched_at=NULL、error_message=NULL，並釋放 throttle slot。
+    """
+    from datetime import datetime, timedelta, timezone
+
+    cutoff = datetime.now(timezone.utc) - timedelta(minutes=5)
+    engine = create_async_engine(settings.database_url, poolclass=NullPool)
+    reset = 0
+    try:
+        async with async_sessionmaker(engine, expire_on_commit=False)() as session:
+            stmt = select(TranscriptionQueue).where(
+                (
+                    (TranscriptionQueue.status == QueueStatus.running)
+                    & (TranscriptionQueue.started_at.is_(None))
+                )
+                | (
+                    (TranscriptionQueue.status == QueueStatus.pending)
+                    & (TranscriptionQueue.dispatched_at.is_not(None))
+                    & (TranscriptionQueue.dispatched_at < cutoff)
+                )
+            )
+            rows = (await session.execute(stmt)).scalars().all()
+            for row in rows:
+                row.status = QueueStatus.pending
+                row.started_at = None
+                row.celery_task_id = None
+                row.dispatched_at = None
+                row.error_message = None
+                try:
+                    release_global_slot(str(row.id))
+                except Exception:
+                    logger.exception(
+                        "lifecycle: release_global_slot failed for queue_id=%s",
+                        row.id,
+                    )
+                reset += 1
+            if reset:
+                await session.commit()
+    finally:
+        await engine.dispose()
+    return reset
+
+
 async def _revert_specific_rows_async(row_ids: set[str]) -> int:
     if not row_ids:
         return 0
@@ -179,6 +236,7 @@ async def _revert_specific_rows_async(row_ids: set[str]) -> int:
                 row.started_at = None
                 row.celery_task_id = None
                 row.error_message = None
+                row.dispatched_at = None
                 try:
                     release_global_slot(str(row.id))
                 except Exception:
@@ -204,6 +262,16 @@ def _on_worker_ready(sender=None, **kwargs):
             n,
             ok,
         )
+        # celery-routing-and-dispatcher-fix: 接著清模稜兩可 + 卡住 dispatched_at row
+        try:
+            m = asyncio.run(_reset_ambiguous_and_stuck_rows_async())
+            logger.info(
+                "lifecycle: worker_ready — reset %d ambiguous/stuck rows", m
+            )
+        except Exception:
+            logger.exception(
+                "lifecycle: worker_ready ambiguous/stuck reset raised"
+            )
     except Exception:
         logger.exception("lifecycle: worker_ready handler raised")
 
