@@ -590,3 +590,714 @@ tests:
   - backend/tests/test_summary_integration.py
   - backend/tests/test_config.py
 -->
+
+---
+### Requirement: Queue routing splits tasks across four named queues
+
+The Celery application SHALL configure `task_routes` so that each task class is routed to one of four named queues based on its workload category:
+
+- `transcribe` queue: `app.workers.tasks.transcribe_episode`
+- `topic` queue: `app.workers.topic_task.classify_episode_topics`
+- `summary` queue: `app.workers.summary_task.generate_episode_summary`
+- `control` queue: cron_tick, quota_digest, eval_reminder, db_backup, tokenizer_reload, and any task without an explicit route
+
+The `task_default_queue` SHALL be set to `control` so that tasks added in the future without an explicit `task_routes` entry are not silently dropped or sent to a queue that no worker is listening to.
+
+#### Scenario: transcribe task routed to transcribe queue
+
+- **WHEN** `transcribe_episode.delay(episode_id)` is called
+- **THEN** the broker SHALL receive the task message on the queue named `transcribe`
+
+#### Scenario: topic task routed to topic queue
+
+- **WHEN** `classify_episode_topics.delay(episode_id)` is called
+- **THEN** the broker SHALL receive the task message on the queue named `topic`
+
+#### Scenario: unrouted task falls back to control queue
+
+- **WHEN** a new task `app.workers.foo.bar` is registered with no entry in `task_routes` and `bar.delay()` is called
+- **THEN** the broker SHALL receive the task message on the queue named `control`
+
+
+<!-- @trace
+source: celery-routing-and-dispatcher-fix
+updated: 2026-05-18
+code:
+  - backend/app/api/admin/__init__.py
+  - backend/app/workers/usage_alert.py
+  - backend/eval/datasets/this-not-that-cool.json
+  - backend/app/api/admin/ai_steps.py
+  - backend/app/models/episode_description_chunk.py
+  - backend/alembic/versions/x2e3f4a5b6c7_provider_usage_monitoring.py
+  - backend/scripts/backfill_guests.py
+  - backend/eval/scripts/embedding_bakeoff.py
+  - src/Shared.jsx
+  - backend/scripts/cleanup_v1_description_chunks.py
+  - backend/app/api/query.py
+  - backend/app/services/exceptions.py
+  - backend/app/workers/appeal_digest.py
+  - backend/app/api/admin_processing_stats.py
+  - backend/app/api/admin/episode_guests.py
+  - backend/app/services/episode_finders.py
+  - backend/eval/datasets/_schema.json
+  - backend/app/services/rag.py
+  - src/App.jsx
+  - src/releaseLog.jsx
+  - backend/app/services/sync.py
+  - backend/app/workers/lifecycle.py
+  - backend/scripts/pilot_reembed_descriptions.py
+  - backend/app/models/transcription_queue.py
+  - src/AdminEpisodeGuestsTab.jsx
+  - src/QueueTab.jsx
+  - backend/app/services/llm_prompts.py
+  - backend/app/api/admin/chunking_status.py
+  - backend/app/schemas/episode_guests.py
+  - .tmp/citation-unify-en-collapsed.png
+  - backend/app/schemas/appeal.py
+  - backend/app/models/__init__.py
+  - docs/ai-steps.md
+  - backend/alembic/versions/v0c1d2e3f4a5_r33_episodes_guests_and_title_tsv.py
+  - backend/scripts/backfill_title_tsv.py
+  - backend/alembic/versions/t8a9b0c1d2e3_chunking_version_description_chunks.py
+  - backend/alembic/versions/z4a5b6c7d8e9_add_transcription_queue_dispatched_at.py
+  - backend/app/core/config.py
+  - src/AdminPage.jsx
+  - backend/app/main.py
+  - CLAUDE.md
+  - backend/app/services/description_rechunker.py
+  - backend/app/models/provider_usage_snapshot.py
+  - backend/app/services/key_resolver.py
+  - backend/app/workers/topic_task.py
+  - backend/eval/metrics/recall.py
+  - .tmp/citation-unify-q2.png
+  - backend/app/services/zsend.py
+  - backend/app/services/rss_parser.py
+  - backend/app/schemas/query.py
+  - backend/app/services/description_indexer.py
+  - backend/app/workers/dispatcher.py
+  - index.html
+  - backend/app/workers/celery_app.py
+  - backend/alembic/versions/u9b0c1d2e3f4_add_embedding_v2_columns.py
+  - backend/app/models/account_appeal.py
+  - .tmp/citation-unify-q3.png
+  - src/AdminTokenizerTab.jsx
+  - backend/app/api/shows.py
+  - src/ProviderUsageTab.jsx
+  - src/AppealModal.jsx
+  - backend/app/workers/usage_collector.py
+  - backend/app/services/tokenizer.py
+  - docs/celery-queues.md
+  - backend/app/api/appeal.py
+  - .tmp/citation-unify-q1-q2-q3-zh-expanded.png
+  - .tmp/citation-unify-q1.png
+  - backend/app/services/citation_parser.py
+  - backend/scripts/backfill_embedding_v2.py
+  - backend/app/services/query_entity.py
+  - backend/app/schemas/query_entity.py
+  - backend/alembic/versions/y3f4a5b6c7d8_add_account_appeals.py
+  - backend/app/api/admin_provider_usage.py
+  - backend/alembic/versions/w1d2e3f4a5b6_r33_add_entity_extraction_step.py
+  - backend/app/workers/tasks.py
+  - backend/app/workers/summary_task.py
+  - backend/app/services/embedding.py
+  - backend/eval/datasets/README.md
+  - backend/app/services/provider_usage/__init__.py
+  - backend/eval/datasets/this-not-that-cool.json.bak-20260515T060258Z
+  - entrypoint.sh
+  - backend/eval/scripts/build_golden_set.py
+  - backend/app/schemas/errors.py
+  - backend/app/services/provider_usage/zeabur_aihub_graphql.py
+  - src/CitationEvidenceCollapse.jsx
+  - backend/app/services/transcription/openai_provider.py
+  - src/QueryPage.jsx
+  - backend/app/models/ai_step.py
+  - backend/app/api/auth.py
+  - docs/roadmap.md
+  - backend/eval/scripts/bakeoff_entity_extractor.py
+  - backend/app/services/provider_usage/openai_adapter.py
+  - backend/eval/datasets/_pending_review.json
+  - backend/.env.example
+  - backend/eval/runners/run.py
+  - backend/app/models/episode.py
+  - backend/eval/scripts/validate_schema.py
+  - backend/app/models/transcript_chunk.py
+  - src/TranscriptPage.jsx
+  - .tmp/citation-unify-zh-all.png
+  - backend/app/core/csrf.py
+tests:
+  - backend/tests/test_rag_multi_column_bm25.py
+  - backend/tests/test_chunking_version_coexistence.py
+  - backend/tests/test_key_resolver.py
+  - backend/tests/test_admin_provider_usage_api.py
+  - backend/tests/test_answer_unwrap.py
+  - backend/tests/test_rss_guests_extraction.py
+  - backend/tests/test_description_rechunker.py
+  - backend/tests/test_eval_runner_dispatch.py
+  - backend/tests/test_rag_retrieval_flags.py
+  - backend/tests/test_answer_malformed_json_salvage.py
+  - backend/tests/test_runner_chat_enumeration.py
+  - backend/tests/services/__init__.py
+  - backend/tests/test_strip_citations.py
+  - backend/tests/test_chat_enum_grounding.py
+  - backend/tests/test_query_chat_metadata_filter.py
+  - backend/tests/test_dispatcher_idempotency.py
+  - backend/tests/test_celery_routing.py
+  - backend/tests/test_episode_guests_schema.py
+  - backend/tests/test_admin_processing_stats_api.py
+  - backend/tests/test_usage_collector.py
+  - backend/tests/test_citation_parser.py
+  - backend/tests/workers/__init__.py
+  - backend/tests/test_backfill_guests.py
+  - backend/tests/test_eval_dataset_schema.py
+  - backend/tests/test_usage_alert.py
+  - backend/tests/test_query_entity.py
+  - backend/tests/test_llm_prompts.py
+  - backend/tests/test_episode_finders.py
+  - backend/tests/test_description_retrieval_prefer_v2.py
+  - backend/tests/test_auth_db.py
+  - backend/tests/workers/test_appeal_digest.py
+  - backend/tests/test_golden_set_dataset.py
+  - backend/tests/api/__init__.py
+  - backend/tests/test_eval_runner_flags.py
+  - backend/tests/test_rag_embedding_v2_flag.py
+  - backend/tests/test_provider_usage_adapters.py
+  - backend/tests/test_compute_enumeration_combiner.py
+  - backend/tests/test_embedding_v2_dual_write.py
+  - backend/tests/test_admin_episode_guests.py
+  - backend/tests/test_openai_provider_chunking.py
+  - backend/tests/services/test_aihub_graphql_adapter.py
+  - backend/tests/test_rag_query_response_shape.py
+  - backend/tests/test_ai_summary_full_field.py
+  - backend/tests/test_description_chunker_120.py
+  - backend/tests/api/test_appeal.py
+  - backend/tests/test_transcribe_task_celery_id.py
+-->
+
+---
+### Requirement: Message priority orders task dispatch within and across queues
+
+The Celery application SHALL set `task_queue_max_priority=10` and `task_default_priority=5`, and configure `broker_transport_options={"priority_steps": [0, 3, 6, 9]}` for the Redis broker. Each task SHALL declare a default priority value via its `apply_async`/`delay` configuration:
+
+- `transcribe_episode`: priority `9` (highest)
+- `classify_episode_topics`: priority `2`
+- `generate_episode_summary`: priority `2`
+- All other tasks: priority `5` (default)
+
+When a worker process becomes idle, the Redis broker SHALL deliver the highest-priority pending message available across all subscribed queues before delivering any lower-priority message.
+
+#### Scenario: high-priority transcribe preempts low-priority backfill
+
+- **GIVEN** the worker has 6 prefork slots, 5 of which are currently running `classify_episode_topics` tasks (priority=2)
+- **AND** 100 additional `classify_episode_topics` tasks are pending on the `topic` queue
+- **AND** 1 `transcribe_episode` task (priority=9) is pending on the `transcribe` queue
+- **WHEN** the next prefork slot becomes idle (current task completes)
+- **THEN** the worker SHALL pick up the `transcribe_episode` task before any of the 100 pending `topic` tasks
+
+##### Example: priority pop order
+
+| Pending messages on broker | Next idle slot picks |
+| -------------------------- | -------------------- |
+| 50× topic (p=2) | 1× topic (p=2) |
+| 50× topic (p=2), 1× transcribe (p=9) | 1× transcribe (p=9) |
+| 1× control cron_tick (p=5), 50× topic (p=2) | 1× cron_tick (p=5) |
+| 1× transcribe (p=9), 1× cron_tick (p=5), 1× topic (p=2) | 1× transcribe (p=9), then cron_tick, then topic |
+
+#### Scenario: tasks within the same priority level use queue FIFO order
+
+- **GIVEN** 10 `classify_episode_topics` tasks (priority=2) enqueued in order T1...T10
+- **WHEN** a worker slot becomes idle
+- **THEN** the worker SHALL pick up T1 before T2 (FIFO within the same priority bucket)
+
+
+<!-- @trace
+source: celery-routing-and-dispatcher-fix
+updated: 2026-05-18
+code:
+  - backend/app/api/admin/__init__.py
+  - backend/app/workers/usage_alert.py
+  - backend/eval/datasets/this-not-that-cool.json
+  - backend/app/api/admin/ai_steps.py
+  - backend/app/models/episode_description_chunk.py
+  - backend/alembic/versions/x2e3f4a5b6c7_provider_usage_monitoring.py
+  - backend/scripts/backfill_guests.py
+  - backend/eval/scripts/embedding_bakeoff.py
+  - src/Shared.jsx
+  - backend/scripts/cleanup_v1_description_chunks.py
+  - backend/app/api/query.py
+  - backend/app/services/exceptions.py
+  - backend/app/workers/appeal_digest.py
+  - backend/app/api/admin_processing_stats.py
+  - backend/app/api/admin/episode_guests.py
+  - backend/app/services/episode_finders.py
+  - backend/eval/datasets/_schema.json
+  - backend/app/services/rag.py
+  - src/App.jsx
+  - src/releaseLog.jsx
+  - backend/app/services/sync.py
+  - backend/app/workers/lifecycle.py
+  - backend/scripts/pilot_reembed_descriptions.py
+  - backend/app/models/transcription_queue.py
+  - src/AdminEpisodeGuestsTab.jsx
+  - src/QueueTab.jsx
+  - backend/app/services/llm_prompts.py
+  - backend/app/api/admin/chunking_status.py
+  - backend/app/schemas/episode_guests.py
+  - .tmp/citation-unify-en-collapsed.png
+  - backend/app/schemas/appeal.py
+  - backend/app/models/__init__.py
+  - docs/ai-steps.md
+  - backend/alembic/versions/v0c1d2e3f4a5_r33_episodes_guests_and_title_tsv.py
+  - backend/scripts/backfill_title_tsv.py
+  - backend/alembic/versions/t8a9b0c1d2e3_chunking_version_description_chunks.py
+  - backend/alembic/versions/z4a5b6c7d8e9_add_transcription_queue_dispatched_at.py
+  - backend/app/core/config.py
+  - src/AdminPage.jsx
+  - backend/app/main.py
+  - CLAUDE.md
+  - backend/app/services/description_rechunker.py
+  - backend/app/models/provider_usage_snapshot.py
+  - backend/app/services/key_resolver.py
+  - backend/app/workers/topic_task.py
+  - backend/eval/metrics/recall.py
+  - .tmp/citation-unify-q2.png
+  - backend/app/services/zsend.py
+  - backend/app/services/rss_parser.py
+  - backend/app/schemas/query.py
+  - backend/app/services/description_indexer.py
+  - backend/app/workers/dispatcher.py
+  - index.html
+  - backend/app/workers/celery_app.py
+  - backend/alembic/versions/u9b0c1d2e3f4_add_embedding_v2_columns.py
+  - backend/app/models/account_appeal.py
+  - .tmp/citation-unify-q3.png
+  - src/AdminTokenizerTab.jsx
+  - backend/app/api/shows.py
+  - src/ProviderUsageTab.jsx
+  - src/AppealModal.jsx
+  - backend/app/workers/usage_collector.py
+  - backend/app/services/tokenizer.py
+  - docs/celery-queues.md
+  - backend/app/api/appeal.py
+  - .tmp/citation-unify-q1-q2-q3-zh-expanded.png
+  - .tmp/citation-unify-q1.png
+  - backend/app/services/citation_parser.py
+  - backend/scripts/backfill_embedding_v2.py
+  - backend/app/services/query_entity.py
+  - backend/app/schemas/query_entity.py
+  - backend/alembic/versions/y3f4a5b6c7d8_add_account_appeals.py
+  - backend/app/api/admin_provider_usage.py
+  - backend/alembic/versions/w1d2e3f4a5b6_r33_add_entity_extraction_step.py
+  - backend/app/workers/tasks.py
+  - backend/app/workers/summary_task.py
+  - backend/app/services/embedding.py
+  - backend/eval/datasets/README.md
+  - backend/app/services/provider_usage/__init__.py
+  - backend/eval/datasets/this-not-that-cool.json.bak-20260515T060258Z
+  - entrypoint.sh
+  - backend/eval/scripts/build_golden_set.py
+  - backend/app/schemas/errors.py
+  - backend/app/services/provider_usage/zeabur_aihub_graphql.py
+  - src/CitationEvidenceCollapse.jsx
+  - backend/app/services/transcription/openai_provider.py
+  - src/QueryPage.jsx
+  - backend/app/models/ai_step.py
+  - backend/app/api/auth.py
+  - docs/roadmap.md
+  - backend/eval/scripts/bakeoff_entity_extractor.py
+  - backend/app/services/provider_usage/openai_adapter.py
+  - backend/eval/datasets/_pending_review.json
+  - backend/.env.example
+  - backend/eval/runners/run.py
+  - backend/app/models/episode.py
+  - backend/eval/scripts/validate_schema.py
+  - backend/app/models/transcript_chunk.py
+  - src/TranscriptPage.jsx
+  - .tmp/citation-unify-zh-all.png
+  - backend/app/core/csrf.py
+tests:
+  - backend/tests/test_rag_multi_column_bm25.py
+  - backend/tests/test_chunking_version_coexistence.py
+  - backend/tests/test_key_resolver.py
+  - backend/tests/test_admin_provider_usage_api.py
+  - backend/tests/test_answer_unwrap.py
+  - backend/tests/test_rss_guests_extraction.py
+  - backend/tests/test_description_rechunker.py
+  - backend/tests/test_eval_runner_dispatch.py
+  - backend/tests/test_rag_retrieval_flags.py
+  - backend/tests/test_answer_malformed_json_salvage.py
+  - backend/tests/test_runner_chat_enumeration.py
+  - backend/tests/services/__init__.py
+  - backend/tests/test_strip_citations.py
+  - backend/tests/test_chat_enum_grounding.py
+  - backend/tests/test_query_chat_metadata_filter.py
+  - backend/tests/test_dispatcher_idempotency.py
+  - backend/tests/test_celery_routing.py
+  - backend/tests/test_episode_guests_schema.py
+  - backend/tests/test_admin_processing_stats_api.py
+  - backend/tests/test_usage_collector.py
+  - backend/tests/test_citation_parser.py
+  - backend/tests/workers/__init__.py
+  - backend/tests/test_backfill_guests.py
+  - backend/tests/test_eval_dataset_schema.py
+  - backend/tests/test_usage_alert.py
+  - backend/tests/test_query_entity.py
+  - backend/tests/test_llm_prompts.py
+  - backend/tests/test_episode_finders.py
+  - backend/tests/test_description_retrieval_prefer_v2.py
+  - backend/tests/test_auth_db.py
+  - backend/tests/workers/test_appeal_digest.py
+  - backend/tests/test_golden_set_dataset.py
+  - backend/tests/api/__init__.py
+  - backend/tests/test_eval_runner_flags.py
+  - backend/tests/test_rag_embedding_v2_flag.py
+  - backend/tests/test_provider_usage_adapters.py
+  - backend/tests/test_compute_enumeration_combiner.py
+  - backend/tests/test_embedding_v2_dual_write.py
+  - backend/tests/test_admin_episode_guests.py
+  - backend/tests/test_openai_provider_chunking.py
+  - backend/tests/services/test_aihub_graphql_adapter.py
+  - backend/tests/test_rag_query_response_shape.py
+  - backend/tests/test_ai_summary_full_field.py
+  - backend/tests/test_description_chunker_120.py
+  - backend/tests/api/test_appeal.py
+  - backend/tests/test_transcribe_task_celery_id.py
+-->
+
+---
+### Requirement: Worker subscribes to all four named queues
+
+The Celery worker process SHALL be started with `--queues=transcribe,topic,summary,control` so that it consumes from all four routed queues. The Zeabur `worker` service `START_COMMAND` SHALL include this flag. The worker SHALL not be configured to listen exclusively to a subset (no per-queue worker split is introduced).
+
+#### Scenario: Worker accepts task from any of the four queues
+
+- **GIVEN** the worker is running with `--queues=transcribe,topic,summary,control`
+- **WHEN** any task is dispatched to any one of the four queues
+- **THEN** the worker SHALL receive and execute the task within 5 seconds of broker delivery (subject to concurrency slot availability)
+
+#### Scenario: Worker without --queues flag rejects new queues
+
+- **GIVEN** the worker `START_COMMAND` does not include `--queues`
+- **WHEN** a `classify_episode_topics` task is dispatched to the `topic` queue
+- **THEN** the worker SHALL NOT receive the message
+- **AND** the message SHALL accumulate on the `topic` queue indefinitely
+
+
+<!-- @trace
+source: celery-routing-and-dispatcher-fix
+updated: 2026-05-18
+code:
+  - backend/app/api/admin/__init__.py
+  - backend/app/workers/usage_alert.py
+  - backend/eval/datasets/this-not-that-cool.json
+  - backend/app/api/admin/ai_steps.py
+  - backend/app/models/episode_description_chunk.py
+  - backend/alembic/versions/x2e3f4a5b6c7_provider_usage_monitoring.py
+  - backend/scripts/backfill_guests.py
+  - backend/eval/scripts/embedding_bakeoff.py
+  - src/Shared.jsx
+  - backend/scripts/cleanup_v1_description_chunks.py
+  - backend/app/api/query.py
+  - backend/app/services/exceptions.py
+  - backend/app/workers/appeal_digest.py
+  - backend/app/api/admin_processing_stats.py
+  - backend/app/api/admin/episode_guests.py
+  - backend/app/services/episode_finders.py
+  - backend/eval/datasets/_schema.json
+  - backend/app/services/rag.py
+  - src/App.jsx
+  - src/releaseLog.jsx
+  - backend/app/services/sync.py
+  - backend/app/workers/lifecycle.py
+  - backend/scripts/pilot_reembed_descriptions.py
+  - backend/app/models/transcription_queue.py
+  - src/AdminEpisodeGuestsTab.jsx
+  - src/QueueTab.jsx
+  - backend/app/services/llm_prompts.py
+  - backend/app/api/admin/chunking_status.py
+  - backend/app/schemas/episode_guests.py
+  - .tmp/citation-unify-en-collapsed.png
+  - backend/app/schemas/appeal.py
+  - backend/app/models/__init__.py
+  - docs/ai-steps.md
+  - backend/alembic/versions/v0c1d2e3f4a5_r33_episodes_guests_and_title_tsv.py
+  - backend/scripts/backfill_title_tsv.py
+  - backend/alembic/versions/t8a9b0c1d2e3_chunking_version_description_chunks.py
+  - backend/alembic/versions/z4a5b6c7d8e9_add_transcription_queue_dispatched_at.py
+  - backend/app/core/config.py
+  - src/AdminPage.jsx
+  - backend/app/main.py
+  - CLAUDE.md
+  - backend/app/services/description_rechunker.py
+  - backend/app/models/provider_usage_snapshot.py
+  - backend/app/services/key_resolver.py
+  - backend/app/workers/topic_task.py
+  - backend/eval/metrics/recall.py
+  - .tmp/citation-unify-q2.png
+  - backend/app/services/zsend.py
+  - backend/app/services/rss_parser.py
+  - backend/app/schemas/query.py
+  - backend/app/services/description_indexer.py
+  - backend/app/workers/dispatcher.py
+  - index.html
+  - backend/app/workers/celery_app.py
+  - backend/alembic/versions/u9b0c1d2e3f4_add_embedding_v2_columns.py
+  - backend/app/models/account_appeal.py
+  - .tmp/citation-unify-q3.png
+  - src/AdminTokenizerTab.jsx
+  - backend/app/api/shows.py
+  - src/ProviderUsageTab.jsx
+  - src/AppealModal.jsx
+  - backend/app/workers/usage_collector.py
+  - backend/app/services/tokenizer.py
+  - docs/celery-queues.md
+  - backend/app/api/appeal.py
+  - .tmp/citation-unify-q1-q2-q3-zh-expanded.png
+  - .tmp/citation-unify-q1.png
+  - backend/app/services/citation_parser.py
+  - backend/scripts/backfill_embedding_v2.py
+  - backend/app/services/query_entity.py
+  - backend/app/schemas/query_entity.py
+  - backend/alembic/versions/y3f4a5b6c7d8_add_account_appeals.py
+  - backend/app/api/admin_provider_usage.py
+  - backend/alembic/versions/w1d2e3f4a5b6_r33_add_entity_extraction_step.py
+  - backend/app/workers/tasks.py
+  - backend/app/workers/summary_task.py
+  - backend/app/services/embedding.py
+  - backend/eval/datasets/README.md
+  - backend/app/services/provider_usage/__init__.py
+  - backend/eval/datasets/this-not-that-cool.json.bak-20260515T060258Z
+  - entrypoint.sh
+  - backend/eval/scripts/build_golden_set.py
+  - backend/app/schemas/errors.py
+  - backend/app/services/provider_usage/zeabur_aihub_graphql.py
+  - src/CitationEvidenceCollapse.jsx
+  - backend/app/services/transcription/openai_provider.py
+  - src/QueryPage.jsx
+  - backend/app/models/ai_step.py
+  - backend/app/api/auth.py
+  - docs/roadmap.md
+  - backend/eval/scripts/bakeoff_entity_extractor.py
+  - backend/app/services/provider_usage/openai_adapter.py
+  - backend/eval/datasets/_pending_review.json
+  - backend/.env.example
+  - backend/eval/runners/run.py
+  - backend/app/models/episode.py
+  - backend/eval/scripts/validate_schema.py
+  - backend/app/models/transcript_chunk.py
+  - src/TranscriptPage.jsx
+  - .tmp/citation-unify-zh-all.png
+  - backend/app/core/csrf.py
+tests:
+  - backend/tests/test_rag_multi_column_bm25.py
+  - backend/tests/test_chunking_version_coexistence.py
+  - backend/tests/test_key_resolver.py
+  - backend/tests/test_admin_provider_usage_api.py
+  - backend/tests/test_answer_unwrap.py
+  - backend/tests/test_rss_guests_extraction.py
+  - backend/tests/test_description_rechunker.py
+  - backend/tests/test_eval_runner_dispatch.py
+  - backend/tests/test_rag_retrieval_flags.py
+  - backend/tests/test_answer_malformed_json_salvage.py
+  - backend/tests/test_runner_chat_enumeration.py
+  - backend/tests/services/__init__.py
+  - backend/tests/test_strip_citations.py
+  - backend/tests/test_chat_enum_grounding.py
+  - backend/tests/test_query_chat_metadata_filter.py
+  - backend/tests/test_dispatcher_idempotency.py
+  - backend/tests/test_celery_routing.py
+  - backend/tests/test_episode_guests_schema.py
+  - backend/tests/test_admin_processing_stats_api.py
+  - backend/tests/test_usage_collector.py
+  - backend/tests/test_citation_parser.py
+  - backend/tests/workers/__init__.py
+  - backend/tests/test_backfill_guests.py
+  - backend/tests/test_eval_dataset_schema.py
+  - backend/tests/test_usage_alert.py
+  - backend/tests/test_query_entity.py
+  - backend/tests/test_llm_prompts.py
+  - backend/tests/test_episode_finders.py
+  - backend/tests/test_description_retrieval_prefer_v2.py
+  - backend/tests/test_auth_db.py
+  - backend/tests/workers/test_appeal_digest.py
+  - backend/tests/test_golden_set_dataset.py
+  - backend/tests/api/__init__.py
+  - backend/tests/test_eval_runner_flags.py
+  - backend/tests/test_rag_embedding_v2_flag.py
+  - backend/tests/test_provider_usage_adapters.py
+  - backend/tests/test_compute_enumeration_combiner.py
+  - backend/tests/test_embedding_v2_dual_write.py
+  - backend/tests/test_admin_episode_guests.py
+  - backend/tests/test_openai_provider_chunking.py
+  - backend/tests/services/test_aihub_graphql_adapter.py
+  - backend/tests/test_rag_query_response_shape.py
+  - backend/tests/test_ai_summary_full_field.py
+  - backend/tests/test_description_chunker_120.py
+  - backend/tests/api/test_appeal.py
+  - backend/tests/test_transcribe_task_celery_id.py
+-->
+
+---
+### Requirement: Existing tests for queue behaviour SHALL pass without regression
+
+All existing tests under `backend/tests/` that exercise Celery task dispatch, throttling, and worker lifecycle SHALL continue to pass after the routing and priority configuration is added. The change SHALL NOT break the `transcribe_episode` task's interaction with the global concurrency semaphore, per-show lock, or graceful shutdown handler.
+
+#### Scenario: Throttle semaphore continues to function
+
+- **GIVEN** `MAX_CONCURRENT_TRANSCRIPTIONS=1` and one `transcribe_episode` task is currently active
+- **WHEN** a second `transcribe_episode` task is enqueued (now to the `transcribe` queue with priority=9)
+- **THEN** the second task SHALL still self-requeue via the existing `transcribe:global:active_count` check
+- **AND** the per-show Redis lock SHALL still be honored
+
+<!-- @trace
+source: celery-routing-and-dispatcher-fix
+updated: 2026-05-18
+code:
+  - backend/app/api/admin/__init__.py
+  - backend/app/workers/usage_alert.py
+  - backend/eval/datasets/this-not-that-cool.json
+  - backend/app/api/admin/ai_steps.py
+  - backend/app/models/episode_description_chunk.py
+  - backend/alembic/versions/x2e3f4a5b6c7_provider_usage_monitoring.py
+  - backend/scripts/backfill_guests.py
+  - backend/eval/scripts/embedding_bakeoff.py
+  - src/Shared.jsx
+  - backend/scripts/cleanup_v1_description_chunks.py
+  - backend/app/api/query.py
+  - backend/app/services/exceptions.py
+  - backend/app/workers/appeal_digest.py
+  - backend/app/api/admin_processing_stats.py
+  - backend/app/api/admin/episode_guests.py
+  - backend/app/services/episode_finders.py
+  - backend/eval/datasets/_schema.json
+  - backend/app/services/rag.py
+  - src/App.jsx
+  - src/releaseLog.jsx
+  - backend/app/services/sync.py
+  - backend/app/workers/lifecycle.py
+  - backend/scripts/pilot_reembed_descriptions.py
+  - backend/app/models/transcription_queue.py
+  - src/AdminEpisodeGuestsTab.jsx
+  - src/QueueTab.jsx
+  - backend/app/services/llm_prompts.py
+  - backend/app/api/admin/chunking_status.py
+  - backend/app/schemas/episode_guests.py
+  - .tmp/citation-unify-en-collapsed.png
+  - backend/app/schemas/appeal.py
+  - backend/app/models/__init__.py
+  - docs/ai-steps.md
+  - backend/alembic/versions/v0c1d2e3f4a5_r33_episodes_guests_and_title_tsv.py
+  - backend/scripts/backfill_title_tsv.py
+  - backend/alembic/versions/t8a9b0c1d2e3_chunking_version_description_chunks.py
+  - backend/alembic/versions/z4a5b6c7d8e9_add_transcription_queue_dispatched_at.py
+  - backend/app/core/config.py
+  - src/AdminPage.jsx
+  - backend/app/main.py
+  - CLAUDE.md
+  - backend/app/services/description_rechunker.py
+  - backend/app/models/provider_usage_snapshot.py
+  - backend/app/services/key_resolver.py
+  - backend/app/workers/topic_task.py
+  - backend/eval/metrics/recall.py
+  - .tmp/citation-unify-q2.png
+  - backend/app/services/zsend.py
+  - backend/app/services/rss_parser.py
+  - backend/app/schemas/query.py
+  - backend/app/services/description_indexer.py
+  - backend/app/workers/dispatcher.py
+  - index.html
+  - backend/app/workers/celery_app.py
+  - backend/alembic/versions/u9b0c1d2e3f4_add_embedding_v2_columns.py
+  - backend/app/models/account_appeal.py
+  - .tmp/citation-unify-q3.png
+  - src/AdminTokenizerTab.jsx
+  - backend/app/api/shows.py
+  - src/ProviderUsageTab.jsx
+  - src/AppealModal.jsx
+  - backend/app/workers/usage_collector.py
+  - backend/app/services/tokenizer.py
+  - docs/celery-queues.md
+  - backend/app/api/appeal.py
+  - .tmp/citation-unify-q1-q2-q3-zh-expanded.png
+  - .tmp/citation-unify-q1.png
+  - backend/app/services/citation_parser.py
+  - backend/scripts/backfill_embedding_v2.py
+  - backend/app/services/query_entity.py
+  - backend/app/schemas/query_entity.py
+  - backend/alembic/versions/y3f4a5b6c7d8_add_account_appeals.py
+  - backend/app/api/admin_provider_usage.py
+  - backend/alembic/versions/w1d2e3f4a5b6_r33_add_entity_extraction_step.py
+  - backend/app/workers/tasks.py
+  - backend/app/workers/summary_task.py
+  - backend/app/services/embedding.py
+  - backend/eval/datasets/README.md
+  - backend/app/services/provider_usage/__init__.py
+  - backend/eval/datasets/this-not-that-cool.json.bak-20260515T060258Z
+  - entrypoint.sh
+  - backend/eval/scripts/build_golden_set.py
+  - backend/app/schemas/errors.py
+  - backend/app/services/provider_usage/zeabur_aihub_graphql.py
+  - src/CitationEvidenceCollapse.jsx
+  - backend/app/services/transcription/openai_provider.py
+  - src/QueryPage.jsx
+  - backend/app/models/ai_step.py
+  - backend/app/api/auth.py
+  - docs/roadmap.md
+  - backend/eval/scripts/bakeoff_entity_extractor.py
+  - backend/app/services/provider_usage/openai_adapter.py
+  - backend/eval/datasets/_pending_review.json
+  - backend/.env.example
+  - backend/eval/runners/run.py
+  - backend/app/models/episode.py
+  - backend/eval/scripts/validate_schema.py
+  - backend/app/models/transcript_chunk.py
+  - src/TranscriptPage.jsx
+  - .tmp/citation-unify-zh-all.png
+  - backend/app/core/csrf.py
+tests:
+  - backend/tests/test_rag_multi_column_bm25.py
+  - backend/tests/test_chunking_version_coexistence.py
+  - backend/tests/test_key_resolver.py
+  - backend/tests/test_admin_provider_usage_api.py
+  - backend/tests/test_answer_unwrap.py
+  - backend/tests/test_rss_guests_extraction.py
+  - backend/tests/test_description_rechunker.py
+  - backend/tests/test_eval_runner_dispatch.py
+  - backend/tests/test_rag_retrieval_flags.py
+  - backend/tests/test_answer_malformed_json_salvage.py
+  - backend/tests/test_runner_chat_enumeration.py
+  - backend/tests/services/__init__.py
+  - backend/tests/test_strip_citations.py
+  - backend/tests/test_chat_enum_grounding.py
+  - backend/tests/test_query_chat_metadata_filter.py
+  - backend/tests/test_dispatcher_idempotency.py
+  - backend/tests/test_celery_routing.py
+  - backend/tests/test_episode_guests_schema.py
+  - backend/tests/test_admin_processing_stats_api.py
+  - backend/tests/test_usage_collector.py
+  - backend/tests/test_citation_parser.py
+  - backend/tests/workers/__init__.py
+  - backend/tests/test_backfill_guests.py
+  - backend/tests/test_eval_dataset_schema.py
+  - backend/tests/test_usage_alert.py
+  - backend/tests/test_query_entity.py
+  - backend/tests/test_llm_prompts.py
+  - backend/tests/test_episode_finders.py
+  - backend/tests/test_description_retrieval_prefer_v2.py
+  - backend/tests/test_auth_db.py
+  - backend/tests/workers/test_appeal_digest.py
+  - backend/tests/test_golden_set_dataset.py
+  - backend/tests/api/__init__.py
+  - backend/tests/test_eval_runner_flags.py
+  - backend/tests/test_rag_embedding_v2_flag.py
+  - backend/tests/test_provider_usage_adapters.py
+  - backend/tests/test_compute_enumeration_combiner.py
+  - backend/tests/test_embedding_v2_dual_write.py
+  - backend/tests/test_admin_episode_guests.py
+  - backend/tests/test_openai_provider_chunking.py
+  - backend/tests/services/test_aihub_graphql_adapter.py
+  - backend/tests/test_rag_query_response_shape.py
+  - backend/tests/test_ai_summary_full_field.py
+  - backend/tests/test_description_chunker_120.py
+  - backend/tests/api/test_appeal.py
+  - backend/tests/test_transcribe_task_celery_id.py
+-->
