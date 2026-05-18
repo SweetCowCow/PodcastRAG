@@ -49,8 +49,13 @@ TOPIC_TRANSIENT_ERRORS = (
     retry_backoff=True,
     retry_backoff_max=300,
     retry_jitter=True,
+    priority=2,
 )
 def classify_episode_topics(self, episode_id: str) -> dict:
+    # celery-routing-and-dispatcher-fix task 4.2 (defensive entry
+    # idempotency): topic task 不寫 transcription_queue，自身的 entry
+    # idempotency 由 `_run` 開頭「unlabelled == 0 短路」保證——重複 task
+    # 進來時所有 segment 都已 labelled、會走 already_done 分支立刻 ack。
     return asyncio.run(_run(episode_id))
 
 

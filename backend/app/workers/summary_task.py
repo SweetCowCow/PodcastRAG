@@ -110,8 +110,13 @@ async def _mark_failed_from_on_failure(episode_id: str, exc: BaseException) -> N
     retry_backoff=True,
     retry_backoff_max=300,
     retry_jitter=True,
+    priority=2,
 )
 def generate_episode_summary(self, episode_id: str) -> dict:
+    # celery-routing-and-dispatcher-fix task 4.2 (defensive entry
+    # idempotency): summary task 不寫 transcription_queue，由 `_run`
+    # 開頭檢查 ai_summary_status in (done, running) 短路。重複 task
+    # 進來會走 already_done / already_running 分支立刻 ack。
     return asyncio.run(_run(self, episode_id))
 
 
