@@ -51,6 +51,31 @@ const MILESTONE_LABELS = {
 const RELEASE_LOG = [
   // ─── v1.7 — Retrieval Quality Fix (5/13–5/18) ───
   {
+    date: '2026-05-18', slug: 'aihub-graphql-adapter-migration', milestone: 'v1.7', tag: 'fix',
+    title: {
+      zh: '後台 AI Hub 用量數字之前一直顯示 0，現在已可正常追蹤實際花費',
+      en: 'AI Hub Usage Now Tracked Correctly (Previously Always 0)',
+    },
+    summary: {
+      zh: '上一版「服務用量」分頁的 AI Hub 那一欄之所以空白，是因為 collector 對著一個不存在的網址 `aihub.zeabur.app/v1/usage` 打 — 那是當初寫程式時憑感覺猜的 URL，從 2026-05-09 上線後整整 9 天都沒人發現 DB 裡 aihub provider 連一筆 row 都沒寫進去。這版改走 Zeabur 官方 GraphQL endpoint (`api.zeabur.com/graphql`) 的 `aihubMonthlyUsage` query，schema 直接從 zeabur/ai-sdk 公開 repo 取出，本機 curl 驗過 totalSpend $77.54 與 CLI `zeabur ai-hub status` 顯示完全吻合。adapter 跨月 range 會自動拆成多次 query、超過 6 個月 raise，5xx 改回 raise 不再 fail-open（信任 Zeabur SLA），4xx 立即 raise。Prod 觸發一輪 collector 後 aihub row 直接寫進 DB、admin 後台看得到實際花費數字。同場補一條工程紀律：未來寫 adapter 一定要先 curl 證明 endpoint 真的活著、或查官方 SDK schema，不能用感覺猜。',
+      en: 'In the previous release, the "Service Usage" tab\'s AI Hub column was blank because the collector pointed at a non-existent URL `aihub.zeabur.app/v1/usage` — a guessed URL from when the code was first written. For 9 days after the 2026-05-09 launch, nobody noticed that not a single aihub provider row had been written to the DB. This release switches to Zeabur\'s official GraphQL endpoint (`api.zeabur.com/graphql`) using the `aihubMonthlyUsage` query, schema pulled directly from zeabur/ai-sdk public repo. Local curl verified totalSpend $77.54 matches `zeabur ai-hub status` exactly. The adapter auto-splits cross-month date ranges into per-month queries, raises ValueError beyond 6 months, raises on 5xx after retries (trust Zeabur SLA, no more fail-open), and raises immediately on 4xx. After triggering one collector cycle in prod, aihub rows landed in the DB and the admin tab now shows real spend. Engineering discipline added: always curl-verify an endpoint or check the official SDK schema before writing an adapter — no more guessing URLs.',
+    },
+    summaryBullets: {
+      zh: [
+        'AI Hub adapter 從猜測 REST endpoint 改走官方 GraphQL `aihubMonthlyUsage` query — schema 從 zeabur/ai-sdk repo 取',
+        '本機 curl 驗證 totalSpend $77.54 與 `zeabur ai-hub status` 完全吻合，prod 觸發 collector 後 admin 看得到真實數字',
+        '5xx 改回 raise（不再 fail-open）— 信任 Zeabur SLA，沉默失敗比噪音危險',
+        '工程紀律：未來寫外部 adapter 一律先 curl 驗 endpoint 或查官方 SDK，不能憑感覺猜 URL',
+      ],
+      en: [
+        'AI Hub adapter switched from guessed REST endpoint to official GraphQL `aihubMonthlyUsage` query — schema from zeabur/ai-sdk repo',
+        'Local curl verified totalSpend $77.54 matches `zeabur ai-hub status` exactly; admin tab shows real numbers after one prod collector cycle',
+        '5xx now raises (no more fail-open) — trust Zeabur SLA; silent failure is more dangerous than noise',
+        'Engineering discipline: always curl-verify an endpoint or check the official SDK before writing an adapter — no more guessed URLs',
+      ],
+    },
+  },
+  {
     date: '2026-05-18', slug: 'multi-provider-usage-monitoring', milestone: 'v1.7', tag: 'enhancement',
     title: {
       zh: '後台多了「服務用量」分頁，看 OpenAI 月花費 + 預算超標自動寄信告警',

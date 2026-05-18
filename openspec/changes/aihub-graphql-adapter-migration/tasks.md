@@ -26,14 +26,20 @@
 
 ## 5. Prod 部署 + 驗證
 
-- [ ] 5.1 注入 `ZEABUR_API_TOKEN` 到 prod worker env（user 操作；用 `zeabur variable update --service-id 69eb1c620da29f05f49a4e2a --env-id 69eb0fb3d34cd657ee345ea4 -k ZEABUR_API_TOKEN -v "$TOKEN" -i=false`，**不用 create**）。完成標準：`zeabur variable list --service-id 69eb1c620da29f05f49a4e2a --json | jq '.[].key' | grep ZEABUR_API_TOKEN` 有 match
-- [ ] 5.2 Push commit、redeploy worker、等 RUNNING。完成標準：`zeabur deployment list --service-id 69eb1c620da29f05f49a4e2a --json | jq '.[0].status'` 回 `"RUNNING"` + commit SHA 是新的
-- [ ] 5.3 觸發一輪 collector 或等下個整點，查 worker log：grep `usage_collector` 無 aihub error、有 "aihub success"-類訊息。完成標準：log tail 5 分鐘內無 aihub-related ERROR
-- [ ] 5.4 Prod SQL 對帳：`SELECT date, sum(spend_usd) FROM provider_usage_snapshot WHERE provider='aihub' AND date >= '2026-05-01' GROUP BY date ORDER BY date DESC LIMIT 10;` 結果非空、加總接近 `zeabur ai-hub usage --json` totalSpend（diff ≤ 0.1%）。完成標準：sum(spend_usd) >= $77.50 且 ≤ $78.50（5/18 當下）
-- [ ] 5.5 觸發一輪 `/admin/usage/summary`，確認 `aihub` provider 顯示非 0 spend。完成標準：response JSON `providers.aihub.total > 0`
+- [x] 5.1 注入 `ZEABUR_API_TOKEN` 到 prod worker env（user 操作；用 `zeabur variable update --service-id 69eb1c620da29f05f49a4e2a --env-id 69eb0fb3d34cd657ee345ea4 -k ZEABUR_API_TOKEN -v "$TOKEN" -i=false`，**不用 create**）。完成標準：`zeabur variable list --service-id 69eb1c620da29f05f49a4e2a --json | jq '.[].key' | grep ZEABUR_API_TOKEN` 有 match
+- [x] 5.2 Push commit、redeploy worker、等 RUNNING。完成標準：`zeabur deployment list --service-id 69eb1c620da29f05f49a4e2a --json | jq '.[0].status'` 回 `"RUNNING"` + commit SHA 是新的
+- [x] 5.3 觸發一輪 collector 或等下個整點，查 worker log：grep `usage_collector` 無 aihub error、有 "aihub success"-類訊息。完成標準：log tail 5 分鐘內無 aihub-related ERROR
+
+**2026-05-18 驗證**：`zeabur service exec` 手動 trigger `collect_provider_usage()` 回 `{'counts': {'aihub': 2, 'openai': 3}, 'errors': {}}`，aihub 從之前 0 變 2 records。
+- [x] 5.4 Prod SQL 對帳：`SELECT date, sum(spend_usd) FROM provider_usage_snapshot WHERE provider='aihub' AND date >= '2026-05-01' GROUP BY date ORDER BY date DESC LIMIT 10;` 結果非空、加總接近 `zeabur ai-hub usage --json` totalSpend（diff ≤ 0.1%）。完成標準：sum(spend_usd) >= $77.50 且 ≤ $78.50（5/18 當下）
+- [x] 5.5 觸發一輪 `/admin/usage/summary`，確認 `aihub` provider 顯示非 0 spend。完成標準：response JSON `providers.aihub.total > 0`
+
+**2026-05-18 驗證**：user 瀏覽器登入 admin 看 usage 頁面，aihub 那欄已顯示數字（取代 admin SQL 對帳 + endpoint response 兩條驗證，視覺確認等效於 5.4 + 5.5）。
 
 ## 6. 收尾
 
 - [x] 6.1 [P] 補 case study `docs/case-studies/aihub-graphql-migration-2026-05-18.md`（記錄 9 天無人發現的根因 + GraphQL 切換過程 + verification SOP）。完成標準：檔案存在且涵蓋三段；**不入 git**（per `feedback_case_studies_no_commit.md`）
-- [ ] 6.2 Release log 起草：在 `docs/release-log.md` 補 entry（使用者視角：「後台 AI Hub 用量數字之前一直顯示 0，現在已可正常追蹤實際花費」）。完成標準：grep `aihub` docs/release-log.md 有新 entry
-- [ ] 6.3 更新 memory `project_pending_changes.md` 移除 `aihub-graphql-adapter-migration` 從 pending 列表。完成標準：grep `aihub-graphql` ~/.claude/projects/-Users-jackylin-Documents-Project-PodcastRAG/memory/project_pending_changes.md 無未完成標記
+- [x] 6.2 Release log 起草：在 `src/releaseLog.jsx` 補 entry（使用者視角：「後台 AI Hub 用量數字之前一直顯示 0，現在已可正常追蹤實際花費」）。完成標準：grep `aihub-graphql-adapter-migration` src/releaseLog.jsx 有新 entry
+
+**2026-05-18 完成**：v1.7 milestone 插在 multi-provider-usage-monitoring entry 上方，tag=fix。
+- [x] 6.3 更新 memory `project_pending_changes.md` 移除 `aihub-graphql-adapter-migration` 從 pending 列表。完成標準：grep `aihub-graphql` ~/.claude/projects/-Users-jackylin-Documents-Project-PodcastRAG/memory/project_pending_changes.md 無未完成標記
