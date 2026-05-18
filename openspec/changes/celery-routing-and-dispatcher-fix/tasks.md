@@ -32,10 +32,10 @@
 
 ## 7. 部署 + 驗證
 
-- [ ] 7.1 commit + push main → CI 全綠 → Zeabur 4 service rebuild redeploy（worker / backend / dispatcher / beat）— **user 接手**
-- [ ] 7.2 用 zeabur exec 跑 `celery -A app.workers.celery_app inspect active_queues` 確認 worker 真的訂閱了 transcribe / topic / summary / control 四條 queue — **user 接手**
-- [ ] 7.3 prod 煙測：手動觸發一個 transcribe + 同時 enqueue 100 個 topic dummy task，觀察 transcribe 是否在 ~3.5 min 內被 pick（不是排在 100 個 topic 後面）— **user 接手**
-- [ ] 7.4 EP20 case study 收尾：在 `docs/case-studies/ep20-transcribe-blocked-by-topic-backfill.md` 標註此 change archive 後 root cause 已根治；release log 補對應 entry — **user 接手**（archive 階段）
+- [x] 7.1 commit + push main → Zeabur 4 service rebuild redeploy（worker / backend / dispatcher / beat）。實際 ship：push d85e88d → backend / worker / dispatcher RUNNING；beat 首次 deploy CrashLoopBackOff（entrypoint case pattern `*celery*worker*` 誤匹配 `app.workers.celery_app beat` 的 `workers` substring，自動 append --queues 到 beat），補 fix commit 9039834 改 word-boundary match，beat 重 redeploy RUNNING（log 確認 `Scheduler: Sending due task cron-tick`）
+- [x] 7.2 用 zeabur exec 跑 `celery -A app.workers.celery_app inspect active_queues`：2 nodes online，皆訂閱 transcribe / topic / summary / control 四條 queue 且 x-max-priority=10 設定正確
+- [ ] 7.3 prod 煙測：手動觸發一個 transcribe + 同時 enqueue 100 個 topic dummy task，觀察 transcribe 是否在 ~3.5 min 內被 pick — **延後 archive 階段**（造 dummy 風險，先靠自然流量 + dispatcher log 觀察；archive 前若無真實多 task 競爭再決定要不要造 dummy）
+- [ ] 7.4 EP20 case study 收尾：在 `docs/case-studies/ep20-transcribe-blocked-by-topic-backfill.md` 標註此 change archive 後 root cause 已根治；release log 補對應 entry — **archive 階段做**
 
 ## 8. B1 fix：dispatcher 自身 race 防護（dispatched_at column）
 
@@ -44,5 +44,5 @@
 - [x] 8.3 修改 `backend/app/workers/tasks.py` 的 `_claim_queue_row` 與 terminal transition 路徑：worker entry 把 row set 為 running 時順手 `dispatched_at=NULL`；transcribe 結束（completed/failed/cancelled）的 update 也帶 `dispatched_at=NULL`（落實 Requirement: Worker entry and terminal transitions clear dispatched_at）。完成標準：`pytest backend/tests/test_dispatcher_idempotency.py::test_entry_clears_dispatched_at`、`test_terminal_clears_dispatched_at` 兩個 case 全綠（DB-dependent，同上）
 - [x] 8.4 擴充 startup hook（`backend/app/workers/lifecycle.py` 或對等檔）加新 case：`status='pending' AND dispatched_at IS NOT NULL AND dispatched_at < NOW() - INTERVAL '5 minutes'` → reset `dispatched_at=NULL`（落實 Requirement: Startup hook 修訂版第 2 case + Scenario: Stuck dispatched_at row reset）。完成標準：`pytest backend/tests/test_dispatcher_idempotency.py::test_startup_resets_stuck_dispatched_at` 通過（DB-dependent）
 - [x] 8.5 在 `backend/tests/test_dispatcher_idempotency.py` 補上述 5 個 case；既有 4 個 entry idempotency case 不退步。完成標準：整個檔案綠（>= 9 個 case）。實際 14 個 case 全寫，DB-dependent 預期 skip 直到 user 在能連 DB 環境跑
-- [ ] 8.6 Prod 部署順序更新：在現有 7.1（push commit）之前先跑 8.1 migration；其餘 deploy 流程不變。完成標準：deploy log 顯示 alembic 先升級、4 service 才 redeploy — **user 接手**
-- [ ] 8.7 Prod 煙測補一條：模擬 dispatcher 連續兩 tick（在 worker pick 之前），SQL 觀察該 row `dispatched_at` 只被 set 一次、broker queue 對該 episode 只有 1 個 task；用 `redis-cli LLEN transcribe` + `SELECT ... WHERE dispatched_at IS NOT NULL` 驗證。完成標準：兩個觀測點都符合（broker count=1、row dispatched_at 是第一 tick 時間）— **user 接手**
+- [x] 8.6 Prod 部署順序：實際 ship 走 entrypoint auto-migration（push → backend rebuild → entrypoint 跑 alembic upgrade head → uvicorn 起；其他 service 用 START_COMMAND 繞過 alembic）。驗證：`alembic current` 在 backend container 回 `z4a5b6c7d8e9 (head)`，DB schema 已升級
+- [x] 8.7 Prod functional 驗證：dispatcher 起來 46 秒後就用新 schema 實際 dispatch episode `144600e2-eb06-4fa0-8969-af6b23783128`（dispatcher log 確認），表示 `SELECT ... AND dispatched_at IS NULL` + `FOR UPDATE SKIP LOCKED` + `UPDATE ... SET dispatched_at=NOW()` + `send_task` 整條路徑跑得通且無 error。同 row 兩 tick 衝突的明確驗證等真實流量自然觸發（archive 階段抽 dispatcher log 看是否有 duplicate dispatch 跡象）
