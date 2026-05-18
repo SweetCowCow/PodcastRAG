@@ -1,6 +1,6 @@
 # PodcastRAG 路線圖
 
-> 最後更新：2026-05-18 深夜（F1 `celery-routing-and-dispatcher-fix` ✅ archive；F2 `task-failure-monitoring-and-circuit-breaker` ship 28/31 但主動 smoke 卡 publish bug，未 archive；`chat-agentic-tool-routing` discuss 收斂完 9 點清單；兩個新 propose parked：`agentic-framework-bakeoff` (19) + `celery-publish-routing-fix-and-f2-smoke` (9/20 active 中，agent code+test+commit 完，user push 完，4 service redeploy 中)。下一動：驗 4 service RUNNING、跑 F2 主動 smoke、archive F2 + celery-publish-routing-fix 兩個 change）
+> 最後更新：2026-05-19 凌晨（F1 + F2 + `celery-publish-routing-fix-and-f2-smoke` 三個全 ✅ archive。F2 ship 後 prod smoke 抓到兩個 silent drop bug 即時修完：(a) admin endpoint async/sync 衝突、(b) failure_hooks._run_async 踩到 closed event loop。Smoke 端到端通過：fake key → worker 401 → circuit OPEN → UI 紅 badge + 手動恢復 button → resume → closed + toast。下一動：unpark `agentic-framework-bakeoff` spike 跑 framework bake-off，跑完才能 propose `chat-agentic-tool-routing` 主 change）
 
 本文件記錄 PodcastRAG 後續開發的優先順序與規劃。依 Phase 排序，**Phase A 阻擋公開最先**，再做評測基線，再優化 RAG，最後商業化。
 
