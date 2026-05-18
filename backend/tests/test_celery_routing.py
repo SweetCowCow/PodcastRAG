@@ -87,3 +87,17 @@ def test_priority_pop_order_documented_via_priority_steps():
     assert bucket(transcribe_p) == 9
     assert bucket(topic_p) == 0
     assert bucket(transcribe_p) > bucket(topic_p)
+
+
+def test_beat_schedule_all_entries_route_to_control_queue():
+    """celery-publish-routing-fix-and-f2-smoke task 3.1: F1 殘留 leak 是
+    beat publish 不套 task_routes 而走 default queue → fix 是每個 beat
+    entry 顯式指定 options.queue='control'。此 test 防回退。"""
+    schedule = celery_app.conf.beat_schedule
+    assert schedule, "beat_schedule 不該為空"
+    for name, entry in schedule.items():
+        opts = entry.get("options") or {}
+        assert opts.get("queue") == "control", (
+            f"beat entry {name!r} 缺 options.queue='control'，"
+            f"會走 task_default_queue fallback → 重蹈 F1 cron_tick leak"
+        )

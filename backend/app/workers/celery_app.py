@@ -81,37 +81,49 @@ celery_app.conf.update(
     task_queue_max_priority=10,
     task_default_priority=5,
     broker_transport_options={"priority_steps": [0, 3, 6, 9]},
+    # celery-publish-routing-fix-and-f2-smoke task 3.1: 每個 beat entry
+    # 顯式指定 options={"queue": "control"}。F1 設了 task_routes 但 beat
+    # publish path 在某些 Celery 版本不套 routes，會走 task_default_queue
+    # fallback；2026-05-18 prod 在 default `celery` queue 撈到 1 筆殘留
+    # stuck cron_tick（routing_key='celery'）就是這個 leak。
     beat_schedule={
         "cron-tick": {
             "task": "app.workers.cron_tick.cron_tick",
             "schedule": crontab(minute="*"),
+            "options": {"queue": "control"},
         },
         "quota-digest": {
             "task": "app.workers.quota_digest.send_quota_digest",
             "schedule": crontab(minute=0, hour="9,21"),
+            "options": {"queue": "control"},
         },
         # disabled-user-appeal-flow: 01:00 UTC = 09:00 Asia/Taipei
         "appeal-digest": {
             "task": "app.workers.appeal_digest.send_appeal_digest",
             "schedule": crontab(minute=0, hour=1),
+            "options": {"queue": "control"},
         },
         "eval-reminder": {
             "task": "app.workers.eval_reminder.send_eval_reminder",
             "schedule": crontab(minute=0, hour=9, day_of_month=1),
+            "options": {"queue": "control"},
         },
         "db-backup": {
             "task": "app.workers.db_backup.run_db_backup",
             "schedule": crontab(minute=0, hour=3),
+            "options": {"queue": "control"},
         },
         # multi-provider-usage-monitoring: hourly snapshot collector +
         # daily 09:00 Taipei (= 01:00 UTC) threshold alert evaluator.
         "usage-collector": {
             "task": "app.workers.usage_collector.collect_provider_usage",
             "schedule": crontab(minute=0),
+            "options": {"queue": "control"},
         },
         "usage-alert": {
             "task": "app.workers.usage_alert.evaluate_usage_thresholds",
             "schedule": crontab(minute=0, hour=1),
+            "options": {"queue": "control"},
         },
         # task-failure-monitoring-and-circuit-breaker:
         # - failure-alert: every 5 min — sliding-window failure rate alert
@@ -120,10 +132,12 @@ celery_app.conf.update(
         "failure-alert": {
             "task": "app.workers.failure_alert.run_failure_alert",
             "schedule": crontab(minute="*/5"),
+            "options": {"queue": "control"},
         },
         "circuit-probe": {
             "task": "app.workers.circuit_probe.run_circuit_probe",
             "schedule": crontab(minute="*/30"),
+            "options": {"queue": "control"},
         },
     },
 )
