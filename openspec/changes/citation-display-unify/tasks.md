@@ -21,7 +21,7 @@
 
 ## 4. 部署
 
-- [ ] 4.1 commit + push → Zeabur frontend service 自動 rebuild。完成標準：`zeabur deployment list --service-id 69eb27320da29f05f49a5260 --json | jq '.[0].status'` 回 RUNNING + commit SHA 是新的
+- [x] 4.1 commit + push → Zeabur frontend service 自動 rebuild。完成標準：`zeabur deployment list --service-id 69eb27320da29f05f49a5260 --json | jq '.[0].status'` 回 RUNNING + commit SHA 是新的
 - [ ] 4.2 prod 用三題 sample 跑同樣的視覺驗證；確認對 prod data 行為一致（特別注意馬世芳題真的會出現 enum 非空）。完成標準：prod 截三張 screenshot 比對 staging 一致
 
 ## 5. 收尾
