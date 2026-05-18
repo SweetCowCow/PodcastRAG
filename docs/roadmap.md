@@ -1,6 +1,6 @@
 # PodcastRAG 路線圖
 
-> 最後更新：2026-05-16（R3.3 metadata-filter + r3-3-chat-enum-grounding follow-up 全 shipped；chat 答案 grounding + topic enum + 階段式顯示完成。下一動：`citation-display-unify`（user follow-up #2）或 `whisper-chunking-fix` 或 R2.2 prompt redo）
+> 最後更新：2026-05-18（5/16-18 一週共 ship 9 個 archive：R3.3 + chat-enum 系列 + IME fix + enumeration-rule-broaden + enumeration-topic-finder + backfill / whisper / multi-provider；F1 補 B1 reviewer fix 重 park；新 propose 三個 parked：`disabled-user-appeal-flow` / `aihub-graphql-adapter-migration` / `rag-vs-longcontext-benchmark`。下一動：apply 輕量 #1 + #2 + discuss `citation-display-unify`）
 
 本文件記錄 PodcastRAG 後續開發的優先順序與規劃。依 Phase 排序，**Phase A 阻擋公開最先**，再做評測基線，再優化 RAG，最後商業化。
 
@@ -123,42 +123,41 @@ R3 拆三段做（每段都跑 eval baseline 對照升幅）：
 
 （2026-05-13 R3.2 milestone 全部 archive 收尾後清空 — 詳見下方「已 archive」段）
 
-## Parked changes（7 個）
+## Parked changes（7 個，2026-05-18 snapshot）
 
-**今天的執行順序（2026-05-13 user 拍板）**：
-1. ✅ R3.x 收尾家務（archive 4 個 R3.2-era stale changes）
-2. ⏳ **C 軌**：擴 human golden set 到 n=30+
-3. ⏳ `whisper-chunking-fix` (~12) — 80min 集 multipart 撞 25MiB chunk 沒生效 bug
-4. ⏳ **R2.2 prompt redo** — Faithfulness 拉回（routing 已修，先量新 baseline 再決定 prompt 改動範圍）
+**目前推薦 apply 順序**（2026-05-18）：
+1. ⏳ `aihub-graphql-adapter-migration` (14) — 純 adapter 替換 + 7 test、修 9 天 aihub 觀測 bug。Apply：agent 跑 code+test、prod token step user 操作
+2. ⏳ `disabled-user-appeal-flow` (16) — 新 capability `account-appeal` + Lock card 第三狀態、無外部依賴
+3. ⏳ `celery-routing-and-dispatcher-fix` (F1, **25** — 含 B1 reviewer fix ingest) — EP20 互卡 + dispatcher race 雙修
+4. ⏳ `task-failure-monitoring-and-circuit-breaker` (F2, 31) — 失敗率告警 + 永久錯短路 + 斷路器（依賴 F1）
+5. ⏳ `keyword-index-mode` (26) — 第三模式新功能 + SQL CTE T1/T2/T3 + 結果頁 sectioned
+6. ⏳ `landing-and-mode-orchestration-redesign` (49) — HomePage 合併 + 三模式 trio + Lock card 新版 + sticky audio + paragraph aggregation
+7. — `rag-vs-longcontext-benchmark` (19) — research benchmark；需 user 共草 20 新題 + playwright cookie 才能 apply
 
-其他 parked（待之後規劃）：
+## 衍生待 propose（未開 change 但有共識）
 
-5. `celery-routing-and-dispatcher-fix` (F1, ~18) — EP20 互卡 + stale-detect 失效
-6. `r3-3-metadata-filter` (~52) — 詳見 Phase C 表
-7. `multi-provider-usage-monitoring` (~25) — admin AI Hub + OpenAI 用量觀測 + budget 告警
-8. `task-failure-monitoring-and-circuit-breaker` (F2, ~31) — 失敗率告警 + 永久錯短路 + 斷路器（依賴 F1）
-9. `backfill-progress-admin-tab` (~16) — admin Queue Tab 進度概覽（將合進「新節目 onboarding flow」討論）
-10. `fix-eval-dataset-com-004-json-leak` (~7) — thisno-core-com-004 答案混 raw JSON
-
-## 衍生待 propose
-
+- **`citation-display-unify`** — R3.3 prod 驗證 user follow-up #2：ChatBubble 兩個 source 區塊（chip + enum card）混淆，需 discuss 三方案（合併 / 視覺指示 / 互斥渲染）後 propose
 - **eval golden set 擴張到 曼報 + 壹加壹電台** — 各 ~30+ 題人工 sentinel，等本節目 30+ 題到位再啟動
-- **新節目 onboarding flow（情境 B）** — admin 加 show 時看 cost preview + 必須 confirm + worker throttle + 進度面板；建議合進 `backfill-progress-admin-tab`
-- **R3.x 候選未 propose**：列舉型查詢 / topic seg 自動類別建議 / segment_categories admin UI / 業配段降權 multiplier / dict weight_in_lexical_query 通用化
-- **`eval-runner-dynamic-top-k`**（待 `eval-runner-enumeration-scope` ship 後 propose）— enumeration items 的 top_k 動態提到 `len(expected_episode_ids)`（或 1.2x），才能測 catalog-wide 召回真實上限。動機：q25 expected 25 集，固定 top_k=5 下 episode_set_recall 數學上限 0.20。影響面：retrieval cost / latency aggregation 都會變，需獨立 change 評估
+- **R3.x 候選未 propose**：topic seg 自動類別建議 / segment_categories admin UI / 業配段降權 multiplier / dict weight_in_lexical_query 通用化
+- **R2.2 prompt redo** — Faithfulness 拉回（依賴 R3.x + R1.3）
+- **R1.3 judge re-bake-off** — Phase B，等 R3.x 全跑完啟動
+- **Golden set audit q25 expected 對齊** — 4 集多撈 / 6 集漏，人工複查（屬 dataset quality）
+- **Rule pattern 涵蓋率月度回顧** — 等真實 prod query 累積後做
+- **`eval-runner-dynamic-top-k`** — enumeration items top_k 動態提到 `len(expected)`
 
 ---
 
-## 已 archive 變更（最近 5 個，依時間反序）
+## 已 archive 變更（最近，依時間反序）
 
 | Change(s) | Archive 路徑 | 摘要 |
 |-----------|-------------|------|
-| **R3.5** `r3-5-disable-routing` + R3.4 + R3.2 milestone (6 個) | `openspec/changes/archive/2026-05-13-*` | **v1.7 milestone**：關掉 two-layer routing + 6 個 R3.x changes pair archive。Recall@5 (human-curated) 0.0625 → **0.4375 (7x)**、P95 2170ms。Golden set audit 移 36 LLM-auto 壞題、留 10 sentinel、加 staging 守門。各 archive design.md 都有「2026-05-13 archive follow-up」段說明 supersession 邏輯 |
-| `r2-1-citation-infra` + `r2-1-followup-bugs` + `r2-1-prompt-fix` | `openspec/changes/archive/2026-05-10-r2-1-*` | citation infrastructure（v1.6）：search 結果加 highlights / before/after_text / ai_summary 60 字 + 「展開」+「跳到這段內容」button + URL deep-link shareable + LLM prompt 加拒答模式 + citation parser strip [N]。**Faithfulness gate 重訂為軟 gate（≥ 0.50）**因 RCA 證實退步根因是 retrieval recall 15% + judge 對中文拒答打折，跟 UI 無關。Case study `docs/case-studies/r21-rca-deep-2026-05-10.md` |
-| `db-backup` | `openspec/changes/archive/2026-05-07-db-backup/` | 每日 03:00 UTC pg_dump → age → R2 離站；月度 GHA 還原驗證；7d/4w/12m retention。月成本 ~$1。Release log v1.3 |
-| `freemium-onboarding` | `openspec/changes/archive/2026-05-04-freemium-onboarding/` | LandingPage + 公開段落搜尋（IP rate limit 20/day）+ 登入解鎖 LLM 答案 + quota 申請流程。Release log v1.0 |
-| `summary-stale-detection` | `openspec/changes/archive/2026-05-04-summary-stale-detection/` | cron_tick 每分鐘掃 stale running summary 重置 + 重 enqueue。Release log v0.9 |
-| `episode-ai-summary` | `openspec/changes/archive/2026-05-03-episode-ai-summary/` | 每集 AI 摘要 80-150 字繁中，map-reduce + per-batch commit + admin 批次補摘要 button。Release log v0.9 |
+| **2026-05-18 batch (3 個)** `backfill-progress-admin-tab` + `whisper-chunking-fix` + `multi-provider-usage-monitoring` | `openspec/changes/archive/2026-05-18-*` | Admin Queue Tab 進度概覽；Whisper 80min 集 multipart 25MiB chunk fix；3 provider 用量監控 + 預算告警（aihub adapter URL 猜錯 follow-up 開 `aihub-graphql-adapter-migration`）。Release log v1.7 |
+| **2026-05-17 batch (2 個)** `enumeration-rule-pattern-broaden` + `enumeration-topic-finder-include-title` | `openspec/changes/archive/2026-05-17-*` | Rule pattern 加反序「集數有哪些」+ find_episodes_by_topic 對 LLM phrase 先 jieba 切（CJK simple analyzer bug）；q26 0.333→1.0、aggregate 0.5467→**0.88** |
+| **2026-05-16 batch (4 個)** `r3-3-metadata-filter` + `r3-3-chat-enum-grounding` + `chat-input-ime-composition-fix` + `eval-runner-chat-enum-scoring` | `openspec/changes/archive/2026-05-16-*` | R3.3 milestone (v1.7)：guests JSONB + admin tab + title_tsvector + 三池 RRF + LLM entity_extraction + ChatResponse enumeration_episodes + frontend EnumerationSection；chat 答案 grounding + topic-trigger + topic-filter SQL；IME enter 送出 bug；eval runner 對 chat enum 計分。Prod Recall@5 0.86 (n=28)，q25 0.04→0.76、aggregate 0.1867→0.5467。詳見 `docs/case-studies/r33-metadata-filter.md` |
+| **R3.5** `r3-5-disable-routing` + R3.4 + R3.2 milestone (6 個) | `openspec/changes/archive/2026-05-13-*` | **v1.7 milestone**：關掉 two-layer routing + 6 個 R3.x changes pair archive。Recall@5 (human-curated) 0.0625 → **0.4375 (7x)**、P95 2170ms |
+| `r2-1-citation-infra` + `r2-1-followup-bugs` + `r2-1-prompt-fix` | `openspec/changes/archive/2026-05-10-r2-1-*` | citation infrastructure（v1.6）：search 結果加 highlights / before/after_text / ai_summary 60 字 + 「展開」+「跳到這段內容」button + URL deep-link shareable + LLM prompt 加拒答模式 + citation parser strip [N]。**Faithfulness gate 重訂為軟 gate（≥ 0.50）** |
+| `db-backup` | `openspec/changes/archive/2026-05-07-db-backup/` | 每日 03:00 UTC pg_dump → age → R2 離站；月度 GHA 還原驗證；7d/4w/12m retention。月成本 ~$1 |
+| `freemium-onboarding` | `openspec/changes/archive/2026-05-04-freemium-onboarding/` | LandingPage + 公開段落搜尋（IP rate limit 20/day）+ 登入解鎖 LLM 答案 + quota 申請流程 |
 
 完整列表（含更早）見 `openspec/changes/archive/` 目錄。
 
