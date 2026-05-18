@@ -109,61 +109,74 @@ const ServiceStatusTab = ({ lang }) => {
       )}
 
       <div style={{ background: TOKEN.surface, border: `1px solid ${TOKEN.surfaceBorder}`, borderRadius: 12, overflow: 'hidden' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 0.8fr 1.3fr 0.8fr 1.4fr 1fr', padding: '12px 18px', borderBottom: `1px solid ${TOKEN.surfaceBorder}`, color: TOKEN.textMuted, fontSize: 12, fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase' }}>
-          <div>{t ? '供應商' : 'Provider'}</div>
-          <div>{t ? '狀態' : 'State'}</div>
-          <div>{t ? '暫停起時' : 'Opened at'}</div>
-          <div style={{ textAlign: 'right' }}>{t ? '影響 task 數' : 'Paused'}</div>
-          <div>{t ? '最後探測' : 'Last probe'}</div>
-          <div style={{ textAlign: 'right' }}>{t ? '操作' : 'Action'}</div>
-        </div>
-        {(rows || []).map((r) => {
-          const isOpen = r.state === 'open';
-          return (
-            <div key={r.provider_id}
-              style={{ display: 'grid', gridTemplateColumns: '1.4fr 0.8fr 1.3fr 0.8fr 1.4fr 1fr', padding: '14px 18px', borderTop: `1px solid ${TOKEN.surfaceBorder}`, alignItems: 'center', fontSize: 14, color: TOKEN.text }}>
-              <div style={{ fontWeight: 600 }}>
-                {_serviceLabels[r.provider_id] || r.provider_id}
-              </div>
-              <div>
-                <Badge variant={isOpen ? 'danger' : 'success'}>
-                  {isOpen ? 'open' : 'closed'}
-                </Badge>
-              </div>
-              <div style={{ color: isOpen ? TOKEN.text : TOKEN.textMuted, fontSize: 13 }}>
-                {isOpen ? _fmtTaipei(r.opened_at) : '—'}
-              </div>
-              <div style={{ textAlign: 'right', color: TOKEN.text, fontVariantNumeric: 'tabular-nums' }}>
-                {r.paused_task_count || 0}
-              </div>
-              <div style={{ color: TOKEN.textSecondary, fontSize: 12 }}>
-                {r.last_probe_at ? (
-                  <span>
-                    {_fmtTaipei(r.last_probe_at)}{' '}
-                    <span style={{ color: r.last_probe_result === 'success' ? '#4ade80' : '#f87171' }}>
-                      ({r.last_probe_result})
-                    </span>
-                  </span>
-                ) : '—'}
-              </div>
-              <div style={{ textAlign: 'right' }}>
-                <Btn
-                  size="sm"
-                  variant={isOpen ? 'primary' : 'ghost'}
-                  disabled={!isOpen || busy}
-                  onClick={() => setConfirming(r.provider_id)}
-                >
-                  {t ? '⏵ 手動恢復' : 'Resume'}
-                </Btn>
-              </div>
-            </div>
-          );
-        })}
-        {rows && rows.length === 0 && (
-          <div style={{ padding: 24, color: TOKEN.textMuted, textAlign: 'center' }}>
-            {t ? '無資料' : 'No data'}
-          </div>
-        )}
+        <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+          <thead>
+            <tr style={{ color: TOKEN.textMuted, fontSize: 12, fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase', textAlign: 'left' }}>
+              <th style={{ padding: '12px 18px', borderBottom: `1px solid ${TOKEN.surfaceBorder}`, fontWeight: 600 }}>{t ? '供應商' : 'Provider'}</th>
+              <th style={{ padding: '12px 18px', borderBottom: `1px solid ${TOKEN.surfaceBorder}`, fontWeight: 600 }}>{t ? '狀態' : 'State'}</th>
+              <th style={{ padding: '12px 18px', borderBottom: `1px solid ${TOKEN.surfaceBorder}`, fontWeight: 600 }}>{t ? '暫停起時' : 'Opened at'}</th>
+              <th style={{ padding: '12px 18px', borderBottom: `1px solid ${TOKEN.surfaceBorder}`, fontWeight: 600, textAlign: 'right' }}>{t ? '影響 task 數' : 'Paused'}</th>
+              <th style={{ padding: '12px 18px', borderBottom: `1px solid ${TOKEN.surfaceBorder}`, fontWeight: 600 }}>{t ? '最後探測' : 'Last probe'}</th>
+              <th style={{ padding: '12px 18px', borderBottom: `1px solid ${TOKEN.surfaceBorder}`, fontWeight: 600, textAlign: 'right' }}>{t ? '操作' : 'Action'}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows === null && (
+              <tr><td colSpan={6} style={{ padding: 24, color: TOKEN.textMuted, textAlign: 'center' }}>{t ? '載入中…' : 'Loading…'}</td></tr>
+            )}
+            {Array.isArray(rows) && rows.length === 0 && (
+              <tr><td colSpan={6} style={{ padding: 24, color: TOKEN.textMuted, textAlign: 'center' }}>{t ? '無資料' : 'No data'}</td></tr>
+            )}
+            {Array.isArray(rows) && rows.map((r) => {
+              const isOpen = r.state === 'open';
+              return (
+                <tr key={r.provider_id}
+                  style={{ borderTop: `1px solid ${TOKEN.surfaceBorder}`, fontSize: 14, color: TOKEN.text }}>
+                  <td style={{ padding: '14px 18px', fontWeight: 600, verticalAlign: 'middle' }}>
+                    {_serviceLabels[r.provider_id] || r.provider_id}
+                  </td>
+                  <td style={{ padding: '14px 18px', verticalAlign: 'middle' }}>
+                    <Badge variant={isOpen ? 'danger' : 'success'}>
+                      {isOpen ? 'open' : 'closed'}
+                    </Badge>
+                  </td>
+                  <td style={{ padding: '14px 18px', color: r.opened_at ? TOKEN.text : TOKEN.textMuted, fontSize: 13, verticalAlign: 'middle' }}>
+                    {r.opened_at ? _fmtTaipei(r.opened_at) : '—'}
+                  </td>
+                  <td style={{ padding: '14px 18px', textAlign: 'right', color: TOKEN.text, fontVariantNumeric: 'tabular-nums', verticalAlign: 'middle' }}>
+                    {r.paused_task_count != null ? r.paused_task_count : 0}
+                  </td>
+                  <td style={{ padding: '14px 18px', color: TOKEN.textSecondary, fontSize: 12, verticalAlign: 'middle' }}>
+                    {r.last_probe_at ? (
+                      <span>
+                        {_fmtTaipei(r.last_probe_at)}
+                        {r.last_probe_result && (
+                          <span style={{ marginLeft: 4, color: r.last_probe_result === 'success' ? '#4ade80' : '#f87171' }}>
+                            ({r.last_probe_result})
+                          </span>
+                        )}
+                      </span>
+                    ) : '—'}
+                  </td>
+                  <td style={{ padding: '14px 18px', textAlign: 'right', verticalAlign: 'middle' }}>
+                    {isOpen ? (
+                      <Btn
+                        size="sm"
+                        variant="primary"
+                        disabled={busy}
+                        onClick={() => setConfirming(r.provider_id)}
+                      >
+                        {t ? '手動恢復' : 'Resume'}
+                      </Btn>
+                    ) : (
+                      <span style={{ color: TOKEN.textMuted }}>—</span>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
 
       {confirming && (
