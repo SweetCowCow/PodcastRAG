@@ -31,23 +31,36 @@ logger = logging.getLogger(__name__)
 
 
 def _run_async(coro):
-    """Run an async coroutine in a private event loop.
+    """Run an async coroutine on a fresh background thread + event loop.
 
-    Celery's prefork worker process may or may not have a running loop;
-    the safest approach is to create a private one each call (same
-    pattern the existing tasks.py / topic_task.py / summary_task.py use
-    via ``asyncio.run(...)``).
+    Don't reuse ``asyncio.run()`` here: Celery prefork workers can leave
+    main-thread asyncio state in an inconsistent / closed shape after a
+    task crash (e.g. httpx pool teardown spews "Event loop is closed"
+    tracebacks). Calling ``asyncio.run()`` on that thread then raises
+    before the coroutine is awaited — the failure_log write silently
+    drops and the circuit_breaker never increments. Spawning a private
+    thread gives us a guaranteed-fresh asyncio context.
     """
-    try:
-        return asyncio.run(coro)
-    except RuntimeError:
-        # If an event loop is already running (e.g. tests), create
-        # a separate loop for the call.
+    import threading
+
+    result: list = []
+    error: list[BaseException] = []
+
+    def _runner() -> None:
         loop = asyncio.new_event_loop()
         try:
-            return loop.run_until_complete(coro)
+            result.append(loop.run_until_complete(coro))
+        except BaseException as exc:  # noqa: BLE001 — surface to caller
+            error.append(exc)
         finally:
             loop.close()
+
+    t = threading.Thread(target=_runner, daemon=True)
+    t.start()
+    t.join()
+    if error:
+        raise error[0]
+    return result[0] if result else None
 
 
 def record_task_failure(

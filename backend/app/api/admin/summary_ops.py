@@ -1,4 +1,6 @@
 """Admin endpoints for AI summary regeneration and backfill."""
+import asyncio
+import functools
 import logging
 import uuid
 
@@ -55,10 +57,17 @@ async def regenerate_summary(
     from app.workers.summary_task import generate_episode_summary
 
     try:
-        # retry=False → broker 連不上或 publish 失敗時直接 raise，不吞成
-        # silent OK。OperationalError 是 kombu 對 broker 層異常的 wrapper。
-        generate_episode_summary.apply_async(
-            args=[str(episode_id)], retry=False
+        # 用 to_thread 把 sync kombu publish 跑到 worker thread，
+        # 避免跟 FastAPI 的 asyncio loop / asyncpg event loop hook 衝突
+        # 造成 silent drop（直接在 async route 內 call apply_async 觀察到
+        # backend 200 但 broker 沒收 task 的 bug）。retry=False → 連不上或
+        # publish 失敗直接 raise，不吞成 silent OK。
+        await asyncio.to_thread(
+            functools.partial(
+                generate_episode_summary.apply_async,
+                args=[str(episode_id)],
+                retry=False,
+            )
         )
     except (KombuOperationalError, ConnectionError, OSError) as exc:
         logger.exception(
