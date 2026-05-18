@@ -1,6 +1,6 @@
 # PodcastRAG 路線圖
 
-> 最後更新：2026-05-18（5/16-18 一週共 ship 9 個 archive：R3.3 + chat-enum 系列 + IME fix + enumeration-rule-broaden + enumeration-topic-finder + backfill / whisper / multi-provider；F1 補 B1 reviewer fix 重 park；新 propose 三個 parked：`disabled-user-appeal-flow` / `aihub-graphql-adapter-migration` / `rag-vs-longcontext-benchmark`。下一動：apply 輕量 #1 + #2 + discuss `citation-display-unify`）
+> 最後更新：2026-05-18 深夜（F1 `celery-routing-and-dispatcher-fix` ✅ archive；F2 `task-failure-monitoring-and-circuit-breaker` ship 28/31 但主動 smoke 卡 publish bug，未 archive；`chat-agentic-tool-routing` discuss 收斂完 9 點清單；兩個新 propose parked：`agentic-framework-bakeoff` (19) + `celery-publish-routing-fix-and-f2-smoke` (9/20 active 中，agent code+test+commit 完，user push 完，4 service redeploy 中)。下一動：驗 4 service RUNNING、跑 F2 主動 smoke、archive F2 + celery-publish-routing-fix 兩個 change）
 
 本文件記錄 PodcastRAG 後續開發的優先順序與規劃。依 Phase 排序，**Phase A 阻擋公開最先**，再做評測基線，再優化 RAG，最後商業化。
 
@@ -123,16 +123,20 @@ R3 拆三段做（每段都跑 eval baseline 對照升幅）：
 
 （2026-05-13 R3.2 milestone 全部 archive 收尾後清空 — 詳見下方「已 archive」段）
 
-## Parked changes（7 個，2026-05-18 snapshot）
+## Active + Parked changes（2026-05-18 深夜 snapshot）
 
-**目前推薦 apply 順序**（2026-05-18）：
-1. ⏳ `aihub-graphql-adapter-migration` (14) — 純 adapter 替換 + 7 test、修 9 天 aihub 觀測 bug。Apply：agent 跑 code+test、prod token step user 操作
-2. ⏳ `disabled-user-appeal-flow` (16) — 新 capability `account-appeal` + Lock card 第三狀態、無外部依賴
-3. ⏳ `celery-routing-and-dispatcher-fix` (F1, **25** — 含 B1 reviewer fix ingest) — EP20 互卡 + dispatcher race 雙修
-4. ⏳ `task-failure-monitoring-and-circuit-breaker` (F2, 31) — 失敗率告警 + 永久錯短路 + 斷路器（依賴 F1）
-5. ⏳ `keyword-index-mode` (26) — 第三模式新功能 + SQL CTE T1/T2/T3 + 結果頁 sectioned
-6. ⏳ `landing-and-mode-orchestration-redesign` (49) — HomePage 合併 + 三模式 trio + Lock card 新版 + sticky audio + paragraph aggregation
-7. — `rag-vs-longcontext-benchmark` (19) — research benchmark；需 user 共草 20 新題 + playwright cookie 才能 apply
+**Active**（2 個）：
+- F2 `task-failure-monitoring-and-circuit-breaker` (28/31) — code 全 ship、主動 smoke 卡 publish bug 待解
+- `celery-publish-routing-fix-and-f2-smoke` (9/20) — 解 publish silent drop + F1 cron_tick leak + F2 完整 smoke + 同時 archive F2。Agent code+test+commit 完，user push 完，4 service redeploy 中
+
+**Parked**（4 個，推薦 apply 順序）：
+1. ⏳ `agentic-framework-bakeoff` (19) — research spike，跑 A 原生 / B Pydantic AI / E Google ADK × 30 題比較，3-5 天，先做才能定 `chat-agentic-tool-routing` 主 change framework
+2. ⏳ `keyword-index-mode` (26) — 第三模式新功能 + SQL CTE T1/T2/T3 + 結果頁 sectioned
+3. ⏳ `landing-and-mode-orchestration-redesign` (49) — HomePage 合併 + 三模式 trio + Lock card 新版 + sticky audio。**等 `chat-agentic-tool-routing` response shape 定再做**
+4. — `rag-vs-longcontext-benchmark` (19) — research benchmark；需 user 共草 20 新題 + playwright cookie 才能 apply
+
+**待 propose**（discuss 已收斂）：
+- `chat-agentic-tool-routing` — 主 change。9 tool + L0/L1 memory + bake-off A/B/E 三選一。等 `agentic-framework-bakeoff` 出結果再 propose
 
 ## 衍生待 propose（未開 change 但有共識）
 
