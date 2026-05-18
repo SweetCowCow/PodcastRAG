@@ -152,13 +152,16 @@ tests:
 ---
 ### Requirement: Adapter interface for provider usage
 
-The backend SHALL expose a uniform adapter interface in `app.services.provider_usage`. Each adapter module SHALL implement the function signature `async def fetch_daily_usage(start: date, end: date) -> list[UsageSnapshot]` where `UsageSnapshot` is a dataclass with fields `(provider: str, model: str | None, date: date, spend_usd: Decimal, raw_payload: dict)`. Adapters SHALL be registered in `provider_usage/__init__.py` `ADAPTERS: dict[str, Callable]` so the collector iterates them generically.
+The backend SHALL expose a uniform adapter interface in `app.services.provider_usage`. Each adapter module SHALL implement the function signature `async def fetch_daily_usage(start: date, end: date) -> list[UsageSnapshot]` where `UsageSnapshot` is a dataclass with fields `(provider: str, model: str | None, date: date, spend_usd: Decimal, raw_payload: dict)`. Adapters SHALL be registered in `provider_usage/__init__.py` `ADAPTERS: dict[str, Callable]` so the collector iterates them generically. The AI Hub adapter SHALL fetch data from the Zeabur GraphQL API at `https://api.zeabur.com/graphql` using the `aihubMonthlyUsage(month: String)` query authenticated via the `ZEABUR_API_TOKEN` environment variable. When the requested date range crosses month boundaries, the adapter SHALL issue one GraphQL request per month and merge results, filtering returned `dailyUsage` entries to those within `[start, end]`. Date ranges spanning more than 6 months SHALL raise `ValueError`.
 
-#### Scenario: AI Hub adapter returns daily usage
+#### Scenario: AI Hub adapter returns daily usage from GraphQL
 
-- **GIVEN** `ADAPTERS['aihub']` is the Zeabur AI Hub adapter
+- **GIVEN** `ADAPTERS['aihub']` is the Zeabur AI Hub GraphQL adapter
+- **AND** `ZEABUR_API_TOKEN` is set
 - **WHEN** `await ADAPTERS['aihub'](date(2026, 5, 1), date(2026, 5, 10))` is called
-- **THEN** the return value SHALL be `list[UsageSnapshot]` with provider='aihub' for every snapshot
+- **THEN** the adapter SHALL POST to `https://api.zeabur.com/graphql` with the `aihubMonthlyUsage(month: "2026-05")` query
+- **AND** the return value SHALL be `list[UsageSnapshot]` with provider='aihub' for every snapshot
+- **AND** each snapshot's `date` field SHALL fall within `[date(2026,5,1), date(2026,5,10)]`
 
 #### Scenario: OpenAI adapter returns daily usage
 
@@ -166,132 +169,63 @@ The backend SHALL expose a uniform adapter interface in `app.services.provider_u
 - **WHEN** `await ADAPTERS['openai'](date(2026, 5, 1), date(2026, 5, 10))` is called
 - **THEN** the return value SHALL be `list[UsageSnapshot]` with provider='openai' for every snapshot
 
-#### Scenario: Adapter without admin key gracefully returns empty
+#### Scenario: AI Hub adapter without token gracefully returns empty
+
+- **GIVEN** AI Hub GraphQL adapter is invoked but `ZEABUR_API_TOKEN` env is unset
+- **WHEN** `fetch_daily_usage(...)` runs
+- **THEN** the adapter SHALL log a warning "ZEABUR_API_TOKEN not configured, skipping aihub usage fetch"
+- **AND** SHALL return an empty list (no exception raised)
+
+#### Scenario: OpenAI adapter without admin key gracefully returns empty
 
 - **GIVEN** OpenAI adapter is invoked but `OPENAI_ORG_ADMIN_KEY` env is unset
 - **WHEN** `fetch_daily_usage(...)` runs
 - **THEN** the adapter SHALL log a warning "OPENAI_ORG_ADMIN_KEY not configured, skipping"
 - **AND** SHALL return an empty list (no exception raised)
 
+#### Scenario: AI Hub adapter splits cross-month range into multiple GraphQL queries
+
+- **GIVEN** `ADAPTERS['aihub']` is the Zeabur AI Hub GraphQL adapter
+- **AND** `ZEABUR_API_TOKEN` is set
+- **WHEN** `await ADAPTERS['aihub'](date(2026, 4, 29), date(2026, 5, 2))` is called
+- **THEN** the adapter SHALL issue exactly 2 GraphQL POST requests (one for month "2026-04", one for "2026-05")
+- **AND** SHALL return only snapshots whose `date` falls within `[date(2026,4,29), date(2026,5,2)]`
+
+#### Scenario: AI Hub adapter rejects oversize date range
+
+- **WHEN** `await ADAPTERS['aihub'](date(2025, 1, 1), date(2026, 5, 1))` is called (spanning more than 6 months)
+- **THEN** the adapter SHALL raise `ValueError` with message containing "Date range too large"
+
+#### Scenario: AI Hub adapter raises on 5xx after retry exhaustion
+
+- **GIVEN** `ZEABUR_API_TOKEN` is set
+- **AND** the GraphQL endpoint returns HTTP 503 for every attempt
+- **WHEN** `fetch_daily_usage(date(2026,5,1), date(2026,5,2))` runs
+- **THEN** the adapter SHALL retry up to 3 attempts with exponential backoff
+- **AND** after exhausting retries SHALL raise `httpx.HTTPStatusError` (no fail-open behavior)
+
+#### Scenario: AI Hub adapter raises immediately on 4xx
+
+- **GIVEN** `ZEABUR_API_TOKEN` is set to an invalid value
+- **AND** the GraphQL endpoint returns HTTP 401
+- **WHEN** `fetch_daily_usage(...)` runs
+- **THEN** the adapter SHALL raise `httpx.HTTPStatusError` without retry
+
+#### Scenario: AI Hub adapter raises when GraphQL response contains errors field
+
+- **GIVEN** the GraphQL endpoint returns HTTP 200 with body `{"data": null, "errors": [{"message": "..."}]}`
+- **WHEN** `fetch_daily_usage(...)` runs
+- **THEN** the adapter SHALL raise `RuntimeError` with message containing "GraphQL errors"
+
 
 <!-- @trace
-source: multi-provider-usage-monitoring
+source: aihub-graphql-adapter-migration
 updated: 2026-05-18
 code:
-  - backend/app/api/admin/chunking_status.py
-  - backend/eval/datasets/_pending_review.json
-  - backend/app/services/key_resolver.py
-  - backend/eval/runners/run.py
-  - src/QueueTab.jsx
-  - backend/app/services/tokenizer.py
-  - backend/app/services/embedding.py
-  - backend/alembic/versions/w1d2e3f4a5b6_r33_add_entity_extraction_step.py
-  - backend/app/services/episode_finders.py
-  - backend/app/services/rss_parser.py
-  - backend/alembic/versions/t8a9b0c1d2e3_chunking_version_description_chunks.py
-  - backend/eval/datasets/this-not-that-cool.json
-  - CLAUDE.md
-  - docs/roadmap.md
-  - src/Shared.jsx
-  - backend/app/services/exceptions.py
-  - backend/app/workers/usage_collector.py
-  - backend/app/schemas/query_entity.py
-  - backend/app/services/transcription/openai_provider.py
-  - backend/eval/datasets/this-not-that-cool.json.bak-20260515T060258Z
-  - src/AdminEpisodeGuestsTab.jsx
-  - backend/app/models/__init__.py
-  - src/App.jsx
-  - backend/scripts/backfill_embedding_v2.py
-  - backend/app/schemas/episode_guests.py
-  - backend/eval/metrics/recall.py
-  - backend/scripts/backfill_title_tsv.py
-  - backend/app/services/provider_usage/__init__.py
-  - src/AdminPage.jsx
-  - backend/alembic/versions/x2e3f4a5b6c7_provider_usage_monitoring.py
-  - backend/app/services/provider_usage/openai_adapter.py
-  - backend/app/main.py
-  - backend/eval/scripts/validate_schema.py
-  - backend/app/api/admin_processing_stats.py
-  - backend/app/services/sync.py
-  - backend/app/services/zsend.py
-  - backend/app/workers/tasks.py
-  - backend/app/models/provider_usage_snapshot.py
-  - backend/app/api/admin/__init__.py
-  - index.html
-  - backend/scripts/pilot_reembed_descriptions.py
-  - backend/app/models/episode.py
-  - backend/app/services/rag.py
-  - backend/app/services/citation_parser.py
-  - backend/app/services/provider_usage/zeabur_aihub_adapter.py
-  - backend/eval/datasets/_schema.json
-  - backend/eval/scripts/build_golden_set.py
-  - src/TranscriptPage.jsx
-  - backend/alembic/versions/v0c1d2e3f4a5_r33_episodes_guests_and_title_tsv.py
-  - src/ProviderUsageTab.jsx
-  - backend/app/services/llm_prompts.py
-  - backend/app/services/description_rechunker.py
-  - backend/.env.example
-  - docs/ai-steps.md
-  - backend/app/models/transcript_chunk.py
-  - src/AdminTokenizerTab.jsx
-  - backend/scripts/cleanup_v1_description_chunks.py
-  - src/releaseLog.jsx
-  - backend/eval/scripts/bakeoff_entity_extractor.py
-  - backend/app/core/config.py
-  - backend/eval/scripts/embedding_bakeoff.py
-  - backend/app/services/description_indexer.py
-  - backend/alembic/versions/u9b0c1d2e3f4_add_embedding_v2_columns.py
-  - backend/app/services/query_entity.py
-  - backend/app/api/admin_provider_usage.py
-  - backend/app/workers/usage_alert.py
-  - backend/scripts/backfill_guests.py
-  - backend/eval/datasets/README.md
-  - backend/app/models/episode_description_chunk.py
-  - backend/app/schemas/query.py
-  - backend/app/api/shows.py
-  - backend/app/models/ai_step.py
-  - backend/app/workers/celery_app.py
-  - backend/app/api/query.py
-  - backend/app/api/admin/episode_guests.py
-  - backend/app/api/admin/ai_steps.py
   - src/QueryPage.jsx
-tests:
-  - backend/tests/test_description_retrieval_prefer_v2.py
-  - backend/tests/test_compute_enumeration_combiner.py
-  - backend/tests/test_backfill_guests.py
-  - backend/tests/test_usage_collector.py
-  - backend/tests/test_episode_guests_schema.py
-  - backend/tests/test_query_entity.py
-  - backend/tests/test_golden_set_dataset.py
-  - backend/tests/test_openai_provider_chunking.py
-  - backend/tests/test_chunking_version_coexistence.py
-  - backend/tests/test_answer_malformed_json_salvage.py
-  - backend/tests/test_rag_retrieval_flags.py
-  - backend/tests/test_key_resolver.py
-  - backend/tests/test_admin_processing_stats_api.py
-  - backend/tests/test_strip_citations.py
-  - backend/tests/test_eval_dataset_schema.py
-  - backend/tests/test_runner_chat_enumeration.py
-  - backend/tests/test_provider_usage_adapters.py
-  - backend/tests/test_admin_provider_usage_api.py
-  - backend/tests/test_citation_parser.py
-  - backend/tests/test_rag_multi_column_bm25.py
-  - backend/tests/test_query_chat_metadata_filter.py
-  - backend/tests/test_admin_episode_guests.py
-  - backend/tests/test_rag_query_response_shape.py
-  - backend/tests/test_description_chunker_120.py
-  - backend/tests/test_usage_alert.py
-  - backend/tests/test_rss_guests_extraction.py
-  - backend/tests/test_ai_summary_full_field.py
-  - backend/tests/test_episode_finders.py
-  - backend/tests/test_rag_embedding_v2_flag.py
-  - backend/tests/test_eval_runner_flags.py
-  - backend/tests/test_llm_prompts.py
-  - backend/tests/test_chat_enum_grounding.py
-  - backend/tests/test_embedding_v2_dual_write.py
-  - backend/tests/test_answer_unwrap.py
-  - backend/tests/test_eval_runner_dispatch.py
-  - backend/tests/test_description_rechunker.py
+  - index.html
+  - backend/eval/datasets/this-not-that-cool.json.bak-20260515T060258Z
+  - src/CitationEvidenceCollapse.jsx
 -->
 
 ---
