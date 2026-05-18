@@ -51,6 +51,31 @@ const MILESTONE_LABELS = {
 const RELEASE_LOG = [
   // ─── v1.7 — Retrieval Quality Fix (5/13–5/18) ───
   {
+    date: '2026-05-18', slug: 'celery-routing-and-dispatcher-fix', milestone: 'v1.7', tag: 'fix',
+    title: {
+      zh: '新節目轉錄永遠優先處理，不再被 batch 任務堵',
+      en: 'New Episode Transcription Always First, No Longer Blocked by Batch Backfills',
+    },
+    summary: {
+      zh: '5/10 發現 EP20（Axios 那集）排在轉錄佇列裡 9 個多小時沒被處理 — 因為當時前面排著 100 個 topic 補跑任務，後端只有一個 worker 全部一個一個吃完才輪到。這版把後端任務分四條 queue（轉錄 / topic / 摘要 / 控制）並設優先級：轉錄任務 priority=9（最高）、topic / 摘要 priority=2（最低）、其他控制類 priority=5。同一個 worker 同時訂閱四條 queue，broker 按優先級 pop — 新節目進來不管前面排多少 topic 都會被先抽出來。另外 dispatcher 加 `dispatched_at` 欄位 + `FOR UPDATE SKIP LOCKED`，徹底解掉「同一筆連發兩個 Celery 任務」的競態 bug。Prod 已驗 dispatcher 新 schema 跑通、worker 訂閱四條 queue 且優先級設定正確。',
+      en: 'On 5/10 we found EP20 (the Axios episode) sat in the transcription queue for 9+ hours unprocessed — 100 topic backfill tasks were queued ahead and the single worker chewed through them one by one. This release splits backend tasks into four queues (transcribe / topic / summary / control) with priorities: transcribe at priority=9 (highest), topic/summary at priority=2 (lowest), control defaults at priority=5. The same worker subscribes to all four queues; the broker pops by priority, so new episodes get pulled ahead regardless of how many topic tasks are queued. The dispatcher also gained a `dispatched_at` column + `FOR UPDATE SKIP LOCKED` to eliminate the race where the same row could be dispatched twice. Prod verified: dispatcher running the new schema, worker subscribed to four queues with correct priority binding.',
+    },
+    summaryBullets: {
+      zh: [
+        '轉錄優先級拉到最高（priority=9），topic / 摘要降到最低（priority=2）',
+        '新節目轉錄永遠優先 pick，不會排在 topic 補跑任務後面',
+        'Dispatcher 加 `dispatched_at` + `FOR UPDATE SKIP LOCKED` 解雙派 race',
+        'Worker 啟動時自動 reset 卡 running 又沒實際在跑的 row 回 pending',
+      ],
+      en: [
+        'Transcription priority raised to top (priority=9), topic / summary dropped to lowest (priority=2)',
+        'New-episode transcription always picked first, never queued behind topic backfills',
+        'Dispatcher gained `dispatched_at` + `FOR UPDATE SKIP LOCKED` to fix double-dispatch race',
+        'Worker startup auto-resets rows stuck at running-without-actual-execution back to pending',
+      ],
+    },
+  },
+  {
     date: '2026-05-18', slug: 'citation-display-unify', milestone: 'v1.7', tag: 'ui',
     title: {
       zh: '對話模式的引用區塊重整，列舉題集數卡跟段落引用不再並排',
