@@ -88,6 +88,17 @@ src/
 | `admin-rag` | 後台 → RAG 設定 |
 | `admin-schedule` | 後台 → 轉錄排程 |
 
+## 後端 Celery Queue 模型
+
+詳細見 `docs/celery-queues.md`。摘要：
+
+- 四條 queue：`transcribe`（priority=9）、`topic`（=2）、`summary`（=2）、`control`（=5 預設）
+- 單 worker 多 queue：`--queues=transcribe,topic,summary,control --concurrency=6`
+- `task_default_queue="control"`：未設 route 的 task 自動走 control，不會消失
+- 只支援 Redis broker（priority_steps 是 Redis 專屬實作）
+- dispatcher 不再 set `status=running`；transcribe worker entry 自己 set + 5 min idempotency 視窗
+- `transcription_queue.dispatched_at`：dispatcher 的 memo pad，防自身 race（同 row 連發兩 task）
+
 ## 重要開發注意事項
 
 - **不需要打包**：直接用瀏覽器開啟 `index.html` 即可運行
