@@ -1,0 +1,13 @@
+# Bake-off-only deps. NOT installed by main Dockerfile. Bake-off run scripts
+# `pip install -r backend/requirements-bakeoff.txt` first inside the container
+# before invoking prototype runners.
+#
+# Why separate file: google-adk + litellm pull ~50 transitive deps
+# (google-cloud-*, mcp, opentelemetry-gcp) that the prod backend does not need.
+# Adding them to main requirements.txt bloats every backend / worker /
+# dispatcher / beat redeploy by ~60s build + ~80MB image.
+
+google-adk==1.34.0
+# litellm>=1.72 has ModelResponseStream symbol that ADK 1.34 expects;
+# 1.49 lacks it. Cap below 1.86 to avoid forcing openai>=2.x.
+litellm==1.75.0

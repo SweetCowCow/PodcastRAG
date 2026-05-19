@@ -39,6 +39,9 @@ def _make_adapter(framework: str):
     if framework == "b_pydantic_ai":
         from .prototypes.b_pydantic_ai.agent import PydanticAIAdapter
         return PydanticAIAdapter()
+    if framework == "e_google_adk":
+        from .prototypes.e_google_adk.agent import GoogleADKAdapter
+        return GoogleADKAdapter()
     raise SystemExit(f"unsupported framework for probe (yet): {framework}")
 
 
