@@ -20,9 +20,9 @@
 ## 4. Prototype E Google ADK（含 LiteLLM AI Hub adapter）
 
 - [x] 4.1 **第一天 spike 任務**：寫 `backend/scripts/agentic_bakeoff/prototypes/e_google_adk/litellm_aihub_adapter.py`，用 LiteLLM 包 AI Hub OpenAI-compatible endpoint。完成標準：能成功跑一次 `litellm.completion(model="openai/gemini-2.5-flash", api_base=<aihub>, api_key=<aihub_key>, messages=[...])` 並收到合法 response。30 min 內驗不通要回報並改 framework 候選名單
-- [ ] 4.2 在 `backend/scripts/agentic_bakeoff/prototypes/e_google_adk/agent.py` 寫 < 250 LOC：用 ADK `LlmAgent` + `FunctionTool`，model 走 4.1 LiteLLM adapter；L0 / L1 用 ADK session memory + 自加 Redis hook
-- [ ] 4.3 用 metric runner 跑 30 題，結果寫到 `backend/scripts/agentic_bakeoff/results/e_google_adk_<timestamp>.json`
-- [ ] 4.4 agent 收 trace 寫到 case study 的「Debug 體驗附錄 / E Google ADK」section（同 2.3 規格）
+- [x] 4.2 在 `backend/scripts/agentic_bakeoff/prototypes/e_google_adk/agent.py` 寫 < 250 LOC：用 ADK `LlmAgent` + `FunctionTool`，model 走 4.1 LiteLLM adapter；L0 / L1 用 ADK session memory + 自加 Redis hook
+- [x] 4.3 用 metric runner 跑 30 題，結果寫到 `backend/scripts/agentic_bakeoff/results/e_google_adk_<timestamp>.json`
+- [x] 4.4 agent 收 trace 寫到 case study 的「Debug 體驗附錄 / E Google ADK」section（同 2.3 規格）
 
 ## 5. 結果分析
 
