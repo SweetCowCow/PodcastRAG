@@ -30,6 +30,8 @@ from dataclasses import dataclass, field
 from openai import OpenAI
 from pydantic import BaseModel
 
+from app.services.ai_step_resolver import get_step_config
+
 from ..runner_models import import_for_adapter  # noqa: F401 (registers protocol)
 from ...runner.cost_latency_tracker import TurnTracker, usage_from_openai_response
 from ...runner.metric_runner import ToolCallTrace, TurnResult
@@ -38,7 +40,9 @@ from ...tools import TOOLS, TOOLS_BY_NAME, ToolSpec
 from ...tools.context import ToolContext
 
 
-AIHUB_BASE = "https://hnd1.aihub.zeabur.ai/v1"
+# Bake-off fixes the chat model per design.md Decision (gemini-2.5-flash).
+# api_key + base_url are pulled from ai_steps (same pattern as prod chat) —
+# avoids env var key mismatch between local and prod container.
 MAIN_MODEL = "gemini-2.5-flash"
 SUMMARY_MODEL = "gemini-2.5-flash-lite"
 K_LAST_TURNS = 3
@@ -142,16 +146,17 @@ class NativeOpenAIAdapter:
     # per-session message history (last K turns), keyed by session_id
     _history: dict[str, list[dict]] = field(default_factory=dict)
 
-    def _client(self) -> OpenAI:
-        key = os.environ.get("OPENAI_API_KEY")
-        if not key:
-            raise SystemExit("Set OPENAI_API_KEY (= AI Hub key, per memory).")
-        return OpenAI(api_key=key, base_url=AIHUB_BASE)
+    async def _client(self, ctx: ToolContext) -> OpenAI:
+        # Pull AI Hub creds from ai_steps.summary (any chat step works; summary
+        # already lives on AI Hub gemini in prod per CLAUDE.md).
+        async with ctx.db_factory() as db:
+            step = await get_step_config(db, "summary")
+        return OpenAI(api_key=step.api_key, base_url=step.base_url)
 
     async def run_turn(
         self, question: str, session_id: str, ctx: ToolContext
     ) -> TurnResult:
-        client = self._client()
+        client = await self._client(ctx)
         tracker = TurnTracker()
         trace: list[str] = []
         tool_calls_trace: list[ToolCallTrace] = []
