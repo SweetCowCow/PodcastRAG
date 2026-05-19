@@ -11,7 +11,7 @@ httpx==0.28.1
 celery[redis]==5.4.0
 redis==5.2.1
 boto3==1.35.71
-openai==1.57.0
+openai>=1.86.0,<2
 faster-whisper==1.1.0
 cachetools==5.5.0
 authlib==1.3.2
