@@ -1,9 +1,9 @@
 ## 1. 共用基礎建設
 
 - [x] 1.1 在 `backend/scripts/agentic_bakeoff/tools/` 下定義 9 個 tool 的統一 input/output schema（Pydantic BaseModel），其中 8 個 stub 回 fixture data、`search_across_episodes` 接 `app.services.rag.retrieve_hybrid`、`pin_episode` / `unpin_episode` 真寫 Redis L1 state（落實 design.md「9 Tool Spec」表）
-- [ ] 1.2 在 `backend/scripts/agentic_bakeoff/golden_set/bakeoff_30.json` 整理 30 題 golden set：從 `backend/eval/datasets/this-not-that-cool.json` 挑 26 題覆蓋 7 個類型（guest / topic / date / 單集深挖 / 跨集對比 / summary / show overview），新加 4 題 multi-turn（Q1-Q4，expected_answer 由 golden set author 填，預設 TBD）；每題標 `expected_tool_calls: list[str]`（落實 Requirement: Bake-off uses a fixed 30-question golden set）
-- [ ] 1.3 在 `backend/scripts/agentic_bakeoff/runner/metric_runner.py` 寫共用 metric runner：跑一份 golden set × 一個 framework adapter，回傳 5 量化 metric（tool 選對率 / 答題正確率 / latency / cost / multi-turn 通過率）+ 收集 trace 給質化評分（落實 Requirement: Metric runner produces five quantitative metrics）
-- [ ] 1.4 在 `backend/scripts/agentic_bakeoff/runner/cost_latency_tracker.py` 寫 cost + latency tracker：hook LLM API 呼叫前後算 ms、從 response.usage 算 token × 單價（gemini-2.5-flash 預設單價硬編 `MODEL_PRICING` dict）
+- [x] 1.2 在 `backend/scripts/agentic_bakeoff/golden_set/bakeoff_30.json` 整理 30 題 golden set：從 `backend/eval/datasets/this-not-that-cool.json` 挑 26 題覆蓋 7 個類型（guest / topic / date / 單集深挖 / 跨集對比 / summary / show overview），新加 4 題 multi-turn（Q1-Q4，expected_answer 由 golden set author 填，預設 TBD）；每題標 `expected_tool_calls: list[str]`（落實 Requirement: Bake-off uses a fixed 30-question golden set）
+- [x] 1.3 在 `backend/scripts/agentic_bakeoff/runner/metric_runner.py` 寫共用 metric runner：跑一份 golden set × 一個 framework adapter，回傳 5 量化 metric（tool 選對率 / 答題正確率 / latency / cost / multi-turn 通過率）+ 收集 trace 給質化評分（落實 Requirement: Metric runner produces five quantitative metrics）
+- [x] 1.4 在 `backend/scripts/agentic_bakeoff/runner/cost_latency_tracker.py` 寫 cost + latency tracker：hook LLM API 呼叫前後算 ms、從 response.usage 算 token × 單價（gemini-2.5-flash 預設單價硬編 `MODEL_PRICING` dict）
 
 ## 2. Prototype A 原生 OpenAI tool calling
 
