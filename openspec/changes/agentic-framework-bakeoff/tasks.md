@@ -8,8 +8,8 @@
 ## 2. Prototype A 原生 OpenAI tool calling
 
 - [x] 2.1 在 `backend/scripts/agentic_bakeoff/prototypes/a_native_openai/agent.py` 寫 < 250 LOC agent loop：直接打 AI Hub OpenAI-compatible endpoint，自己處理 tool call message round-trip + L0 K=3 truncation + history_summary 增量壓縮（gemini-2.5-flash-lite，fail-open）+ L1 Redis state hook
-- [ ] 2.2 用 metric runner 跑 30 題（含 4 multi-turn），結果寫到 `backend/scripts/agentic_bakeoff/results/a_native_openai_<timestamp>.json`
-- [ ] 2.3 agent 自動產出 trace 片段（每題 1 條 sample trace + 故意觸發 1 個 tool exception 看 stack trace + 1 個 schema invalid case）寫到 `docs/case-studies/agentic-framework-bakeoff-2026-05.md` 的「Debug 體驗附錄 / A 原生」section
+- [x] 2.2 用 metric runner 跑 30 題（含 4 multi-turn），結果寫到 `backend/scripts/agentic_bakeoff/results/a_native_openai_<timestamp>.json`
+- [x] 2.3 agent 自動產出 trace 片段（每題 1 條 sample trace + 故意觸發 1 個 tool exception 看 stack trace + 1 個 schema invalid case）寫到 `docs/case-studies/agentic-framework-bakeoff-2026-05.md` 的「Debug 體驗附錄 / A 原生」section
 
 ## 3. Prototype B Pydantic AI
 

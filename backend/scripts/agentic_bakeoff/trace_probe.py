@@ -36,6 +36,9 @@ def _make_adapter(framework: str):
     if framework == "a_native_openai":
         from .prototypes.a_native_openai.agent import NativeOpenAIAdapter
         return NativeOpenAIAdapter()
+    if framework == "b_pydantic_ai":
+        from .prototypes.b_pydantic_ai.agent import PydanticAIAdapter
+        return PydanticAIAdapter()
     raise SystemExit(f"unsupported framework for probe (yet): {framework}")
 
 
