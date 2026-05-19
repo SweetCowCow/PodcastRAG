@@ -31,10 +31,14 @@ class ToolContext:
 
         engine = create_async_engine(settings.database_url)
         Session = async_sessionmaker(engine, expire_on_commit=False)
-        rc = redis.Redis.from_url(
-            os.environ.get("REDIS_URL", "redis://localhost:6379/0"),
-            decode_responses=True,
+        # Use the canonical app Redis (= celery broker). Falls back to REDIS_URL
+        # env if settings doesn't expose celery_broker_url (e.g. local pytest).
+        redis_url = (
+            getattr(settings, "celery_broker_url", None)
+            or os.environ.get("REDIS_URL")
+            or "redis://localhost:6379/0"
         )
+        rc = redis.Redis.from_url(redis_url, decode_responses=True)
         return cls(
             show_id=show_id,
             session_id=session_id,
