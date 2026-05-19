@@ -1,0 +1,787 @@
+{
+  "framework": "b_pydantic_ai",
+  "ran_at": "2026-05-19T16:10:05.179355+00:00",
+  "aggregate": {
+    "turns_total": 40,
+    "tool_precision_mean": 0.46041666666666664,
+    "answer_keyword_hit_mean": 0.20333333333333334,
+    "latency_p50_ms": 5713.489721,
+    "latency_p95_ms": 10089.851764,
+    "latency_mean_ms": 5824.9115423,
+    "cost_total_usd": 0.011643787499999999,
+    "multi_turn_final_pass_rate": 0.0,
+    "multi_turn_finals_n": 4
+  },
+  "turns": [
+    {
+      "item_id": "b01",
+      "turn_index": 0,
+      "question": "節目名「這又沒有很屌」是怎麼來的？",
+      "tool_precision": 1.0,
+      "answer_keyword_hit": 0.0,
+      "wall_latency_ms": 3458.243242,
+      "cost_usd": 0.0001459125,
+      "is_final_turn": true,
+      "is_multi_turn": false,
+      "actual_tools": [
+        "get_show_overview"
+      ],
+      "expected_required": [
+        "get_show_overview"
+      ],
+      "answer_excerpt": "節目簡介沒有提到節目名稱「這又沒有很屌」的由來。",
+      "raised": []
+    },
+    {
+      "item_id": "b02",
+      "turn_index": 0,
+      "question": "這節目是在講什麼的？",
+      "tool_precision": 1.0,
+      "answer_keyword_hit": 0.0,
+      "wall_latency_ms": 3819.023671,
+      "cost_usd": 0.000121125,
+      "is_final_turn": true,
+      "is_multi_turn": false,
+      "actual_tools": [
+        "get_show_overview"
+      ],
+      "expected_required": [
+        "get_show_overview"
+      ],
+      "answer_excerpt": "這個節目是「這又沒有很屌」，一個關於科技和流行文化的 podcast。兩位主持人會不定期邀請來賓，每集大約 60-90 分鐘。",
+      "raised": []
+    },
+    {
+      "item_id": "b03",
+      "turn_index": 0,
+      "question": "這節目主持人是誰？",
+      "tool_precision": 1.0,
+      "answer_keyword_hit": 0.0,
+      "wall_latency_ms": 3154.331932,
+      "cost_usd": 0.0001445625,
+      "is_final_turn": true,
+      "is_multi_turn": false,
+      "actual_tools": [
+        "get_show_overview"
+      ],
+      "expected_required": [
+        "get_show_overview"
+      ],
+      "answer_excerpt": "這節目有兩位主持人。",
+      "raised": []
+    },
+    {
+      "item_id": "b04",
+      "turn_index": 0,
+      "question": "這節目大概多久更新一集？",
+      "tool_precision": 1.0,
+      "answer_keyword_hit": 1.0,
+      "wall_latency_ms": 3072.954483,
+      "cost_usd": 0.000129375,
+      "is_final_turn": true,
+      "is_multi_turn": false,
+      "actual_tools": [
+        "get_show_overview"
+      ],
+      "expected_required": [
+        "get_show_overview"
+      ],
+      "answer_excerpt": "這個節目是不定期更新的，每集大約 60-90 分鐘。",
+      "raised": []
+    },
+    {
+      "item_id": "b05",
+      "turn_index": 0,
+      "question": "迪拉去試音《也好吃》那天遇到誰？對方做了什麼？",
+      "tool_precision": 0.0,
+      "answer_keyword_hit": 0.0,
+      "wall_latency_ms": 10089.851764,
+      "cost_usd": 0.00029298750000000004,
+      "is_final_turn": true,
+      "is_multi_turn": false,
+      "actual_tools": [
+        "search_across_episodes"
+      ],
+      "expected_required": [
+        "find_episode_by_ref",
+        "search_within_episode"
+      ],
+      "answer_excerpt": "迪拉去試音《也好吃》那天遇到了馬世芳。他們一起錄製了《也好吃》。",
+      "raised": []
+    },
+    {
+      "item_id": "b06",
+      "turn_index": 0,
+      "question": "馬世芳上過《這又沒有很屌》哪幾集？",
+      "tool_precision": 1.0,
+      "answer_keyword_hit": 0.5,
+      "wall_latency_ms": 3600.460177,
+      "cost_usd": 0.0001951875,
+      "is_final_turn": true,
+      "is_multi_turn": false,
+      "actual_tools": [
+        "find_episodes_by_guest"
+      ],
+      "expected_required": [
+        "find_episodes_by_guest"
+      ],
+      "answer_excerpt": "馬世芳上過《這又沒有很屌》EP143。",
+      "raised": []
+    },
+    {
+      "item_id": "b07",
+      "turn_index": 0,
+      "question": "楊大正在這節目出現過幾次？哪幾集？",
+      "tool_precision": 1.0,
+      "answer_keyword_hit": 0.6666666666666666,
+      "wall_latency_ms": 4146.66795,
+      "cost_usd": 0.0002027625,
+      "is_final_turn": true,
+      "is_multi_turn": false,
+      "actual_tools": [
+        "find_episodes_by_guest"
+      ],
+      "expected_required": [
+        "find_episodes_by_guest"
+      ],
+      "answer_excerpt": "楊大正老師在這個節目中出現過 2 次：\nEP140｜高雄美食第二彈，樂團大佬來報到！Ft.楊大正、張凱婷\nEP4｜誠懇的場面話大師如何維持《家和萬事興》？Feat. 楊大正、山東",
+      "raised": []
+    },
+    {
+      "item_id": "b08",
+      "turn_index": 0,
+      "question": "節目裡有哪些集是歌單？",
+      "tool_precision": 1.0,
+      "answer_keyword_hit": 0.8,
+      "wall_latency_ms": 5846.685728,
+      "cost_usd": 0.0008251125,
+      "is_final_turn": true,
+      "is_multi_turn": false,
+      "actual_tools": [
+        "find_episodes_by_topic"
+      ],
+      "expected_required": [
+        "find_episodes_by_topic"
+      ],
+      "answer_excerpt": "節目中有以下幾集是歌單：\n\n*   EP142｜只有現場才有的經典瞬間！回味那些年的live 演出歌單\n*   EP134｜馬力全開的開工歌單\n*   EP131 | 當年不聽這個很落伍！ 一起回到2016 歌單\n*   EP108｜墾丁還值得去嗎？搭配雷鬼歌單來一場Good Trip Ft.卡拉雞\n*   EP96｜歡迎來我的DJ趴！身體不由自主律動的夏日節拍歌單 Ft. E1and\n*   E",
+      "raised": []
+    },
+    {
+      "item_id": "b09",
+      "turn_index": 0,
+      "question": "節目裡有講過高雄美食的集數有哪些？",
+      "tool_precision": 1.0,
+      "answer_keyword_hit": 1.0,
+      "wall_latency_ms": 5525.60948,
+      "cost_usd": 0.0005686500000000001,
+      "is_final_turn": true,
+      "is_multi_turn": false,
+      "actual_tools": [
+        "find_episodes_by_topic"
+      ],
+      "expected_required": [
+        "find_episodes_by_topic"
+      ],
+      "answer_excerpt": "有這些集數談到高雄美食：\n\n*   EP140｜高雄美食第二彈，樂團大佬來報到！Ft.楊大正、張凱婷\n*   EP129｜穿越烘爐地來找你 Ft. 小老虎\n*   EP97｜金曲預測前哨戰！評審們請不要生氣啦～\n*   EP88｜跟巷口店員的曖昧界線\n*   EP85｜高雄美食的新手任務、老手地圖 Ft. 銀座聚場邱承漢、貓下去阿寬\n*   EP58｜異世界美食家：這是我今天的第一杯（嗝） Ft.",
+      "raised": []
+    },
+    {
+      "item_id": "b10",
+      "turn_index": 0,
+      "question": "節目裡有講過咖啡的集數有哪些？",
+      "tool_precision": 1.0,
+      "answer_keyword_hit": 1.0,
+      "wall_latency_ms": 3457.717125,
+      "cost_usd": 0.00024997500000000005,
+      "is_final_turn": true,
+      "is_multi_turn": false,
+      "actual_tools": [
+        "find_episodes_by_topic"
+      ],
+      "expected_required": [
+        "find_episodes_by_topic"
+      ],
+      "answer_excerpt": "節目中提及咖啡的集數有：\n\n*   EP123 | 有朋自遠方來，迪拉葛格帶你玩\n*   EP110｜四人小隊出動！沖咖啡沖到痛風！\n*   EP106｜我們都是圈外人\n*   EP85｜高雄美食的新手任務、老手地圖 Ft. 銀座聚場邱承漢、貓下去阿寬\n*   15CM｜喝咖啡聊是非，嘎逼是為了提神還裝 B？",
+      "raised": []
+    },
+    {
+      "item_id": "b11",
+      "turn_index": 0,
+      "question": "2024 年上半年（1-6 月）發過哪幾集？",
+      "tool_precision": 1.0,
+      "answer_keyword_hit": 0.0,
+      "wall_latency_ms": 1482.0174,
+      "cost_usd": 2.39625e-05,
+      "is_final_turn": true,
+      "is_multi_turn": false,
+      "actual_tools": [
+        "find_episodes_by_date"
+      ],
+      "expected_required": [
+        "find_episodes_by_date"
+      ],
+      "answer_excerpt": "(pydantic_ai error: TypeError: Object of type date is not JSON serializable)",
+      "raised": []
+    },
+    {
+      "item_id": "b12",
+      "turn_index": 0,
+      "question": "2024 年 11 月有哪些集？",
+      "tool_precision": 1.0,
+      "answer_keyword_hit": 0.0,
+      "wall_latency_ms": 1910.979256,
+      "cost_usd": 2.6287500000000002e-05,
+      "is_final_turn": true,
+      "is_multi_turn": false,
+      "actual_tools": [
+        "find_episodes_by_date"
+      ],
+      "expected_required": [
+        "find_episodes_by_date"
+      ],
+      "answer_excerpt": "(pydantic_ai error: TypeError: Object of type date is not JSON serializable)",
+      "raised": []
+    },
+    {
+      "item_id": "b13",
+      "turn_index": 0,
+      "question": "2025 年農曆過年期間（1/25-2/10）那段出了哪幾集？",
+      "tool_precision": 1.0,
+      "answer_keyword_hit": 0.0,
+      "wall_latency_ms": 2260.127833,
+      "cost_usd": 2.5987499999999998e-05,
+      "is_final_turn": true,
+      "is_multi_turn": false,
+      "actual_tools": [
+        "find_episodes_by_date"
+      ],
+      "expected_required": [
+        "find_episodes_by_date"
+      ],
+      "answer_excerpt": "(pydantic_ai error: TypeError: Object of type date is not JSON serializable)",
+      "raised": []
+    },
+    {
+      "item_id": "b14",
+      "turn_index": 0,
+      "question": "迪拉胖在 EP134 為什麼不挑一首振奮的開工歌？他選的歌想表達什麼概念？",
+      "tool_precision": 0.25,
+      "answer_keyword_hit": 0.0,
+      "wall_latency_ms": 7806.989911,
+      "cost_usd": 0.0003078,
+      "is_final_turn": true,
+      "is_multi_turn": false,
+      "actual_tools": [
+        "find_episode_by_ref"
+      ],
+      "expected_required": [
+        "find_episode_by_ref",
+        "search_within_episode"
+      ],
+      "answer_excerpt": "EP134 節目未提及。",
+      "raised": []
+    },
+    {
+      "item_id": "b15",
+      "turn_index": 0,
+      "question": "EP19《動漫歌單》來賓提到他爸爸以前在哪裡工作？後來兼差開了什麼店讓他接觸到漫畫？",
+      "tool_precision": 0.25,
+      "answer_keyword_hit": 0.0,
+      "wall_latency_ms": 3462.403691,
+      "cost_usd": 0.00016634999999999998,
+      "is_final_turn": true,
+      "is_multi_turn": false,
+      "actual_tools": [
+        "find_episode_by_ref"
+      ],
+      "expected_required": [
+        "find_episode_by_ref",
+        "search_within_episode"
+      ],
+      "answer_excerpt": "EP19 似乎沒有收錄在資料庫中。",
+      "raised": []
+    },
+    {
+      "item_id": "b16",
+      "turn_index": 0,
+      "question": "EP140《高雄美食第二彈》提到第一彈的兩位來賓是誰？節目裡指出高雄哪兩個場館是音樂節 / 國際演唱會重鎮？",
+      "tool_precision": 0.25,
+      "answer_keyword_hit": 0.0,
+      "wall_latency_ms": 9496.58258,
+      "cost_usd": 0.000302475,
+      "is_final_turn": true,
+      "is_multi_turn": false,
+      "actual_tools": [
+        "find_episode_by_ref"
+      ],
+      "expected_required": [
+        "find_episode_by_ref",
+        "search_within_episode"
+      ],
+      "answer_excerpt": "我無法找到 EP140 這集。請問您是否有其他資訊可以提供？",
+      "raised": []
+    },
+    {
+      "item_id": "b17",
+      "turn_index": 0,
+      "question": "EP18《黃玠 跑鞋國王》提到剛開始跑步時買的 Nike 鞋款叫什麼？鞋底厚度多少？標榜什麼特色？",
+      "tool_precision": 0.25,
+      "answer_keyword_hit": 0.0,
+      "wall_latency_ms": 6459.159258,
+      "cost_usd": 0.00032505,
+      "is_final_turn": true,
+      "is_multi_turn": false,
+      "actual_tools": [
+        "find_episode_by_ref"
+      ],
+      "expected_required": [
+        "find_episode_by_ref",
+        "search_within_episode"
+      ],
+      "answer_excerpt": "節目未提及 EP18，因此無法回答您的問題。",
+      "raised": []
+    },
+    {
+      "item_id": "b18",
+      "turn_index": 0,
+      "question": "EP44《伴手禮是社交潤滑劑》來賓用什麼食物當作例子來講送禮糾結？為什麼『現吃好吃』的食物反而不適合當伴手禮？",
+      "tool_precision": 0.25,
+      "answer_keyword_hit": 0.0,
+      "wall_latency_ms": 8226.081176,
+      "cost_usd": 0.00028586249999999996,
+      "is_final_turn": true,
+      "is_multi_turn": false,
+      "actual_tools": [
+        "find_episode_by_ref"
+      ],
+      "expected_required": [
+        "find_episode_by_ref",
+        "search_within_episode"
+      ],
+      "answer_excerpt": "EP44 節目未提及。",
+      "raised": []
+    },
+    {
+      "item_id": "b19",
+      "turn_index": 0,
+      "question": "EP66《浪人祭歌單》主持人忠祐為什麼選某些外國藝人／團入歌單？他在 IG 留言『Please come to Taiwan』反映台灣樂迷的什麼處境？",
+      "tool_precision": 0.25,
+      "answer_keyword_hit": 0.0,
+      "wall_latency_ms": 6612.630783,
+      "cost_usd": 0.0002944875,
+      "is_final_turn": true,
+      "is_multi_turn": false,
+      "actual_tools": [
+        "find_episode_by_ref"
+      ],
+      "expected_required": [
+        "find_episode_by_ref",
+        "search_within_episode"
+      ],
+      "answer_excerpt": "EP66 節目未提及。",
+      "raised": []
+    },
+    {
+      "item_id": "b20",
+      "turn_index": 0,
+      "question": "節目裡迪拉怎麼描述中老年人的開工想法跟年輕時的差異？",
+      "tool_precision": 0.0,
+      "answer_keyword_hit": 0.0,
+      "wall_latency_ms": 5291.695951,
+      "cost_usd": 0.0002854125,
+      "is_final_turn": true,
+      "is_multi_turn": false,
+      "actual_tools": [
+        "find_episodes_by_guest"
+      ],
+      "expected_required": [
+        "search_across_episodes"
+      ],
+      "answer_excerpt": "節目中未提及迪拉此人。",
+      "raised": []
+    },
+    {
+      "item_id": "b21",
+      "turn_index": 0,
+      "question": "迪拉跟馬世芳怎麼定義『家常味』？為什麼家常菜可以天天吃，但 Fine dining 不行？",
+      "tool_precision": 0.0,
+      "answer_keyword_hit": 0.6,
+      "wall_latency_ms": 8125.84152,
+      "cost_usd": 0.00038538749999999996,
+      "is_final_turn": true,
+      "is_multi_turn": false,
+      "actual_tools": [
+        "find_episodes_by_guest",
+        "find_episodes_by_guest"
+      ],
+      "expected_required": [
+        "search_across_episodes"
+      ],
+      "answer_excerpt": "節目中沒有提及迪拉對「家常味」的定義。\n\n在 EP143 中，馬世芳與主持人討論了家常味。節目中提到家常菜的客製化與情感傳承，並鼓勵年輕人多嘗好料理建立味覺。至於為什麼家常菜可以天天吃，但 Fine dining 不行，節目中沒有直接說明原因，但從討論家常菜的客製化和情感傳承來看，暗示了家常菜的獨特性和與個人連結的深度是 Fine dining 無法取代的。",
+      "raised": []
+    },
+    {
+      "item_id": "b22",
+      "turn_index": 0,
+      "question": "《這又沒有很屌》從第一集到現在，主持人陣容有什麼變化？",
+      "tool_precision": 0.0,
+      "answer_keyword_hit": 0.0,
+      "wall_latency_ms": 2722.645752,
+      "cost_usd": 0.00012903749999999999,
+      "is_final_turn": true,
+      "is_multi_turn": false,
+      "actual_tools": [],
+      "expected_required": [
+        "search_across_episodes"
+      ],
+      "answer_excerpt": "節目中未提及主持人陣容的變化。",
+      "raised": []
+    },
+    {
+      "item_id": "b23",
+      "turn_index": 0,
+      "question": "迪拉跟 Leo王 是怎麼從不認識變成合作夥伴的？他們第一次見面的故事是什麼？",
+      "tool_precision": 1.0,
+      "answer_keyword_hit": 0.3333333333333333,
+      "wall_latency_ms": 8842.052529,
+      "cost_usd": 0.000494625,
+      "is_final_turn": true,
+      "is_multi_turn": false,
+      "actual_tools": [
+        "search_across_episodes"
+      ],
+      "expected_required": [
+        "search_across_episodes"
+      ],
+      "answer_excerpt": "根據節目內容，迪拉和 Leo 王的第一次見面是在一個 Live house，當時 Leo 王向迪拉介紹自己。\n\n至於他們如何從不認識變成合作夥伴，節目中提到在某年的菁英獎，迪拉受邀與 Leo 王和黃瑄合作一個演出橋段，因此他們約了開會，這可能是他們開始合作的契機。此外，EP116 也提到迪拉曾安排 Leo 王在 Revolver 擔任暖場嘉賓。",
+      "raised": []
+    },
+    {
+      "item_id": "b24",
+      "turn_index": 0,
+      "question": "給我 EP143 的摘要",
+      "tool_precision": 0.25,
+      "answer_keyword_hit": 0.0,
+      "wall_latency_ms": 5519.956003,
+      "cost_usd": 0.0001906125,
+      "is_final_turn": true,
+      "is_multi_turn": false,
+      "actual_tools": [
+        "find_episode_by_ref"
+      ],
+      "expected_required": [
+        "find_episode_by_ref",
+        "get_episode_summary"
+      ],
+      "answer_excerpt": "EP143 的摘要是：「Axios 創辦人解釋 RAG 對新聞業的影響。」",
+      "raised": []
+    },
+    {
+      "item_id": "b25",
+      "turn_index": 0,
+      "question": "EP140 在講什麼？簡短說一下",
+      "tool_precision": 0.25,
+      "answer_keyword_hit": 0.0,
+      "wall_latency_ms": 3570.998322,
+      "cost_usd": 0.00018596249999999997,
+      "is_final_turn": true,
+      "is_multi_turn": false,
+      "actual_tools": [
+        "find_episode_by_ref"
+      ],
+      "expected_required": [
+        "find_episode_by_ref",
+        "get_episode_summary"
+      ],
+      "answer_excerpt": "EP140 節目未提及。",
+      "raised": []
+    },
+    {
+      "item_id": "b26",
+      "turn_index": 0,
+      "question": "EP66 浪人祭歌單那集大概聊什麼？",
+      "tool_precision": 0.25,
+      "answer_keyword_hit": 0.0,
+      "wall_latency_ms": 9447.976955,
+      "cost_usd": 0.00031841249999999997,
+      "is_final_turn": true,
+      "is_multi_turn": false,
+      "actual_tools": [
+        "find_episode_by_ref"
+      ],
+      "expected_required": [
+        "find_episode_by_ref",
+        "get_episode_summary"
+      ],
+      "answer_excerpt": "EP66 節目未提及。",
+      "raised": []
+    },
+    {
+      "item_id": "b27",
+      "turn_index": 0,
+      "question": "迪拉胖在 EP1 有提到自己得過什麼嘻哈大賽冠軍嗎？",
+      "tool_precision": 0.25,
+      "answer_keyword_hit": 0.0,
+      "wall_latency_ms": 11866.25772,
+      "cost_usd": 0.0005355,
+      "is_final_turn": true,
+      "is_multi_turn": false,
+      "actual_tools": [
+        "find_episode_by_ref"
+      ],
+      "expected_required": [
+        "find_episode_by_ref",
+        "search_within_episode"
+      ],
+      "answer_excerpt": "節目中未提及迪拉胖在 EP1 提到自己得過嘻哈大賽冠軍。",
+      "raised": []
+    },
+    {
+      "item_id": "b28",
+      "turn_index": 0,
+      "question": "迪拉胖在 EP143 有提到他的廠牌顏社今年會發行哪些新專輯嗎？",
+      "tool_precision": 0.0,
+      "answer_keyword_hit": 0.0,
+      "wall_latency_ms": 2331.035419,
+      "cost_usd": 0.0001224,
+      "is_final_turn": true,
+      "is_multi_turn": false,
+      "actual_tools": [],
+      "expected_required": [
+        "find_episode_by_ref",
+        "search_within_episode"
+      ],
+      "answer_excerpt": "EP143 節目中未提及迪拉胖的廠牌顏社今年會發行哪些新專輯。",
+      "raised": []
+    },
+    {
+      "item_id": "b29",
+      "turn_index": 0,
+      "question": "迪拉在《這又沒有很屌》裡有講過『安身之處』或『被照顧到』這個概念嗎？",
+      "tool_precision": 1.0,
+      "answer_keyword_hit": 0.4,
+      "wall_latency_ms": 5876.31873,
+      "cost_usd": 0.00038324999999999996,
+      "is_final_turn": true,
+      "is_multi_turn": false,
+      "actual_tools": [
+        "search_across_episodes"
+      ],
+      "expected_required": [
+        "search_across_episodes"
+      ],
+      "answer_excerpt": "在 EP134《馬力全開的開工歌單》中，迪拉有提到「安身之處」這個概念。節目中提到：「我覺得 我可以很同感迪拉 剛剛講那個安身之處 就是因為我覺得 我下半年有比較 就是我去2025下半年 有比較 把我自己的身心狀態 跟作息整頓好這樣子 所以 也因為這樣...精神上或是物理上的安身之處 然後可以讓自己好好的 在那個安身之處待著的話 應該一整年 遇到什麼狀況 都可以很輕鬆的活著」。\n\n節目中未提及「被",
+      "raised": []
+    },
+    {
+      "item_id": "b30",
+      "turn_index": 0,
+      "question": "EP140《高雄美食第二彈》楊大正有提到他自己在高雄開過餐廳嗎？",
+      "tool_precision": 0.25,
+      "answer_keyword_hit": 0.2,
+      "wall_latency_ms": 8186.233507,
+      "cost_usd": 0.0003803625,
+      "is_final_turn": true,
+      "is_multi_turn": false,
+      "actual_tools": [
+        "find_episode_by_ref"
+      ],
+      "expected_required": [
+        "find_episode_by_ref",
+        "search_within_episode"
+      ],
+      "answer_excerpt": "節目未提及。我找不到 EP140 這集。",
+      "raised": []
+    },
+    {
+      "item_id": "mt01",
+      "turn_index": 0,
+      "question": "歌單有哪幾集？",
+      "tool_precision": 1.0,
+      "answer_keyword_hit": 0.8,
+      "wall_latency_ms": 8725.411135,
+      "cost_usd": 0.000859125,
+      "is_final_turn": false,
+      "is_multi_turn": true,
+      "actual_tools": [
+        "find_episodes_by_topic"
+      ],
+      "expected_required": [
+        "find_episodes_by_topic"
+      ],
+      "answer_excerpt": "關於「歌單」的集數有：\n\n*   EP142｜只有現場才有的經典瞬間！回味那些年的live 演出歌單\n*   EP134｜馬力全開的開工歌單\n*   EP131 | 當年不聽這個很落伍！ 一起回到2016 歌單\n*   EP108｜墾丁還值得去嗎？搭配雷鬼歌單來一場Good Trip Ft.卡拉雞\n*   EP96｜歡迎來我的DJ趴！身體不由自主律動的夏日節拍歌單 Ft. E1and\n*   EP",
+      "raised": []
+    },
+    {
+      "item_id": "mt01",
+      "turn_index": 1,
+      "question": "第三集是什麼內容？",
+      "tool_precision": 0.0,
+      "answer_keyword_hit": 0.0,
+      "wall_latency_ms": 8578.696308,
+      "cost_usd": 0.0012910125,
+      "is_final_turn": true,
+      "is_multi_turn": true,
+      "actual_tools": [
+        "find_episode_by_ref"
+      ],
+      "expected_required": [
+        "get_episode_summary"
+      ],
+      "answer_excerpt": "節目未提及第三集。",
+      "raised": []
+    },
+    {
+      "item_id": "mt02",
+      "turn_index": 0,
+      "question": "EP143 講什麼？",
+      "tool_precision": 0.3333333333333333,
+      "answer_keyword_hit": 0.0,
+      "wall_latency_ms": 5884.343145,
+      "cost_usd": 3.06e-05,
+      "is_final_turn": false,
+      "is_multi_turn": true,
+      "actual_tools": [
+        "find_episode_by_ref",
+        "get_episode_summary"
+      ],
+      "expected_required": [
+        "find_episode_by_ref",
+        "get_episode_summary",
+        "pin_episode"
+      ],
+      "answer_excerpt": "(pydantic_ai error: TypeError: Object of type UUID is not JSON serializable)",
+      "raised": []
+    },
+    {
+      "item_id": "mt02",
+      "turn_index": 1,
+      "question": "他怎麼解釋 RAG？",
+      "tool_precision": 0.0,
+      "answer_keyword_hit": 0.0,
+      "wall_latency_ms": 5933.282819,
+      "cost_usd": 0.00022522499999999999,
+      "is_final_turn": true,
+      "is_multi_turn": true,
+      "actual_tools": [],
+      "expected_required": [
+        "search_within_episode",
+        "search_across_episodes"
+      ],
+      "answer_excerpt": "EP143 的 ID 不正確，無法搜尋。",
+      "raised": []
+    },
+    {
+      "item_id": "mt03",
+      "turn_index": 0,
+      "question": "EP140 第二彈是哪兩位來賓？",
+      "tool_precision": 0.16666666666666666,
+      "answer_keyword_hit": 0.3333333333333333,
+      "wall_latency_ms": 6405.511683,
+      "cost_usd": 0.00024149999999999996,
+      "is_final_turn": false,
+      "is_multi_turn": true,
+      "actual_tools": [
+        "find_episode_by_ref"
+      ],
+      "expected_required": [
+        "find_episode_by_ref",
+        "pin_episode",
+        "search_within_episode"
+      ],
+      "answer_excerpt": "節目未提及 EP140。",
+      "raised": []
+    },
+    {
+      "item_id": "mt03",
+      "turn_index": 1,
+      "question": "他們在節目裡推薦哪間餐廳？",
+      "tool_precision": 0.0,
+      "answer_keyword_hit": 0.5,
+      "wall_latency_ms": 3023.148796,
+      "cost_usd": 0.00013751249999999996,
+      "is_final_turn": false,
+      "is_multi_turn": true,
+      "actual_tools": [],
+      "expected_required": [
+        "search_within_episode"
+      ],
+      "answer_excerpt": "EP140 節目未提及，因此無法得知他們推薦哪間餐廳。",
+      "raised": []
+    },
+    {
+      "item_id": "mt03",
+      "turn_index": 2,
+      "question": "他們推薦餐廳的什麼料理？",
+      "tool_precision": 0.0,
+      "answer_keyword_hit": 0.0,
+      "wall_latency_ms": 2444.433881,
+      "cost_usd": 0.000121875,
+      "is_final_turn": true,
+      "is_multi_turn": true,
+      "actual_tools": [],
+      "expected_required": [
+        "search_within_episode"
+      ],
+      "answer_excerpt": "EP140 節目未提及，因此無法得知他們推薦什麼料理。",
+      "raised": []
+    },
+    {
+      "item_id": "mt04",
+      "turn_index": 0,
+      "question": "跟我聊聊 EP19 動漫歌單？",
+      "tool_precision": 0.16666666666666666,
+      "answer_keyword_hit": 0.0,
+      "wall_latency_ms": 5580.293714,
+      "cost_usd": 0.00020534999999999998,
+      "is_final_turn": false,
+      "is_multi_turn": true,
+      "actual_tools": [
+        "find_episode_by_ref"
+      ],
+      "expected_required": [
+        "find_episode_by_ref",
+        "get_episode_summary",
+        "pin_episode"
+      ],
+      "answer_excerpt": "EP19 似乎沒有收錄在我的資料庫中，請問您是不是在找其他的集數呢？",
+      "raised": []
+    },
+    {
+      "item_id": "mt04",
+      "turn_index": 1,
+      "question": "大家推薦了哪些歌？",
+      "tool_precision": 0.0,
+      "answer_keyword_hit": 0.0,
+      "wall_latency_ms": 8091.906087,
+      "cost_usd": 0.00041516249999999996,
+      "is_final_turn": false,
+      "is_multi_turn": true,
+      "actual_tools": [
+        "search_across_episodes"
+      ],
+      "expected_required": [
+        "search_within_episode"
+      ],
+      "answer_excerpt": "根據節目內容，有幾集提到了歌曲推薦：\n\n*   **EP96** 提到了 Troye Sivan 的歌曲 \"Talk Talk\"，被形容為很有 Party 感的歌。\n*   **EP70** 提到使用伍佰的《音浪》這類很紅的歌效果很好。\n*   **EP52** 討論了適合夏天、海灘、玩水的消暑歌單，以及一些有「熱帶」感覺的嗨歌。\n*   **EP67** 提到主持人會推薦他們喜歡的來賓作品中的歌",
+      "raised": []
+    },
+    {
+      "item_id": "mt04",
+      "turn_index": 2,
+      "question": "這些歌分別是出自哪部作品？",
+      "tool_precision": 0.0,
+      "answer_keyword_hit": 0.0,
+      "wall_latency_ms": 12659.904276,
+      "cost_usd": 7.154999999999999e-05,
+      "is_final_turn": true,
+      "is_multi_turn": true,
+      "actual_tools": [],
+      "expected_required": [
+        "search_within_episode"
+      ],
+      "answer_excerpt": "(pydantic_ai error: ModelHTTPError: status_code: 500, model_name: gemini-2.5-flash, body: {'message': 'litellm.APIConnectionError: Missing corresponding tool call for tool response message. Received -",
+      "raised": []
+    }
+  ]
+}

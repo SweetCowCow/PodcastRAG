@@ -1,0 +1,91 @@
+{
+  "framework": "b_pydantic_ai",
+  "ran_at": "2026-05-19T16:15:03.231240+00:00",
+  "items": [
+    {
+      "item_id": "normal_b01",
+      "turns": [
+        {
+          "question": "節目名「這又沒有很屌」是怎麼來的？",
+          "answer": "節目簡介沒有提到節目名稱「這又沒有很屌」的由來。",
+          "tool_calls": [
+            {
+              "name": "get_show_overview",
+              "args": {},
+              "result_summary": "{\"overview\": \"(fixture show overview) 這又沒有很屌：科技 + 流行文化 podcast，兩位主持人不定期邀請來賓，每集 60-90 分鐘。\"}",
+              "raised": null
+            }
+          ],
+          "wall_latency_ms": 5249.492073,
+          "cost_usd": 0.0001459125,
+          "trace_log": "get_show_overview({}) -> {'overview': '(fixture show overview) 這又沒有很屌：科技 + 流行文化 podca"
+        }
+      ]
+    },
+    {
+      "item_id": "schema_invalid",
+      "turns": [
+        {
+          "question": "請給我 episode id 'not-a-real-uuid-string' 的摘要，就用這個字串",
+          "answer": "您提供的 episode ID 'not-a-real-uuid-string' 不是一個有效的 UUID 格式，請提供正確的 episode ID。",
+          "tool_calls": [],
+          "wall_latency_ms": 5843.748648,
+          "cost_usd": 0.0001524,
+          "trace_log": ""
+        }
+      ]
+    },
+    {
+      "item_id": "unknown_ref",
+      "turns": [
+        {
+          "question": "EP99999 講什麼？",
+          "answer": "EP99999 這個集數不存在，請確認集數 ID。",
+          "tool_calls": [],
+          "wall_latency_ms": 4862.823897,
+          "cost_usd": 0.0001787625,
+          "trace_log": ""
+        }
+      ]
+    },
+    {
+      "item_id": "multi_turn_carry",
+      "turns": [
+        {
+          "question": "歌單有哪幾集？",
+          "answer": "關於「歌單」的集數有：\n\n*   EP142｜只有現場才有的經典瞬間！回味那些年的live 演出歌單\n*   EP134｜馬力全開的開工歌單\n*   EP131 | 當年不聽這個很落伍！ 一起回到2016 歌單\n*   EP108｜墾丁還值得去嗎？搭配雷鬼歌單來一場Good Trip Ft.卡拉雞\n*   EP96｜歡迎來我的DJ趴！身體不由自主律動的夏日節拍歌單 Ft. E1and\n*   EP93｜從荷蘭回來還是始終如一的迪拉\n*   EP92｜像刮痧一樣除瘀，幫你降底噪、解心悶的療效歌單 Ft. PUZZLEMAN\n*   EP89｜青春還沒走，老闆再來一手🍺 中年男子心中真正的搖滾歌單 Ft. 鳳小岳、阿強(88balaz)\n*   EP87｜特別的方大同，特別的紀念歌單 Ft. 趙翊帆\n*   EP84｜北京來的90年代嘻哈歌單 Ft. 龍胆紫、Dirty Moss、DJ Trius\n*   EP71｜天冷了，靠被不如抱抱睡歌單\n*   EP66｜血與淚交織的夢幻音樂祭歌單 Feat.浪人祭Echo蕭達謙\n*   EP61｜乖乖待在家的颱風夜歌單\n*   EP60｜走正路，你是不會後悔的\n*   EP57｜深入南洋的秘穴 探險者的歌單 Feat. 雷擎\n*   EP55｜情不自禁就想插播的KTV歌單\n*   EP52｜夏天就是要衝海灘 玩水配的消暑歌單\n*   EP46｜只差臨門一腳，你需要超能力歌單\n*   EP43｜金屬樂這樣聽懂最快 Ft.血肉果汁機GIGO、阿霖\n*   EP37｜旺盛生命力的東南亞歌單\n*   EP34｜假文青歌單 Feat. 黃玠\n*   【龍年特別企劃】 不想上班！讓開工歌單陪你收收心\n*   EP19｜在通往世界最強的路上，意外撿到的動漫歌單 Feat. 蛋頭、李優\n*   15CM｜最讓人Emo的季節🍂 起秋孤單聽的起秋歌單\n*   EP12｜原來你也喜歡KPOP？！來一場與韓國偶像的夢幻約會 ♥ Feat. Gummy B\n*   15CM｜什麼歌會讓人 Refresh ？「除濕歌單」帶你脫離低氣壓\n*   EP9｜怎麼 Catch 生活中的創意？ 讓靈感歌單帶你進入心流！ Feat. 囂搞、PUZZLEMAN\n*   EP7｜請問你要到哪裡？ 老司機的開車歌單！Feat. Leo王\n*   15CM｜越酷我越愛，偏門歌單大補帖！",
+          "tool_calls": [
+            {
+              "name": "find_episodes_by_topic",
+              "args": {
+                "topic": "歌單"
+              },
+              "result_summary": "{\"episodes\": [{\"episode_id\": \"fa604fe3-20f5-47d4-a82c-2a48aa11028d\", \"title\": \"EP142｜只有現場才有的經典瞬間！回味那些年的live 演出歌單\", \"publ",
+              "raised": null
+            }
+          ],
+          "wall_latency_ms": 7797.472649,
+          "cost_usd": 0.000859125,
+          "trace_log": "find_episodes_by_topic({\"topic\": \"歌單\"}) -> {'episodes': [{'episode_id': 'fa604fe3-20f5-47d4-a82c-2a48aa"
+        },
+        {
+          "question": "第三集是什麼內容？",
+          "answer": "節目未提及第三集。",
+          "tool_calls": [
+            {
+              "name": "find_episode_by_ref",
+              "args": {
+                "ref": "第三集"
+              },
+              "result_summary": "{\"episode\": null}",
+              "raised": null
+            }
+          ],
+          "wall_latency_ms": 4643.695757,
+          "cost_usd": 0.0012910125,
+          "trace_log": "find_episode_by_ref({\"ref\": \"第三集\"}) -> {'episode': None}"
+        }
+      ]
+    }
+  ]
+}

@@ -13,9 +13,9 @@
 
 ## 3. Prototype B Pydantic AI
 
-- [ ] 3.1 在 `backend/scripts/agentic_bakeoff/prototypes/b_pydantic_ai/agent.py` 寫 < 250 LOC：用 Pydantic AI `Agent` + `@tool` decorator + `RunContext`，model 設 OpenAI provider 指向 AI Hub endpoint；L0 / L1 用 Pydantic AI 既有 message history + 自加 Redis state hook
-- [ ] 3.2 用 metric runner 跑 30 題，結果寫到 `backend/scripts/agentic_bakeoff/results/b_pydantic_ai_<timestamp>.json`
-- [ ] 3.3 agent 收 trace 寫到 case study 的「Debug 體驗附錄 / B Pydantic AI」section（同 2.3 規格）
+- [x] 3.1 在 `backend/scripts/agentic_bakeoff/prototypes/b_pydantic_ai/agent.py` 寫 < 250 LOC：用 Pydantic AI `Agent` + `@tool` decorator + `RunContext`，model 設 OpenAI provider 指向 AI Hub endpoint；L0 / L1 用 Pydantic AI 既有 message history + 自加 Redis state hook
+- [x] 3.2 用 metric runner 跑 30 題，結果寫到 `backend/scripts/agentic_bakeoff/results/b_pydantic_ai_<timestamp>.json`
+- [x] 3.3 agent 收 trace 寫到 case study 的「Debug 體驗附錄 / B Pydantic AI」section（同 2.3 規格）
 
 ## 4. Prototype E Google ADK（含 LiteLLM AI Hub adapter）
 
