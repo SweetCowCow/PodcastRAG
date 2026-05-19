@@ -148,6 +148,7 @@ R3 拆三段做（每段都跑 eval baseline 對照升幅）：
 - **Golden set audit q25 expected 對齊** — 4 集多撈 / 6 集漏，人工複查（屬 dataset quality）
 - **Rule pattern 涵蓋率月度回顧** — 等真實 prod query 累積後做
 - **`eval-runner-dynamic-top-k`** — enumeration items top_k 動態提到 `len(expected)`
+- **`rag-py-module-split`** — `backend/app/services/rag.py` 已 1330 行，拆成 retrieve / rerank / aggregation / prompt 等獨立 module。**併進 `chat-agentic-tool-routing` 主 change 一起做**（那 change 本就會動 rag.py 內部結構，避免做兩遍）
 
 ---
 
