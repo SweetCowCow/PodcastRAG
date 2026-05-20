@@ -10,6 +10,7 @@ from sqlalchemy import text
 from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import optional_auth_with_ip_limit, require_authenticated_user
 from app.models.show import Show
@@ -29,6 +30,7 @@ from app.schemas.query_entity import QueryEntities
 from openai import AsyncOpenAI, OpenAI
 
 from app.services import citation_parser, episode_finders, query_entity, rag
+from app.services.chat_agent.agent import ChatAgentResult, run_agent
 from app.services.ai_step_resolver import (
     AiStepNotConfiguredError,
     get_step_config,
@@ -416,6 +418,13 @@ async def query_show(
             quota_remaining=quota_remaining,
         )
 
+    # chat-agentic-tool-routing: when the feature flag is on, dispatch to the
+    # agentic loop instead of the rule-based pipeline. search-mode is unaffected.
+    if settings.enable_agentic_chat:
+        session_id = payload.session_id or uuid.uuid4()
+        agent_result = await run_agent(payload.question, session_id, show_id, db)
+        return _agent_result_to_response(agent_result, quota_remaining)
+
     try:
         rewrite_cfg = await get_step_config(db, "rewrite")
         answer_cfg = await get_step_config(db, "answer")
@@ -554,6 +563,18 @@ async def query_show(
         citations_meta=citations_meta,
         enumeration_episodes=enumeration,
         enumeration_total=enumeration_total,
+    )
+
+
+def _agent_result_to_response(result: ChatAgentResult, quota_remaining: int) -> ChatResponse:
+    """Map `ChatAgentResult` to the `ChatResponse` wire shape."""
+    return ChatResponse(
+        query_id=uuid.uuid4().hex[:32],
+        answer=result.answer,
+        citations=[],
+        quota_remaining=quota_remaining,
+        tool_calls=result.tool_calls or None,
+        agent_truncated=result.agent_truncated,
     )
 
 

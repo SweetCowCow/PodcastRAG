@@ -385,6 +385,93 @@ The decision SHALL be made client-side based on `enumeration_episodes?.length > 
 - **THEN** the same `citation_click` event SHALL be sent with the same `chunk_id` format
 - **AND** the navigation behaviour SHALL be identical to the enumeration layout case
 
+---
+### Requirement: Chat-mode dispatches to agent loop when feature flag is enabled
+
+When `settings.enable_agentic_chat` is `true` AND the request `payload.mode` is not `"search"`, the `query_show` endpoint SHALL dispatch the request to `chat_agent.agent.run_agent` instead of executing the rule-based pipeline (rewrite → entity extraction → metadata filter → `retrieve_hybrid` → enumeration → answer). When `settings.enable_agentic_chat` is `false`, the rule-based pipeline SHALL continue to execute unchanged. The search-mode branch (`payload.mode == "search"`) SHALL NOT be affected by the flag in either state.
+
+#### Scenario: Flag enabled, chat-mode request → agent loop
+
+- **GIVEN** `ENABLE_AGENTIC_CHAT=true` and a request with `payload.mode != "search"`
+- **WHEN** `query_show` handles the request
+- **THEN** `chat_agent.agent.run_agent` SHALL be called
+- **AND** the rule-based pipeline branch (rewrite + entity extraction + `_compute_enumeration_episodes`) SHALL NOT execute
+
+#### Scenario: Flag disabled, chat-mode request → rule-based pipeline
+
+- **GIVEN** `ENABLE_AGENTIC_CHAT=false` and a request with `payload.mode != "search"`
+- **WHEN** `query_show` handles the request
+- **THEN** the rule-based pipeline SHALL execute as before
+- **AND** `chat_agent.agent.run_agent` SHALL NOT be called
+
+#### Scenario: Search-mode unaffected by flag
+
+- **GIVEN** any value of `ENABLE_AGENTIC_CHAT` and a request with `payload.mode == "search"`
+- **WHEN** `query_show` handles the request
+- **THEN** the search-mode branch SHALL execute the existing pipeline (embed → optional routing → `retrieve_hybrid` → enrich)
+- **AND** `chat_agent.agent.run_agent` SHALL NOT be called
+
+
+<!-- @trace
+source: chat-agentic-tool-routing
+updated: 2026-05-21
+code:
+  - .agents/skills/spectra-analyze/SKILL.md
+  - .agents/skills/spectra-commit/SKILL.md
+  - .agents/skills/spectra-ingest/SKILL.md
+  - backend/scripts/run_chat_agent_eval.py
+  - backend/app/services/chat_agent/__init__.py
+  - backend/app/core/config.py
+  - .agents/skills/spectra-verify/SKILL.md
+  - backend/scripts/agentic_bakeoff/results/comparison.md
+  - backend/app/services/chat_agent/prompts.py
+  - .codex/config.toml
+  - .tmp/citation-unify-en-collapsed.png
+  - backend/app/services/chat_agent/agent.py
+  - .agents/skills/spectra-archive/SKILL.md
+  - backend/scripts/agentic_bakeoff/results/a_native_openai_20260519T100220Z.json
+  - .agents/skills/spectra-propose/SKILL.md
+  - .agents/skills/spectra-audit/SKILL.md
+  - backend/app/services/episode_finders.py
+  - .agents/skills/spectra-discuss/SKILL.md
+  - .tmp/citation-unify-q1.png
+  - .tmp/citation-unify-q3.png
+  - AGENTS.md
+  - backend/app/services/chat_agent/state.py
+  - .agents/skills/spectra-apply/SKILL.md
+  - backend/app/services/chat_agent/memory.py
+  - .tmp/citation-unify-q1-q2-q3-zh-expanded.png
+  - backend/app/schemas/query.py
+  - .agents/skills/rag-eval-runner/SKILL.md
+  - .agents/skills/spectra-drift/SKILL.md
+  - .codex/hooks.json
+  - .agents/skills/spectra-ask/SKILL.md
+  - .agents/skills/spectra-debug/SKILL.md
+  - .tmp/citation-unify-q2.png
+  - .tmp/citation-unify-zh-all.png
+  - backend/app/services/chat_agent/tools.py
+  - backend/eval/datasets/this-not-that-cool.json.bak-20260515T060258Z
+  - backend/app/api/query.py
+tests:
+  - backend/tests/test_chat_session_state.py
+  - backend/tests/test_quota_decrement_uniform.py
+  - backend/tests/test_chat_agent_multi_turn.py
+  - backend/tests/test_chat_agent_loop.py
+  - backend/tests/test_chat_agent_memory.py
+-->
+
+---
+### Requirement: Quota accounting applies uniformly across both pipelines
+
+The per-user query quota check and atomic decrement SHALL be performed before pipeline dispatch and SHALL behave identically regardless of whether the request is routed to the agent loop or the rule-based pipeline. Once dispatched, an agent-loop failure (e.g., iteration cap exhausted, all tools failing) SHALL NOT trigger an automatic quota refund unless the rule-based pipeline would have refunded under equivalent conditions.
+
+#### Scenario: Quota decremented before dispatch
+
+- **GIVEN** an authenticated chat-mode request
+- **WHEN** `query_show` enters the chat branch
+- **THEN** the user's quota SHALL be decremented before either `run_agent` or the rule-based pipeline is invoked
+- **AND** the decrement SHALL behave identically across both pipelines
+
 ## 相關集數清單（共 2 集）
 這個問題的搜尋結果鎖定以下集數，作為你回答的依據：
 1. EP143「從餐廳請客到自家廚房」(2026-04-29, ft. 馬世芳)
@@ -413,6 +500,55 @@ code:
   - .tmp/citation-unify-zh-all.png
   - .tmp/citation-unify-q1.png
   - .tmp/citation-unify-q3.png
+-->
+
+
+<!-- @trace
+source: chat-agentic-tool-routing
+updated: 2026-05-21
+code:
+  - .agents/skills/spectra-analyze/SKILL.md
+  - .agents/skills/spectra-commit/SKILL.md
+  - .agents/skills/spectra-ingest/SKILL.md
+  - backend/scripts/run_chat_agent_eval.py
+  - backend/app/services/chat_agent/__init__.py
+  - backend/app/core/config.py
+  - .agents/skills/spectra-verify/SKILL.md
+  - backend/scripts/agentic_bakeoff/results/comparison.md
+  - backend/app/services/chat_agent/prompts.py
+  - .codex/config.toml
+  - .tmp/citation-unify-en-collapsed.png
+  - backend/app/services/chat_agent/agent.py
+  - .agents/skills/spectra-archive/SKILL.md
+  - backend/scripts/agentic_bakeoff/results/a_native_openai_20260519T100220Z.json
+  - .agents/skills/spectra-propose/SKILL.md
+  - .agents/skills/spectra-audit/SKILL.md
+  - backend/app/services/episode_finders.py
+  - .agents/skills/spectra-discuss/SKILL.md
+  - .tmp/citation-unify-q1.png
+  - .tmp/citation-unify-q3.png
+  - AGENTS.md
+  - backend/app/services/chat_agent/state.py
+  - .agents/skills/spectra-apply/SKILL.md
+  - backend/app/services/chat_agent/memory.py
+  - .tmp/citation-unify-q1-q2-q3-zh-expanded.png
+  - backend/app/schemas/query.py
+  - .agents/skills/rag-eval-runner/SKILL.md
+  - .agents/skills/spectra-drift/SKILL.md
+  - .codex/hooks.json
+  - .agents/skills/spectra-ask/SKILL.md
+  - .agents/skills/spectra-debug/SKILL.md
+  - .tmp/citation-unify-q2.png
+  - .tmp/citation-unify-zh-all.png
+  - backend/app/services/chat_agent/tools.py
+  - backend/eval/datasets/this-not-that-cool.json.bak-20260515T060258Z
+  - backend/app/api/query.py
+tests:
+  - backend/tests/test_chat_session_state.py
+  - backend/tests/test_quota_decrement_uniform.py
+  - backend/tests/test_chat_agent_multi_turn.py
+  - backend/tests/test_chat_agent_loop.py
+  - backend/tests/test_chat_agent_memory.py
 -->
 
 ---

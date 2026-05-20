@@ -45,10 +45,37 @@ const MILESTONE_LABELS = {
   'v1.5': { zh: 'v1.5 — 更新日誌變好讀',           en: 'v1.5 — Release Log, Browsable' },
   'v1.6': { zh: 'v1.6 — 搜尋結果看得更清楚',       en: 'v1.6 — Search Results, Now Readable' },
   'v1.7': { zh: 'v1.7 — 搜尋準度大幅提升',         en: 'v1.7 — Retrieval Quality, Materially Better' },
+  'v1.8': { zh: 'v1.8 — 對話模式 agent 化',         en: 'v1.8 — Chat Mode, Now Agentic' },
 };
 
 // Entries — newest milestone first; within each milestone newest date first.
 const RELEASE_LOG = [
+  // ─── v1.8 — Chat Mode: Agentic (5/21~) ───
+  {
+    date: '2026-05-21', slug: 'chat-agentic-tool-routing', milestone: 'v1.8', tag: 'feature',
+    title: {
+      zh: '對話模式升級：AI 自己決定要查什麼、查幾次',
+      en: 'Chat Mode Upgraded: AI Decides What to Look Up and How Many Times',
+    },
+    summary: {
+      zh: '之前的對話模式走「先嵌入向量、做混合檢索、再讓 LLM 寫答案」的固定流程，不管問題長什麼樣都是同一條 pipeline；遇到「歌單有哪幾集？」「第三集講什麼？」這種要分兩步看的問題就常常卡住。這版改成 agent loop：AI 拿到問題後自己決定要呼哪個 tool（找節目、找來賓、找日期、查摘要、查段落、show 概覽、pin/unpin 集數…11 個 callable），可以連續呼叫多次直到湊到夠的資訊再回答。順手修了「先列舉再用序數」（你問「歌單有哪幾集？」之後追問「第三集講什麼？」）的多輪 carry bug — 之前三套主流 agent 框架測試都跟丟，這版用 system prompt 教 LLM 對應到上一輪列舉結果的第三筆 ep_id。目前 feature flag 預設關閉，先自己 dogfood 兩週、跑 eval 比對通過後才會翻 default。',
+      en: 'The previous chat mode ran a fixed pipeline (embed → hybrid retrieval → LLM writes answer) regardless of the question — so multi-step questions like "Which episodes have playlists?" → "What\'s episode 3 about?" often broke. This release switches to an agent loop: the AI receives the question and decides which tool to call (find by topic / guest / date, get episode summary, get segments, show overview, pin/unpin episode… 11 callables total), can chain multiple calls until it has enough info, then answers. Also fixed the "enumerate then ordinal reference" multi-turn carry bug — all three major agent frameworks failed this in our bake-off, but a system-prompt instruction mapping "the third episode" to the previous enumeration\'s [N-1] ep_id resolves it cleanly. Feature flag is OFF by default for now — self-dogfood two weeks, run the eval gate, then flip default.',
+    },
+    summaryBullets: {
+      zh: [
+        '對話模式從固定 pipeline 改成 agent 自己呼 tool，可連續呼叫直到資訊足夠',
+        '11 個 tool 涵蓋：找節目（topic / guest / date / ref）、查摘要 / 段落、show 概覽、pin/unpin 集數',
+        '修了「歌單有哪幾集？→ 第三集講什麼？」多輪追問 bug（bake-off 三套框架都跟丟）',
+        '目前 feature flag 預設關閉，先 dogfood 兩週、跑 eval gate 通過才翻 default',
+      ],
+      en: [
+        'Chat mode switched from fixed pipeline to agent-driven tool calls; can chain multiple calls until satisfied',
+        '11 tools cover: finding episodes (topic / guest / date / ref), getting summary / segments, show overview, pin/unpin episodes',
+        'Fixed multi-turn "enumerate then ordinal" bug ("Which episodes have playlists?" → "What\'s episode 3 about?") that broke all three frameworks in our bake-off',
+        'Feature flag is OFF by default — two weeks of dogfood + eval gate must pass before flipping the default',
+      ],
+    },
+  },
   // ─── v1.7 — Retrieval Quality Fix (5/13–5/19) ───
   {
     date: '2026-05-19', slug: 'celery-publish-routing-fix-and-f2-smoke', milestone: 'v1.7', tag: 'fix',

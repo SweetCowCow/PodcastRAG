@@ -203,6 +203,69 @@ async def find_episodes_by_topic(
     return [_row_to_episode_ref(row) for row in result.mappings()]
 
 
+_BY_REF_EP_NUMBER_SQL = """
+SELECT id, title, published_at, guests, ai_summary
+FROM episodes
+WHERE show_id = :show_id
+  AND (
+    title ILIKE :ep_token_lower OR title ILIKE :ep_token_upper
+    OR title ILIKE :chinese_ep_token
+  )
+ORDER BY published_at DESC NULLS LAST
+LIMIT 1
+"""
+
+_BY_REF_TITLE_SQL = """
+SELECT id, title, published_at, guests, ai_summary
+FROM episodes
+WHERE show_id = :show_id
+  AND title ILIKE :pattern
+ORDER BY published_at DESC NULLS LAST
+LIMIT 1
+"""
+
+
+async def find_by_ref(
+    db: AsyncSession,
+    show_id: uuid.UUID,
+    ref: str,
+) -> EpisodeRef | None:
+    """Best-effort episode lookup by user-supplied reference string.
+
+    Recognises three patterns:
+      1. `EPnnn` / `epnnn` → matches title containing `EP<n>` or `第<n>集`.
+      2. `第\\d+集` → same as (1), normalised.
+      3. Anything else → falls back to `title ILIKE %ref%`.
+
+    Returns the most recent matching episode by `published_at`, or `None`
+    if no match. Returns `None` for empty / whitespace-only `ref`.
+    """
+    import re
+
+    ref_clean = (ref or "").strip()
+    if not ref_clean:
+        return None
+
+    m = re.search(r"(?:EP|ep|第)\s*(\d+)\s*(?:集)?", ref_clean)
+    if m:
+        n = m.group(1)
+        params = {
+            "show_id": show_id,
+            "ep_token_lower": f"%ep{n}%",
+            "ep_token_upper": f"%EP{n}%",
+            "chinese_ep_token": f"%第{n}集%",
+        }
+        result = await db.execute(text(_BY_REF_EP_NUMBER_SQL), params)
+        row = result.mappings().first()
+        if row is not None:
+            return _row_to_episode_ref(row)
+
+    params = {"show_id": show_id, "pattern": f"%{ref_clean}%"}
+    result = await db.execute(text(_BY_REF_TITLE_SQL), params)
+    row = result.mappings().first()
+    return _row_to_episode_ref(row) if row is not None else None
+
+
 _DATE_SQL = """
 SELECT id, title, published_at, guests, ai_summary
 FROM episodes

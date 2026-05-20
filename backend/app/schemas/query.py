@@ -14,6 +14,9 @@ class QueryRequest(BaseModel):
     mode: Literal["chat", "search"]
     question: str = Field(min_length=1)
     messages: list[ChatMessage] = Field(default_factory=list)
+    # chat-agentic-tool-routing: client-provided session UUID keeps L1 state
+    # across turns. If omitted, each request starts a fresh session (no carry).
+    session_id: uuid.UUID | None = None
 
 
 class ChunkHit(BaseModel):
@@ -77,6 +80,20 @@ class EpisodeRef(BaseModel):
     ai_summary: str | None = None
 
 
+class ToolCallTrace(BaseModel):
+    """Single tool dispatch record produced by the agentic chat loop.
+
+    Populated only when `ENABLE_AGENTIC_CHAT=true` served the request. The
+    frontend can render a collapsed trace for debugging / observability.
+    """
+
+    name: str
+    args: dict
+    result_summary: str = Field(max_length=500)
+    raised: str | None = None
+    latency_ms: float
+
+
 class ChatResponse(BaseModel):
     query_id: str
     answer: str
@@ -84,6 +101,11 @@ class ChatResponse(BaseModel):
     quota_remaining: int
     citations_meta: list[SentenceCitations] = Field(default_factory=list)
     sources_schema_version: int = SOURCES_SCHEMA_VERSION
+    # chat-agentic-tool-routing: populated only when the agent loop served
+    # the request (ENABLE_AGENTIC_CHAT=true). `None` / `False` for the
+    # rule-based pipeline so the existing response shape is preserved.
+    tool_calls: list[ToolCallTrace] | None = None
+    agent_truncated: bool = False
     # R3.3 Phase 9: present only when the query is an enumeration question
     # (entity-driven OR rule-pattern). `None` for non-enumeration queries
     # so the frontend can switch UI mode without inspecting `citations`.

@@ -26,11 +26,11 @@
 
 ## 5. 結果分析
 
-- [ ] 5.1 在 `backend/scripts/agentic_bakeoff/results/comparison.md` 產出三 framework × 6 metric 比較表（5 量化從 3 個 result json 算平均、1 質化從 user score + 文件評分平均），含每個 metric 的 winner 標註
-- [ ] 5.2 在 `chat-agentic-tool-routing/design.md` 補一個 section「Framework decision (from agentic-framework-bakeoff)」：寫選哪個 + 為什麼選 + 落選的 trade-off（落實 Requirement: Bake-off output is captured in a decision document）
-- [ ] 5.3 補完 `docs/case-studies/agentic-framework-bakeoff-2026-05.md`：含背景、3 framework 各 5-10 行體感、user 質化評分過程、最終決策摘要
+- [x] 5.1 在 `backend/scripts/agentic_bakeoff/results/comparison.md` 產出三 framework × 6 metric 比較表（5 量化從 3 個 result json 算平均、1 質化從 user score + 文件評分平均），含每個 metric 的 winner 標註
+- [x] 5.2 在 `chat-agentic-tool-routing/design.md` 補一個 section「Framework decision (from agentic-framework-bakeoff)」：寫選哪個 + 為什麼選 + 落選的 trade-off（落實 Requirement: Bake-off output is captured in a decision document）
+- [x] 5.3 補完 `docs/case-studies/agentic-framework-bakeoff-2026-05.md`：含背景、3 framework 各 5-10 行體感、user 質化評分過程、最終決策摘要
 
 ## 6. discuss 收尾
 
-- [ ] 6.1 跑 `spectra validate agentic-framework-bakeoff --strict` 確認 spec 格式無 error
-- [ ] 6.2 跑 `spectra park agentic-framework-bakeoff` 把本 change park 起來；等 `chat-agentic-tool-routing` archive 時一起 archive（不獨立 archive）
+- [x] 6.1 跑 `spectra validate agentic-framework-bakeoff --strict` 確認 spec 格式無 error
+- [x] 6.2 跑 `spectra park agentic-framework-bakeoff` 把本 change park 起來；等 `chat-agentic-tool-routing` archive 時一起 archive（不獨立 archive）

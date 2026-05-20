@@ -93,6 +93,15 @@ class Settings(BaseSettings):
     provider_budget_usd_monthly_aihub: float = 80.0
     provider_budget_usd_monthly_openai: float = 30.0
 
+    # Agentic chat (chat-agentic-tool-routing change). Flag共存 roll-out：
+    # default false 走既有 rule-based pipeline；翻 true 走 chat_agent.agent.run_agent。
+    enable_agentic_chat: bool = False
+    agentic_chat_max_iterations: int = 10
+    agentic_chat_l0_k_turns: int = 3
+    agentic_chat_l1_ttl_seconds: int = 7200
+    agentic_chat_focused_idle_seconds: int = 600
+    agentic_chat_enumeration_ttl_seconds: int = 600
+
     @field_validator("e2e_login_token")
     @classmethod
     def _validate_e2e_login_token(cls, v: str | None) -> str | None:
