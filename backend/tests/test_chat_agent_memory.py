@@ -51,7 +51,9 @@ def test_build_messages_injects_enumeration_with_ordinal_instruction() -> None:
     for ep in eps:
         assert str(ep) in sys_content
     assert "第 N 集" in sys_content
-    assert "last_enumeration[N-1]" in sys_content
+    assert "last_enumeration_episodes[N-1]" in sys_content
+    # Anti-conflict guard: prompt must explicitly forbid find_episode_by_ref for ordinals
+    assert "find_episode_by_ref" in sys_content
 
 
 def test_build_messages_history_summary_as_second_system(state_blank: ChatSessionState) -> None:

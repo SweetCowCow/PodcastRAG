@@ -21,8 +21,10 @@ logger = logging.getLogger(__name__)
 
 
 _ORDINAL_INSTRUCTION = (
-    "若使用者說「第 N 集」，請對應 last_enumeration[N-1] 的 ep_id；"
-    "若 N 超出範圍或語意不明，請使用者澄清而非自行翻譯為 EP<N>。"
+    "【序數參照規則 — 重要】使用者若說「第 N 集」「第三集」「第二個」「最後一集」等序數詞，"
+    "**必須**用 `get_episode_summary` 直接查 `last_enumeration_episodes[N-1]` 的 ep_id，"
+    "**禁止呼叫 `find_episode_by_ref`**（那是用來解 EP 編號 / 主題名 / 相對位置，不是序數）。"
+    "若 N 超出 last_enumeration 長度，請使用者澄清而非翻譯成 EP<N>。"
 )
 
 

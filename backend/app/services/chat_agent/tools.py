@@ -309,7 +309,13 @@ def _unpin_episode(inp: UnpinEpisodeInput, ctx: ToolContext) -> dict:
 TOOLS: list[ToolSpec] = [
     ToolSpec(
         name="find_episode_by_ref",
-        description="Resolve a textual reference (e.g. 'EP143', '第 3 集') to a single episode.",
+        description=(
+            "Resolve a textual episode reference to a single episode. Accepts: "
+            "EP numbers ('EP143'), topic refs ('Axios 那集'), relative refs ('上一集'). "
+            "DO NOT use for ordinal references like '第 N 集' / '第三集' when a prior "
+            "enumeration exists in the system context — those resolve via "
+            "`last_enumeration_episodes[N-1]` (use `get_episode_summary` on that ep_id instead)."
+        ),
         input_model=FindEpisodeByRefInput,
         callable=_find_episode_by_ref,
     ),
