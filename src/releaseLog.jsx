@@ -52,6 +52,31 @@ const MILESTONE_LABELS = {
 const RELEASE_LOG = [
   // ─── v1.8 — Chat Mode: Agentic (5/21~) ───
   {
+    date: '2026-05-22', slug: 'chat-tool-error-isolation', milestone: 'v1.8', tag: 'fix',
+    title: {
+      zh: '對話模式錯誤訊息變友善了',
+      en: 'Chat Mode: Error Messages Got Friendlier',
+    },
+    summary: {
+      zh: '上週開始 dogfood 對話模式時，偶爾會撞到「系統查詢時遇到了技術問題」這種 user 體感超差的回覆——我們追了完整 trace 之後發現是內部資料庫某個欄位名拼錯了，AI 工具呼叫失敗後又把原始錯誤訊息（含內部 exception 名稱）直接翻給 user。這版三層一起修：修了拼錯的 SQL、AI 每呼一個工具用 SAVEPOINT 隔離（一個工具炸不會連坐後續工具）、加上結構化錯誤格式 `{ok, kind, internal_message, user_hint}` 讓 AI 看 `kind` 判斷下一步、user 視角只看 `user_hint`，並且在 system prompt 明文禁止 AI 輸出內部錯誤類別名或「技術問題」這種字眼。修完同樣 30 題 dogfood，「技術問題」訊號從 1/30 降到 0/30；Phase 2 翻 default 前最後一個 blocker 清掉了。',
+      en: 'When we started dogfooding chat mode last week, the bot occasionally replied "the system encountered a technical issue during the query" — terrible UX. Full trace investigation traced it to: an internal column-name typo in one SQL, AI tool failure then leaked the raw exception class name to the user. This release fixes all three layers: corrected the SQL typo, wrapped every tool call in a SAVEPOINT so one tool failing does not cascade into the next, and introduced a structured error envelope `{ok, kind, internal_message, user_hint}` where AI uses `kind` for routing decisions and users only see `user_hint`. The system prompt now explicitly forbids leaking internal exception class names or "technical issue"-style phrasings. After the fix, the same 30-question dogfood run showed "technical issue" signals drop from 1/30 to 0/30; the last blocker for flipping the Phase 2 default is cleared.',
+    },
+    summaryBullets: {
+      zh: [
+        '使用者不會再看到「系統查詢時遇到了技術問題」這種裸露的內部錯誤訊息',
+        'AI 每呼一個工具用 SAVEPOINT 隔離，一個工具撞 bug 不會把後續工具都拖下水',
+        '錯誤訊息改成結構化格式：AI 看 kind 決定怎麼處理、user 看 user_hint',
+        'dogfood 30 題 failure signal 從 1/30 降到 0/30',
+      ],
+      en: [
+        'Users no longer see raw "the system encountered a technical issue" messages',
+        'Every tool call is now SAVEPOINT-isolated — one tool failing does not cascade into the next',
+        'Error format restructured: AI reads `kind` to decide next steps; user only sees `user_hint`',
+        '30-question dogfood failure-signal rate dropped from 1/30 to 0/30',
+      ],
+    },
+  },
+  {
     date: '2026-05-21', slug: 'chat-agentic-tool-routing', milestone: 'v1.8', tag: 'feature',
     title: {
       zh: '對話模式升級：AI 自己決定要查什麼、查幾次',
