@@ -62,23 +62,23 @@
 
 ## 7. Prod 驗證 + trace 蒐集
 
-- [ ] 7.1 git commit + push → Zeabur build 觸發
-- [ ] 7.2 確認 backend redeploy 完成、RUNNING 狀態（per `feedback_zeabur_env_update_no_restart.md` 順序紀律）
-- [ ] 7.3 用 admin session 打 prod 1 題 with `?debug_trace=true` 驗證 trace 出現，schema 對齊
-- [ ] 7.4 跑 `python3 backend/scripts/dogfood_trace_dump.py` 落 30 題 trace JSON
-- [ ] 7.5 確認 `.tmp/dogfood_trace_2026-05-22.json` 30 entries 完整、stage_timings 都有值
+- [x] 7.1 git commit + push → Zeabur build 觸發
+- [x] 7.2 確認 backend redeploy 完成、RUNNING 狀態（per `feedback_zeabur_env_update_no_restart.md` 順序紀律）
+- [x] 7.3 用 admin session 打 prod 1 題 with `?debug_trace=true` 驗證 trace 出現，schema 對齊
+- [x] 7.4 跑 `python3 backend/scripts/dogfood_trace_dump.py` 落 30 題 trace JSON
+- [x] 7.5 確認 `.tmp/dogfood_trace_2026-05-22.json` 30 entries 完整、stage_timings 都有值
 
 ## 8. Trace 分析 + case study append
 
-- [ ] 8.1 寫分析 script（一次性 `.tmp/analyze_trace.py` 不入 git）：算 30 題 stage latency 的 mean / p50 / p95 / max
-- [ ] 8.2 對 q01 / q02 / q03 / q05 四題 deep dive：列每題的 tool_calls sequence + result_full snippet + LLM round per-round finish_reason + 失敗訊號出現位置
-- [ ] 8.3 把 deep dive 結果分類成「tool ValidationError 翻譯」「prompt 沒指引 noise→hallucination」「其他」三類，數出比例
-- [ ] 8.4 在 `docs/case-studies/rag-vs-long-context-2026-05-22.md` append 新 section「Agent loop trace 分析」含：4 題 deep dive 並排、30 題 stage latency 表、root cause 分類比例、waterfall ASCII 圖
-- [ ] 8.5 確認 case study 仍保持 `feedback_case_studies_no_commit.md` 規則（不入 git）
+- [x] 8.1 寫分析 script（一次性 `.tmp/analyze_trace.py` 不入 git）：算 30 題 stage latency 的 mean / p50 / p95 / max
+- [x] 8.2 對 q01 / q02 / q03 / q05 四題 deep dive：列每題的 tool_calls sequence + result_full snippet + LLM round per-round finish_reason + 失敗訊號出現位置
+- [x] 8.3 把 deep dive 結果分類成「tool ValidationError 翻譯」「prompt 沒指引 noise→hallucination」「其他」三類，數出比例
+- [x] 8.4 在 `docs/case-studies/rag-vs-long-context-2026-05-22.md` append 新 section「Agent loop trace 分析」含：4 題 deep dive 並排、30 題 stage latency 表、root cause 分類比例、waterfall ASCII 圖
+- [x] 8.5 確認 case study 仍保持 `feedback_case_studies_no_commit.md` 規則（不入 git）
 
 ## 9. Archive 前驗證
 
-- [ ] 9.1 跑 `spectra verify agent-trace-telemetry` 確認所有 task 完成
-- [ ] 9.2 確認 prod 仍正常運作（chat query 200 + 非 admin 不會看到 trace）
-- [ ] 9.3 確認沒新的 prod error（zeabur log 抓不到時用 `?debug_trace=false` 跑一題確認 graceful）
+- [x] 9.1 跑 `spectra verify agent-trace-telemetry` 確認所有 task 完成
+- [x] 9.2 確認 prod 仍正常運作（chat query 200 + 非 admin 不會看到 trace）
+- [x] 9.3 確認沒新的 prod error（zeabur log 抓不到時用 `?debug_trace=false` 跑一題確認 graceful）
 - [ ] 9.4 跑 `spectra archive agent-trace-telemetry` 進 archive

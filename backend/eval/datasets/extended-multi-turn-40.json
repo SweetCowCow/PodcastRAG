@@ -1,0 +1,533 @@
+{
+  "version": "1",
+  "show_id": "45fc2462-17cf-42f5-98a7-68fe1a222228",
+  "show_slug": "this-not-that-cool",
+  "created_at": "2026-05-19",
+  "baseline_pull_ref": "baseline_pull_20260519T064908Z.json",
+  "notes": "30 record / 40 turn (26 single + 4 multi-turn: 2+2+3+3 turns). 14 existing + 12 new + 4 multi-turn dialogs. Design types: show_overview / guest_find / topic_find / date_find / deep_dive / cross_episode / summary / negative / multi_turn. Tool calls are two-tier: required (must hit) + acceptable (bonus, not penalised).",
+  "items": [
+    {
+      "id": "b01",
+      "design_type": "show_overview",
+      "source": "existing:q01-show-name-origin",
+      "is_multi_turn": false,
+      "turns": [
+        {
+          "question": "節目名「這又沒有很屌」是怎麼來的？",
+          "expected_tool_calls_required": ["get_show_overview"],
+          "expected_tool_calls_acceptable": ["search_across_episodes"],
+          "expected_answer_keywords": ["迪拉", "口頭禪", "音樂", "好壞", "不客套"]
+        }
+      ]
+    },
+    {
+      "id": "b02",
+      "design_type": "show_overview",
+      "source": "new:N10",
+      "is_multi_turn": false,
+      "turns": [
+        {
+          "question": "這節目是在講什麼的？",
+          "expected_tool_calls_required": ["get_show_overview"],
+          "expected_tool_calls_acceptable": [],
+          "expected_answer_keywords": ["音樂", "美食", "迪拉"]
+        }
+      ]
+    },
+    {
+      "id": "b03",
+      "design_type": "show_overview",
+      "source": "new:N11",
+      "is_multi_turn": false,
+      "turns": [
+        {
+          "question": "這節目主持人是誰？",
+          "expected_tool_calls_required": ["get_show_overview"],
+          "expected_tool_calls_acceptable": [],
+          "expected_answer_keywords": ["迪拉"]
+        }
+      ]
+    },
+    {
+      "id": "b04",
+      "design_type": "show_overview",
+      "source": "new:N12",
+      "is_multi_turn": false,
+      "turns": [
+        {
+          "question": "這節目大概多久更新一集？",
+          "expected_tool_calls_required": ["get_show_overview"],
+          "expected_tool_calls_acceptable": [],
+          "expected_answer_keywords": []
+        }
+      ]
+    },
+    {
+      "id": "b05",
+      "design_type": "guest_find",
+      "source": "existing:q06-debut-restaurant-encounter",
+      "is_multi_turn": false,
+      "turns": [
+        {
+          "question": "迪拉去試音《也好吃》那天遇到誰？對方做了什麼？",
+          "expected_tool_calls_required": ["find_episode_by_ref", "search_within_episode"],
+          "expected_tool_calls_acceptable": ["find_episodes_by_guest"],
+          "expected_answer_keywords": ["裴社長", "鏡週刊", "食譜", "台塑招待所", "牛小排"]
+        }
+      ]
+    },
+    {
+      "id": "b06",
+      "design_type": "guest_find",
+      "source": "new:N1",
+      "is_multi_turn": false,
+      "turns": [
+        {
+          "question": "馬世芳上過《這又沒有很屌》哪幾集？",
+          "expected_tool_calls_required": ["find_episodes_by_guest"],
+          "expected_tool_calls_acceptable": [],
+          "expected_answer_keywords": ["EP143", "家常味"]
+        }
+      ]
+    },
+    {
+      "id": "b07",
+      "design_type": "guest_find",
+      "source": "new:N2",
+      "is_multi_turn": false,
+      "turns": [
+        {
+          "question": "楊大正在這節目出現過幾次？哪幾集？",
+          "expected_tool_calls_required": ["find_episodes_by_guest"],
+          "expected_tool_calls_acceptable": [],
+          "expected_answer_keywords": ["EP140", "EP4", "兩集"]
+        }
+      ]
+    },
+    {
+      "id": "b08",
+      "design_type": "topic_find",
+      "source": "existing:q25-list-playlist-episodes",
+      "is_multi_turn": false,
+      "turns": [
+        {
+          "question": "節目裡有哪些集是歌單？",
+          "expected_tool_calls_required": ["find_episodes_by_topic"],
+          "expected_tool_calls_acceptable": [],
+          "expected_answer_keywords": ["歌單", "29", "EP142", "EP134", "EP131"]
+        }
+      ]
+    },
+    {
+      "id": "b09",
+      "design_type": "topic_find",
+      "source": "existing:q26-list-kaohsiung-food-episodes",
+      "is_multi_turn": false,
+      "turns": [
+        {
+          "question": "節目裡有講過高雄美食的集數有哪些？",
+          "expected_tool_calls_required": ["find_episodes_by_topic"],
+          "expected_tool_calls_acceptable": [],
+          "expected_answer_keywords": ["高雄", "美食", "EP140", "EP85"]
+        }
+      ]
+    },
+    {
+      "id": "b10",
+      "design_type": "topic_find",
+      "source": "new:N3",
+      "is_multi_turn": false,
+      "turns": [
+        {
+          "question": "節目裡有講過咖啡的集數有哪些？",
+          "expected_tool_calls_required": ["find_episodes_by_topic"],
+          "expected_tool_calls_acceptable": [],
+          "expected_answer_keywords": ["咖啡", "EP110"]
+        }
+      ]
+    },
+    {
+      "id": "b11",
+      "design_type": "date_find",
+      "source": "new:N4",
+      "is_multi_turn": false,
+      "turns": [
+        {
+          "question": "2024 年上半年（1-6 月）發過哪幾集？",
+          "expected_tool_calls_required": ["find_episodes_by_date"],
+          "expected_tool_calls_acceptable": [],
+          "expected_answer_keywords": ["2024", "26"]
+        }
+      ]
+    },
+    {
+      "id": "b12",
+      "design_type": "date_find",
+      "source": "new:N5",
+      "is_multi_turn": false,
+      "turns": [
+        {
+          "question": "2024 年 11 月有哪些集？",
+          "expected_tool_calls_required": ["find_episodes_by_date"],
+          "expected_tool_calls_acceptable": [],
+          "expected_answer_keywords": ["2024", "11", "EP143"]
+        }
+      ]
+    },
+    {
+      "id": "b13",
+      "design_type": "date_find",
+      "source": "new:N6",
+      "is_multi_turn": false,
+      "turns": [
+        {
+          "question": "2025 年農曆過年期間（1/25-2/10）那段出了哪幾集？",
+          "expected_tool_calls_required": ["find_episodes_by_date"],
+          "expected_tool_calls_acceptable": [],
+          "expected_answer_keywords": ["2025", "兩集"]
+        }
+      ]
+    },
+    {
+      "id": "b14",
+      "design_type": "deep_dive",
+      "source": "existing:q03-ep134-opening-song",
+      "is_multi_turn": false,
+      "turns": [
+        {
+          "question": "迪拉胖在 EP134 為什麼不挑一首振奮的開工歌？他選的歌想表達什麼概念？",
+          "expected_tool_calls_required": ["find_episode_by_ref", "search_within_episode"],
+          "expected_tool_calls_acceptable": ["get_episode_segments"],
+          "expected_answer_keywords": ["安身之處", "45歲", "版本聖太郎", "YOHO", "中老年"]
+        }
+      ]
+    },
+    {
+      "id": "b15",
+      "design_type": "deep_dive",
+      "source": "existing:q11-ep19-guest-dad-rental-shop",
+      "is_multi_turn": false,
+      "turns": [
+        {
+          "question": "EP19《動漫歌單》來賓提到他爸爸以前在哪裡工作？後來兼差開了什麼店讓他接觸到漫畫？",
+          "expected_tool_calls_required": ["find_episode_by_ref", "search_within_episode"],
+          "expected_tool_calls_acceptable": ["get_episode_segments"],
+          "expected_answer_keywords": ["電信局", "錄影帶店", "公務人員", "兼差", "漫畫"]
+        }
+      ]
+    },
+    {
+      "id": "b16",
+      "design_type": "deep_dive",
+      "source": "existing:q12-ep140-kaohsiung-first-edition-and-venues",
+      "is_multi_turn": false,
+      "turns": [
+        {
+          "question": "EP140《高雄美食第二彈》提到第一彈的兩位來賓是誰？節目裡指出高雄哪兩個場館是音樂節 / 國際演唱會重鎮？",
+          "expected_tool_calls_required": ["find_episode_by_ref", "search_within_episode"],
+          "expected_tool_calls_acceptable": ["get_episode_segments"],
+          "expected_answer_keywords": ["阿寬", "邱承翰", "高雄巨蛋", "世運主場館"]
+        }
+      ]
+    },
+    {
+      "id": "b17",
+      "design_type": "deep_dive",
+      "source": "existing:q17-ep18-nike-invincible-shoe",
+      "is_multi_turn": false,
+      "turns": [
+        {
+          "question": "EP18《黃玠 跑鞋國王》提到剛開始跑步時買的 Nike 鞋款叫什麼？鞋底厚度多少？標榜什麼特色？",
+          "expected_tool_calls_required": ["find_episode_by_ref", "search_within_episode"],
+          "expected_tool_calls_acceptable": ["get_episode_segments"],
+          "expected_answer_keywords": ["Nike", "Invincible", "4公分", "鞋底", "避震", "泡棉"]
+        }
+      ]
+    },
+    {
+      "id": "b18",
+      "design_type": "deep_dive",
+      "source": "existing:q22-ep44-gift-food-freshness-paradox",
+      "is_multi_turn": false,
+      "turns": [
+        {
+          "question": "EP44《伴手禮是社交潤滑劑》來賓用什麼食物當作例子來講送禮糾結？為什麼『現吃好吃』的食物反而不適合當伴手禮？",
+          "expected_tool_calls_required": ["find_episode_by_ref", "search_within_episode"],
+          "expected_tool_calls_acceptable": ["get_episode_segments"],
+          "expected_answer_keywords": ["鯛魚燒", "軟掉", "送禮", "狀態"],
+          "source_note": "modified from q22; removed 鯛魚燒 hint from question (now expected_answer)"
+        }
+      ]
+    },
+    {
+      "id": "b19",
+      "design_type": "deep_dive",
+      "source": "existing:q23-ep66-ig-please-come-taiwan-fan-plight",
+      "is_multi_turn": false,
+      "turns": [
+        {
+          "question": "EP66《浪人祭歌單》主持人忠祐為什麼選某些外國藝人／團入歌單？他在 IG 留言『Please come to Taiwan』反映台灣樂迷的什麼處境？",
+          "expected_tool_calls_required": ["find_episode_by_ref", "search_within_episode"],
+          "expected_tool_calls_acceptable": ["get_episode_segments"],
+          "expected_answer_keywords": ["忠祐", "IG", "Please come to Taiwan", "外國團", "樂迷", "浪人祭"]
+        }
+      ]
+    },
+    {
+      "id": "b20",
+      "design_type": "cross_episode",
+      "source": "existing:q04-mid-age-opening-view",
+      "is_multi_turn": false,
+      "turns": [
+        {
+          "question": "節目裡迪拉怎麼描述中老年人的開工想法跟年輕時的差異？",
+          "expected_tool_calls_required": ["search_across_episodes"],
+          "expected_tool_calls_acceptable": ["find_episodes_by_topic"],
+          "expected_answer_keywords": ["中老年", "振奮", "安身之處", "錨定", "廚餘"]
+        }
+      ]
+    },
+    {
+      "id": "b21",
+      "design_type": "cross_episode",
+      "source": "existing:q07-homemade-vs-fine-dining",
+      "is_multi_turn": false,
+      "turns": [
+        {
+          "question": "迪拉跟馬世芳怎麼定義『家常味』？為什麼家常菜可以天天吃，但 Fine dining 不行？",
+          "expected_tool_calls_required": ["search_across_episodes"],
+          "expected_tool_calls_acceptable": ["find_episodes_by_topic"],
+          "expected_answer_keywords": ["家常味", "客製化", "味覺記憶", "雙向", "天天吃"]
+        }
+      ]
+    },
+    {
+      "id": "b22",
+      "design_type": "cross_episode",
+      "source": "existing:q09-show-host-changes-since-ep1",
+      "is_multi_turn": false,
+      "turns": [
+        {
+          "question": "《這又沒有很屌》從第一集到現在，主持人陣容有什麼變化？",
+          "expected_tool_calls_required": ["search_across_episodes"],
+          "expected_tool_calls_acceptable": ["get_show_overview"],
+          "expected_answer_keywords": ["迪拉", "方品融", "杜忠祐", "阿鳴", "三人", "四人"],
+          "source_note": "modified from q09; changed 「EP134」→「現在」 to remove date anchor hint"
+        }
+      ]
+    },
+    {
+      "id": "b23",
+      "design_type": "cross_episode",
+      "source": "existing:q24-leo-wang-encounter-arc",
+      "is_multi_turn": false,
+      "turns": [
+        {
+          "question": "迪拉跟 Leo王 是怎麼從不認識變成合作夥伴的？他們第一次見面的故事是什麼？",
+          "expected_tool_calls_required": ["search_across_episodes"],
+          "expected_tool_calls_acceptable": ["find_episodes_by_guest"],
+          "expected_answer_keywords": ["Leo王", "Live house", "加好友", "樂迷", "音樂節", "合作"],
+          "source_note": "modified from q24; rephrased to remove 「節目裡有提過…嗎」 negative framing"
+        }
+      ]
+    },
+    {
+      "id": "b24",
+      "design_type": "summary",
+      "source": "new:N7",
+      "is_multi_turn": false,
+      "turns": [
+        {
+          "question": "給我 EP143 的摘要",
+          "expected_tool_calls_required": ["find_episode_by_ref", "get_episode_summary"],
+          "expected_tool_calls_acceptable": [],
+          "expected_answer_keywords": ["家常味", "馬世芳", "裴社長", "牛小排"]
+        }
+      ]
+    },
+    {
+      "id": "b25",
+      "design_type": "summary",
+      "source": "new:N8",
+      "is_multi_turn": false,
+      "turns": [
+        {
+          "question": "EP140 在講什麼？簡短說一下",
+          "expected_tool_calls_required": ["find_episode_by_ref", "get_episode_summary"],
+          "expected_tool_calls_acceptable": [],
+          "expected_answer_keywords": ["高雄", "美食", "滅火器", "楊大正"]
+        }
+      ]
+    },
+    {
+      "id": "b26",
+      "design_type": "summary",
+      "source": "new:N9",
+      "is_multi_turn": false,
+      "turns": [
+        {
+          "question": "EP66 浪人祭歌單那集大概聊什麼？",
+          "expected_tool_calls_required": ["find_episode_by_ref", "get_episode_summary"],
+          "expected_tool_calls_acceptable": [],
+          "expected_answer_keywords": ["浪人祭", "歌單", "忠祐"]
+        }
+      ]
+    },
+    {
+      "id": "b27",
+      "design_type": "negative",
+      "source": "existing:q02-no-rap-championship",
+      "is_multi_turn": false,
+      "turns": [
+        {
+          "question": "迪拉胖在 EP1 有提到自己得過什麼嘻哈大賽冠軍嗎？",
+          "expected_tool_calls_required": ["find_episode_by_ref", "search_within_episode"],
+          "expected_tool_calls_acceptable": ["get_episode_segments"],
+          "expected_answer_keywords": ["節目未提及", "沒有提到", "大嘻哈評審", "顏色老闆"]
+        }
+      ]
+    },
+    {
+      "id": "b28",
+      "design_type": "negative",
+      "source": "existing:q08-no-yanse-release-here",
+      "is_multi_turn": false,
+      "turns": [
+        {
+          "question": "迪拉胖在 EP143 有提到他的廠牌顏社今年會發行哪些新專輯嗎？",
+          "expected_tool_calls_required": ["find_episode_by_ref", "search_within_episode"],
+          "expected_tool_calls_acceptable": ["get_episode_segments"],
+          "expected_answer_keywords": ["節目未提及", "家常菜", "馬世芳", "也好吃"],
+          "source_note": "modified from q08; 「廠牌顏色」→「廠牌顏社」 (顏色 is ASR/typo error of real label name 顏社)"
+        }
+      ]
+    },
+    {
+      "id": "b29",
+      "design_type": "negative",
+      "source": "existing:q10-anchored-belonging-cross",
+      "is_multi_turn": false,
+      "turns": [
+        {
+          "question": "迪拉在《這又沒有很屌》裡有講過『安身之處』或『被照顧到』這個概念嗎？",
+          "expected_tool_calls_required": ["search_across_episodes"],
+          "expected_tool_calls_acceptable": ["find_episodes_by_topic"],
+          "expected_answer_keywords": ["安身之處", "被照顧", "中老年", "家常味", "歸屬"],
+          "source_note": "trap negative: question uses 「有講過…嗎」 framing but answer is actually YES (EP134 + EP143)"
+        }
+      ]
+    },
+    {
+      "id": "b30",
+      "design_type": "negative",
+      "source": "existing:q30-no-yang-dazheng-opens-restaurant",
+      "is_multi_turn": false,
+      "turns": [
+        {
+          "question": "EP140《高雄美食第二彈》楊大正有提到他自己在高雄開過餐廳嗎？",
+          "expected_tool_calls_required": ["find_episode_by_ref", "search_within_episode"],
+          "expected_tool_calls_acceptable": ["find_episodes_by_guest"],
+          "expected_answer_keywords": ["節目未提及", "沒有提到", "楊大正", "滅火器", "高雄樂團"]
+        }
+      ]
+    },
+    {
+      "id": "mt01",
+      "design_type": "multi_turn",
+      "source": "new:mt01-enumeration-carry",
+      "is_multi_turn": true,
+      "turns": [
+        {
+          "question": "歌單有哪幾集？",
+          "expected_tool_calls_required": ["find_episodes_by_topic"],
+          "expected_tool_calls_acceptable": [],
+          "expected_answer_keywords": ["歌單", "29", "EP142", "EP134", "EP131"]
+        },
+        {
+          "question": "第三集是什麼內容？",
+          "expected_tool_calls_required": ["get_episode_summary"],
+          "expected_tool_calls_acceptable": ["find_episode_by_ref"],
+          "expected_answer_keywords": ["2016", "Big Bang", "韓國", "hip-hop"],
+          "carry_note": "agent must read last_enumeration_episodes[2] from L1 (= EP131 回到 2016 歌單, sorted by published_at DESC)"
+        }
+      ]
+    },
+    {
+      "id": "mt02",
+      "design_type": "multi_turn",
+      "source": "new:mt02-focused-fallback",
+      "is_multi_turn": true,
+      "turns": [
+        {
+          "question": "EP143 講什麼？",
+          "expected_tool_calls_required": ["find_episode_by_ref", "get_episode_summary", "pin_episode"],
+          "expected_tool_calls_acceptable": [],
+          "expected_answer_keywords": ["家常味", "馬世芳", "裴社長"]
+        },
+        {
+          "question": "他怎麼解釋 RAG？",
+          "expected_tool_calls_required": ["search_within_episode", "search_across_episodes"],
+          "expected_tool_calls_acceptable": ["unpin_episode"],
+          "expected_answer_keywords": ["沒有", "未提及", "找不到", "並未"],
+          "carry_note": "agent should try search_within(focused=EP143) → no hit on RAG → fallback to search_across → still no hit → refuse gracefully. EP143 confirmed to not mention RAG/AI per baseline."
+        }
+      ]
+    },
+    {
+      "id": "mt03",
+      "design_type": "multi_turn",
+      "source": "new:mt03-focused-continuity-3turn",
+      "is_multi_turn": true,
+      "turns": [
+        {
+          "question": "EP140 第二彈是哪兩位來賓？",
+          "expected_tool_calls_required": ["find_episode_by_ref", "pin_episode", "search_within_episode"],
+          "expected_tool_calls_acceptable": ["get_episode_summary", "get_episode_segments"],
+          "expected_answer_keywords": ["楊大正", "張凱婷", "EP140"]
+        },
+        {
+          "question": "他們在節目裡推薦哪間餐廳？",
+          "expected_tool_calls_required": ["search_within_episode"],
+          "expected_tool_calls_acceptable": ["get_episode_segments"],
+          "expected_answer_keywords": ["餐廳", "鵝肉"],
+          "carry_note": "agent uses L1 focused_episode_id=EP140"
+        },
+        {
+          "question": "他們推薦餐廳的什麼料理？",
+          "expected_tool_calls_required": ["search_within_episode"],
+          "expected_tool_calls_acceptable": ["get_episode_segments"],
+          "expected_answer_keywords": ["鵝肉", "鵝血"],
+          "carry_note": "still on EP140 focused"
+        }
+      ]
+    },
+    {
+      "id": "mt04",
+      "design_type": "multi_turn",
+      "source": "new:mt04-focused-deep-dive-3turn",
+      "is_multi_turn": true,
+      "turns": [
+        {
+          "question": "跟我聊聊 EP19 動漫歌單？",
+          "expected_tool_calls_required": ["find_episode_by_ref", "get_episode_summary", "pin_episode"],
+          "expected_tool_calls_acceptable": ["search_within_episode"],
+          "expected_answer_keywords": ["動漫", "歌單", "JOJO", "櫻花大戰", "福音戰士"]
+        },
+        {
+          "question": "大家推薦了哪些歌？",
+          "expected_tool_calls_required": ["search_within_episode"],
+          "expected_tool_calls_acceptable": ["get_episode_segments"],
+          "expected_answer_keywords": ["JOJO", "黃金之風"],
+          "carry_note": "agent uses L1 focused_episode_id=EP19"
+        },
+        {
+          "question": "這些歌分別是出自哪部作品？",
+          "expected_tool_calls_required": ["search_within_episode"],
+          "expected_tool_calls_acceptable": ["get_episode_segments"],
+          "expected_answer_keywords": ["JOJO", "動畫", "Sega"],
+          "carry_note": "still on EP19 focused; testing whether agent connects 「這些歌」 to T2 results"
+        }
+      ]
+    }
+  ]
+}

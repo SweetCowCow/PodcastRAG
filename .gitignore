@@ -54,6 +54,9 @@ docs/research/
 docs/roadmap.pdf
 docs/bills/
 
+# Content strategy & social posts (drafts, playbooks, tracking — local only, per project memory rules)
+docs/content/
+
 # Random screenshots / scratch images at repo root
 aisteps-tab.png
 backend/eval/runs/

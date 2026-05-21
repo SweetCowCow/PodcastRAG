@@ -11,6 +11,7 @@ Last verified: **2026-05-15** (Claude session)
 | File | n | Status | Format | Last verified |
 |---|---|---|---|---|
 | `this-not-that-cool.json` | **30** (v3, post-promote 2026-05-15) | **Main golden set** | retrieval-eval schema | 2026-05-15 |
+| `extended-multi-turn-40.json` | **34 records / 40 turns** (30 single + 4 multi-turn) | **Multi-turn extended** — only dataset with multi-turn dialogs | bakeoff schema (is_multi_turn + turns array) | 2026-05-21 |
 | `_pending_review.json` | 0 (cleared after promote) | **Staging buffer**, ready for next batch | retrieval-eval schema | 2026-05-15 |
 | `_judge_minisset.json` | 40 | **Judge bake-off** hand-scored set | answer + chunks + human_score | 2026-05-06 |
 | `_schema.json` | 0 | JSON schema (validator), not data | – | – |
@@ -27,6 +28,17 @@ Last verified: **2026-05-15** (Claude session)
 - **eval_mode breakdown**: chunk_id 27 · enumeration 2 (q25 歌單, q26 高雄美食) · open_set_lenient 1 (q24 Leo 王 演進弧)
 - **Used by**: `eval/runners/run.py` retrieval baseline; `bakeoff_entity_extractor.py` (entity-extraction LLM inputs)
 - **Recall@5 baseline (n=10, pre-promote 2026-05-14)**: 0.5625 — see `docs/case-studies/r33-baseline.md`. **n=30 baseline pending** — re-run after R3.3 Phase 8 ships
+
+### `extended-multi-turn-40.json` — multi-turn extended set
+
+- **Show**: 同 `this-not-that-cool.json`
+- **Created**: 2026-05-19（framework bake-off 期間）
+- **Origin**: `backend/scripts/agentic_bakeoff/golden_set/bakeoff_40.json`（原檔保留供舊 bake-off scripts 使用），2026-05-21 複製到標準位置改名
+- **Composition**: 34 record / 40 turn（26 既有 single + 4 新 single + 4 multi-turn dialogs: mt01/mt02 各 2 turn、mt03/mt04 各 3 turn）
+- **Schema 差異**：每個 item 含 `is_multi_turn` flag + `turns` array（每 turn 含 `question` + tool call `required`+`acceptable` 兩 tier），跟主 eval 的 retrieval schema **不相容**，eval runner 要另寫
+- **唯一用途**：驗 multi-turn ordinal carry / focused_episode pin / context retention 失敗模式（mt01「歌單有哪幾集？→ 第三集是什麼？」是經典 ordinal carry 考題）
+- **Used by**: `backend/scripts/agentic_bakeoff/runner/run_prototype.py`（已 archive 的 bake-off prototype runner）
+- **未來用途**: 後續 `chat-multi-turn-trace-investigation` 等 change 主要 dataset
 
 ### `_pending_review.json` — staging buffer
 
