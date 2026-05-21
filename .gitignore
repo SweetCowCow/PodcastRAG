@@ -61,3 +61,13 @@ backend/eval/runs/
 # Local docker-compose overrides (host port remapping, dev-only env vars)
 docker-compose.override.yml
 docker-compose.override.yaml
+
+# Agent CLI 工具個人快取 / 設定（不跨機器同步）
+.agents/
+.codex/
+
+# 本地暫存（benchmark embedding cache、截圖、暫存腳本等）
+.tmp/
+
+# Golden set / dataset 備份檔（自動產生，不入版控）
+*.bak-*
