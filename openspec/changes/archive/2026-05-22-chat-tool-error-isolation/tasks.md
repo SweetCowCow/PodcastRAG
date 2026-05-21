@@ -51,15 +51,15 @@
 
 > 對應 design: **Decision 5：q03 verification 走 prod 真實 query 不靠 unit test**
 
-- [ ] 6.1 git commit + push → Zeabur build 觸發
-- [ ] 6.2 確認 backend redeploy 完成、RUNNING 狀態
-- [ ] 6.3 用 admin session 對 prod 打「迪拉胖 EP134 開工歌單觀念」query with `?debug_trace=true`；驗 (a) `_get_episode_segments` trace entry `raised=None` (b) 後續 tool 沒 InFailedSQLTransactionError (c) answer 文字不含「技術問題 / 系統查詢 / 資料存取」訊號，覆蓋 spec scenario「`_get_episode_segments` succeeds on prod schema」+「Tool result with `ok: false` produces user-friendly answer」的 prod path
-- [ ] 6.4 對 q03 原 dataset 題（`q03-mid-age-opening-view`）跑一次 `dogfood_trace_dump.py` 全 30 題 → `.tmp/dogfood_trace_2026-05-22-postfix.json`，對比 prefix 版本驗 q03 已修
-- [ ] 6.5 確認沒新 prod error（zeabur log 抓 `error|exception` 過去 10 條沒有跟本 change 相關的新 stack trace）
+- [x] 6.1 git commit + push → Zeabur build 觸發
+- [x] 6.2 確認 backend redeploy 完成、RUNNING 狀態
+- [x] 6.3 用 admin session 對 prod 打「迪拉胖 EP134 開工歌單觀念」query with `?debug_trace=true`；驗 (a) `_get_episode_segments` trace entry `raised=None` (b) 後續 tool 沒 InFailedSQLTransactionError (c) answer 文字不含「技術問題 / 系統查詢 / 資料存取」訊號，覆蓋 spec scenario「`_get_episode_segments` succeeds on prod schema」+「Tool result with `ok: false` produces user-friendly answer」的 prod path
+- [x] 6.4 對 q03 原 dataset 題（`q03-mid-age-opening-view`）跑一次 `dogfood_trace_dump.py` 全 30 題 → `.tmp/dogfood_trace_2026-05-22-postfix.json`，對比 prefix 版本驗 q03 已修
+- [x] 6.5 確認沒新 prod error（zeabur log 抓 `error|exception` 過去 10 條沒有跟本 change 相關的新 stack trace）
 
 ## 7. Case study + archive
 
-- [ ] 7.1 `docs/case-studies/rag-vs-long-context-2026-05-22.md` 在「Agent loop trace 分析」section 後 append 「q03 root cause 修復」小節，含 before/after envelope 結構對比 + prod query before/after answer 對比
-- [ ] 7.2 確認 case study 仍不入 git（per `feedback_case_studies_no_commit.md`）
-- [ ] 7.3 `spectra validate chat-tool-error-isolation` 過、所有 task 標完成
+- [x] 7.1 `docs/case-studies/rag-vs-long-context-2026-05-22.md` 在「Agent loop trace 分析」section 後 append 「q03 root cause 修復」小節，含 before/after envelope 結構對比 + prod query before/after answer 對比
+- [x] 7.2 確認 case study 仍不入 git（per `feedback_case_studies_no_commit.md`）
+- [x] 7.3 `spectra validate chat-tool-error-isolation` 過、所有 task 標完成
 - [ ] 7.4 `spectra archive chat-tool-error-isolation` 進 archive
