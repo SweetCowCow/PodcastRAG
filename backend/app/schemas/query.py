@@ -92,6 +92,38 @@ class ToolCallTrace(BaseModel):
     result_summary: str = Field(max_length=500)
     raised: str | None = None
     latency_ms: float
+    # agent-trace-telemetry: full tool result JSON, only populated when the
+    # admin debug_trace gate fires (see `Query endpoint exposes trace under
+    # admin debug gate`). `None` for default chat responses.
+    result_full: str | None = None
+
+
+class LLMCallTraceResponse(BaseModel):
+    """Per-round LLM API call telemetry (admin debug_trace mode only)."""
+
+    round_index: int
+    latency_ms: float
+    prompt_tokens: int
+    completion_tokens: int
+    finish_reason: str
+    had_tool_calls: bool
+
+
+class StageTimingsResponse(BaseModel):
+    """Per-stage elapsed-ms timings (admin debug_trace mode only)."""
+
+    build_messages_ms: float
+    state_load_ms: float
+    state_save_ms: float
+    history_summary_ms: float
+    llm_loop_total_ms: float
+
+
+class AgentTraceResponse(BaseModel):
+    """Full agent telemetry trace, returned only under admin debug_trace gate."""
+
+    llm_calls: list[LLMCallTraceResponse] = Field(default_factory=list)
+    stage_timings: StageTimingsResponse
 
 
 class ChatResponse(BaseModel):
@@ -118,6 +150,10 @@ class ChatResponse(BaseModel):
     # surface "showing X of N" without changing the list shape. `None`
     # mirrors `enumeration_episodes is None` (enum did not trigger).
     enumeration_total: int | None = None
+    # agent-trace-telemetry: per-stage timings + per-round LLM calls. Only
+    # populated when the request carries `?debug_trace=true` AND the session
+    # belongs to an admin user. `None` for all other requests.
+    trace: AgentTraceResponse | None = None
 
 
 class PublicSearchRequest(BaseModel):

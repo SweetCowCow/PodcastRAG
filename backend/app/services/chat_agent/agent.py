@@ -16,6 +16,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import time
 import uuid
 from dataclasses import dataclass, field
 
@@ -39,12 +40,40 @@ class TokenUsage:
 
 
 @dataclass
+class LLMCallTrace:
+    """Per-round LLM API call telemetry collected by `run_agent`.
+
+    `prompt_tokens` is the round-total prompt token count reported by the
+    provider (includes all accumulated history + tool messages, not just the
+    delta for this round). `completion_tokens` is delta-only as usual.
+    """
+
+    round_index: int
+    latency_ms: float
+    prompt_tokens: int
+    completion_tokens: int
+    finish_reason: str
+    had_tool_calls: bool
+
+
+@dataclass
+class StageTimings:
+    build_messages_ms: float = 0.0
+    state_load_ms: float = 0.0
+    state_save_ms: float = 0.0
+    history_summary_ms: float = 0.0
+    llm_loop_total_ms: float = 0.0
+
+
+@dataclass
 class ChatAgentResult:
     answer: str
     tool_calls: list[ToolCallTrace]
     agent_truncated: bool
     l1_state_after: ChatSessionState
     usage: TokenUsage = field(default_factory=TokenUsage)
+    llm_calls: list[LLMCallTrace] = field(default_factory=list)
+    stage_timings: StageTimings = field(default_factory=StageTimings)
 
 
 async def run_agent(
@@ -65,10 +94,17 @@ async def run_agent(
         api_key=answer_cfg.api_key,
     )
 
-    state_store = ChatSessionStateStore()
-    state = state_store.load(session_id) or ChatSessionState(session_id=session_id)
+    stage_timings = StageTimings()
+    llm_calls: list[LLMCallTrace] = []
 
+    state_store = ChatSessionStateStore()
+    _t = time.perf_counter()
+    state = state_store.load(session_id) or ChatSessionState(session_id=session_id)
+    stage_timings.state_load_ms = (time.perf_counter() - _t) * 1000.0
+
+    _t = time.perf_counter()
     messages = build_messages(state, [], question)
+    stage_timings.build_messages_ms = (time.perf_counter() - _t) * 1000.0
 
     trace: list[ToolCallTrace] = []
     agent_truncated = False
@@ -76,19 +112,33 @@ async def run_agent(
     usage = TokenUsage()
     ctx = ToolContext(db=db, show_id=show_id, state=state, state_store=state_store)
 
-    for _ in range(settings.agentic_chat_max_iterations):
+    loop_t0 = time.perf_counter()
+    for round_index in range(settings.agentic_chat_max_iterations):
+        _llm_t = time.perf_counter()
         response = await client.chat.completions.create(
             model=answer_cfg.model,
             messages=messages,
             tools=OPENAI_TOOLS_SPEC,
             tool_choice="auto",
         )
+        llm_latency_ms = (time.perf_counter() - _llm_t) * 1000.0
         choice = response.choices[0]
         msg = choice.message
 
         if response.usage:
             usage.prompt_tokens += response.usage.prompt_tokens or 0
             usage.completion_tokens += response.usage.completion_tokens or 0
+
+        llm_calls.append(
+            LLMCallTrace(
+                round_index=round_index,
+                latency_ms=llm_latency_ms,
+                prompt_tokens=(response.usage.prompt_tokens or 0) if response.usage else 0,
+                completion_tokens=(response.usage.completion_tokens or 0) if response.usage else 0,
+                finish_reason=choice.finish_reason or "",
+                had_tool_calls=bool(msg.tool_calls),
+            )
+        )
 
         # Append assistant message to running context window.
         assistant_msg: dict = {"role": "assistant", "content": msg.content}
@@ -129,6 +179,10 @@ async def run_agent(
                     result_summary=result_str[:500],
                     raised=raised,
                     latency_ms=latency_ms,
+                    # agent-trace-telemetry task 4.1: always store the full
+                    # result_str here. API layer scrubs to None when the admin
+                    # debug_trace gate is not active (task 4.2).
+                    result_full=result_str,
                 )
             )
             messages.append(
@@ -145,13 +199,18 @@ async def run_agent(
             if isinstance(m, dict) and m.get("role") == "assistant":
                 answer = m.get("content") or ""
                 break
+    stage_timings.llm_loop_total_ms = (time.perf_counter() - loop_t0) * 1000.0
 
+    _t = time.perf_counter()
     await _try_update_summary(db, state, question, answer)
+    stage_timings.history_summary_ms = (time.perf_counter() - _t) * 1000.0
 
+    _t = time.perf_counter()
     try:
         state_store.save(state)
     except Exception:
         logger.exception("chat_agent: L1 state persist failed (non-fatal)")
+    stage_timings.state_save_ms = (time.perf_counter() - _t) * 1000.0
 
     return ChatAgentResult(
         answer=answer,
@@ -159,6 +218,8 @@ async def run_agent(
         agent_truncated=agent_truncated,
         l1_state_after=state,
         usage=usage,
+        llm_calls=llm_calls,
+        stage_timings=stage_timings,
     )
 
 

@@ -5,7 +5,7 @@ import re
 import uuid
 
 import openai
-from fastapi import APIRouter, Cookie, Depends, HTTPException, status
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Query, status
 from sqlalchemy import text
 from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,14 +17,18 @@ from app.models.show import Show
 from app.models.user import User
 from app.schemas.errors import ErrorCode, ErrorResponse
 from app.schemas.query import (
+    AgentTraceResponse,
     ChatResponse,
     ChunkHit,
     EpisodeRef,
+    LLMCallTraceResponse,
     PublicSearchRequest,
     PublicSearchResponse,
     QueryRequest,
     SearchResponse,
     SentenceCitations,
+    StageTimingsResponse,
+    ToolCallTrace,
 )
 from app.schemas.query_entity import QueryEntities
 from openai import AsyncOpenAI, OpenAI
@@ -364,7 +368,11 @@ async def query_show(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_authenticated_user),
     lang: str | None = Cookie(default=None),
+    debug_trace: bool = Query(default=False),
 ) -> SearchResponse | ChatResponse:
+    # agent-trace-telemetry: admin-only gate for telemetry data. Non-admin
+    # callers passing debug_trace=true are silently ignored (no 4xx, no trace).
+    include_trace = debug_trace and user.role == "admin"
     show = await db.get(Show, show_id)
     if show is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Show 不存在")
@@ -423,7 +431,9 @@ async def query_show(
     if settings.enable_agentic_chat:
         session_id = payload.session_id or uuid.uuid4()
         agent_result = await run_agent(payload.question, session_id, show_id, db)
-        return _agent_result_to_response(agent_result, quota_remaining)
+        return _agent_result_to_response(
+            agent_result, quota_remaining, include_trace=include_trace
+        )
 
     try:
         rewrite_cfg = await get_step_config(db, "rewrite")
@@ -566,15 +576,68 @@ async def query_show(
     )
 
 
-def _agent_result_to_response(result: ChatAgentResult, quota_remaining: int) -> ChatResponse:
-    """Map `ChatAgentResult` to the `ChatResponse` wire shape."""
+def _agent_result_to_response(
+    result: ChatAgentResult,
+    quota_remaining: int,
+    *,
+    include_trace: bool = False,
+) -> ChatResponse:
+    """Map `ChatAgentResult` to the `ChatResponse` wire shape.
+
+    When `include_trace` is True (admin debug_trace gate active), serialise
+    the full agent telemetry into `response.trace` and leave `result_full`
+    populated on each tool call. Otherwise scrub `result_full` to None and
+    omit the trace entirely (default response shape).
+    """
+    if include_trace:
+        tool_calls_out = result.tool_calls or None
+        trace_out = AgentTraceResponse(
+            llm_calls=[
+                LLMCallTraceResponse(
+                    round_index=lc.round_index,
+                    latency_ms=lc.latency_ms,
+                    prompt_tokens=lc.prompt_tokens,
+                    completion_tokens=lc.completion_tokens,
+                    finish_reason=lc.finish_reason,
+                    had_tool_calls=lc.had_tool_calls,
+                )
+                for lc in result.llm_calls
+            ],
+            stage_timings=StageTimingsResponse(
+                build_messages_ms=result.stage_timings.build_messages_ms,
+                state_load_ms=result.stage_timings.state_load_ms,
+                state_save_ms=result.stage_timings.state_save_ms,
+                history_summary_ms=result.stage_timings.history_summary_ms,
+                llm_loop_total_ms=result.stage_timings.llm_loop_total_ms,
+            ),
+        )
+    else:
+        # Scrub result_full on each tool-call entry so non-admin / non-debug
+        # responses never leak the unbounded raw tool result.
+        tool_calls_out = (
+            [
+                ToolCallTrace(
+                    name=tc.name,
+                    args=tc.args,
+                    result_summary=tc.result_summary,
+                    raised=tc.raised,
+                    latency_ms=tc.latency_ms,
+                    result_full=None,
+                )
+                for tc in result.tool_calls
+            ]
+            if result.tool_calls
+            else None
+        )
+        trace_out = None
     return ChatResponse(
         query_id=uuid.uuid4().hex[:32],
         answer=result.answer,
         citations=[],
         quota_remaining=quota_remaining,
-        tool_calls=result.tool_calls or None,
+        tool_calls=tool_calls_out,
         agent_truncated=result.agent_truncated,
+        trace=trace_out,
     )
 
 
