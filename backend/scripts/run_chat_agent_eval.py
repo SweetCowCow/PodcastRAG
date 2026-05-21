@@ -60,6 +60,7 @@ _CITATION_RE = re.compile(r"\s*\[\d+(?:\s*,\s*\d+)*\]")
 # ────────────────────────────────────────────────────────────────────
 
 _CSRF_CACHE: dict[str, str] = {}
+_ORIGIN_OVERRIDE: str | None = None
 
 
 def _fetch_csrf(backend_url: str, token: str, timeout: float = 10.0) -> str:
@@ -84,7 +85,10 @@ def _post(url: str, body: dict, token: str, timeout: float = 60.0) -> dict:
         csrf = _CSRF_CACHE.get(token, "")
         if csrf:
             headers["X-CSRF-Token"] = csrf
-            headers["Origin"] = urlparse(url).scheme + "://" + urlparse(url).netloc
+            if _ORIGIN_OVERRIDE:
+                headers["Origin"] = _ORIGIN_OVERRIDE
+            else:
+                headers["Origin"] = urlparse(url).scheme + "://" + urlparse(url).netloc
     data = json.dumps(body).encode()
     req = urllib.request.Request(url, data=data, headers=headers, method="POST")
     with urllib.request.urlopen(req, timeout=timeout) as resp:
@@ -343,6 +347,7 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("--label", default="agentic", help="Label for this run (e.g. 'rule-based' or 'agentic')")
     p.add_argument("--out", type=Path, required=True, help="Write JSON results to this file")
     p.add_argument("--baseline", type=Path, default=None, help="Baseline JSON from a previous rule-based run")
+    p.add_argument("--origin", default=None, help="Override Origin header (default: derive from backend-url)")
     p.add_argument(
         "--case-study-dir",
         type=Path,
@@ -354,6 +359,10 @@ def _parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = _parse_args()
+
+    global _ORIGIN_OVERRIDE
+    if args.origin:
+        _ORIGIN_OVERRIDE = args.origin
 
     print(f"Running chat eval: {args.label}")
     print(f"  dataset   : {args.dataset}")
