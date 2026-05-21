@@ -14,10 +14,23 @@ from __future__ import annotations
 
 import json
 import uuid
+from contextlib import asynccontextmanager
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, call, patch
 
 import pytest
+
+
+def _db_mock() -> MagicMock:
+    """AsyncSession-like mock with `begin_nested()` as an async context manager."""
+
+    @asynccontextmanager
+    async def _nested():
+        yield None
+
+    db = MagicMock()
+    db.begin_nested = _nested
+    return db
 
 from app.schemas.query import EpisodeRef
 from datetime import datetime, timezone
@@ -139,7 +152,7 @@ async def test_enumeration_then_ordinal_reference():
         ),
         patch("app.services.chat_agent.agent._try_update_summary", new_callable=AsyncMock),
     ):
-        result_t1 = await run_agent("歌單有哪幾集？", session_id, show_id, AsyncMock())
+        result_t1 = await run_agent("歌單有哪幾集？", session_id, show_id, _db_mock())
 
     # Assert turn 1: find_episodes_by_topic was called
     tool_names_t1 = [tc.name for tc in result_t1.tool_calls]

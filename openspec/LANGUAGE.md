@@ -62,8 +62,19 @@
 - **avoid**：「次數限制」（不夠 specific）、「rate limit」（這是 per-request throttling，不是 monthly cap）
 - **why**：跟 rate limit 分開
 
+### YAGNI（You Aren't Gonna Need It）
+- **definition**：XP 流派核心口號——「不為以後可能用到的需求預先寫程式」。判斷標準：眼下有具體 use case 才寫；只有「以後可能會用」的腦補需求一律不寫。對 ChangeProposal scope 內外的判斷常用。
+- **avoid**：「過度設計」「over-engineering」（這兩個是負面標籤，但沒給出可操作的判斷規則；YAGNI 給的是「現在有 use case 嗎」這條明確問句）、「精簡」「lean」（太鬆）
+- **why**：避開「腦補需求預先寫」陷阱；Spectra discuss / propose 階段切 scope 經常要援用這條原則。注意：YAGNI **不是**反對所有 generalization——對眼下需求有直接收益的一般化（譬如 SAVEPOINT 防護網對所有 tool 都有效）應該做，YAGNI 擋的是 imaginary need。
+
+### Tool error envelope
+- **definition**：agent loop `_dispatch_tool` 回給 LLM 的結構化錯誤格式 `{"ok": false, "kind": "schema|transient|not_found|validation|unknown", "internal_message": "...", "user_hint": "..."}`，取代之前直接 dump `{"error": "ExceptionClassName: msg"}`。LLM 看 `kind` 決策後續行為（譬如 transient 換 tool 試、schema 不要再呼），user 視角只看 `user_hint`，`internal_message` 留給 trace / log debug 用。
+- **avoid**：「error result」「error dict」（太通用，沒明示 envelope 是 ok/kind/message/hint 的固定結構）、「tool exception」（exception 是 raise 那刻；envelope 是 catch 後的 dict）
+- **why**：把「LLM 看得懂的錯誤分類」「user 看得懂的提示」「engineer 看得懂的內部訊息」三層分開；跟 Tool call failure 一同使用：tool call failure 講「發生什麼事」，envelope 講「怎麼結構化回給 LLM」
+
 ---
 
 ## 變更紀錄
 
 - 2026-05-21：建檔。初始 entry 來自 `agent-trace-telemetry` change discuss + propose 過程
+- 2026-05-21 晚：`chat-tool-error-isolation` discuss 加入 `YAGNI` + `Tool error envelope`

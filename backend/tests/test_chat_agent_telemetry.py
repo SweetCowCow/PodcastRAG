@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import uuid
+from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -19,6 +20,18 @@ from app.services.chat_agent.agent import (
     StageTimings,
     run_agent,
 )
+
+
+def _db_mock() -> MagicMock:
+    """AsyncSession-like mock with `begin_nested()` as an async context manager."""
+
+    @asynccontextmanager
+    async def _nested():
+        yield None
+
+    db = MagicMock()
+    db.begin_nested = _nested
+    return db
 
 
 def _fake_step_config(model: str = "gpt-4o") -> MagicMock:
@@ -111,7 +124,7 @@ async def test_telemetry_populated_on_success():
         ),
         patch("app.services.chat_agent.agent._try_update_summary", new_callable=AsyncMock),
     ):
-        result = await run_agent("節目簡介？", session_id, show_id, AsyncMock())
+        result = await run_agent("節目簡介？", session_id, show_id, _db_mock())
 
     assert isinstance(result, ChatAgentResult)
     # Two LLM rounds: one with tool_calls, one terminal answer.
@@ -173,7 +186,7 @@ async def test_telemetry_on_truncate():
         ),
         patch("app.services.chat_agent.agent._try_update_summary", new_callable=AsyncMock),
     ):
-        result = await run_agent("loop forever", session_id, show_id, AsyncMock())
+        result = await run_agent("loop forever", session_id, show_id, _db_mock())
 
     assert result.agent_truncated is True
     assert len(result.llm_calls) == settings.agentic_chat_max_iterations
@@ -205,7 +218,7 @@ async def test_telemetry_stage_save_failopen():
         patch("app.services.chat_agent.agent._try_update_summary", new_callable=AsyncMock),
     ):
         # MUST NOT raise — fail-open path.
-        result = await run_agent("q", session_id, show_id, AsyncMock())
+        result = await run_agent("q", session_id, show_id, _db_mock())
 
     assert result.answer == "ok"
     assert result.stage_timings.state_save_ms >= 0  # recorded despite failure

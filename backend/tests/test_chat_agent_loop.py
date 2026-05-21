@@ -10,11 +10,25 @@ from __future__ import annotations
 
 import json
 import uuid
+from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from app.services.chat_agent.agent import ChatAgentResult, run_agent
+
+
+def _db_mock() -> MagicMock:
+    """AsyncSession-like mock with `begin_nested()` as an async context
+    manager (required by `_dispatch_tool` SAVEPOINT wrapper)."""
+
+    @asynccontextmanager
+    async def _nested():
+        yield None
+
+    db = MagicMock()
+    db.begin_nested = _nested
+    return db
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -127,7 +141,7 @@ async def test_run_agent_happy_path_enumeration():
         ),
         patch("app.services.chat_agent.agent._try_update_summary", new_callable=AsyncMock),
     ):
-        result = await run_agent("歌單有哪幾集？", session_id, show_id, AsyncMock())
+        result = await run_agent("歌單有哪幾集？", session_id, show_id, _db_mock())
 
     assert isinstance(result, ChatAgentResult)
     assert result.answer == "節目共有 3 集歌單：EP101、EP112、EP120。"
@@ -172,12 +186,17 @@ async def test_tool_exception_caught_not_5xx():
         ),
         patch("app.services.chat_agent.agent._try_update_summary", new_callable=AsyncMock),
     ):
-        result = await run_agent("EP999 的內容？", session_id, show_id, AsyncMock())
+        result = await run_agent("EP999 的內容？", session_id, show_id, _db_mock())
 
     assert isinstance(result, ChatAgentResult)
     assert len(result.tool_calls) == 1
     assert result.tool_calls[0].raised == "RuntimeError"
-    assert "error" in result.tool_calls[0].result_summary
+    # chat-tool-error-isolation: envelope shape replaced the legacy
+    # {"error": "..."} dict. Verify the envelope keys land in result_summary.
+    assert '"ok": false' in result.tool_calls[0].result_summary
+    assert '"kind"' in result.tool_calls[0].result_summary
+    assert '"internal_message"' in result.tool_calls[0].result_summary
+    assert "RuntimeError" in result.tool_calls[0].result_summary
 
 
 @pytest.mark.asyncio
@@ -214,7 +233,7 @@ async def test_iteration_cap_truncates():
         ),
         patch("app.services.chat_agent.agent._try_update_summary", new_callable=AsyncMock),
     ):
-        result = await run_agent("show overview?", session_id, show_id, AsyncMock())
+        result = await run_agent("show overview?", session_id, show_id, _db_mock())
 
     assert result.agent_truncated is True
     assert len(result.tool_calls) == settings.agentic_chat_max_iterations

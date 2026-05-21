@@ -31,6 +31,7 @@ what fixes the multi-turn carry regression bake-off found.
 
 from __future__ import annotations
 
+import asyncio
 import inspect
 import logging
 import time
@@ -41,6 +42,7 @@ from typing import Any, Awaitable, Callable
 
 from pydantic import BaseModel, Field, ValidationError
 from sqlalchemy import text
+from sqlalchemy.exc import DataError, IntegrityError, OperationalError, ProgrammingError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services import episode_finders, rag
@@ -186,8 +188,8 @@ async def _get_episode_summary(inp: GetEpisodeSummaryInput, ctx: ToolContext) ->
 
 _EPISODE_SEGMENTS_SQL = """
 SELECT ts.id AS segment_id,
-       ts.start_seconds AS start_sec,
-       ts.end_seconds AS end_sec,
+       ts.start_time AS start_sec,
+       ts.end_time AS end_sec,
        ts.text,
        ts.topic_label
 FROM transcript_segments ts
@@ -195,7 +197,7 @@ JOIN transcripts t ON t.id = ts.transcript_id
 JOIN episodes e ON e.id = t.episode_id
 WHERE e.id = :episode_id AND e.show_id = :show_id
   {topic_clause}
-ORDER BY ts.start_seconds ASC
+ORDER BY ts.start_time ASC
 """
 
 
@@ -412,18 +414,59 @@ def _pydantic_to_openai_function(spec: ToolSpec) -> dict:
 OPENAI_TOOLS_SPEC: list[dict] = [_pydantic_to_openai_function(t) for t in TOOLS]
 
 
+def _classify_exception(exc: BaseException) -> tuple[str, str]:
+    """Map an exception to (kind, user_hint) per the chat-tool-error-isolation
+    design (Decision 3 dispatch table).
+
+    `kind` is one of: validation / schema / transient / not_found / unknown.
+    `user_hint` is a zh-TW phrasing safe to surface to end-users — it MUST
+    NOT contain exception class names, column names, or phrases that imply
+    internal system failure ("技術問題" / "系統查詢" / etc).
+    """
+    if isinstance(exc, ValidationError):
+        return ("validation", "查詢條件有點不太對，請再試一次")
+    if isinstance(exc, (ProgrammingError, IntegrityError, DataError)):
+        return ("schema", "這次查詢沒撈到完整資料")
+    if isinstance(exc, OperationalError):
+        return ("transient", "這次查詢遇到一點狀況，可以再問一次")
+    if isinstance(exc, (asyncio.TimeoutError, TimeoutError)):
+        return ("transient", "這次查詢遇到一點狀況，可以再問一次")
+    if isinstance(exc, LookupError):
+        return ("not_found", "找不到對應的資料")
+    return ("unknown", "這次查詢遇到一點狀況")
+
+
+def _make_envelope(exc: BaseException) -> dict:
+    """Build a Tool error envelope dict from a caught exception."""
+    kind, user_hint = _classify_exception(exc)
+    return {
+        "ok": False,
+        "kind": kind,
+        "internal_message": f"{type(exc).__name__}: {exc}",
+        "user_hint": user_hint,
+    }
+
+
 async def _dispatch_tool(
     name: str,
     args: dict[str, Any],
     ctx: ToolContext,
 ) -> tuple[dict, str | None, float]:
-    """Validate `args`, run the tool, catch exceptions.
+    """Validate `args`, run the tool inside a SAVEPOINT, catch exceptions.
 
-    Returns `(result_dict, raised_class_name_or_None, latency_ms)`. The
-    result dict is what gets serialised back to the LLM as the tool
-    message body. On ValidationError → `{"error": "ValidationError: ..."}`.
-    On any other Exception → `{"error": "<ExceptionClass>: <msg>"}`. The
-    agent loop always sees a dict so it can keep iterating.
+    Returns `(result_dict, raised_class_name_or_None, latency_ms)`. On
+    success `result_dict` is whatever the tool callable produced. On
+    failure `result_dict` is a structured Tool error envelope
+    `{"ok": false, "kind": "...", "internal_message": "...", "user_hint": "..."}`
+    so the LLM has a `kind` for decision-making and a `user_hint` for the
+    user-facing reply, while `internal_message` is preserved for trace /
+    log analysis.
+
+    SAVEPOINT isolation: the tool callable runs inside a SQLAlchemy
+    `begin_nested()` context manager so any DB exception triggers a
+    SAVEPOINT rollback before propagating. Subsequent tool calls on the
+    same `AsyncSession` then start from a clean transaction state instead
+    of inheriting `InFailedSQLTransactionError`.
 
     Side effect: when an enumeration tool succeeds, its episode IDs are
     written back to `ctx.state.last_enumeration_episodes` (FIFO-capped at
@@ -435,28 +478,41 @@ async def _dispatch_tool(
     spec = TOOLS_BY_NAME.get(name)
     if spec is None:
         elapsed = (time.perf_counter() - start) * 1000.0
-        return {"error": f"UnknownTool: {name}"}, "UnknownTool", elapsed
+        return (
+            {
+                "ok": False,
+                "kind": "validation",
+                "internal_message": f"UnknownTool: {name}",
+                "user_hint": "查詢條件有點不太對，請再試一次",
+            },
+            "UnknownTool",
+            elapsed,
+        )
 
     try:
         validated = spec.input_model.model_validate(args)
     except ValidationError as exc:
         elapsed = (time.perf_counter() - start) * 1000.0
-        return {"error": f"ValidationError: {exc}"}, "ValidationError", elapsed
+        return _make_envelope(exc), "ValidationError", elapsed
 
+    # SAVEPOINT-wrapped tool execution. Any exception inside the `with`
+    # block triggers savepoint rollback before propagating out, so the
+    # outer AsyncSession transaction is not poisoned for subsequent tool
+    # calls in the same agent loop. If `begin_nested()` itself raises
+    # (outer transaction already broken), the classifier falls back to
+    # `kind="transient"` (OperationalError) or `kind="unknown"` so the
+    # agent loop continues.
     try:
-        result = spec.callable(validated, ctx)
-        if inspect.isawaitable(result):
-            result = await result
-        if not isinstance(result, dict):
-            result = {"value": result}
+        async with ctx.db.begin_nested():
+            result = spec.callable(validated, ctx)
+            if inspect.isawaitable(result):
+                result = await result
+            if not isinstance(result, dict):
+                result = {"value": result}
     except Exception as exc:
         elapsed = (time.perf_counter() - start) * 1000.0
         logger.exception("chat_agent tool %s raised", name)
-        return (
-            {"error": f"{type(exc).__name__}: {exc}"},
-            type(exc).__name__,
-            elapsed,
-        )
+        return _make_envelope(exc), type(exc).__name__, elapsed
 
     if name in _ENUMERATION_TOOL_NAMES:
         _writeback_enumeration_anchor(result, ctx)
