@@ -185,14 +185,13 @@ const App = () => {
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
         {/* Landing for unauthenticated visitors at root. Avoid flash on hard
             refresh while logged in by waiting for /me to resolve. */}
-        {page === 'select' && userLoading && (
-          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: TOKEN.textMuted }}>
-            ⏳
-          </div>
-        )}
+        {/* landing-and-mode-orchestration-redesign: HomePage replaces the old
+            LandingPage / PodcastSelect pair. Single component covers both
+            auth states via hero swap, plus mode-trio educational band and
+            show grid with trending-query chips. */}
         {page === 'select' && !userLoading && !user && disabledAuth && (
           <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-            <LockCard
+            <LockCardLegacy
               lang={lang}
               state="disabled"
               appealEnabled={disabledAuth.appealEnabled}
@@ -200,15 +199,23 @@ const App = () => {
             />
           </div>
         )}
-        {page === 'select' && !userLoading && !user && !disabledAuth && (
-          <LandingPage
+        {page === 'select' && !(!userLoading && !user && disabledAuth) && (
+          <HomePage
             lang={lang}
-            onSearch={(q) => setLandingQuery(q)}
+            user={user}
+            userLoading={userLoading}
             onSelectShow={(show) => { setSelectedShow(show); setPage('query'); }}
+            onSearchPrefill={(q) => setLandingQuery(q)}
+            onSignIn={handleSignIn}
+            onOpenApplyQuota={() => { /* QueryPage handles its own modal; quick-pass for hero CTA */
+              setLandingQuery('');
+              if (user) {
+                // Send the user into the show grid; QuotaApply modal lives
+                // inside QueryPage today. Future iteration may extract it
+                // to App-level for cross-page reuse.
+              }
+            }}
           />
-        )}
-        {page === 'select' && !userLoading && user && (
-          <PodcastSelect lang={lang} user={user} setPage={handleSetPage} initialQuery={landingQuery} onSelect={(show) => { setSelectedShow(show); setPage('query'); }} />
         )}
         {selectedShow && (page === 'query' || page === 'transcript') && (
           <div style={{ display: page === 'query' ? 'flex' : 'none', flex: 1, overflow: 'hidden' }}>
@@ -301,4 +308,11 @@ const App = () => {
 };
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
-root.render(<App />);
+// AudioPlayerProvider mounts a single <audio> element outside the page
+// router so playback survives QueryPage ↔ TranscriptPage navigation
+// (landing-and-mode-orchestration-redesign decision 6).
+root.render(
+  <AudioPlayerProvider>
+    <App />
+  </AudioPlayerProvider>
+);

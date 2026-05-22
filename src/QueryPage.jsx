@@ -193,17 +193,45 @@ const LockedAnswerCard = ({ lang }) => {
   );
 };
 
+// landing-and-mode-orchestration-redesign: emit search_executed event.
+// Fire-and-forget; failures swallowed so the answer UI is never blocked.
+const _sendSearchExecuted = ({ showId, queryText, mode }) => {
+  if (!showId || !queryText || !mode) return;
+  const body = JSON.stringify({
+    event_type: 'search_executed',
+    payload: { show_id: showId, query_text: queryText.slice(0, 500), mode },
+  });
+  const url = `${API_BASE}/events`;
+  try {
+    if (navigator.sendBeacon) {
+      const blob = new Blob([body], { type: 'application/json' });
+      navigator.sendBeacon(url, blob);
+      return;
+    }
+  } catch (_) { /* fall through */ }
+  try {
+    fetch(url, {
+      method: 'POST',
+      keepalive: true,
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body,
+    }).catch(() => {});
+  } catch (_) { /* swallow */ }
+};
+
 const QueryPage = ({ lang, show, onBack, onOpenEpisode, queryMode, user, onUserChange, initialQuery }) => {
   const t = lang === 'zh';
   const quotaExhausted = user && user.quota_remaining === 0;
   const { isMobile } = useViewport();
   const [drawerOpen, setDrawerOpen] = React.useState(false);
-  // Anonymous visitors land on the search tab so they can use the free
-  // segment search; chat tab shows a locked card for them.
-  const [activeTab, setActiveTab] = React.useState(user ? 'chat' : 'search');
-  const [chatInput, setChatInput] = React.useState('');
+  // landing-and-mode-orchestration-redesign decision 2: three固定tabs in
+  // [index, semantic, chat] order. Default tab is decided ONCE at mount
+  // based on auth state. Mid-session login does NOT change tab.
+  const [activeTab, setActiveTab] = React.useState(user ? 'chat' : 'index');
+  // Cross-tab shared input string (decision 2 — preserve typing on switch).
+  const [queryText, setQueryText] = React.useState(initialQuery || '');
   const [messages, setMessages] = React.useState(MOCK_CHAT);
-  const [searchQ, setSearchQ] = React.useState(initialQuery || '');
   const [searching, setSearching] = React.useState(false);
   const [searchResults, setSearchResults] = React.useState(null);
   const [selectedEp, setSelectedEp] = React.useState(null);
@@ -211,6 +239,7 @@ const QueryPage = ({ lang, show, onBack, onOpenEpisode, queryMode, user, onUserC
   const [episodes, setEpisodes] = React.useState(null);
   const [epError, setEpError] = React.useState(null);
   const [quotaModalOpen, setQuotaModalOpen] = React.useState(false);
+  const audio = (typeof useAudioPlayer === 'function') ? useAudioPlayer() : null;
   // R1.1: thumbs vote state — keyed by query_id; value is 'up' | 'down'.
   const [votes, setVotes] = React.useState({});
   // R1.1: admin debug — 7-day rolling thumbs ratio. Fetched once per session
@@ -252,12 +281,12 @@ const QueryPage = ({ lang, show, onBack, onOpenEpisode, queryMode, user, onUserC
     return () => { cancelled = true; };
   }, [show.id]);
 
-  const handleSend = async () => {
-    const question = chatInput.trim();
+  const handleSend = async (overrideQuestion) => {
+    const question = (overrideQuestion ?? queryText).trim();
     if (!question || sending) return;
     const nextHistory = [...messages, { role: 'user', text: question }];
     setMessages(nextHistory);
-    setChatInput('');
+    setQueryText('');
     setSending(true);
     try {
       const history = nextHistory
@@ -287,15 +316,18 @@ const QueryPage = ({ lang, show, onBack, onOpenEpisode, queryMode, user, onUserC
         enumeration_episodes: data.enumeration_episodes || null,
       }]);
       if (typeof data.quota_remaining === 'number' && onUserChange) onUserChange();
+      // landing-and-mode-orchestration-redesign task 10.1: emit AFTER success only.
+      _sendSearchExecuted({ showId: show.id, queryText: question, mode: 'chat' });
     } catch (err) {
       setMessages(m => [...m, { role: 'assistant', text: err.message, citations: [] }]);
+      // task 10.2 negative — DO NOT emit search_executed on failure path.
     } finally {
       setSending(false);
     }
   };
 
   const handleSearch = async (overrideQuestion) => {
-    const question = (overrideQuestion ?? searchQ).trim();
+    const question = (overrideQuestion ?? queryText).trim();
     if (!question || searching) return;
     setSearching(true);
     setSearchResults(null);
@@ -330,17 +362,22 @@ const QueryPage = ({ lang, show, onBack, onOpenEpisode, queryMode, user, onUserC
         timestamp: formatTimestamp(r.start_time),
       }));
       setSearchResults(mapped);
+      // task 10.1: emit on successful semantic too.
+      _sendSearchExecuted({ showId: show.id, queryText: question, mode: 'semantic' });
     } catch (err) {
       setSearchResults({ error: err.message });
+      // task 10.2 negative — no emit on failure.
     } finally {
       setSearching(false);
     }
   };
 
-  const showChat = queryMode !== 2;
-  const showSearch = queryMode !== 1;
-  const effectiveTabs = [showChat && 'chat', showSearch && 'search'].filter(Boolean);
-  const curTab = effectiveTabs.includes(activeTab) ? activeTab : effectiveTabs[0];
+  // landing-and-mode-orchestration-redesign decision 2: 固定三 tab 順序，
+  // 不受 queryMode tweak 影響（legacy tweak only flipped between chat/search
+  // 兩 tab visibility — 新設計 always shows all three; tweak is now no-op for
+  // tab ordering but kept compiled so AdminPage / Tweaks panel doesn't crash).
+  const TABS = ['index', 'semantic', 'chat'];
+  const curTab = TABS.includes(activeTab) ? activeTab : 'chat';
   const showName = show.title;
   const transcribedCount = show.transcribed_count || 0;
   const showColor = deriveColor(show.id);
@@ -414,116 +451,179 @@ const QueryPage = ({ lang, show, onBack, onOpenEpisode, queryMode, user, onUserC
     })();
   }, [user, messages]);
 
+  // Source / citation click handler — fires citation_click beacon and either
+  // jumps the transcript page or starts sticky audio (decision 6).
+  const onSourceJump = (src, position, queryId) => {
+    if (queryId && src && src.episode_id != null && src.start_time != null) {
+      const chunk_id = `ep:${src.episode_id}@${Number(src.start_time).toFixed(2)}`;
+      sendCitationBeacon(queryId, chunk_id, position);
+    }
+    // Try sticky audio first; if no audio_url just open transcript page.
+    if (audio && audio.playFromTime && src && src.audio_url) {
+      audio.playFromTime(src.episode_id, src.start_time || 0, {
+        title: src.episode_title,
+        audio_url: src.audio_url,
+      });
+    }
+    onOpenEpisode({ id: src.episode_id, title: src.episode_title }, src.start_time);
+  };
+
+  const tabStrip = (
+    <div data-testid="mode-tabs" style={{ display: 'flex', gap: 0, borderBottom: `1px solid ${TOKEN.surfaceBorder}`, background: TOKEN.surface, flexShrink: 0 }}>
+      {TABS.map(tab => (
+        <button key={tab} onClick={() => setActiveTab(tab)}
+          data-testid={`mode-tab-${tab}`}
+          aria-selected={curTab === tab}
+          style={{ padding: '13px 20px', background: 'none', border: 'none', borderBottom: `2px solid ${curTab === tab ? TOKEN.accent : 'transparent'}`, color: curTab === tab ? TOKEN.accent : TOKEN.textSecondary, cursor: 'pointer', fontSize: 14, fontWeight: curTab === tab ? 600 : 400, fontFamily: 'inherit', transition: 'all 0.12s' }}>
+          {uiString(`mode_tab_${tab}`, lang)}
+        </button>
+      ))}
+    </div>
+  );
+
+  // ─── Index tab placeholder (decision 2 / task 4.4) ─────────────────
+  const indexTabContent = (
+    <div data-testid="mode-pane-index" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <div style={{ padding: '16px 24px', borderBottom: `1px solid ${TOKEN.surfaceBorder}`, background: TOKEN.surface, flexShrink: 0 }}>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <Input value={queryText} onChange={e => setQueryText(e.target.value)}
+            placeholder={t ? '在此節目中搜尋關鍵字（即將推出）' : 'Search keywords in this show (coming soon)'}
+            icon="search"
+            onSubmit={() => { /* task 4.4: no retrieval, no event emit */ }}
+          />
+          <Btn disabled icon="search">{t ? '搜尋' : 'Search'}</Btn>
+        </div>
+      </div>
+      <div style={{ flex: 1, overflowY: 'auto', padding: '40px 24px', textAlign: 'center', color: TOKEN.textSecondary }}>
+        <div style={{ fontSize: 36, marginBottom: 12 }}>🔎</div>
+        <h3 style={{ margin: '0 0 8px', color: TOKEN.text, fontSize: 17, fontWeight: 700 }}>
+          {uiString('mode_index_placeholder_title', lang)}
+        </h3>
+        <p style={{ margin: '0 auto 18px', maxWidth: 460, fontSize: 13, lineHeight: 1.7 }}>
+          {uiString('mode_index_placeholder_body', lang)}
+        </p>
+        <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
+          <Btn variant="secondary" size="sm" onClick={() => setActiveTab('semantic')}>
+            {uiString('mode_index_try_semantic', lang)}
+          </Btn>
+          <Btn variant="secondary" size="sm" onClick={() => setActiveTab('chat')}>
+            {uiString('mode_index_try_chat', lang)}
+          </Btn>
+        </div>
+      </div>
+    </div>
+  );
+
+  // ─── Semantic tab (decision 8 — SemanticResultList) ───────────────
+  const semanticTabContent = (
+    <div data-testid="mode-pane-semantic" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <div style={{ padding: '16px 24px', borderBottom: `1px solid ${TOKEN.surfaceBorder}`, background: TOKEN.surface, flexShrink: 0 }}>
+        <TrendingQueriesChips
+          showId={show.id}
+          lang={lang}
+          onSelect={(q) => { setQueryText(q); setTimeout(() => handleSearch(q), 0); }}
+        />
+        <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+          <Input value={queryText} onChange={e => setQueryText(e.target.value)}
+            placeholder={t ? '描述你想找的內容…' : 'Describe what you’re looking for…'}
+            icon="search" onSubmit={() => handleSearch()} />
+          <Btn onClick={() => handleSearch()} disabled={searching || !queryText.trim()}>{t ? '搜尋' : 'Search'}</Btn>
+        </div>
+      </div>
+      <div style={{ flex: 1, overflowY: 'auto', padding: '16px 24px' }}>
+        {searching && <div style={{ color: TOKEN.textMuted, textAlign: 'center', padding: '40px 0' }}>{t ? '搜尋中...' : 'Searching...'}</div>}
+        {searchResults && searchResults.error && (
+          <div style={{ color: TOKEN.danger, textAlign: 'center', padding: '24px 0', fontSize: 13 }}>
+            {t ? `搜尋失敗：${searchResults.error}` : `Search failed: ${searchResults.error}`}
+          </div>
+        )}
+        {Array.isArray(searchResults) && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <p style={{ color: TOKEN.textMuted, fontSize: 13, margin: '0 0 4px' }}>
+              {t ? `找到 ${searchResults.length} 個相關片段` : `Found ${searchResults.length} segments`}
+            </p>
+            <SemanticResultList
+              results={searchResults}
+              lang={lang}
+              onJump={(src, pos) => onSourceJump(src, pos)}
+            />
+          </div>
+        )}
+        {!searching && !searchResults && (
+          <div style={{ color: TOKEN.textMuted, textAlign: 'center', padding: '60px 0' }}>
+            <Icon name="search" size={36} color={TOKEN.textMuted} />
+            <p style={{ marginTop: 12, fontSize: 14 }}>{t ? '輸入關鍵字開始搜尋' : 'Enter a keyword to search'}</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  // ─── Chat tab (LockCard v2 covers when anon / quota exhausted) ─────
+  const chatTabContent = (
+    <div data-testid="mode-pane-chat" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      {!user || quotaExhausted ? (
+        <div style={{ flex: 1, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '32px 24px' }}>
+          <LockCard
+            variant={!user ? 'anonymous' : 'quota_exhausted'}
+            lang={lang}
+            onLogin={() => { window.location.href = googleLoginUrl(); }}
+            onApplyQuota={() => setQuotaModalOpen(true)}
+            onTrySemantic={() => setActiveTab('semantic')}
+          />
+        </div>
+      ) : (
+        <>
+          <div ref={chatEndRef} style={{ flex: 1, overflowY: 'auto', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+            {user && user.role === 'admin' && messages.some(m => m.role === 'assistant' && m.query_id) && (
+              <div style={{ fontSize: 11, color: TOKEN.textMuted, fontFamily: 'monospace' }}>
+                {adminStats == null
+                  ? '[admin] 7d thumbs: …'
+                  : adminStats.ratio == null
+                    ? '[admin] 7d thumbs: no data'
+                    : `[admin] 7d thumbs: ${adminStats.up_7d}↑ ${adminStats.down_7d}↓ (${Math.round(adminStats.ratio * 100)}%)`}
+              </div>
+            )}
+            {messages.map((msg, i) => (
+              <ChatBubble key={i} msg={msg} lang={lang} user={user}
+                onCitationClick={onCitationClick}
+                onOpenEpisode={onOpenEpisode}
+                onSourceJump={onSourceJump}
+                voted={msg.query_id ? votes[msg.query_id] : undefined}
+                onVote={submitVote} />
+            ))}
+            {sending && <TypingIndicator />}
+          </div>
+          <div style={{ padding: '14px 24px', borderTop: `1px solid ${TOKEN.surfaceBorder}`, background: TOKEN.surface, flexShrink: 0 }}>
+            <TrendingQueriesChips
+              showId={show.id}
+              lang={lang}
+              onSelect={(q) => { setQueryText(q); setTimeout(() => handleSend(q), 0); }}
+            />
+            <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+              <Input value={queryText} onChange={e => setQueryText(e.target.value)}
+                placeholder={t ? '針對此節目內容提問...' : 'Ask anything about this show...'}
+                onSubmit={() => handleSend()} />
+              <Btn onClick={() => handleSend()} disabled={sending || !queryText.trim()} icon="send">{t ? '送出' : 'Send'}</Btn>
+            </div>
+            <p style={{ margin: '7px 0 0', fontSize: 12, color: TOKEN.textMuted }}>
+              {t ? `RAG 範圍：${transcribedCount} 集逐字稿 · 剩餘 ${user.quota_remaining} 次`
+                 : `RAG scope: ${transcribedCount} transcripts · ${user.quota_remaining} queries left`}
+            </p>
+          </div>
+        </>
+      )}
+    </div>
+  );
+
   const leftContent = (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-      {/* Quota meter — authenticated only. Anon visitors see no meter (no
-          quota concept until they sign in). */}
+      {/* Quota meter — authenticated only. */}
       {user && <QuotaMeter user={user} lang={lang} onApply={() => setQuotaModalOpen(true)} />}
-
-      {/* Tab bar */}
-      {effectiveTabs.length > 1 && (
-        <div style={{ display: 'flex', gap: 0, borderBottom: `1px solid ${TOKEN.surfaceBorder}`, background: TOKEN.surface, flexShrink: 0 }}>
-          {effectiveTabs.map(tab => (
-            <button key={tab} onClick={() => setActiveTab(tab)}
-              style={{ padding: '13px 20px', background: 'none', border: 'none', borderBottom: `2px solid ${curTab === tab ? TOKEN.accent : 'transparent'}`, color: curTab === tab ? TOKEN.accent : TOKEN.textSecondary, cursor: 'pointer', fontSize: 14, fontWeight: curTab === tab ? 600 : 400, fontFamily: 'inherit', transition: 'all 0.12s' }}>
-              {tab === 'chat' ? (t ? '對話查詢' : 'Chat') : (t ? '語意搜尋' : 'Semantic Search')}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* Chat */}
-      {curTab === 'chat' && (
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-          {!user ? (
-            <LockedAnswerCard lang={lang} />
-          ) : (
-            <>
-              <div ref={chatEndRef} style={{ flex: 1, overflowY: 'auto', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
-                {user && user.role === 'admin' && messages.some(m => m.role === 'assistant' && m.query_id) && (
-                  <div style={{ fontSize: 11, color: TOKEN.textMuted, fontFamily: 'monospace' }}>
-                    {adminStats == null
-                      ? '[admin] 7d thumbs: …'
-                      : adminStats.ratio == null
-                        ? '[admin] 7d thumbs: no data'
-                        : `[admin] 7d thumbs: ${adminStats.up_7d}↑ ${adminStats.down_7d}↓ (${Math.round(adminStats.ratio * 100)}%)`}
-                  </div>
-                )}
-                {messages.map((msg, i) => (
-                  <ChatBubble key={i} msg={msg} lang={lang} user={user}
-                    onCitationClick={onCitationClick}
-                    onOpenEpisode={onOpenEpisode}
-                    voted={msg.query_id ? votes[msg.query_id] : undefined}
-                    onVote={submitVote} />
-                ))}
-                {sending && <TypingIndicator />}
-              </div>
-              <div style={{ padding: '14px 24px', borderTop: `1px solid ${TOKEN.surfaceBorder}`, background: TOKEN.surface, flexShrink: 0 }}>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <Input value={chatInput} onChange={e => setChatInput(e.target.value)}
-                    placeholder={quotaExhausted ? (t ? '查詢額度已用完' : 'Quota exhausted') : (t ? '針對此節目內容提問...' : 'Ask anything about this show...')}
-                    onSubmit={() => handleSend()} />
-                  <Btn onClick={handleSend} disabled={sending || !chatInput.trim() || quotaExhausted} icon="send">{t ? '送出' : 'Send'}</Btn>
-                </div>
-                <p style={{ margin: '7px 0 0', fontSize: 12, color: quotaExhausted ? TOKEN.danger : TOKEN.textMuted }}>
-                  {quotaExhausted
-                    ? (t ? '查詢額度已用完，可從上方申請更多' : 'Quota exhausted — request more above')
-                    : (t ? `RAG 範圍：${transcribedCount} 集逐字稿 · 剩餘 ${user.quota_remaining} 次` : `RAG scope: ${transcribedCount} transcripts · ${user.quota_remaining} queries left`)}
-                </p>
-              </div>
-            </>
-          )}
-        </div>
-      )}
-
-      {/* Search */}
-      {curTab === 'search' && (
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-          <div style={{ padding: '16px 24px', borderBottom: `1px solid ${TOKEN.surfaceBorder}`, background: TOKEN.surface, flexShrink: 0 }}>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <Input value={searchQ} onChange={e => setSearchQ(e.target.value)}
-                placeholder={t ? '輸入關鍵字或語意搜尋...' : 'Keyword or semantic search...'}
-                icon="search" onSubmit={() => handleSearch()} />
-              <Btn onClick={() => handleSearch()} disabled={searching || !searchQ.trim()}>{t ? '搜尋' : 'Search'}</Btn>
-            </div>
-            {!user && (
-              <p style={{ margin: '7px 0 0', fontSize: 12, color: TOKEN.textMuted }}>
-                {t
-                  ? '段落搜尋免登入。想看 AI 整段統整？登入解鎖（30 次免費）'
-                  : 'Segment search is free. Want AI-summarized answers? Log in to unlock (30 free).'}
-              </p>
-            )}
-          </div>
-          <div style={{ flex: 1, overflowY: 'auto', padding: '16px 24px' }}>
-            {searching && <div style={{ color: TOKEN.textMuted, textAlign: 'center', padding: '40px 0' }}>{t ? '搜尋中...' : 'Searching...'}</div>}
-            {searchResults && searchResults.error && (
-              <div style={{ color: TOKEN.danger, textAlign: 'center', padding: '24px 0', fontSize: 13 }}>
-                {t ? `搜尋失敗：${searchResults.error}` : `Search failed: ${searchResults.error}`}
-              </div>
-            )}
-            {Array.isArray(searchResults) && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                <p style={{ color: TOKEN.textMuted, fontSize: 13, margin: '0 0 4px' }}>{t ? `找到 ${searchResults.length} 個相關片段` : `Found ${searchResults.length} segments`}</p>
-                {searchResults.map((r, i) => (
-                  <SourceCard
-                    key={i}
-                    source={r}
-                    lang={lang}
-                    position={i}
-                    onJump={(src) => onOpenEpisode({ id: src.episode_id, title: src.episode_title }, src.start_time)}
-                  />
-                ))}
-              </div>
-            )}
-            {!searching && !searchResults && (
-              <div style={{ color: TOKEN.textMuted, textAlign: 'center', padding: '60px 0' }}>
-                <Icon name="search" size={36} color={TOKEN.textMuted} />
-                <p style={{ marginTop: 12, fontSize: 14 }}>{t ? '輸入關鍵字開始搜尋' : 'Enter a keyword to search'}</p>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+      {tabStrip}
+      {curTab === 'index' && indexTabContent}
+      {curTab === 'semantic' && semanticTabContent}
+      {curTab === 'chat' && chatTabContent}
     </div>
   );
 
@@ -692,7 +792,7 @@ const EnumerationSection = ({ episodes, lang, onOpenEpisode }) => {
   );
 };
 
-const ChatBubble = ({ msg, lang, user, onCitationClick, onOpenEpisode, voted, onVote }) => {
+const ChatBubble = ({ msg, lang, user, onCitationClick, onOpenEpisode, onSourceJump, voted, onVote }) => {
   const t = lang === 'zh';
   const isUser = msg.role === 'user';
   const citations = msg.citations || [];
@@ -748,18 +848,22 @@ const ChatBubble = ({ msg, lang, user, onCitationClick, onOpenEpisode, voted, on
         {(() => {
           if (isUser) return null;
           const isEnumLayout = Array.isArray(enumerationEpisodes) && enumerationEpisodes.length > 0;
-          const chipList = citations.length > 0 ? (
-            <div style={{ display: 'flex', gap: 6, marginTop: isEnumLayout ? 0 : 10, flexWrap: 'wrap' }}>
-              {citations.map((c, i) => (
-                <span key={i} onClick={() => onCitationClick && onCitationClick(c, queryId, i)}
-                  style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 8px', background: TOKEN.bg, border: `1px solid ${TOKEN.surfaceBorder}`, borderRadius: 6, color: TOKEN.accent, fontSize: 12, fontFamily: 'inherit', cursor: onCitationClick ? 'pointer' : 'default', transition: 'border-color 0.15s' }}
-                  onMouseEnter={e => onCitationClick && (e.currentTarget.style.borderColor = TOKEN.accent)}
-                  onMouseLeave={e => onCitationClick && (e.currentTarget.style.borderColor = TOKEN.surfaceBorder)}>
-                  <Icon name="fileText" size={11} color={TOKEN.accent} />
-                  {(c.episode_title || '').slice(0, 24) || (lang === 'zh' ? '片段' : 'Clip')} @ {formatTimestamp(c.start_time)}
-                </span>
-              ))}
-            </div>
+          // landing-and-mode-orchestration-redesign decision 5: replace the
+          // chip + card double-region with a single episode-grouped
+          // ConversationSourcePanel for content-type answers. Enumeration
+          // layout keeps EnumerationSection as the primary block and folds
+          // the new panel underneath via CitationEvidenceCollapse.
+          const sourcePanel = citations.length > 0 ? (
+            <ConversationSourcePanel
+              citations={citations}
+              lang={lang}
+              queryId={queryId}
+              onCitationClickBeacon={onCitationClick}
+              onJump={(c, posInGroup) => {
+                if (onSourceJump) onSourceJump(c, posInGroup, queryId);
+                else if (onOpenEpisode) onOpenEpisode({ id: c.episode_id, title: c.episode_title }, c.start_time);
+              }}
+            />
           ) : null;
           if (isEnumLayout) {
             return (
@@ -769,15 +873,15 @@ const ChatBubble = ({ msg, lang, user, onCitationClick, onOpenEpisode, voted, on
                   lang={lang}
                   onOpenEpisode={onOpenEpisode}
                 />
-                {chipList && (
+                {sourcePanel && (
                   <CitationEvidenceCollapse count={citations.length} lang={lang}>
-                    {chipList}
+                    {sourcePanel}
                   </CitationEvidenceCollapse>
                 )}
               </React.Fragment>
             );
           }
-          return chipList;
+          return sourcePanel;
         })()}
         {!isUser && queryId && (
           <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
