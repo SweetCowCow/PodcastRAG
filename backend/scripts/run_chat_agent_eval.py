@@ -91,8 +91,18 @@ def _post(url: str, body: dict, token: str, timeout: float = 60.0) -> dict:
                 headers["Origin"] = urlparse(url).scheme + "://" + urlparse(url).netloc
     data = json.dumps(body).encode()
     req = urllib.request.Request(url, data=data, headers=headers, method="POST")
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
-        return json.loads(resp.read().decode())
+    last_exc: Exception | None = None
+    for attempt in range(3):
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                return json.loads(resp.read().decode())
+        except (urllib.error.URLError, ConnectionError, TimeoutError) as exc:
+            last_exc = exc
+            if attempt < 2:
+                time.sleep(2 * (attempt + 1))  # 2s, 4s
+                continue
+            raise
+    raise last_exc  # unreachable, for type-checker
 
 
 def _search(backend_url: str, show_id: str, question: str, k: int, token: str) -> list[str]:
@@ -252,6 +262,12 @@ def _run_nested_eval(
             acceptable = turn.get("expected_tool_calls_acceptable", []) or []
             print(f"  [{i:02d}/{len(items)}] {item_id} turn {t_idx}/{len(item['turns'])}")
 
+            gt_chunks = turn.get("ground_truth_chunk_ids")
+            recall_at_k: float | None = None
+            if isinstance(gt_chunks, list) and gt_chunks:
+                retrieved = _search(backend_url, show_id, question, top_k, auth_token)
+                recall_at_k = _recall_at_k(retrieved, gt_chunks, top_k)
+
             t0 = time.monotonic()
             resp = _query_chat_with_trace(
                 backend_url,
@@ -276,6 +292,7 @@ def _run_nested_eval(
                 "turn_index": t_idx,
                 "is_multi_turn": is_multi,
                 "design_type": item.get("design_type", "unknown"),
+                "recall_at_k": recall_at_k,
                 "answer_match": am,
                 "tool_required_hit": cov["required_hit"],
                 "tool_acceptable_hit": cov["acceptable_hit"],
@@ -320,13 +337,15 @@ def run_eval(
         scored_am = [t["answer_match"] for t in per_turn]
         scored_req = [t["tool_required_hit"] for t in per_turn]
         scored_acc = [t["tool_acceptable_hit"] for t in per_turn if t["tool_acceptable_hit"] is not None]
+        scored_recall = [t["recall_at_k"] for t in per_turn if t.get("recall_at_k") is not None]
         multi_turn_items = [it for it in per_item if it["is_multi_turn"]]
         aggregate = {
             "schema": "nested-multi-turn",
             "n_items": len(per_item),
             "n_turns": len(per_turn),
             "n_multi_turn_items": len(multi_turn_items),
-            "recall_at_k_mean": None,  # nested schema does not carry chunk ground truth
+            "recall_at_k_mean": round(mean(scored_recall), 4) if scored_recall else None,
+            "n_scored_recall": len(scored_recall),
             "answer_match_mean": round(mean(scored_am), 4) if scored_am else None,
             "tool_required_hit_mean": round(mean(scored_req), 4) if scored_req else None,
             "tool_acceptable_hit_mean": (
