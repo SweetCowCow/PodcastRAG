@@ -20,6 +20,7 @@ import time
 import uuid
 from dataclasses import dataclass, field
 
+import openai
 from openai import AsyncOpenAI, OpenAI
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -31,6 +32,112 @@ from app.services.chat_agent.state import ChatSessionState, ChatSessionStateStor
 from app.services.chat_agent.tools import OPENAI_TOOLS_SPEC, ToolContext, _dispatch_tool
 
 logger = logging.getLogger(__name__)
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Token-budget + truncate helpers (agent-token-budget-and-tool-truncate)
+# ──────────────────────────────────────────────────────────────────────
+
+
+def _truncate_for_llm(s: str, cap: int) -> str:
+    """Cap a tool-result string for the LLM-facing message body.
+
+    Returns `s` unchanged when within cap. Otherwise returns the first
+    `cap` chars plus a literal suffix `... (truncated, <N> chars omitted)`
+    so the LLM can see the truncation happened (and is expected to wrap
+    up rather than ask for more).
+    """
+    if cap <= 0 or len(s) <= cap:
+        return s
+    omitted = len(s) - cap
+    return f"{s[:cap]}... (truncated, {omitted} chars omitted)"
+
+
+def _estimate_messages_tokens(messages: list[dict]) -> int:
+    """Estimate total tokens in the running messages list.
+
+    Uses `tiktoken` gpt-4o encoder when available; falls back to a coarse
+    `len(text) / 4` heuristic (LLM-tokens-per-char approximation) when the
+    encoder is unavailable or fails to load. This is conservative enough
+    to drive the budget guard — over-estimating by ~10% just makes the
+    guard trip slightly earlier.
+    """
+    try:
+        import tiktoken  # type: ignore
+
+        try:
+            enc = tiktoken.encoding_for_model("gpt-4o")
+        except Exception:
+            enc = tiktoken.get_encoding("cl100k_base")
+        total = 0
+        for m in messages:
+            total += len(enc.encode(json.dumps(m, ensure_ascii=False)))
+        return total
+    except Exception:
+        return sum(len(json.dumps(m, ensure_ascii=False)) for m in messages) // 4
+
+
+def _apply_budget_guard(
+    messages: list[dict], budget: int
+) -> tuple[bool, int]:
+    """Trim oldest tool messages until estimated tokens fit within `budget`.
+
+    Preserves the leading system message(s) and the most recent user / assistant
+    pair. Returns `(fits, popped_count)`:
+        - `fits=True` if the trimmed list is at or under budget
+        - `fits=False` if we ran out of removable tool messages and still
+          exceed budget (caller SHALL finalise the loop)
+    """
+    popped = 0
+    while _estimate_messages_tokens(messages) > budget:
+        # Find oldest tool-role message NOT in the most-recent pair.
+        # Preserve any leading role="system" + the final user + final assistant.
+        tool_idx = None
+        for i, m in enumerate(messages):
+            if m.get("role") == "tool":
+                # Guard: don't pop a tool message from the very last round
+                # (i.e. one that immediately precedes the final assistant);
+                # otherwise the LLM sees a tool_call without its tool reply.
+                # Simple heuristic: never pop the last 2 tool messages.
+                if i < len(messages) - 2:
+                    tool_idx = i
+                    break
+        if tool_idx is None:
+            return False, popped
+        messages.pop(tool_idx)
+        popped += 1
+    return True, popped
+
+
+def _classify_llm_exception(exc: BaseException) -> str | None:
+    """Return envelope `kind` for known LLM-side failures, else None.
+
+    `context_exceeded` is the only kind we handle here (gpt-4o 128K cap via
+    AI Hub surfaces as `openai.BadRequestError` with body mentioning
+    `ContextWindowExceededError`). Other 4xx / 5xx are re-raised so the
+    endpoint-level handler in `query.py` can route them.
+    """
+    if not isinstance(exc, openai.BadRequestError):
+        return None
+    text_blob = ""
+    try:
+        body = getattr(exc, "body", None) or {}
+        if isinstance(body, dict):
+            text_blob = json.dumps(body, ensure_ascii=False)
+        else:
+            text_blob = str(body)
+    except Exception:
+        text_blob = ""
+    text_blob = text_blob + " " + str(exc)
+    if "ContextWindowExceededError" in text_blob or "context_length" in text_blob:
+        return "context_exceeded"
+    return None
+
+
+_CONTEXT_EXCEEDED_USER_HINT = (
+    "這題涉及的內容太多，我只能列出部分結果；試試把問題拆小，"
+    "譬如指定單一集數或縮小範圍。"
+)
 
 
 @dataclass
@@ -114,13 +221,64 @@ async def run_agent(
 
     loop_t0 = time.perf_counter()
     for round_index in range(settings.agentic_chat_max_iterations):
-        _llm_t = time.perf_counter()
-        response = await client.chat.completions.create(
-            model=answer_cfg.model,
-            messages=messages,
-            tools=OPENAI_TOOLS_SPEC,
-            tool_choice="auto",
+        # Per-round token-budget guard. Trim oldest tool messages until
+        # estimated tokens fit; if we cannot fit, finalise this round.
+        _fits, _popped = _apply_budget_guard(
+            messages, settings.agentic_chat_messages_max_tokens
         )
+        if _popped:
+            logger.warning(
+                "agent budget guard: popped %d oldest tool message(s) at round %d",
+                _popped,
+                round_index,
+            )
+        if not _fits:
+            logger.warning(
+                "agent budget guard: cannot fit budget at round %d, finalising", round_index
+            )
+            messages.append({
+                "role": "system",
+                "content": "Context truncated by budget guard. Wrap up with the information you already have.",
+            })
+            agent_truncated = True
+            # Use the most recent assistant content (if any) as the answer.
+            for m in reversed(messages):
+                if m.get("role") == "assistant" and m.get("content"):
+                    answer = m["content"]
+                    break
+            break
+
+        _llm_t = time.perf_counter()
+        try:
+            response = await client.chat.completions.create(
+                model=answer_cfg.model,
+                messages=messages,
+                tools=OPENAI_TOOLS_SPEC,
+                tool_choice="auto",
+            )
+        except openai.BadRequestError as exc:
+            kind = _classify_llm_exception(exc)
+            if kind != "context_exceeded":
+                raise  # other 4xx routes through endpoint handler
+            llm_latency_ms = (time.perf_counter() - _llm_t) * 1000.0
+            logger.warning(
+                "agent LLM context_exceeded at round %d: %s",
+                round_index,
+                type(exc).__name__,
+            )
+            llm_calls.append(
+                LLMCallTrace(
+                    round_index=round_index,
+                    latency_ms=llm_latency_ms,
+                    prompt_tokens=0,
+                    completion_tokens=0,
+                    finish_reason="context_exceeded",
+                    had_tool_calls=False,
+                )
+            )
+            answer = _CONTEXT_EXCEEDED_USER_HINT
+            agent_truncated = True
+            break
         llm_latency_ms = (time.perf_counter() - _llm_t) * 1000.0
         choice = response.choices[0]
         msg = choice.message
@@ -171,17 +329,22 @@ async def run_agent(
                 tool_name, tool_args, ctx
             )
             result_str = json.dumps(result_dict, ensure_ascii=False)
+            # LLM-facing body is capped; result_full keeps the original
+            # for admin debug_trace (no observability degradation).
+            truncated_str = _truncate_for_llm(
+                result_str, settings.agentic_tool_result_max_chars
+            )
 
             trace.append(
                 ToolCallTrace(
                     name=tool_name,
                     args=tool_args,
-                    result_summary=result_str[:500],
+                    result_summary=truncated_str[:500],
                     raised=raised,
                     latency_ms=latency_ms,
                     # agent-trace-telemetry task 4.1: always store the full
-                    # result_str here. API layer scrubs to None when the admin
-                    # debug_trace gate is not active (task 4.2).
+                    # (untruncated) result_str here. API layer scrubs to None
+                    # when the admin debug_trace gate is not active.
                     result_full=result_str,
                 )
             )
@@ -189,7 +352,7 @@ async def run_agent(
                 {
                     "role": "tool",
                     "tool_call_id": tc.id,
-                    "content": result_str,
+                    "content": truncated_str,
                 }
             )
     else:

@@ -102,6 +102,14 @@ class Settings(BaseSettings):
     agentic_chat_l1_ttl_seconds: int = 7200
     agentic_chat_focused_idle_seconds: int = 600
     agentic_chat_enumeration_ttl_seconds: int = 600
+    # agent-token-budget-and-tool-truncate: per-tool LLM-facing truncate cap
+    # (~2K tokens). result_full stays untouched for admin debug_trace.
+    agentic_tool_result_max_chars: int = 8000
+    # Per-round token budget (gpt-4o context = 128K; 100K leaves 28K headroom
+    # for response + functions schema). When estimated message tokens exceed
+    # this, the loop drops oldest tool messages; if still over, finalises
+    # with the user-facing truncated answer + agent_truncated=True.
+    agentic_chat_messages_max_tokens: int = 100000
 
     @field_validator("e2e_login_token")
     @classmethod
