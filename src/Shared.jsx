@@ -771,4 +771,84 @@ const LockCardLegacy = ({ lang, state = 'anonymous', appealEnabled = true, onPri
   );
 };
 
-Object.assign(window, { API_BASE, TOKEN, Icon, Badge, Btn, Input, TopNav, ConfirmModal, FormModal, OverflowMenu, ProgressCounts, categoryToBadge, formatRelativeTime, useViewport, EpisodeBlurb, SourceCard, sanitiseMarkOnly, LockCardLegacy });
+// ─── ShowCard + deriveColor (moved from PodcastSelect.jsx during
+//     landing-and-mode-orchestration-redesign — PodcastSelect retired,
+//     HomePage now owns the show grid). Both stay shared so any future
+//     show-list surface (e.g. admin previews) can reuse them. ───
+const _COLOR_PALETTE = ['#6366f1', '#22d3ee', '#f59e0b', '#22c55e', '#ec4899'];
+const deriveColor = (id) => {
+  if (!id) return _COLOR_PALETTE[0];
+  let hash = 2166136261;
+  for (let i = 0; i < id.length; i++) {
+    hash ^= id.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return _COLOR_PALETTE[Math.abs(hash) % _COLOR_PALETTE.length];
+};
+
+const ShowCard = ({ show, lang, hovered, onMouseEnter, onMouseLeave, onClick }) => {
+  const t = lang === 'zh';
+  const episodeCount = show.episode_count || 0;
+  const transcribedCount = show.transcribed_count || 0;
+  const pct = episodeCount > 0 ? Math.round((transcribedCount / episodeCount) * 100) : 0;
+  const color = deriveColor(show.id);
+
+  return (
+    <div onClick={onClick} onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave}
+      style={{ background: TOKEN.surface, border: `1px solid ${hovered ? color + '55' : TOKEN.surfaceBorder}`, borderRadius: 14, padding: 24, cursor: 'pointer', transition: 'all 0.18s', transform: hovered ? 'translateY(-2px)' : 'none', boxShadow: hovered ? `0 8px 30px rgba(0,0,0,0.3), 0 0 0 1px ${color}33` : 'none', display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
+        <div style={{ width: 64, height: 64, borderRadius: 12, background: color + '22', border: `1px solid ${color}44`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, overflow: 'hidden' }}>
+          {show.image_url ? (
+            <img src={show.image_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          ) : (
+            <Icon name="mic" size={28} color={color} />
+          )}
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ color: TOKEN.text, fontWeight: 700, fontSize: 16, lineHeight: 1.3, marginBottom: 4 }}>
+            {show.title}
+          </div>
+          {show.language && (
+            <div style={{ color: TOKEN.textSecondary, fontSize: 12 }}>{show.language}</div>
+          )}
+        </div>
+      </div>
+      {show.description && (
+        <p style={{ color: TOKEN.textSecondary, fontSize: 13, lineHeight: 1.6, margin: 0,
+          display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+          {show.description}
+        </p>
+      )}
+      <div style={{ display: 'flex', gap: 16, fontSize: 13 }}>
+        <div style={{ color: TOKEN.textSecondary }}>
+          <span style={{ color: TOKEN.text, fontWeight: 600 }}>{episodeCount}</span> {t ? '集' : 'eps'}
+        </div>
+        <div style={{ color: TOKEN.textSecondary }}>
+          <span style={{ color: '#4ade80', fontWeight: 600 }}>{transcribedCount}</span> {t ? '已轉錄' : 'transcribed'}
+        </div>
+      </div>
+      <div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: TOKEN.textMuted, marginBottom: 5 }}>
+          <span>{t ? '轉錄進度' : 'Transcription'}</span>
+          <span style={{ color: pct === 100 ? '#4ade80' : TOKEN.textSecondary, fontWeight: 600 }}>{pct}%</span>
+        </div>
+        <div style={{ height: 4, background: TOKEN.surfaceBorder, borderRadius: 99, overflow: 'hidden' }}>
+          <div style={{ height: '100%', width: `${pct}%`, background: pct === 100 ? '#22c55e' : color, borderRadius: 99, transition: 'width 0.4s' }} />
+        </div>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: TOKEN.textMuted, minWidth: 0, overflow: 'hidden' }}>
+          <Icon name="rss" size={13} color={TOKEN.textMuted} />
+          <span style={{ fontFamily: 'monospace', fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {show.rss_url}
+          </span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, color: hovered ? color : TOKEN.textMuted, fontSize: 13, fontWeight: 500, transition: 'color 0.15s', flexShrink: 0, marginLeft: 8 }}>
+          {t ? '進入節目' : 'Open Show'} <Icon name="chevronRight" size={16} color="currentColor" />
+        </div>
+      </div>
+    </div>
+  );
+};
+
+Object.assign(window, { API_BASE, TOKEN, Icon, Badge, Btn, Input, TopNav, ConfirmModal, FormModal, OverflowMenu, ProgressCounts, categoryToBadge, formatRelativeTime, useViewport, EpisodeBlurb, SourceCard, sanitiseMarkOnly, LockCardLegacy, ShowCard, deriveColor });
