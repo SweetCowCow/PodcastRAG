@@ -52,6 +52,33 @@ const MILESTONE_LABELS = {
 const RELEASE_LOG = [
   // ─── v1.8 — Chat Mode: Agentic (5/21~) ───
   {
+    date: '2026-05-22', slug: 'enable-agentic-chat-default-on', milestone: 'v1.8', tag: 'feature',
+    title: {
+      zh: 'Phase 2 翻牌：對話模式預設改用 AI 自主決策',
+      en: 'Phase 2 Flip: Chat Mode Default Switched to AI-Driven Agent',
+    },
+    summary: {
+      zh: '把 ENABLE_AGENTIC_CHAT 從「測試中」翻成預設開啟，所有人切到對話模式就直接走新的 AI agent loop（過去兩週 dogfood 同 30 題 0/30 看到「技術問題」訊號）。同場補一個容易漏的細節：agent 拿到節目跟段落資料後，原本沒把這些回填給前端 source 區，導致對話模式 source 卡片整個空白；現在從 agent 內部的 tool 結果撿出 chunk 跟 episode，回填給既有的「引用 chip」+「相關集數卡」兩塊區塊，使用者一打開就有完整資料呈現（UIX 細節後續另一個 change 接手優化）。Flag 留 30 天 kill-switch，若 prod 出問題可立即顯式翻回。同場補 LLM-as-judge 對 multi-turn-40 dataset 跑一輪當 quality gate 證據，並開兩個新 runbook（eval-pipeline / agentic-chat-observation）給後續 14 天觀察期值班參考。',
+      en: 'Flipped ENABLE_AGENTIC_CHAT from "in testing" to default-on; everyone landing in chat mode now goes straight to the new AI agent loop (the last two weeks of dogfood ran the same 30-question set with 0/30 "technical issue" signal). Bundled fix for an easy-to-miss gap: after the agent finished its tool calls, the episode and chunk data was never mapped back to the frontend source panel, leaving the chat-mode source area completely blank. Now the response mapper collects chunks from search tools and episodes from listing/lookup tools and feeds the existing "citation chips" + "related episodes card" containers, so users see complete source info from day one (UIX polish is owned by a follow-up change). The flag stays as a 30-day kill-switch; explicit ENABLE_AGENTIC_CHAT=false still falls back to the rule-based pipeline. Also captured: LLM-as-judge against the multi-turn-40 dataset as the quality gate evidence, plus two new runbooks (eval-pipeline / agentic-chat-observation) for the 14-day observation-window on-call.',
+    },
+    summaryBullets: {
+      zh: [
+        '對話模式 default 翻 on：使用者打開就是新的 AI agent 行為',
+        '補齊回應的 source 資料：紫色 chip + 集數卡兩塊區塊不再空白',
+        '保留 30 天 flag kill-switch；prod 出問題顯式翻回 false 立即生效',
+        'LLM-as-judge 對 40 題 multi-turn 跑一輪當 gate 證據（answer_match +2.7pp）',
+        '同場開兩個 runbook：eval pipeline 全圖 + 14 天觀察期值班 SOP',
+      ],
+      en: [
+        'Chat-mode default flipped on — landing in chat mode now goes straight to the AI agent',
+        'Source data mapped back: purple chips + episode cards no longer blank in chat mode',
+        '30-day flag kill-switch retained; explicit ENABLE_AGENTIC_CHAT=false still works as a fallback',
+        'LLM-as-judge against 40-turn multi-turn dataset as gate evidence (answer_match +2.7pp)',
+        'Two new runbooks: eval pipeline overview + 14-day observation-window SOP',
+      ],
+    },
+  },
+  {
     date: '2026-05-22', slug: 'chat-tool-error-isolation', milestone: 'v1.8', tag: 'fix',
     title: {
       zh: '對話模式錯誤訊息變友善了',

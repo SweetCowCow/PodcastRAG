@@ -10,6 +10,7 @@
 - [x] 2.0 實作 spec requirement「Agentic path populates enumeration_episodes from listing-tool results」並落地 design 決策 D2：enumeration_episodes 來源 = 列舉 tool 的 result_full。
 - [x] 2.1 在 `_agent_result_to_response` 內新增 helper `_collect_agentic_enumeration(tool_calls)`：遍歷 `tool_calls`，篩 `name in {"find_episodes_by_guest", "find_episodes_by_topic", "find_episodes_by_date"}` 且 `raised is None` 的 entry；從 `result_full` 撿 episode list（保留 agent 觀察順序）；按 `episode_id` 去重；逐筆轉成 `EpisodeRef`；空集合回 `None`（非空 list）以維持 schema 語意。Shape 異常 skip + warning。
 - [x] 2.2 修改 `_agent_result_to_response` return 語句：加入 `enumeration_episodes=_collect_agentic_enumeration(result.tool_calls)`。
+- [x] 2.3 補實作 spec requirement「Agentic path populates enumeration_episodes from listing-tool and single-episode-lookup results」單 episode 路徑（prod smoke hotfix 抓到漏）：`_AGENTIC_SINGLE_EPISODE_TOOLS = {find_episode_by_ref, get_episode_summary}`；前者抽 `payload["episode"]`，後者組 `{episode_id, title, ai_summary=summary}`，皆視為 1 entry 餵 enumeration。新加 2 個 unit test 覆蓋。
 
 ## 3. 後端 unit tests（覆蓋 §1 與 §2 兩條 spec requirement）
 
@@ -38,19 +39,19 @@
 ## 6. Prod smoke + 視覺驗證
 
 - [x] 6.1 翻 default commit 推到 main 並等 Zeabur build 完成（用 `zeabur deployment list --service-id 69eb10360da29f05f49a4b0b` 確認 RUNNING）。
-- [ ] 6.2 用 chrome-devtools-mcp 走完整流程：登入 → 進「這不是音樂」節目 → chat tab 發「楊大正上過哪幾集？」→ 確認回應內 EnumerationSection 渲染含 2 集 episode card + 答案文字「2 集」一致 + 截圖。
-- [ ] 6.3 chrome-devtools-mcp 同 session 發「歌單那幾集 EP143 主要在講什麼？」→ 確認 ChatBubble 下方紫色 citation chip 區渲染（至少 1 chip）+ 截圖。截圖不入 git（依 `feedback_pptx_qa_jpg_cleanup.md` 規則做完即刪）。
+- [x] 6.2 用 chrome-devtools-mcp 走完整流程：登入 → 進「這不是音樂」節目 → chat tab 發「楊大正上過哪幾集？」→ 確認回應內 EnumerationSection 渲染含 2 集 episode card + 答案文字「2 集」一致 + 截圖。
+- [x] 6.3 chrome-devtools-mcp 同 session 發「歌單那幾集 EP143 主要在講什麼？」→ 確認 ChatBubble 下方紫色 citation chip 區渲染（至少 1 chip）+ 截圖。截圖不入 git（依 `feedback_pptx_qa_jpg_cleanup.md` 規則做完即刪）。
 - [x] 6.4 任一步前端出錯（chip 沒出、enum card 沒出、5xx）→ STOP，回頭排查 mapper / 前端 prop。
 
 ## 7. 觀察期 SOP 落地
 
 - [x] 7.0 落地 design 決策 D5：14 天 dogfood 觀察期 + 自動 rollback 條件。
 - [x] 7.1 把 design.md D5 段「14 天觀察期 + 5% threshold + 人工 rollback」轉成 admin 後台值班 SOP 文件 `docs/runbooks/agentic-chat-observation.md`（依 `feedback_case_studies_no_commit.md` 規則：docs/runbooks/ 不入 git，純記憶）。內容含：(a) 每日掃描查詢 SQL 模板、(b) 5% threshold 公式、(c) rollback CLI 指令範本 `zeabur variable update --id 69eb10360da29f05f49a4b0b -k "ENABLE_AGENTIC_CHAT=false" -y -i=false` + 4 個 service redeploy 範本。
-- [ ] 7.2 把觀察期起始日寫進 `project_pending_changes.md` 記憶（archive 後做），方便未來 session 想起來追蹤。
+- [x] 7.2 把觀察期起始日寫進 `project_pending_changes.md` 記憶（archive 後做），方便未來 session 想起來追蹤。
 
 ## 8. Archive 與後續（含 design D6：Follow-up 列表落地）
 
-- [ ] 8.1 commit 訊息明確：mapper 改、test、config default 翻、design 補 gate 數字四件分開 commit 或合併一個 commit message 多段描述。
-- [ ] 8.2 跑 `/spectra-archive enable-agentic-chat-default-on` 收尾，回流 spec 內容到 `openspec/specs/chat-agentic-routing/spec.md`。
-- [ ] 8.3 archive 後在 release log 起草新 entry（依 `feedback_release_log_maintenance.md`）：tag=feature，milestone v1.8，標題「Phase 2 翻牌：agentic chat 成為預設」，描述含 (a) 補 citations + enumeration 資料、(b) flag 翻 default 但保留 30 天 kill-switch、(c) 後續 UIX 由 landing-redesign 接手。
-- [ ] 8.4 archive parked change `rag-vs-longcontext-benchmark` 並標記 superseded（spike 已寫成 case study 取代）。
+- [x] 8.1 commit 訊息明確：mapper 改、test、config default 翻、design 補 gate 數字四件分開 commit 或合併一個 commit message 多段描述。
+- [x] 8.2 跑 `/spectra-archive enable-agentic-chat-default-on` 收尾，回流 spec 內容到 `openspec/specs/chat-agentic-routing/spec.md`。
+- [x] 8.3 archive 後在 release log 起草新 entry（依 `feedback_release_log_maintenance.md`）：tag=feature，milestone v1.8，標題「Phase 2 翻牌：agentic chat 成為預設」，描述含 (a) 補 citations + enumeration 資料、(b) flag 翻 default 但保留 30 天 kill-switch、(c) 後續 UIX 由 landing-redesign 接手。
+- [x] 8.4 archive parked change `rag-vs-longcontext-benchmark` 並標記 superseded（spike 已寫成 case study 取代）。

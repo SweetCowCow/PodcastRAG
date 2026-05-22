@@ -89,7 +89,7 @@ Spec 初版寫 `severe count == 0` 跟 `ordinal ≥ 3/4`。實跑後發現需要
 | b20 token explosion (209751 tokens > 128K)：agent loop 沒 truncate / sum tool result 長度 | eval b20 HTTP 500 | `agent-token-budget-and-tool-truncate` |
 | 8 severe hallucination：cross-episode 編造 title + negative-trap noise-induced + grounding 弱 | LLM judge 2026-05-22 | `agentic-prompt-grounding-and-ordinal-tool` |
 | Multi-turn ordinal 4/4 → 1/4 命中：gpt-4o 對 `_ORDINAL_INSTRUCTION` 不 follow | mt01 t2 / mt04 t2 | 同上（建議改 explicit `get_nth_from_last_enumeration` tool）|
-| Latency p95 19s + agent loop 多 tool round-trip | dogfood follow-up #8 既存 | `agentic-model-tiering`（拆 tool-selector / answer-synth 兩層 model）|
+| Latency p95 19s + agent loop 多 tool round-trip；答案合成模型升級實驗 | dogfood follow-up #8 + 2026-05-22 user 提案 | `agentic-model-tiering`（拆 tool-selector / answer-synth 兩層 model）。**前置必做**：(1) 先用 `npx zeabur ai-hub models` 或 GraphQL `aihubModels` 查 AI Hub 可用模型清單；(2) 上網查每個候選模型（claude-3.5-sonnet / gpt-5 / gemini-2.5-pro / o1 / o3 等）的官方 benchmark 跟最適合元件（tool-calling 兼容性 / grounding / long-context / latency）；(3) 才設計 a/b 跑 multi-turn-40。**禁止憑感覺直接換模型**（per `feedback_verify_external_endpoint_first.md`）|
 | eval runner `--auth-token` 走 argv 違反 `feedback_subprocess_creds_via_env.md` | follow-up #8 既存 | 同 model-tiering 一起改成 env 或檔案 |
 | `extended-multi-turn-40` 缺 `ground_truth_chunk_ids` 不能量 Recall | dataset 缺口 | `multi-turn-40-add-recall-ground-truth`（人工 audit ~1-2 小時）|
 

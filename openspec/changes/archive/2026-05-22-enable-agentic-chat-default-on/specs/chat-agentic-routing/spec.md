@@ -35,11 +35,16 @@ When a tool's `result_full` does not match the expected `{"chunks": [...]}` shap
 - **AND** the mapper SHALL log a warning
 - **AND** the function SHALL return a valid `ChatResponse` (not raise an exception)
 
-### Requirement: Agentic path populates enumeration_episodes from listing-tool results
+### Requirement: Agentic path populates enumeration_episodes from listing-tool and single-episode-lookup results
 
-When `ENABLE_AGENTIC_CHAT=true` serves a chat-mode query, the `_agent_result_to_response` mapper SHALL populate `ChatResponse.enumeration_episodes` by aggregating episode entries from the `result_full` payload of every `ToolCallTrace` whose `name` is one of `find_episodes_by_guest`, `find_episodes_by_topic`, or `find_episodes_by_date` and whose `raised` is null. The aggregation SHALL deduplicate by `episode_id`, preserve the order in which the agent observed them, and emit each entry as an `EpisodeRef` instance.
+When `ENABLE_AGENTIC_CHAT=true` serves a chat-mode query, the `_agent_result_to_response` mapper SHALL populate `ChatResponse.enumeration_episodes` by aggregating episode entries from the `result_full` payload of every `ToolCallTrace` whose `raised` is null and whose `name` is in either of two groups:
 
-When the agent invoked no successful listing tool, `enumeration_episodes` SHALL remain `None` (the schema default), so that the frontend `EnumerationSection` collapses, matching the rule-based pipeline's behavior on non-enumeration queries.
+- **Listing tools** (`find_episodes_by_guest`, `find_episodes_by_topic`, `find_episodes_by_date`): payload shape `{"episodes": [...]}` — every entry is appended.
+- **Single-episode lookup tools** (`find_episode_by_ref`, `get_episode_summary`): payload shape `{"episode": {...}}` or `{"episode_id": ..., "title": ..., "summary": ...}` — exactly one entry is appended.
+
+The aggregation SHALL deduplicate by `episode_id`, preserve the order in which the agent observed them, and emit each entry as an `EpisodeRef` instance.
+
+When the agent invoked no successful listing or single-episode-lookup tool, `enumeration_episodes` SHALL remain `None` (the schema default), so that the frontend `EnumerationSection` collapses, matching the rule-based pipeline's behavior on non-enumeration queries.
 
 #### Scenario: Agent invokes find_episodes_by_guest and enumeration is populated
 
@@ -59,6 +64,20 @@ When the agent invoked no successful listing tool, `enumeration_episodes` SHALL 
 - **GIVEN** `ENABLE_AGENTIC_CHAT=true` and the agent only calls `search_within_episode`
 - **WHEN** `query_show` returns the chat response
 - **THEN** `ChatResponse.enumeration_episodes` SHALL be `null`
+
+#### Scenario: Agent invokes find_episode_by_ref and enumeration contains one entry
+
+- **GIVEN** `ENABLE_AGENTIC_CHAT=true` and the agent calls `find_episode_by_ref(ref="EP143")` returning one episode
+- **WHEN** `query_show` returns the chat response
+- **THEN** `ChatResponse.enumeration_episodes` SHALL contain exactly 1 `EpisodeRef` entry
+- **AND** the entry SHALL carry the resolved `episode_id` and `title`
+
+#### Scenario: Agent invokes get_episode_summary and enumeration contains one entry
+
+- **GIVEN** `ENABLE_AGENTIC_CHAT=true` and the agent calls `get_episode_summary(episode_id=X)` returning `{episode_id, title, summary}`
+- **WHEN** `query_show` returns the chat response
+- **THEN** `ChatResponse.enumeration_episodes` SHALL contain exactly 1 `EpisodeRef` entry
+- **AND** the entry's `ai_summary` SHALL equal the tool's `summary`
 
 ### Requirement: ENABLE_AGENTIC_CHAT Python default SHALL be true
 
