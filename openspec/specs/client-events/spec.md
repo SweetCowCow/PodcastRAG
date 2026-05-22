@@ -8,7 +8,9 @@ TBD - created by archiving change 'r1-ui-feedback-infra'. Update Purpose after a
 
 ### Requirement: events ingestion endpoint accepts citation_click payloads
 
-The backend SHALL expose `POST /events` accepting JSON body `{event_type: "citation_click", payload: {query_id: str, chunk_id: str, position: int}}`. The endpoint SHALL be public (no auth required) but SHALL apply per-IP rate limiting at 60 requests per minute, returning 429 when exceeded. When the request includes a valid `session_id` cookie, the resolved `user_id` SHALL be persisted on the event row; otherwise `user_id` SHALL be NULL. The endpoint SHALL validate that `event_type` is exactly `"citation_click"` (other values SHALL return 422) and that `payload` matches the citation_click schema (missing or extra keys SHALL return 422). On success the endpoint SHALL return 202 Accepted with empty body.
+The backend SHALL expose `POST /events` accepting JSON body `{event_type: <enum>, payload: <object>}` where `event_type` is one of `"citation_click"` or `"search_executed"`. The endpoint SHALL be public (no auth required) but SHALL apply per-IP rate limiting at 60 requests per minute, returning 429 when exceeded. When the request includes a valid `session_id` cookie, the resolved `user_id` SHALL be persisted on the event row; otherwise `user_id` SHALL be NULL. The endpoint SHALL validate that `event_type` is one of the accepted enum values (other values SHALL return 422) and that `payload` matches the schema corresponding to `event_type` (missing or extra keys SHALL return 422). On success the endpoint SHALL return 202 Accepted with empty body.
+
+The `citation_click` payload schema SHALL be `{query_id: str, chunk_id: str, position: int}`. The `search_executed` payload schema SHALL be `{show_id: str (UUID), query_text: str (length 1 to 500), mode: enum("semantic", "chat")}`.
 
 #### Scenario: Anonymous visitor reports a citation click
 
@@ -23,6 +25,13 @@ The backend SHALL expose `POST /events` accepting JSON body `{event_type: "citat
 - **WHEN** they `POST /events` with a valid citation_click payload
 - **THEN** the inserted row SHALL have `user_id=U`
 
+#### Scenario: search_executed event accepted with valid payload
+
+- **GIVEN** any visitor (authenticated or not)
+- **WHEN** they `POST /events` with `{event_type: "search_executed", payload: {show_id: "<uuid>", query_text: "歌單", mode: "chat"}}`
+- **THEN** a row SHALL be inserted with `event_type="search_executed"` and the matching payload
+- **AND** the response status SHALL be 202
+
 #### Scenario: Unknown event_type rejected
 
 - **WHEN** the body contains `event_type: "scroll_depth"`
@@ -33,48 +42,21 @@ The backend SHALL expose `POST /events` accepting JSON body `{event_type: "citat
 - **WHEN** the body contains `{event_type: "citation_click", payload: {query_id: "q-1"}}` (missing chunk_id and position)
 - **THEN** the response status SHALL be 422
 
+#### Scenario: search_executed payload with unknown mode rejected
+
+- **WHEN** the body contains `{event_type: "search_executed", payload: {show_id: "<uuid>", query_text: "x", mode: "keyword"}}`
+- **THEN** the response status SHALL be 422
+
+#### Scenario: search_executed payload with overlong query_text rejected
+
+- **WHEN** the body contains a `search_executed` payload whose `query_text` is 501 characters long
+- **THEN** the response status SHALL be 422
+
 #### Scenario: Per-IP rate limit enforced
 
 - **GIVEN** an IP has sent 60 successful `POST /events` requests within the last 60 seconds
 - **WHEN** the same IP sends one more request
 - **THEN** the response status SHALL be 429
-
-
-<!-- @trace
-source: r1-ui-feedback-infra
-updated: 2026-05-05
-code:
-  - src/LandingPage.jsx
-  - backend/alembic/versions/q5f6a7b8c9d0_add_qa_feedback_and_events.py
-  - src/QueryPage.jsx
-  - docs/case-studies/dual-write-migration-defeated-by-entrypoint.md
-  - docs/case-studies/zeabur-platform-case-study.md
-  - docs/research/competitive-analysis.md
-  - docs/case-studies/transcription-queue-discussion.md
-  - aisteps-tab.png
-  - backend/app/schemas/event.py
-  - docs/case-studies/local-vs-prod-verification-violation.md
-  - backend/app/api/events.py
-  - backend/app/api/qa_feedback.py
-  - backend/app/main.py
-  - backend/app/models/qa_feedback.py
-  - backend/app/core/csrf.py
-  - backend/app/schemas/query.py
-  - backend/app/schemas/qa_feedback.py
-  - docs/case-studies/build-zeabur-pptx.js
-  - backend/app/api/query.py
-  - src/PodcastSelect.jsx
-  - docs/research/competitive-feature-plan.md
-  - docs/research/r1-rag-eval-brief.md
-  - backend/app/models/event.py
-  - backend/app/core/rate_limit.py
-  - index.html
-  - backend/app/models/__init__.py
-tests:
-  - backend/tests/test_qa_feedback_api.py
-  - backend/tests/test_qa_feedback_stats.py
-  - backend/tests/test_events_api.py
--->
 
 ---
 ### Requirement: SourceCard fires citation_click event on user click
@@ -129,3 +111,32 @@ tests:
   - backend/tests/test_qa_feedback_stats.py
   - backend/tests/test_events_api.py
 -->
+
+---
+### Requirement: QueryPage emits search_executed event after successful semantic or chat query
+
+After a Semantic-mode or Chat-mode query in QueryPage successfully returns results, the frontend SHALL `POST /events` with `{event_type: "search_executed", payload: {show_id, query_text, mode}}` where `mode` is `"semantic"` or `"chat"` respectively. The request SHALL be sent via `navigator.sendBeacon` with a `fetch` keepalive fallback. The emission SHALL be best-effort: any network failure or non-2xx response SHALL be swallowed by the client and SHALL NOT surface as a user-visible error. The Index tab SHALL NOT emit `search_executed` events while it remains a placeholder.
+
+#### Scenario: Successful chat query emits one search_executed event
+
+- **GIVEN** an authenticated user on the Chat tab
+- **WHEN** the user submits the query `歌單` and the chat endpoint returns a successful answer
+- **THEN** the client SHALL issue exactly one `POST /events` with `event_type="search_executed"` and `payload.mode="chat"` and `payload.query_text="歌單"`
+
+#### Scenario: Failed query does not emit search_executed
+
+- **GIVEN** a query that fails with a 500 response
+- **WHEN** the failure is observed by the client
+- **THEN** no `search_executed` event SHALL be emitted
+
+#### Scenario: Index tab does not emit search_executed
+
+- **WHEN** a visitor types and submits a query in the Index tab placeholder
+- **THEN** no `POST /events` request with `event_type="search_executed"` SHALL be issued
+
+#### Scenario: Event emission failure does not surface to user
+
+- **GIVEN** the `POST /events` request fails with a network error
+- **WHEN** the failure occurs
+- **THEN** no error toast, banner, or modal SHALL be shown to the user
+- **AND** the user's query results SHALL still render normally

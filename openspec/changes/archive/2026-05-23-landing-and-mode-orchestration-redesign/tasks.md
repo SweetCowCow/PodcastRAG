@@ -1,14 +1,14 @@
 ## 1. Backend：events 表 search_executed 擴展
 
-- [ ] 1.1 擴展 `POST /events` 接受 `event_type="search_executed"`，payload schema 為 `{show_id: UUID, query_text: 1-500 chars, mode: "semantic" | "chat"}`，未知 event_type 或不合法 payload 回 422；以新增的 `backend/tests/test_events_search_executed.py` 含 4 個案例（happy path、unknown mode、overlong query_text、missing key）跑綠驗證 events ingestion endpoint accepts citation_click payloads 仍含 citation_click 行為。
-- [ ] 1.2 確認 `POST /events` 對 `search_executed` 仍套用既有 per-IP rate limit 60/min 不變，session cookie 解析 user_id 邏輯不變；以擴充 `backend/tests/test_events_api.py` 加一個「authenticated user emit search_executed」案例斷言 row 含 user_id 跑綠驗證。
+- [x] 1.1 擴展 `POST /events` 接受 `event_type="search_executed"`，payload schema 為 `{show_id: UUID, query_text: 1-500 chars, mode: "semantic" | "chat"}`，未知 event_type 或不合法 payload 回 422；以新增的 `backend/tests/test_events_search_executed.py` 含 4 個案例（happy path、unknown mode、overlong query_text、missing key）跑綠驗證 events ingestion endpoint accepts citation_click payloads 仍含 citation_click 行為。
+- [x] 1.2 確認 `POST /events` 對 `search_executed` 仍套用既有 per-IP rate limit 60/min 不變，session cookie 解析 user_id 邏輯不變；以擴充 `backend/tests/test_events_api.py` 加一個「authenticated user emit search_executed」案例斷言 row 含 user_id 跑綠驗證。
 
 ## 2. Backend：trending-queries endpoint
 
-- [ ] 2.1 新增 `backend/app/api/trending_queries.py` 提供 `GET /shows/{show_id}/trending-queries`，依 design 決策 4 的 SQL（events GROUP BY payload->>'query_text' HAVING count>=cutoff ORDER BY count DESC LIMIT 10）回傳 `{queries, days, cutoff}`；以新增 `backend/tests/test_trending_queries.py` 內 happy path 案例（5 / 3 / 1 次三 query → 回前兩個）跑綠驗證 GET trending-queries endpoint returns popular query strings per show。
-- [ ] 2.2 trending-queries endpoint 對未知 show 回 404、空結果回 200 with `queries: []`、days 超出 1-30 回 422；以 `test_trending_queries.py` 三個邊界案例跑綠驗證。
-- [ ] 2.3 trending-queries 的 cutoff 從環境變數讀取，預設 3；以 `test_trending_queries.py` 加一個 monkeypatch cutoff=2 的案例斷言行為改變跑綠驗證。
-- [ ] 2.4 trending-queries 套用與 `POST /events` 相同的 per-IP rate limit 60/min；以 `test_trending_queries.py` 連送 61 次第 61 次回 429 跑綠驗證。
+- [x] 2.1 新增 `backend/app/api/trending_queries.py` 提供 `GET /shows/{show_id}/trending-queries`，依 design 決策 4 的 SQL（events GROUP BY payload->>'query_text' HAVING count>=cutoff ORDER BY count DESC LIMIT 10）回傳 `{queries, days, cutoff}`；以新增 `backend/tests/test_trending_queries.py` 內 happy path 案例（5 / 3 / 1 次三 query → 回前兩個）跑綠驗證 GET trending-queries endpoint returns popular query strings per show。
+- [x] 2.2 trending-queries endpoint 對未知 show 回 404、空結果回 200 with `queries: []`、days 超出 1-30 回 422；以 `test_trending_queries.py` 三個邊界案例跑綠驗證。
+- [x] 2.3 trending-queries 的 cutoff 從環境變數讀取，預設 3；以 `test_trending_queries.py` 加一個 monkeypatch cutoff=2 的案例斷言行為改變跑綠驗證。
+- [x] 2.4 trending-queries 套用與 `POST /events` 相同的 per-IP rate limit 60/min；以 `test_trending_queries.py` 連送 61 次第 61 次回 429 跑綠驗證。
 
 ## 3. Frontend：基礎元件骨架
 
@@ -70,8 +70,8 @@
 ## 12. 整合 + 移除舊路徑驗證（涵蓋 landing-page REMOVED Requirements 遷移）
 
 - [x] 12.1 刪除 `src/LandingPage.jsx` 與 `src/PodcastSelect.jsx`，並在 release log（`src/releaseLog.jsx`）加一條使用者視角的 changelog；以 `git status` 確認兩檔被刪、瀏覽器開所有路徑無 404 / console error 驗證 landing-page capability 的 REMOVED Requirements 已遷移（包含 Landing Page renders for unauthenticated visitors at site root、Landing Page hero presents copy and primary CTA、Landing Page lists collected shows with real data、Landing Page paywall band explains the freemium boundary and offers login、Landing Page top navigation includes secondary login button 五條的退場）。
-- [ ] 12.2 全頁面回歸 smoke：未登入 / 登入兩態，各跑 HomePage → 點 ShowCard → QueryPage（三 tab 切換）→ 點 SourceCard 進 TranscriptPage → 切回 QueryPage 音訊不斷；以 chrome-devtools-mcp 全流程錄一輪 console message 無 error 驗證跨 capability 整合無 regression。
-- [ ] 12.3 部署至 Zeabur 後對 prod 跑同一輪 smoke，並以 prod DB 連線 `SELECT count(*) FROM events WHERE event_type='search_executed' AND created_at > now() - interval '10 minutes'` > 0 驗證 emit 鏈路在 prod 真的寫入。
+- [x] 12.2 全頁面回歸 smoke：未登入 / 登入兩態，各跑 HomePage → 點 ShowCard → QueryPage（三 tab 切換）→ 點 SourceCard 進 TranscriptPage → 切回 QueryPage 音訊不斷；以 chrome-devtools-mcp 全流程錄一輪 console message 無 error 驗證跨 capability 整合無 regression。
+- [x] 12.3 部署至 Zeabur 後對 prod 跑同一輪 smoke，並以 prod DB 連線 `SELECT count(*) FROM events WHERE event_type='search_executed' AND created_at > now() - interval '10 minutes'` > 0 驗證 emit 鏈路在 prod 真的寫入。
 
 ## 13. 設計決策回掃（對應 design.md ### headings）
 
