@@ -33,7 +33,7 @@ from app.schemas.query import (
 from app.schemas.query_entity import QueryEntities
 from openai import AsyncOpenAI, OpenAI
 
-from app.services import citation_parser, episode_finders, query_entity, rag
+from app.services import citation_parser, episode_finders, episode_ref, query_entity, rag
 from app.services.chat_agent.agent import ChatAgentResult, run_agent
 from app.services.ai_step_resolver import (
     AiStepNotConfiguredError,
@@ -190,6 +190,18 @@ async def public_search_show(
         if rag._should_skip_routing(payload.question)
         else await rag.route_episodes(db, show_id, query_embedding[0])
     )
+    # retrieval-episode-reference-handling: when the query mentions `EP<N>`,
+    # resolve those references to episode UUIDs and use them as the filter
+    # (overrides two-layer routing, which is default-off but kept as a
+    # kill-switch). Empty list → no override, fall through to routed_eps.
+    ep_ref_ids = await episode_ref.extract_episode_ids_from_query(
+        db, show_id, payload.question
+    )
+    if ep_ref_ids:
+        logger.info(
+            "episode_ref: filtered to %d episode(s) from query", len(ep_ref_ids)
+        )
+        routed_eps = ep_ref_ids
     hits = await rag.retrieve_hybrid(
         db,
         show_id,
