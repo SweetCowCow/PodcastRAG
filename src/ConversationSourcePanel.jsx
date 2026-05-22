@@ -1,0 +1,133 @@
+// ConversationSourcePanel — landing-and-mode-orchestration-redesign decision 5.
+//
+// Replaces the old「chip 列 + SourceCard 列」double-region. Renders ONE
+// episode-grouped panel:
+//   header  →「答案參考來源（共 N 集 · M 段引用）」(zh) /
+//             "Answer sources (N episodes · M citations)" (en)
+//   groups  → per-episode collapsible card containing SourceCard list
+//
+// Props:
+//   citations : array of citation objects (existing shape — episode_id,
+//               episode_title, start_time, text, before_text, after_text,
+//               highlights, ai_summary_excerpt, ai_summary_full, source...)
+//   lang      : 'zh' | 'en'
+//   onJump    : (citation, indexInGroup?) → opens TranscriptPage
+//   queryId   : optional, forwarded into onCitationClick beacon path
+
+const ConversationSourcePanel = ({ citations, lang, onJump, queryId, onCitationClickBeacon }) => {
+  const t = lang === 'zh';
+  const list = Array.isArray(citations) ? citations : [];
+  const [collapsed, setCollapsed] = React.useState({});  // episode_id → bool
+
+  if (list.length === 0) return null;
+
+  // Group preserving first-appearance order so RRF ranking shines through.
+  const order = [];
+  const groups = {};
+  let globalIdx = 0;
+  for (const c of list) {
+    const epId = c.episode_id != null ? String(c.episode_id) : `__noep_${globalIdx}`;
+    if (!groups[epId]) {
+      groups[epId] = { episode_id: c.episode_id, episode_title: c.episode_title, items: [] };
+      order.push(epId);
+    }
+    groups[epId].items.push({ ...c, _globalIdx: globalIdx });
+    globalIdx += 1;
+  }
+  const N = order.length;
+  const M = list.length;
+  const header = t
+    ? `答案參考來源（共 ${N} 集 · ${M} 段引用）`
+    : `Answer sources (${N} episode${N === 1 ? '' : 's'} · ${M} citation${M === 1 ? '' : 's'})`;
+
+  return (
+    <div
+      data-testid="conversation-source-panel"
+      style={{
+        marginTop: 12,
+        background: TOKEN.bg,
+        border: `1px solid ${TOKEN.surfaceBorder}`,
+        borderRadius: 10,
+        padding: '12px 14px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 10,
+      }}
+    >
+      <div
+        style={{
+          fontSize: 12,
+          fontWeight: 600,
+          color: TOKEN.textSecondary,
+          letterSpacing: '0.02em',
+        }}
+        data-testid="conversation-source-panel-header"
+      >
+        {header}
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {order.map(epId => {
+          const g = groups[epId];
+          const isCollapsed = !!collapsed[epId];
+          return (
+            <div
+              key={epId}
+              data-testid="conversation-source-group"
+              style={{
+                border: `1px solid ${TOKEN.surfaceBorder}`,
+                borderRadius: 8,
+                background: TOKEN.surface,
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => setCollapsed(s => ({ ...s, [epId]: !isCollapsed }))}
+                style={{
+                  width: '100%',
+                  padding: '8px 12px',
+                  background: 'transparent',
+                  border: 'none',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  cursor: 'pointer',
+                  fontFamily: 'inherit',
+                  color: TOKEN.text,
+                  fontSize: 13,
+                  fontWeight: 600,
+                  textAlign: 'left',
+                }}
+              >
+                <Icon name={isCollapsed ? 'chevronRight' : 'chevronDown'} size={12} color={TOKEN.textMuted} />
+                <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {g.episode_title || (t ? '未命名集數' : 'Untitled episode')}
+                </span>
+                <span style={{ color: TOKEN.textMuted, fontSize: 11, fontWeight: 400 }}>
+                  {g.items.length} {t ? '段' : 'clip' + (g.items.length === 1 ? '' : 's')}
+                </span>
+              </button>
+              {!isCollapsed && (
+                <div style={{ padding: '0 10px 10px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {g.items.map((c, i) => (
+                    <SourceCard
+                      key={i}
+                      source={c}
+                      lang={lang}
+                      position={c._globalIdx}
+                      onJump={(src) => {
+                        if (onCitationClickBeacon) onCitationClickBeacon(c, queryId, c._globalIdx);
+                        onJump && onJump(src, c._globalIdx);
+                      }}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+Object.assign(window, { ConversationSourcePanel });

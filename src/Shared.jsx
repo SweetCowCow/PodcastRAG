@@ -698,14 +698,14 @@ const SourceCard = ({ source, lang, onJump, position }) => {
   );
 };
 
-// ─── LockCard ───
+// ─── LockCardLegacy ───
 // Three-state lock card used by QueryPage + landing flows:
 //   state = 'anonymous'  → 🔒 + sign-in CTA
 //   state = 'quota'      → 🔋 + request-quota CTA (existing flow keeps inline copy)
 //   state = 'disabled'   → 🚫 + appeal CTA (disabled-user-appeal-flow)
 // For 'disabled' state, when appealEnabled=false the CTA is hidden and the
 // card shows contact-admin guidance instead.
-const LockCard = ({ lang, state = 'anonymous', appealEnabled = true, onPrimaryClick, primaryLabel, message, subtext }) => {
+const LockCardLegacy = ({ lang, state = 'anonymous', appealEnabled = true, onPrimaryClick, primaryLabel, message, subtext }) => {
   const t = lang === 'zh';
   const presets = {
     anonymous: {
@@ -771,4 +771,4 @@ const LockCard = ({ lang, state = 'anonymous', appealEnabled = true, onPrimaryCl
   );
 };
 
-Object.assign(window, { API_BASE, TOKEN, Icon, Badge, Btn, Input, TopNav, ConfirmModal, FormModal, OverflowMenu, ProgressCounts, categoryToBadge, formatRelativeTime, useViewport, EpisodeBlurb, SourceCard, sanitiseMarkOnly, LockCard });
+Object.assign(window, { API_BASE, TOKEN, Icon, Badge, Btn, Input, TopNav, ConfirmModal, FormModal, OverflowMenu, ProgressCounts, categoryToBadge, formatRelativeTime, useViewport, EpisodeBlurb, SourceCard, sanitiseMarkOnly, LockCardLegacy });

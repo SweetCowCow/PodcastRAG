@@ -40,7 +40,7 @@
 
 ## 7. Frontend：Paragraph aggregation util
 
-- [ ] 7.1 新增 `src/utils/aggregateParagraphs.js` 純函式，input segments + opts，依 design 決策 7 規則切段（gap ≥ 1.5s 或 speaker 變化），output paragraphs；以新增 `src/utils/aggregateParagraphs.test.js`（如無 test runner 則改用 manual smoke script）覆蓋表格邊界（gap 1.0 / 1.5 / 2.0、speaker change、empty input）驗證 aggregateParagraphs util produces paragraphs by silence gap and speaker change。
+- [x] 7.1 新增 `src/utils/aggregateParagraphs.js` 純函式，input segments + opts，依 design 決策 7 規則切段（gap ≥ 1.5s 或 speaker 變化），output paragraphs；以新增 `src/utils/aggregateParagraphs.test.js`（如無 test runner 則改用 manual smoke script）覆蓋表格邊界（gap 1.0 / 1.5 / 2.0、speaker change、empty input）驗證 aggregateParagraphs util produces paragraphs by silence gap and speaker change。
 - [ ] 7.2 改寫 `src/TranscriptPage.jsx` 與對話 / 語意的 SourceCard 渲染邏輯，全部改用 `aggregateParagraphs`，移除任一處既有 inline merge / 分段邏輯；以同一個 transcript 對比 TranscriptPage 與 SourceCard 段落數一致手動驗證 TranscriptPage and SourceCard share the same paragraph aggregation 與 Source panel uses shared paragraph aggregation for chunk text。
 
 ## 8. Frontend：Sticky audio player

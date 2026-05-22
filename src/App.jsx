@@ -192,7 +192,7 @@ const App = () => {
         )}
         {page === 'select' && !userLoading && !user && disabledAuth && (
           <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-            <LockCard
+            <LockCardLegacy
               lang={lang}
               state="disabled"
               appealEnabled={disabledAuth.appealEnabled}
