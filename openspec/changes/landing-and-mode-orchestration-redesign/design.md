@@ -213,3 +213,13 @@ HomePage 中段三張卡（索引 / 語意 / 對話），每張僅顯示「適�
 - **[Trade-off] 索引 tab 是 placeholder** → 短期讓 user 看到「即將推出」可能有期待落空，但比起延後整個 redesign 等 backend 是較佳選擇；release log 明確標 phase 2。
 - **[Trade-off] 不寫具體額度重置時間** → 使用者可能困惑何時恢復，但因無自動補額 cron，寫了會更誤導；用「申請更多次數」CTA 引導正確期望。
 
+## Open Questions / Carry-overs
+
+下列項目在本 worktree apply 階段未完成，會由主對話接續（記錄於此供 archive 前 review）：
+
+- **Backend tasks 1.1-2.4 (`events.search_executed` + `GET /shows/{id}/trending-queries`)**：依 worktree 指令本 change 的後端部分延後到主對話處理（主對話正在跑 `agent-token-budget-and-tool-truncate`，避免兩條 PR 動到 `backend/app/api/events.py` 起 merge conflict）。前端 `TrendingQueriesChips` 已寫成「404 / 失敗時靜默不渲染」，endpoint 上線後會自動開始顯示；`search_executed` beacon 是 fire-and-forget，未來 endpoint 接受 `search_executed` event_type 時資料自動累積。
+- **Task 12.2 跨頁回歸 smoke (chrome-devtools-mcp)**：需要瀏覽器 + prod 連線環境，worktree 內無法跑；主對話 review 時補。
+- **Task 12.3 prod deploy + DB verify `events.search_executed > 0`**：需要 Zeabur deploy + prod DB 連線；worktree 內不可呼 prod。主對話 archive 前要跑。
+- **Paragraph aggregation 在 SourceCard 內的「真正分段」效益有限**：SourceCard 拿到的 chunk 已是 backend 預先拼好的單段字串，沒有 segment-level data 可餵 `aggregateParagraphs`；TranscriptPage 是受益者。檔仍共用 util 以維 future-proof。
+
+

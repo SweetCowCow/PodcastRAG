@@ -52,6 +52,35 @@ const MILESTONE_LABELS = {
 const RELEASE_LOG = [
   // ─── v1.8 — Chat Mode: Agentic (5/21~) ───
   {
+    date: '2026-05-22', slug: 'landing-and-mode-orchestration-redesign', milestone: 'v1.8', tag: 'ui',
+    title: {
+      zh: '首頁 + 三模式編排大改版：一頁挑節目、看懂模式、直接出發',
+      en: 'Home Page + Mode Orchestration Redesign: One Page to Pick, Understand, Go',
+    },
+    summary: {
+      zh: '把「未登入看 marketing 頁、登入後才看到節目」拆兩條路徑的舊設計，收成單一首頁：不管有沒有登入，一打開就看到完整節目清單，hero 區依登入狀態切換（marketing → 「嗨，XXX」+ 剩餘額度）。新增三模式介紹卡（索引 / 語意 / 對話），讓你在點進去之前心裡有底「這個模式適合什麼問題」。查詢頁從原本兩 tab 加上索引 tab（先佔位，backend 之後接），三 tab 順序固定，預設 tab 看登入狀態決定（登入→對話、未登入→索引）。Lock card 文案重寫：未登入版（🔒）只強調「不想花時間重聽找答案？」+ Google 登入按鈕；額度用完版（⏳）改寫成「申請更多次數」直接接到既有 modal，不再寫「重置時間」誤導使用者。對話 source 從「chip 列 + 卡片列」雙區整合成單一「答案參考來源（共 N 集 · M 段引用）」episode-grouped panel。語意結果改 flat list + 同集多段折成「+N 同集」chip + 相關度 bar。音訊播放器掛 router 外層跨頁不打斷（速度 1.0 / 1.25 / 1.5x，localStorage 記住）。逐字稿依停頓 ≥ 1.5 秒或講者變化自動聚段。',
+      en: 'Merged the「marketing page if anon, show grid only after login」two-path design into a single Home Page: regardless of auth state, the full show list shows immediately; hero swaps (marketing → "Hi, XXX" + remaining quota). Three-mode educational card row added (Index / Semantic / Chat) so you know which mode fits which question before clicking. Query page got a third Index tab (placeholder; backend lands later); three tabs fixed order, default decided by auth state (signed-in→Chat, anon→Index). Lock card copy rewritten: anonymous (🔒) emphasizes "tired of re-listening?" + Google login; quota-exhausted (⏳) says "request more usage" and opens the existing modal, no longer claiming a "reset date" we never built. Chat source area consolidated into one episode-grouped panel "Answer sources (N episodes · M citations)". Semantic results render as flat RRF list with "+N in same episode" expand chips + relevance bar (no raw score). Audio player sits outside the router so navigation does not interrupt playback (speed 1.0 / 1.25 / 1.5x, persisted). Transcript aggregates segments into paragraphs by silence gap ≥ 1.5s or speaker change.',
+    },
+    summaryBullets: {
+      zh: [
+        '不論登入與否，首頁一打開就看到完整節目清單',
+        '查詢頁新增第三個 tab「索引」（先佔位，backend 之後接）',
+        'Lock card 文案重寫：不再寫「免費 N 次 / 重置時間」這類我們沒做的承諾',
+        '對話 source 整合成單一 episode-grouped panel，同集多段不重複標題',
+        '音訊播放器跨頁不打斷，速度 1.0/1.25/1.5x localStorage 記住',
+        '逐字稿依停頓自動分段，比原本一句一句好讀',
+      ],
+      en: [
+        'Home page shows the full show list immediately, signed-in or not',
+        'Query page adds a third "Index" tab (placeholder; backend lands later)',
+        'Lock card copy rewritten — no more "free N uses / reset date" claims we never delivered',
+        'Chat source area consolidated into one episode-grouped panel',
+        'Audio player survives navigation; speed 1.0/1.25/1.5x persisted',
+        'Transcript view aggregates segments by silence gap — easier to read',
+      ],
+    },
+  },
+  {
     date: '2026-05-22', slug: 'retrieval-episode-reference-handling', milestone: 'v1.8', tag: 'enhancement',
     title: {
       zh: '問「EP134 講什麼？」現在真的回 EP134 內容了',
