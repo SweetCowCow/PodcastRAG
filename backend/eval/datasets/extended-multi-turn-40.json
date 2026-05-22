@@ -1,10 +1,10 @@
 {
-  "version": "1",
+  "version": 2,
   "show_id": "45fc2462-17cf-42f5-98a7-68fe1a222228",
   "show_slug": "this-not-that-cool",
   "created_at": "2026-05-19",
   "baseline_pull_ref": "baseline_pull_20260519T064908Z.json",
-  "notes": "30 record / 40 turn (26 single + 4 multi-turn: 2+2+3+3 turns). 14 existing + 12 new + 4 multi-turn dialogs. Design types: show_overview / guest_find / topic_find / date_find / deep_dive / cross_episode / summary / negative / multi_turn. Tool calls are two-tier: required (must hit) + acceptable (bonus, not penalised).",
+  "notes": "v2 2026-05-22: added ground_truth_chunk_ids on chunk-level-scorable turns. Coverage breakdown: 7 auto-copied from this-not-that-cool.json (b01/b15-19/b23, single chunk each except b01=5, b23=3), 8 hand-audited via L3 batch (b05/b14/b20/b21/b22/mt02-04 t1, total 37 chunks), 25 explicitly null with audit notes (metadata-driven types: show_overview/guest_find/topic_find/date_find/summary/enumeration/negative + multi-turn t2/t3). Runner skips Recall@5 for null turns. v1 had no ground_truth_chunk_ids field.",
   "items": [
     {
       "id": "b01",
@@ -14,9 +14,29 @@
       "turns": [
         {
           "question": "節目名「這又沒有很屌」是怎麼來的？",
-          "expected_tool_calls_required": ["get_show_overview"],
-          "expected_tool_calls_acceptable": ["search_across_episodes"],
-          "expected_answer_keywords": ["迪拉", "口頭禪", "音樂", "好壞", "不客套"]
+          "expected_tool_calls_required": [
+            "get_show_overview"
+          ],
+          "expected_tool_calls_acceptable": [
+            "search_across_episodes"
+          ],
+          "expected_answer_keywords": [
+            "迪拉",
+            "口頭禪",
+            "音樂",
+            "好壞",
+            "不客套"
+          ],
+          "ground_truth_chunk_ids": [
+            "ep:9359c207-1970-4ab4-acce-bf8d44967b68@252.60",
+            "ep:9359c207-1970-4ab4-acce-bf8d44967b68@257.00",
+            "ep:9359c207-1970-4ab4-acce-bf8d44967b68@258.40",
+            "ep:9359c207-1970-4ab4-acce-bf8d44967b68@262.20",
+            "ep:9359c207-1970-4ab4-acce-bf8d44967b68@265.00"
+          ],
+          "ground_truth_audit_status": "auto-copied",
+          "ground_truth_audit_date": "2026-05-22",
+          "ground_truth_review_notes": "auto-copied from this-not-that-cool.json q01-show-name-origin; not human-reviewed"
         }
       ]
     },
@@ -28,9 +48,19 @@
       "turns": [
         {
           "question": "這節目是在講什麼的？",
-          "expected_tool_calls_required": ["get_show_overview"],
+          "expected_tool_calls_required": [
+            "get_show_overview"
+          ],
           "expected_tool_calls_acceptable": [],
-          "expected_answer_keywords": ["音樂", "美食", "迪拉"]
+          "expected_answer_keywords": [
+            "音樂",
+            "美食",
+            "迪拉"
+          ],
+          "ground_truth_chunk_ids": null,
+          "ground_truth_audit_status": "reviewed",
+          "ground_truth_audit_date": "2026-05-22",
+          "ground_truth_review_notes": "show.description lookup, not chunk-scorable"
         }
       ]
     },
@@ -42,9 +72,17 @@
       "turns": [
         {
           "question": "這節目主持人是誰？",
-          "expected_tool_calls_required": ["get_show_overview"],
+          "expected_tool_calls_required": [
+            "get_show_overview"
+          ],
           "expected_tool_calls_acceptable": [],
-          "expected_answer_keywords": ["迪拉"]
+          "expected_answer_keywords": [
+            "迪拉"
+          ],
+          "ground_truth_chunk_ids": null,
+          "ground_truth_audit_status": "reviewed",
+          "ground_truth_audit_date": "2026-05-22",
+          "ground_truth_review_notes": "show.description lookup, not chunk-scorable"
         }
       ]
     },
@@ -56,9 +94,15 @@
       "turns": [
         {
           "question": "這節目大概多久更新一集？",
-          "expected_tool_calls_required": ["get_show_overview"],
+          "expected_tool_calls_required": [
+            "get_show_overview"
+          ],
           "expected_tool_calls_acceptable": [],
-          "expected_answer_keywords": []
+          "expected_answer_keywords": [],
+          "ground_truth_chunk_ids": null,
+          "ground_truth_audit_status": "reviewed",
+          "ground_truth_audit_date": "2026-05-22",
+          "ground_truth_review_notes": "show.description lookup, not chunk-scorable"
         }
       ]
     },
@@ -70,9 +114,31 @@
       "turns": [
         {
           "question": "迪拉去試音《也好吃》那天遇到誰？對方做了什麼？",
-          "expected_tool_calls_required": ["find_episode_by_ref", "search_within_episode"],
-          "expected_tool_calls_acceptable": ["find_episodes_by_guest"],
-          "expected_answer_keywords": ["裴社長", "鏡週刊", "食譜", "台塑招待所", "牛小排"]
+          "expected_tool_calls_required": [
+            "find_episode_by_ref",
+            "search_within_episode"
+          ],
+          "expected_tool_calls_acceptable": [
+            "find_episodes_by_guest"
+          ],
+          "expected_answer_keywords": [
+            "裴社長",
+            "鏡週刊",
+            "食譜",
+            "台塑招待所",
+            "牛小排"
+          ],
+          "ground_truth_chunk_ids": [
+            "ep:6c5ce32f-fb37-4aa0-b72c-7d14a7c1c163@202.08",
+            "ep:6c5ce32f-fb37-4aa0-b72c-7d14a7c1c163@104.04",
+            "ep:6c5ce32f-fb37-4aa0-b72c-7d14a7c1c163@183.92",
+            "ep:6c5ce32f-fb37-4aa0-b72c-7d14a7c1c163@143.72",
+            "ep:6c5ce32f-fb37-4aa0-b72c-7d14a7c1c163@86.88",
+            "ep:6c5ce32f-fb37-4aa0-b72c-7d14a7c1c163@163.00"
+          ],
+          "ground_truth_audit_status": "reviewed",
+          "ground_truth_audit_date": "2026-05-22",
+          "ground_truth_review_notes": "---"
         }
       ]
     },
@@ -84,9 +150,18 @@
       "turns": [
         {
           "question": "馬世芳上過《這又沒有很屌》哪幾集？",
-          "expected_tool_calls_required": ["find_episodes_by_guest"],
+          "expected_tool_calls_required": [
+            "find_episodes_by_guest"
+          ],
           "expected_tool_calls_acceptable": [],
-          "expected_answer_keywords": ["EP143", "家常味"]
+          "expected_answer_keywords": [
+            "EP143",
+            "家常味"
+          ],
+          "ground_truth_chunk_ids": null,
+          "ground_truth_audit_status": "reviewed",
+          "ground_truth_audit_date": "2026-05-22",
+          "ground_truth_review_notes": "episodes.guests metadata lookup, episode-level recall would fit better"
         }
       ]
     },
@@ -98,9 +173,19 @@
       "turns": [
         {
           "question": "楊大正在這節目出現過幾次？哪幾集？",
-          "expected_tool_calls_required": ["find_episodes_by_guest"],
+          "expected_tool_calls_required": [
+            "find_episodes_by_guest"
+          ],
           "expected_tool_calls_acceptable": [],
-          "expected_answer_keywords": ["EP140", "EP4", "兩集"]
+          "expected_answer_keywords": [
+            "EP140",
+            "EP4",
+            "兩集"
+          ],
+          "ground_truth_chunk_ids": null,
+          "ground_truth_audit_status": "reviewed",
+          "ground_truth_audit_date": "2026-05-22",
+          "ground_truth_review_notes": "episodes.guests metadata lookup, episode-level recall would fit better"
         }
       ]
     },
@@ -112,9 +197,21 @@
       "turns": [
         {
           "question": "節目裡有哪些集是歌單？",
-          "expected_tool_calls_required": ["find_episodes_by_topic"],
+          "expected_tool_calls_required": [
+            "find_episodes_by_topic"
+          ],
           "expected_tool_calls_acceptable": [],
-          "expected_answer_keywords": ["歌單", "29", "EP142", "EP134", "EP131"]
+          "expected_answer_keywords": [
+            "歌單",
+            "29",
+            "EP142",
+            "EP134",
+            "EP131"
+          ],
+          "ground_truth_chunk_ids": null,
+          "ground_truth_audit_status": "reviewed",
+          "ground_truth_audit_date": "2026-05-22",
+          "ground_truth_review_notes": "episode-list enumeration, not chunk-scorable; episode-level recall fits"
         }
       ]
     },
@@ -126,9 +223,20 @@
       "turns": [
         {
           "question": "節目裡有講過高雄美食的集數有哪些？",
-          "expected_tool_calls_required": ["find_episodes_by_topic"],
+          "expected_tool_calls_required": [
+            "find_episodes_by_topic"
+          ],
           "expected_tool_calls_acceptable": [],
-          "expected_answer_keywords": ["高雄", "美食", "EP140", "EP85"]
+          "expected_answer_keywords": [
+            "高雄",
+            "美食",
+            "EP140",
+            "EP85"
+          ],
+          "ground_truth_chunk_ids": null,
+          "ground_truth_audit_status": "reviewed",
+          "ground_truth_audit_date": "2026-05-22",
+          "ground_truth_review_notes": "episode-list enumeration, not chunk-scorable; episode-level recall fits"
         }
       ]
     },
@@ -140,9 +248,18 @@
       "turns": [
         {
           "question": "節目裡有講過咖啡的集數有哪些？",
-          "expected_tool_calls_required": ["find_episodes_by_topic"],
+          "expected_tool_calls_required": [
+            "find_episodes_by_topic"
+          ],
           "expected_tool_calls_acceptable": [],
-          "expected_answer_keywords": ["咖啡", "EP110"]
+          "expected_answer_keywords": [
+            "咖啡",
+            "EP110"
+          ],
+          "ground_truth_chunk_ids": null,
+          "ground_truth_audit_status": "reviewed",
+          "ground_truth_audit_date": "2026-05-22",
+          "ground_truth_review_notes": "episode-level enumeration query, not chunk-scorable"
         }
       ]
     },
@@ -154,9 +271,18 @@
       "turns": [
         {
           "question": "2024 年上半年（1-6 月）發過哪幾集？",
-          "expected_tool_calls_required": ["find_episodes_by_date"],
+          "expected_tool_calls_required": [
+            "find_episodes_by_date"
+          ],
           "expected_tool_calls_acceptable": [],
-          "expected_answer_keywords": ["2024", "26"]
+          "expected_answer_keywords": [
+            "2024",
+            "26"
+          ],
+          "ground_truth_chunk_ids": null,
+          "ground_truth_audit_status": "reviewed",
+          "ground_truth_audit_date": "2026-05-22",
+          "ground_truth_review_notes": "episodes.published_at metadata lookup, not chunk-scorable"
         }
       ]
     },
@@ -168,9 +294,19 @@
       "turns": [
         {
           "question": "2024 年 11 月有哪些集？",
-          "expected_tool_calls_required": ["find_episodes_by_date"],
+          "expected_tool_calls_required": [
+            "find_episodes_by_date"
+          ],
           "expected_tool_calls_acceptable": [],
-          "expected_answer_keywords": ["2024", "11", "EP143"]
+          "expected_answer_keywords": [
+            "2024",
+            "11",
+            "EP143"
+          ],
+          "ground_truth_chunk_ids": null,
+          "ground_truth_audit_status": "reviewed",
+          "ground_truth_audit_date": "2026-05-22",
+          "ground_truth_review_notes": "episodes.published_at metadata lookup, not chunk-scorable"
         }
       ]
     },
@@ -182,9 +318,18 @@
       "turns": [
         {
           "question": "2025 年農曆過年期間（1/25-2/10）那段出了哪幾集？",
-          "expected_tool_calls_required": ["find_episodes_by_date"],
+          "expected_tool_calls_required": [
+            "find_episodes_by_date"
+          ],
           "expected_tool_calls_acceptable": [],
-          "expected_answer_keywords": ["2025", "兩集"]
+          "expected_answer_keywords": [
+            "2025",
+            "兩集"
+          ],
+          "ground_truth_chunk_ids": null,
+          "ground_truth_audit_status": "reviewed",
+          "ground_truth_audit_date": "2026-05-22",
+          "ground_truth_review_notes": "episodes.published_at metadata lookup, not chunk-scorable"
         }
       ]
     },
@@ -196,9 +341,28 @@
       "turns": [
         {
           "question": "迪拉胖在 EP134 為什麼不挑一首振奮的開工歌？他選的歌想表達什麼概念？",
-          "expected_tool_calls_required": ["find_episode_by_ref", "search_within_episode"],
-          "expected_tool_calls_acceptable": ["get_episode_segments"],
-          "expected_answer_keywords": ["安身之處", "45歲", "版本聖太郎", "YOHO", "中老年"]
+          "expected_tool_calls_required": [
+            "find_episode_by_ref",
+            "search_within_episode"
+          ],
+          "expected_tool_calls_acceptable": [
+            "get_episode_segments"
+          ],
+          "expected_answer_keywords": [
+            "安身之處",
+            "45歲",
+            "版本聖太郎",
+            "YOHO",
+            "中老年"
+          ],
+          "ground_truth_chunk_ids": [
+            "ep:c1d87278-7dba-4fb1-930d-c2bd3a3461d2@0.00",
+            "ep:c1d87278-7dba-4fb1-930d-c2bd3a3461d2@1808.78",
+            "ep:c1d87278-7dba-4fb1-930d-c2bd3a3461d2@1790.18"
+          ],
+          "ground_truth_audit_status": "reviewed",
+          "ground_truth_audit_date": "2026-05-22",
+          "ground_truth_review_notes": "---"
         }
       ]
     },
@@ -210,9 +374,26 @@
       "turns": [
         {
           "question": "EP19《動漫歌單》來賓提到他爸爸以前在哪裡工作？後來兼差開了什麼店讓他接觸到漫畫？",
-          "expected_tool_calls_required": ["find_episode_by_ref", "search_within_episode"],
-          "expected_tool_calls_acceptable": ["get_episode_segments"],
-          "expected_answer_keywords": ["電信局", "錄影帶店", "公務人員", "兼差", "漫畫"]
+          "expected_tool_calls_required": [
+            "find_episode_by_ref",
+            "search_within_episode"
+          ],
+          "expected_tool_calls_acceptable": [
+            "get_episode_segments"
+          ],
+          "expected_answer_keywords": [
+            "電信局",
+            "錄影帶店",
+            "公務人員",
+            "兼差",
+            "漫畫"
+          ],
+          "ground_truth_chunk_ids": [
+            "ep:88f78fbe-d216-4334-bf4f-e3e3caeea48d@1446.34"
+          ],
+          "ground_truth_audit_status": "auto-copied",
+          "ground_truth_audit_date": "2026-05-22",
+          "ground_truth_review_notes": "auto-copied from this-not-that-cool.json q11-ep19-guest-dad-rental-shop; not human-reviewed"
         }
       ]
     },
@@ -224,9 +405,25 @@
       "turns": [
         {
           "question": "EP140《高雄美食第二彈》提到第一彈的兩位來賓是誰？節目裡指出高雄哪兩個場館是音樂節 / 國際演唱會重鎮？",
-          "expected_tool_calls_required": ["find_episode_by_ref", "search_within_episode"],
-          "expected_tool_calls_acceptable": ["get_episode_segments"],
-          "expected_answer_keywords": ["阿寬", "邱承翰", "高雄巨蛋", "世運主場館"]
+          "expected_tool_calls_required": [
+            "find_episode_by_ref",
+            "search_within_episode"
+          ],
+          "expected_tool_calls_acceptable": [
+            "get_episode_segments"
+          ],
+          "expected_answer_keywords": [
+            "阿寬",
+            "邱承翰",
+            "高雄巨蛋",
+            "世運主場館"
+          ],
+          "ground_truth_chunk_ids": [
+            "ep:d15bddde-153f-484f-bff6-0bb74415b718@29.00"
+          ],
+          "ground_truth_audit_status": "auto-copied",
+          "ground_truth_audit_date": "2026-05-22",
+          "ground_truth_review_notes": "auto-copied from this-not-that-cool.json q12-ep140-kaohsiung-first-edition-and-venues; not human-reviewed"
         }
       ]
     },
@@ -238,9 +435,27 @@
       "turns": [
         {
           "question": "EP18《黃玠 跑鞋國王》提到剛開始跑步時買的 Nike 鞋款叫什麼？鞋底厚度多少？標榜什麼特色？",
-          "expected_tool_calls_required": ["find_episode_by_ref", "search_within_episode"],
-          "expected_tool_calls_acceptable": ["get_episode_segments"],
-          "expected_answer_keywords": ["Nike", "Invincible", "4公分", "鞋底", "避震", "泡棉"]
+          "expected_tool_calls_required": [
+            "find_episode_by_ref",
+            "search_within_episode"
+          ],
+          "expected_tool_calls_acceptable": [
+            "get_episode_segments"
+          ],
+          "expected_answer_keywords": [
+            "Nike",
+            "Invincible",
+            "4公分",
+            "鞋底",
+            "避震",
+            "泡棉"
+          ],
+          "ground_truth_chunk_ids": [
+            "ep:f72cc0d1-17df-4712-9a83-e0216a243233@2931.74"
+          ],
+          "ground_truth_audit_status": "auto-copied",
+          "ground_truth_audit_date": "2026-05-22",
+          "ground_truth_review_notes": "auto-copied from this-not-that-cool.json q17-ep18-nike-invincible-shoe; not human-reviewed"
         }
       ]
     },
@@ -252,10 +467,26 @@
       "turns": [
         {
           "question": "EP44《伴手禮是社交潤滑劑》來賓用什麼食物當作例子來講送禮糾結？為什麼『現吃好吃』的食物反而不適合當伴手禮？",
-          "expected_tool_calls_required": ["find_episode_by_ref", "search_within_episode"],
-          "expected_tool_calls_acceptable": ["get_episode_segments"],
-          "expected_answer_keywords": ["鯛魚燒", "軟掉", "送禮", "狀態"],
-          "source_note": "modified from q22; removed 鯛魚燒 hint from question (now expected_answer)"
+          "expected_tool_calls_required": [
+            "find_episode_by_ref",
+            "search_within_episode"
+          ],
+          "expected_tool_calls_acceptable": [
+            "get_episode_segments"
+          ],
+          "expected_answer_keywords": [
+            "鯛魚燒",
+            "軟掉",
+            "送禮",
+            "狀態"
+          ],
+          "source_note": "modified from q22; removed 鯛魚燒 hint from question (now expected_answer)",
+          "ground_truth_chunk_ids": [
+            "ep:65030207-726d-43ba-80d4-d4c0efb97ac8@1607.39"
+          ],
+          "ground_truth_audit_status": "auto-copied",
+          "ground_truth_audit_date": "2026-05-22",
+          "ground_truth_review_notes": "auto-copied from this-not-that-cool.json q22-ep44-gift-food-freshness-paradox; not human-reviewed"
         }
       ]
     },
@@ -267,9 +498,27 @@
       "turns": [
         {
           "question": "EP66《浪人祭歌單》主持人忠祐為什麼選某些外國藝人／團入歌單？他在 IG 留言『Please come to Taiwan』反映台灣樂迷的什麼處境？",
-          "expected_tool_calls_required": ["find_episode_by_ref", "search_within_episode"],
-          "expected_tool_calls_acceptable": ["get_episode_segments"],
-          "expected_answer_keywords": ["忠祐", "IG", "Please come to Taiwan", "外國團", "樂迷", "浪人祭"]
+          "expected_tool_calls_required": [
+            "find_episode_by_ref",
+            "search_within_episode"
+          ],
+          "expected_tool_calls_acceptable": [
+            "get_episode_segments"
+          ],
+          "expected_answer_keywords": [
+            "忠祐",
+            "IG",
+            "Please come to Taiwan",
+            "外國團",
+            "樂迷",
+            "浪人祭"
+          ],
+          "ground_truth_chunk_ids": [
+            "ep:dbeecd79-f170-476a-b4e9-80e64eb49528@1542.86"
+          ],
+          "ground_truth_audit_status": "auto-copied",
+          "ground_truth_audit_date": "2026-05-22",
+          "ground_truth_review_notes": "auto-copied from this-not-that-cool.json q23-ep66-ig-please-come-taiwan-fan-plight; not human-reviewed"
         }
       ]
     },
@@ -281,9 +530,28 @@
       "turns": [
         {
           "question": "節目裡迪拉怎麼描述中老年人的開工想法跟年輕時的差異？",
-          "expected_tool_calls_required": ["search_across_episodes"],
-          "expected_tool_calls_acceptable": ["find_episodes_by_topic"],
-          "expected_answer_keywords": ["中老年", "振奮", "安身之處", "錨定", "廚餘"]
+          "expected_tool_calls_required": [
+            "search_across_episodes"
+          ],
+          "expected_tool_calls_acceptable": [
+            "find_episodes_by_topic"
+          ],
+          "expected_answer_keywords": [
+            "中老年",
+            "振奮",
+            "安身之處",
+            "錨定",
+            "廚餘"
+          ],
+          "ground_truth_chunk_ids": [
+            "ep:c1d87278-7dba-4fb1-930d-c2bd3a3461d2@1719.78",
+            "ep:c1d87278-7dba-4fb1-930d-c2bd3a3461d2@1993.76",
+            "ep:c1d87278-7dba-4fb1-930d-c2bd3a3461d2@1790.18",
+            "ep:c1d87278-7dba-4fb1-930d-c2bd3a3461d2@1808.78"
+          ],
+          "ground_truth_audit_status": "reviewed",
+          "ground_truth_audit_date": "2026-05-22",
+          "ground_truth_review_notes": "---"
         }
       ]
     },
@@ -295,9 +563,29 @@
       "turns": [
         {
           "question": "迪拉跟馬世芳怎麼定義『家常味』？為什麼家常菜可以天天吃，但 Fine dining 不行？",
-          "expected_tool_calls_required": ["search_across_episodes"],
-          "expected_tool_calls_acceptable": ["find_episodes_by_topic"],
-          "expected_answer_keywords": ["家常味", "客製化", "味覺記憶", "雙向", "天天吃"]
+          "expected_tool_calls_required": [
+            "search_across_episodes"
+          ],
+          "expected_tool_calls_acceptable": [
+            "find_episodes_by_topic"
+          ],
+          "expected_answer_keywords": [
+            "家常味",
+            "客製化",
+            "味覺記憶",
+            "雙向",
+            "天天吃"
+          ],
+          "ground_truth_chunk_ids": [
+            "ep:6c5ce32f-fb37-4aa0-b72c-7d14a7c1c163@3030.62",
+            "ep:6c5ce32f-fb37-4aa0-b72c-7d14a7c1c163@3047.50",
+            "ep:6c5ce32f-fb37-4aa0-b72c-7d14a7c1c163@2963.38",
+            "ep:6c5ce32f-fb37-4aa0-b72c-7d14a7c1c163@2847.50",
+            "ep:6c5ce32f-fb37-4aa0-b72c-7d14a7c1c163@3064.30"
+          ],
+          "ground_truth_audit_status": "reviewed",
+          "ground_truth_audit_date": "2026-05-22",
+          "ground_truth_review_notes": "---"
         }
       ]
     },
@@ -309,10 +597,33 @@
       "turns": [
         {
           "question": "《這又沒有很屌》從第一集到現在，主持人陣容有什麼變化？",
-          "expected_tool_calls_required": ["search_across_episodes"],
-          "expected_tool_calls_acceptable": ["get_show_overview"],
-          "expected_answer_keywords": ["迪拉", "方品融", "杜忠祐", "阿鳴", "三人", "四人"],
-          "source_note": "modified from q09; changed 「EP134」→「現在」 to remove date anchor hint"
+          "expected_tool_calls_required": [
+            "search_across_episodes"
+          ],
+          "expected_tool_calls_acceptable": [
+            "get_show_overview"
+          ],
+          "expected_answer_keywords": [
+            "迪拉",
+            "方品融",
+            "杜忠祐",
+            "阿鳴",
+            "三人",
+            "四人"
+          ],
+          "source_note": "modified from q09; changed 「EP134」→「現在」 to remove date anchor hint",
+          "ground_truth_chunk_ids": [
+            "ep:86a8b9d4-5933-4707-8dbe-4ae7cf8b9230@0.00",
+            "ep:82da4ef4-b072-4c34-8094-dc2e8650aad8@0.00",
+            "ep:c1d87278-7dba-4fb1-930d-c2bd3a3461d2@0.00",
+            "ep:9359c207-1970-4ab4-acce-bf8d44967b68@0.00",
+            "ep:ad6a3a71-c543-4ec1-b28e-9148439507ee@0.00",
+            "ep:d81fffc2-fe81-42c8-9892-76f4a11a4cd5@0.00",
+            "ep:2cdba68e-6679-464c-bd18-d7b8dcdde4bc@0.00"
+          ],
+          "ground_truth_audit_status": "reviewed",
+          "ground_truth_audit_date": "2026-05-22",
+          "ground_truth_review_notes": "---"
         }
       ]
     },
@@ -324,10 +635,29 @@
       "turns": [
         {
           "question": "迪拉跟 Leo王 是怎麼從不認識變成合作夥伴的？他們第一次見面的故事是什麼？",
-          "expected_tool_calls_required": ["search_across_episodes"],
-          "expected_tool_calls_acceptable": ["find_episodes_by_guest"],
-          "expected_answer_keywords": ["Leo王", "Live house", "加好友", "樂迷", "音樂節", "合作"],
-          "source_note": "modified from q24; rephrased to remove 「節目裡有提過…嗎」 negative framing"
+          "expected_tool_calls_required": [
+            "search_across_episodes"
+          ],
+          "expected_tool_calls_acceptable": [
+            "find_episodes_by_guest"
+          ],
+          "expected_answer_keywords": [
+            "Leo王",
+            "Live house",
+            "加好友",
+            "樂迷",
+            "音樂節",
+            "合作"
+          ],
+          "source_note": "modified from q24; rephrased to remove 「節目裡有提過…嗎」 negative framing",
+          "ground_truth_chunk_ids": [
+            "ep:8b3d4c1d-be8d-4dde-b12c-4cbe9b60ef21@1766.87",
+            "ep:8b3d4c1d-be8d-4dde-b12c-4cbe9b60ef21@1819.35",
+            "ep:cb96f6f8-58fb-43fd-bbd6-da1b585d9f60@187.48"
+          ],
+          "ground_truth_audit_status": "auto-copied",
+          "ground_truth_audit_date": "2026-05-22",
+          "ground_truth_review_notes": "auto-copied from this-not-that-cool.json q24-leo-wang-encounter-arc; not human-reviewed"
         }
       ]
     },
@@ -339,9 +669,21 @@
       "turns": [
         {
           "question": "給我 EP143 的摘要",
-          "expected_tool_calls_required": ["find_episode_by_ref", "get_episode_summary"],
+          "expected_tool_calls_required": [
+            "find_episode_by_ref",
+            "get_episode_summary"
+          ],
           "expected_tool_calls_acceptable": [],
-          "expected_answer_keywords": ["家常味", "馬世芳", "裴社長", "牛小排"]
+          "expected_answer_keywords": [
+            "家常味",
+            "馬世芳",
+            "裴社長",
+            "牛小排"
+          ],
+          "ground_truth_chunk_ids": null,
+          "ground_truth_audit_status": "reviewed",
+          "ground_truth_audit_date": "2026-05-22",
+          "ground_truth_review_notes": "episodes.ai_summary lookup, not chunk-scorable"
         }
       ]
     },
@@ -353,9 +695,21 @@
       "turns": [
         {
           "question": "EP140 在講什麼？簡短說一下",
-          "expected_tool_calls_required": ["find_episode_by_ref", "get_episode_summary"],
+          "expected_tool_calls_required": [
+            "find_episode_by_ref",
+            "get_episode_summary"
+          ],
           "expected_tool_calls_acceptable": [],
-          "expected_answer_keywords": ["高雄", "美食", "滅火器", "楊大正"]
+          "expected_answer_keywords": [
+            "高雄",
+            "美食",
+            "滅火器",
+            "楊大正"
+          ],
+          "ground_truth_chunk_ids": null,
+          "ground_truth_audit_status": "reviewed",
+          "ground_truth_audit_date": "2026-05-22",
+          "ground_truth_review_notes": "episodes.ai_summary lookup, not chunk-scorable"
         }
       ]
     },
@@ -367,9 +721,20 @@
       "turns": [
         {
           "question": "EP66 浪人祭歌單那集大概聊什麼？",
-          "expected_tool_calls_required": ["find_episode_by_ref", "get_episode_summary"],
+          "expected_tool_calls_required": [
+            "find_episode_by_ref",
+            "get_episode_summary"
+          ],
           "expected_tool_calls_acceptable": [],
-          "expected_answer_keywords": ["浪人祭", "歌單", "忠祐"]
+          "expected_answer_keywords": [
+            "浪人祭",
+            "歌單",
+            "忠祐"
+          ],
+          "ground_truth_chunk_ids": null,
+          "ground_truth_audit_status": "reviewed",
+          "ground_truth_audit_date": "2026-05-22",
+          "ground_truth_review_notes": "episodes.ai_summary lookup, not chunk-scorable"
         }
       ]
     },
@@ -381,9 +746,23 @@
       "turns": [
         {
           "question": "迪拉胖在 EP1 有提到自己得過什麼嘻哈大賽冠軍嗎？",
-          "expected_tool_calls_required": ["find_episode_by_ref", "search_within_episode"],
-          "expected_tool_calls_acceptable": ["get_episode_segments"],
-          "expected_answer_keywords": ["節目未提及", "沒有提到", "大嘻哈評審", "顏色老闆"]
+          "expected_tool_calls_required": [
+            "find_episode_by_ref",
+            "search_within_episode"
+          ],
+          "expected_tool_calls_acceptable": [
+            "get_episode_segments"
+          ],
+          "expected_answer_keywords": [
+            "節目未提及",
+            "沒有提到",
+            "大嘻哈評審",
+            "顏色老闆"
+          ],
+          "ground_truth_chunk_ids": null,
+          "ground_truth_audit_status": "reviewed",
+          "ground_truth_audit_date": "2026-05-22",
+          "ground_truth_review_notes": "negative-trap, expected answer is refusal; no chunk-level GT meaningful"
         }
       ]
     },
@@ -395,10 +774,24 @@
       "turns": [
         {
           "question": "迪拉胖在 EP143 有提到他的廠牌顏社今年會發行哪些新專輯嗎？",
-          "expected_tool_calls_required": ["find_episode_by_ref", "search_within_episode"],
-          "expected_tool_calls_acceptable": ["get_episode_segments"],
-          "expected_answer_keywords": ["節目未提及", "家常菜", "馬世芳", "也好吃"],
-          "source_note": "modified from q08; 「廠牌顏色」→「廠牌顏社」 (顏色 is ASR/typo error of real label name 顏社)"
+          "expected_tool_calls_required": [
+            "find_episode_by_ref",
+            "search_within_episode"
+          ],
+          "expected_tool_calls_acceptable": [
+            "get_episode_segments"
+          ],
+          "expected_answer_keywords": [
+            "節目未提及",
+            "家常菜",
+            "馬世芳",
+            "也好吃"
+          ],
+          "source_note": "modified from q08; 「廠牌顏色」→「廠牌顏社」 (顏色 is ASR/typo error of real label name 顏社)",
+          "ground_truth_chunk_ids": null,
+          "ground_truth_audit_status": "reviewed",
+          "ground_truth_audit_date": "2026-05-22",
+          "ground_truth_review_notes": "negative-trap, expected answer is refusal; no chunk-level GT meaningful"
         }
       ]
     },
@@ -410,10 +803,24 @@
       "turns": [
         {
           "question": "迪拉在《這又沒有很屌》裡有講過『安身之處』或『被照顧到』這個概念嗎？",
-          "expected_tool_calls_required": ["search_across_episodes"],
-          "expected_tool_calls_acceptable": ["find_episodes_by_topic"],
-          "expected_answer_keywords": ["安身之處", "被照顧", "中老年", "家常味", "歸屬"],
-          "source_note": "trap negative: question uses 「有講過…嗎」 framing but answer is actually YES (EP134 + EP143)"
+          "expected_tool_calls_required": [
+            "search_across_episodes"
+          ],
+          "expected_tool_calls_acceptable": [
+            "find_episodes_by_topic"
+          ],
+          "expected_answer_keywords": [
+            "安身之處",
+            "被照顧",
+            "中老年",
+            "家常味",
+            "歸屬"
+          ],
+          "source_note": "trap negative: question uses 「有講過…嗎」 framing but answer is actually YES (EP134 + EP143)",
+          "ground_truth_chunk_ids": null,
+          "ground_truth_audit_status": "reviewed",
+          "ground_truth_audit_date": "2026-05-22",
+          "ground_truth_review_notes": "negative-trap, expected answer is refusal; no chunk-level GT meaningful"
         }
       ]
     },
@@ -425,9 +832,24 @@
       "turns": [
         {
           "question": "EP140《高雄美食第二彈》楊大正有提到他自己在高雄開過餐廳嗎？",
-          "expected_tool_calls_required": ["find_episode_by_ref", "search_within_episode"],
-          "expected_tool_calls_acceptable": ["find_episodes_by_guest"],
-          "expected_answer_keywords": ["節目未提及", "沒有提到", "楊大正", "滅火器", "高雄樂團"]
+          "expected_tool_calls_required": [
+            "find_episode_by_ref",
+            "search_within_episode"
+          ],
+          "expected_tool_calls_acceptable": [
+            "find_episodes_by_guest"
+          ],
+          "expected_answer_keywords": [
+            "節目未提及",
+            "沒有提到",
+            "楊大正",
+            "滅火器",
+            "高雄樂團"
+          ],
+          "ground_truth_chunk_ids": null,
+          "ground_truth_audit_status": "reviewed",
+          "ground_truth_audit_date": "2026-05-22",
+          "ground_truth_review_notes": "negative-trap, expected answer is refusal; no chunk-level GT meaningful"
         }
       ]
     },
@@ -439,16 +861,41 @@
       "turns": [
         {
           "question": "歌單有哪幾集？",
-          "expected_tool_calls_required": ["find_episodes_by_topic"],
+          "expected_tool_calls_required": [
+            "find_episodes_by_topic"
+          ],
           "expected_tool_calls_acceptable": [],
-          "expected_answer_keywords": ["歌單", "29", "EP142", "EP134", "EP131"]
+          "expected_answer_keywords": [
+            "歌單",
+            "29",
+            "EP142",
+            "EP134",
+            "EP131"
+          ],
+          "ground_truth_chunk_ids": null,
+          "ground_truth_audit_status": "reviewed",
+          "ground_truth_audit_date": "2026-05-22",
+          "ground_truth_review_notes": "episode-list enumeration, chunk-level not applicable → standardise as null in import\n\n---"
         },
         {
           "question": "第三集是什麼內容？",
-          "expected_tool_calls_required": ["get_episode_summary"],
-          "expected_tool_calls_acceptable": ["find_episode_by_ref"],
-          "expected_answer_keywords": ["2016", "Big Bang", "韓國", "hip-hop"],
-          "carry_note": "agent must read last_enumeration_episodes[2] from L1 (= EP131 回到 2016 歌單, sorted by published_at DESC)"
+          "expected_tool_calls_required": [
+            "get_episode_summary"
+          ],
+          "expected_tool_calls_acceptable": [
+            "find_episode_by_ref"
+          ],
+          "expected_answer_keywords": [
+            "2016",
+            "Big Bang",
+            "韓國",
+            "hip-hop"
+          ],
+          "carry_note": "agent must read last_enumeration_episodes[2] from L1 (= EP131 回到 2016 歌單, sorted by published_at DESC)",
+          "ground_truth_chunk_ids": null,
+          "ground_truth_audit_status": "reviewed",
+          "ground_truth_audit_date": "2026-05-22",
+          "ground_truth_review_notes": "multi-turn followup turn, expected reference is episode_id from prior enumeration; not chunk-scorable"
         }
       ]
     },
@@ -460,16 +907,46 @@
       "turns": [
         {
           "question": "EP143 講什麼？",
-          "expected_tool_calls_required": ["find_episode_by_ref", "get_episode_summary", "pin_episode"],
+          "expected_tool_calls_required": [
+            "find_episode_by_ref",
+            "get_episode_summary",
+            "pin_episode"
+          ],
           "expected_tool_calls_acceptable": [],
-          "expected_answer_keywords": ["家常味", "馬世芳", "裴社長"]
+          "expected_answer_keywords": [
+            "家常味",
+            "馬世芳",
+            "裴社長"
+          ],
+          "ground_truth_chunk_ids": [
+            "ep:6c5ce32f-fb37-4aa0-b72c-7d14a7c1c163@2963.38",
+            "ep:6c5ce32f-fb37-4aa0-b72c-7d14a7c1c163@104.04",
+            "ep:6c5ce32f-fb37-4aa0-b72c-7d14a7c1c163@86.88"
+          ],
+          "ground_truth_audit_status": "reviewed",
+          "ground_truth_audit_date": "2026-05-22",
+          "ground_truth_review_notes": "---"
         },
         {
           "question": "他怎麼解釋 RAG？",
-          "expected_tool_calls_required": ["search_within_episode", "search_across_episodes"],
-          "expected_tool_calls_acceptable": ["unpin_episode"],
-          "expected_answer_keywords": ["沒有", "未提及", "找不到", "並未"],
-          "carry_note": "agent should try search_within(focused=EP143) → no hit on RAG → fallback to search_across → still no hit → refuse gracefully. EP143 confirmed to not mention RAG/AI per baseline."
+          "expected_tool_calls_required": [
+            "search_within_episode",
+            "search_across_episodes"
+          ],
+          "expected_tool_calls_acceptable": [
+            "unpin_episode"
+          ],
+          "expected_answer_keywords": [
+            "沒有",
+            "未提及",
+            "找不到",
+            "並未"
+          ],
+          "carry_note": "agent should try search_within(focused=EP143) → no hit on RAG → fallback to search_across → still no hit → refuse gracefully. EP143 confirmed to not mention RAG/AI per baseline.",
+          "ground_truth_chunk_ids": null,
+          "ground_truth_audit_status": "reviewed",
+          "ground_truth_audit_date": "2026-05-22",
+          "ground_truth_review_notes": "multi-turn followup turn, expected reference is episode_id from prior enumeration; not chunk-scorable"
         }
       ]
     },
@@ -481,23 +958,62 @@
       "turns": [
         {
           "question": "EP140 第二彈是哪兩位來賓？",
-          "expected_tool_calls_required": ["find_episode_by_ref", "pin_episode", "search_within_episode"],
-          "expected_tool_calls_acceptable": ["get_episode_summary", "get_episode_segments"],
-          "expected_answer_keywords": ["楊大正", "張凱婷", "EP140"]
+          "expected_tool_calls_required": [
+            "find_episode_by_ref",
+            "pin_episode",
+            "search_within_episode"
+          ],
+          "expected_tool_calls_acceptable": [
+            "get_episode_summary",
+            "get_episode_segments"
+          ],
+          "expected_answer_keywords": [
+            "楊大正",
+            "張凱婷",
+            "EP140"
+          ],
+          "ground_truth_chunk_ids": [
+            "ep:d15bddde-153f-484f-bff6-0bb74415b718@0.00"
+          ],
+          "ground_truth_audit_status": "reviewed",
+          "ground_truth_audit_date": "2026-05-22",
+          "ground_truth_review_notes": "---"
         },
         {
           "question": "他們在節目裡推薦哪間餐廳？",
-          "expected_tool_calls_required": ["search_within_episode"],
-          "expected_tool_calls_acceptable": ["get_episode_segments"],
-          "expected_answer_keywords": ["餐廳", "鵝肉"],
-          "carry_note": "agent uses L1 focused_episode_id=EP140"
+          "expected_tool_calls_required": [
+            "search_within_episode"
+          ],
+          "expected_tool_calls_acceptable": [
+            "get_episode_segments"
+          ],
+          "expected_answer_keywords": [
+            "餐廳",
+            "鵝肉"
+          ],
+          "carry_note": "agent uses L1 focused_episode_id=EP140",
+          "ground_truth_chunk_ids": null,
+          "ground_truth_audit_status": "reviewed",
+          "ground_truth_audit_date": "2026-05-22",
+          "ground_truth_review_notes": "multi-turn followup turn, expected reference is episode_id from prior enumeration; not chunk-scorable"
         },
         {
           "question": "他們推薦餐廳的什麼料理？",
-          "expected_tool_calls_required": ["search_within_episode"],
-          "expected_tool_calls_acceptable": ["get_episode_segments"],
-          "expected_answer_keywords": ["鵝肉", "鵝血"],
-          "carry_note": "still on EP140 focused"
+          "expected_tool_calls_required": [
+            "search_within_episode"
+          ],
+          "expected_tool_calls_acceptable": [
+            "get_episode_segments"
+          ],
+          "expected_answer_keywords": [
+            "鵝肉",
+            "鵝血"
+          ],
+          "carry_note": "still on EP140 focused",
+          "ground_truth_chunk_ids": null,
+          "ground_truth_audit_status": "reviewed",
+          "ground_truth_audit_date": "2026-05-22",
+          "ground_truth_review_notes": "multi-turn followup turn, expected reference is episode_id from prior enumeration; not chunk-scorable"
         }
       ]
     },
@@ -509,23 +1025,70 @@
       "turns": [
         {
           "question": "跟我聊聊 EP19 動漫歌單？",
-          "expected_tool_calls_required": ["find_episode_by_ref", "get_episode_summary", "pin_episode"],
-          "expected_tool_calls_acceptable": ["search_within_episode"],
-          "expected_answer_keywords": ["動漫", "歌單", "JOJO", "櫻花大戰", "福音戰士"]
+          "expected_tool_calls_required": [
+            "find_episode_by_ref",
+            "get_episode_summary",
+            "pin_episode"
+          ],
+          "expected_tool_calls_acceptable": [
+            "search_within_episode"
+          ],
+          "expected_answer_keywords": [
+            "動漫",
+            "歌單",
+            "JOJO",
+            "櫻花大戰",
+            "福音戰士"
+          ],
+          "ground_truth_chunk_ids": [
+            "ep:88f78fbe-d216-4334-bf4f-e3e3caeea48d@275.04",
+            "ep:88f78fbe-d216-4334-bf4f-e3e3caeea48d@302.68",
+            "ep:88f78fbe-d216-4334-bf4f-e3e3caeea48d@680.11",
+            "ep:88f78fbe-d216-4334-bf4f-e3e3caeea48d@314.40",
+            "ep:88f78fbe-d216-4334-bf4f-e3e3caeea48d@1039.11",
+            "ep:88f78fbe-d216-4334-bf4f-e3e3caeea48d@0.00",
+            "ep:88f78fbe-d216-4334-bf4f-e3e3caeea48d@288.64",
+            "ep:88f78fbe-d216-4334-bf4f-e3e3caeea48d@382.40"
+          ],
+          "ground_truth_audit_status": "reviewed",
+          "ground_truth_audit_date": "2026-05-22"
         },
         {
           "question": "大家推薦了哪些歌？",
-          "expected_tool_calls_required": ["search_within_episode"],
-          "expected_tool_calls_acceptable": ["get_episode_segments"],
-          "expected_answer_keywords": ["JOJO", "黃金之風"],
-          "carry_note": "agent uses L1 focused_episode_id=EP19"
+          "expected_tool_calls_required": [
+            "search_within_episode"
+          ],
+          "expected_tool_calls_acceptable": [
+            "get_episode_segments"
+          ],
+          "expected_answer_keywords": [
+            "JOJO",
+            "黃金之風"
+          ],
+          "carry_note": "agent uses L1 focused_episode_id=EP19",
+          "ground_truth_chunk_ids": null,
+          "ground_truth_audit_status": "reviewed",
+          "ground_truth_audit_date": "2026-05-22",
+          "ground_truth_review_notes": "multi-turn followup turn, expected reference is episode_id from prior enumeration; not chunk-scorable"
         },
         {
           "question": "這些歌分別是出自哪部作品？",
-          "expected_tool_calls_required": ["search_within_episode"],
-          "expected_tool_calls_acceptable": ["get_episode_segments"],
-          "expected_answer_keywords": ["JOJO", "動畫", "Sega"],
-          "carry_note": "still on EP19 focused; testing whether agent connects 「這些歌」 to T2 results"
+          "expected_tool_calls_required": [
+            "search_within_episode"
+          ],
+          "expected_tool_calls_acceptable": [
+            "get_episode_segments"
+          ],
+          "expected_answer_keywords": [
+            "JOJO",
+            "動畫",
+            "Sega"
+          ],
+          "carry_note": "still on EP19 focused; testing whether agent connects 「這些歌」 to T2 results",
+          "ground_truth_chunk_ids": null,
+          "ground_truth_audit_status": "reviewed",
+          "ground_truth_audit_date": "2026-05-22",
+          "ground_truth_review_notes": "multi-turn followup turn, expected reference is episode_id from prior enumeration; not chunk-scorable"
         }
       ]
     }
