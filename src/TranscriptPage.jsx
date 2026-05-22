@@ -22,6 +22,9 @@ const _readDeepLinkSeconds = () => {
 const TranscriptPage = ({ lang, show, episode, onBack, initSearch, highlightTime }) => {
   const t = lang === 'zh';
   const { isMobile } = useViewport();
+  // landing-and-mode-orchestration-redesign decision 6: use the cross-page
+  // AudioPlayerContext so playback survives QueryPage ↔ TranscriptPage.
+  const audio = (typeof useAudioPlayer === 'function') ? useAudioPlayer() : null;
   const [search, setSearch] = React.useState(initSearch || '');
   const [activeIdx, setActiveIdx] = React.useState(null);
   const [highlightedIdx, setHighlightedIdx] = React.useState(null);
@@ -44,6 +47,17 @@ const TranscriptPage = ({ lang, show, episode, onBack, initSearch, highlightTime
       .then(data => setSegments(data.segments || []))
       .catch(err => setSegError(err.message));
   }, [episode?.id]);
+
+  // landing-and-mode-orchestration-redesign decision 7: derive paragraphs from
+  // segments using the shared aggregateParagraphs util (gap ≥ 1.5s OR speaker
+  // change). Memoize so we don't recompute on every render.
+  const paragraphs = React.useMemo(() => {
+    if (!segments || segments.length === 0) return [];
+    if (typeof window.aggregateParagraphs !== 'function') return segments.map((s, i) => ({
+      paragraph_text: s.text, start_time: s.start_time, end_time: s.end_time, speaker: s.speaker, segment_ids: [String(i)],
+    }));
+    return window.aggregateParagraphs(segments, { gap_threshold_seconds: 1.5 });
+  }, [segments]);
 
   const fmtTime = (sec) => {
     const m = Math.floor(sec / 60);
@@ -118,6 +132,19 @@ const TranscriptPage = ({ lang, show, episode, onBack, initSearch, highlightTime
           <Input value={search} onChange={e => setSearch(e.target.value)} placeholder={t ? '關鍵字高亮搜尋...' : 'Highlight keywords...'} icon="search" />
         </div>
         {search && <span style={{ fontSize: 12, color: TOKEN.textMuted, whiteSpace: 'nowrap' }}>{matchCount} {t ? '個匹配' : 'matches'}</span>}
+        {audio && episode && episode.audio_url && (
+          <Btn variant="secondary" size="sm" icon="play"
+            onClick={() => {
+              const startSec = (activeIdx != null && segments && segments[activeIdx])
+                ? segments[activeIdx].start_time : 0;
+              audio.playFromTime(episode.id, startSec, {
+                title: episode.title,
+                audio_url: episode.audio_url,
+              });
+            }}>
+            {t ? '從此處播放' : 'Play here'}
+          </Btn>
+        )}
       </div>
 
       {(episode.ai_summary_status === 'done' && episode.ai_summary) || episode.description ? (
@@ -197,19 +224,58 @@ const TranscriptPage = ({ lang, show, episode, onBack, initSearch, highlightTime
           )}
           {segments && segments.length > 0 && (
             <div style={{ maxWidth: 720, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 0 }}>
-              {segments.map((seg, i) => {
-                const matched = search.trim() && seg.text.toLowerCase().includes(search.trim().toLowerCase());
-                const active = activeIdx === i;
+              {/* landing-and-mode-orchestration-redesign decision 7: render
+                  by paragraph (gap ≥ 1.5s) instead of raw segments. We keep
+                  per-segment `id="seg-{i}"` anchors for the deep-link
+                  scroll-to-segment logic; the paragraph wrapper holds the
+                  outer paragraph and within it the original segment lines
+                  remain individually targetable. */}
+              {paragraphs.map((para, pIdx) => {
+                const segIds = para.segment_ids || [];
+                const containsActive = segIds.some(sid => String(segments.findIndex(s => String(s.id || segments.indexOf(s)) === sid)) === String(activeIdx));
+                const matched = search.trim() && (para.paragraph_text || '').toLowerCase().includes(search.trim().toLowerCase());
                 return (
-                  <div key={i} id={`seg-${i}`}
-                    style={{ display: 'flex', gap: isMobile ? 10 : 20, padding: isMobile ? '12px 8px' : '16px 14px', borderRadius: 10, background: highlightedIdx === i ? TOKEN.accent + '33' : active ? TOKEN.accentDim : matched ? '#fbbf2411' : 'transparent', border: `1px solid ${highlightedIdx === i ? TOKEN.accent : active ? TOKEN.accent + '44' : matched ? '#fbbf2433' : 'transparent'}`, marginBottom: 4, transition: 'all 0.3s', cursor: 'pointer' }}
-                    onClick={() => setActiveIdx(i)}>
+                  <div key={pIdx}
+                    style={{
+                      display: 'flex',
+                      gap: isMobile ? 10 : 20,
+                      padding: isMobile ? '12px 8px' : '16px 14px',
+                      borderRadius: 10,
+                      background: containsActive ? TOKEN.accentDim : matched ? '#fbbf2411' : 'transparent',
+                      border: `1px solid ${containsActive ? TOKEN.accent + '44' : matched ? '#fbbf2433' : 'transparent'}`,
+                      marginBottom: 6,
+                      transition: 'all 0.3s',
+                    }}
+                  >
                     <div style={{ minWidth: isMobile ? 50 : 80, textAlign: 'right', flexShrink: 0 }}>
-                      <div style={{ color: TOKEN.accent, fontSize: isMobile ? 11 : 12, fontFamily: 'monospace', fontWeight: 600 }}>{fmtTime(seg.start_time)}</div>
+                      <div style={{ color: TOKEN.accent, fontSize: isMobile ? 11 : 12, fontFamily: 'monospace', fontWeight: 600 }}>{fmtTime(para.start_time || 0)}</div>
                     </div>
-                    <div style={{ width: 1, background: active ? TOKEN.accent + '55' : TOKEN.surfaceBorder, flexShrink: 0, borderRadius: 99 }} />
-                    <p style={{ margin: 0, color: active ? TOKEN.text : TOKEN.textSecondary, fontSize: 14, lineHeight: 1.8, flex: 1 }}>
-                      {highlight(seg.text)}
+                    <div style={{ width: 1, background: containsActive ? TOKEN.accent + '55' : TOKEN.surfaceBorder, flexShrink: 0, borderRadius: 99 }} />
+                    <p style={{ margin: 0, color: containsActive ? TOKEN.text : TOKEN.textSecondary, fontSize: 14, lineHeight: 1.85, flex: 1 }}>
+                      {/* Internal segment anchors preserved for deep-link */}
+                      {segIds.map((sid, sIdx) => {
+                        const segIndex = parseInt(sid, 10);
+                        const seg = (!Number.isNaN(segIndex) && segments[segIndex]) ? segments[segIndex] : null;
+                        if (!seg) return null;
+                        const active = activeIdx === segIndex;
+                        const isHighlighted = highlightedIdx === segIndex;
+                        return (
+                          <span
+                            key={sIdx}
+                            id={`seg-${segIndex}`}
+                            onClick={() => setActiveIdx(segIndex)}
+                            style={{
+                              cursor: 'pointer',
+                              background: isHighlighted ? TOKEN.accent + '33' : 'transparent',
+                              borderRadius: 4,
+                              transition: 'background 0.3s',
+                            }}
+                          >
+                            {highlight(seg.text)}
+                            {sIdx < segIds.length - 1 ? ' ' : ''}
+                          </span>
+                        );
+                      })}
                     </p>
                   </div>
                 );
