@@ -576,6 +576,133 @@ async def query_show(
     )
 
 
+_AGENTIC_CITATION_TOP_K = 5
+_AGENTIC_SEARCH_TOOLS = frozenset(
+    {"search_within_episode", "search_across_episodes", "search_in_episodes"}
+)
+_AGENTIC_LISTING_TOOLS = frozenset(
+    {"find_episodes_by_guest", "find_episodes_by_topic", "find_episodes_by_date"}
+)
+
+
+def _collect_agentic_citations(
+    tool_calls: list[ToolCallTrace] | None,
+) -> list[ChunkHit]:
+    """Aggregate top-K chunks from successful agentic search-tool dispatches.
+
+    Walks `tool_calls`, decodes each `result_full` JSON, picks chunks from
+    `result_full["chunks"]`, dedupes by `chunk_id`, sorts by `rrf_score`
+    descending, and emits at most `_AGENTIC_CITATION_TOP_K` `ChunkHit`
+    instances. Malformed entries are skipped with a warning so a bad tool
+    payload never raises a 5xx.
+    """
+    if not tool_calls:
+        return []
+    seen_chunk_ids: set[str] = set()
+    pool: list[tuple[float, dict]] = []
+    for tc in tool_calls:
+        if tc.name not in _AGENTIC_SEARCH_TOOLS or tc.raised is not None:
+            continue
+        if not tc.result_full:
+            continue
+        try:
+            payload = _stdlib_json.loads(tc.result_full)
+            chunks = payload.get("chunks")
+            if not isinstance(chunks, list):
+                raise ValueError("result_full payload missing 'chunks' list")
+        except (ValueError, TypeError) as exc:
+            logger.warning(
+                "Skipping malformed search-tool result for citations collection: %s",
+                exc,
+            )
+            continue
+        for c in chunks:
+            if not isinstance(c, dict):
+                continue
+            chunk_id = c.get("chunk_id")
+            if chunk_id and chunk_id in seen_chunk_ids:
+                continue
+            if chunk_id:
+                seen_chunk_ids.add(chunk_id)
+            pool.append((float(c.get("rrf_score", 0.0) or 0.0), c))
+    pool.sort(key=lambda item: item[0], reverse=True)
+    hits: list[ChunkHit] = []
+    for _, c in pool[:_AGENTIC_CITATION_TOP_K]:
+        try:
+            hits.append(
+                ChunkHit(
+                    episode_id=uuid.UUID(c["episode_id"]),
+                    episode_title=c.get("episode_title", "") or "",
+                    start_time=float(c.get("start_time", 0.0) or 0.0),
+                    end_time=float(c.get("end_time", 0.0) or 0.0),
+                    text=c.get("text", "") or "",
+                    distance=None,
+                    source=c.get("source", "transcript"),
+                    before_text=c.get("before_text", "") or "",
+                    after_text=c.get("after_text", "") or "",
+                    highlights=c.get("highlights", "") or "",
+                    ai_summary_excerpt=c.get("ai_summary_excerpt", "") or "",
+                    ai_summary_full=c.get("ai_summary_full"),
+                )
+            )
+        except (KeyError, ValueError, TypeError) as exc:
+            logger.warning(
+                "Skipping malformed chunk dict for citations collection: %s", exc
+            )
+            continue
+    return hits
+
+
+def _collect_agentic_enumeration(
+    tool_calls: list[ToolCallTrace] | None,
+) -> list[EpisodeRef] | None:
+    """Aggregate episodes from successful listing-tool dispatches.
+
+    Returns `None` (matching the schema default) when the agent invoked no
+    successful listing tool, so the frontend `EnumerationSection` collapses.
+    Otherwise returns a deduped list of `EpisodeRef` preserving agent
+    observation order.
+    """
+    if not tool_calls:
+        return None
+    invoked_listing = False
+    seen_episode_ids: set[str] = set()
+    refs: list[EpisodeRef] = []
+    for tc in tool_calls:
+        if tc.name not in _AGENTIC_LISTING_TOOLS or tc.raised is not None:
+            continue
+        invoked_listing = True
+        if not tc.result_full:
+            continue
+        try:
+            payload = _stdlib_json.loads(tc.result_full)
+            episodes = payload.get("episodes")
+            if not isinstance(episodes, list):
+                raise ValueError("result_full payload missing 'episodes' list")
+        except (ValueError, TypeError) as exc:
+            logger.warning(
+                "Skipping malformed listing-tool result for enumeration: %s", exc
+            )
+            continue
+        for ep in episodes:
+            if not isinstance(ep, dict):
+                continue
+            ep_id = ep.get("episode_id")
+            if not ep_id or ep_id in seen_episode_ids:
+                continue
+            seen_episode_ids.add(ep_id)
+            try:
+                refs.append(EpisodeRef(**ep))
+            except (ValueError, TypeError) as exc:
+                logger.warning(
+                    "Skipping malformed episode dict for enumeration: %s", exc
+                )
+                continue
+    if not invoked_listing:
+        return None
+    return refs
+
+
 def _agent_result_to_response(
     result: ChatAgentResult,
     quota_remaining: int,
@@ -588,7 +715,16 @@ def _agent_result_to_response(
     the full agent telemetry into `response.trace` and leave `result_full`
     populated on each tool call. Otherwise scrub `result_full` to None and
     omit the trace entirely (default response shape).
+
+    `citations` and `enumeration_episodes` are populated from the raw
+    `result.tool_calls` BEFORE scrubbing so the wire response carries
+    chunk-level + episode-level source data regardless of the debug gate.
     """
+    agentic_citations = _collect_agentic_citations(result.tool_calls)
+    agentic_enumeration = _collect_agentic_enumeration(result.tool_calls)
+    enumeration_total = (
+        len(agentic_enumeration) if agentic_enumeration is not None else None
+    )
     if include_trace:
         tool_calls_out = result.tool_calls or None
         trace_out = AgentTraceResponse(
@@ -633,10 +769,12 @@ def _agent_result_to_response(
     return ChatResponse(
         query_id=uuid.uuid4().hex[:32],
         answer=result.answer,
-        citations=[],
+        citations=agentic_citations,
         quota_remaining=quota_remaining,
         tool_calls=tool_calls_out,
         agent_truncated=result.agent_truncated,
+        enumeration_episodes=agentic_enumeration,
+        enumeration_total=enumeration_total,
         trace=trace_out,
     )
 

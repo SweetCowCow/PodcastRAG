@@ -126,6 +126,37 @@ def _query_chat(backend_url: str, show_id: str, question: str, token: str) -> st
     return _CITATION_RE.sub("", raw).strip()
 
 
+def _query_chat_with_trace(
+    backend_url: str,
+    show_id: str,
+    question: str,
+    token: str,
+    *,
+    session_id: str | None = None,
+    messages: list[dict] | None = None,
+) -> dict:
+    """POST /query?debug_trace=true returning the full response body.
+
+    Caller is responsible for being authenticated as an admin (the
+    backdoor account is admin by construction). Returns `{}` on transport
+    failure so the runner keeps going.
+    """
+    body: dict = {"question": question, "mode": "chat", "messages": messages or []}
+    if session_id:
+        body["session_id"] = session_id
+    try:
+        resp = _post(
+            f"{backend_url}/shows/{show_id}/query?debug_trace=true",
+            body,
+            token,
+            timeout=120.0,
+        )
+    except (urllib.error.URLError, json.JSONDecodeError) as exc:
+        print(f"  [warn] query failed: {exc}", file=sys.stderr)
+        return {}
+    return resp
+
+
 # ────────────────────────────────────────────────────────────────────
 # Scoring
 # ────────────────────────────────────────────────────────────────────
@@ -162,6 +193,115 @@ def _answer_match(answer: str, keywords: list[str]) -> float:
 # Main eval loop
 # ────────────────────────────────────────────────────────────────────
 
+def _is_nested_schema(items: list[dict]) -> bool:
+    """Detect the extended-multi-turn-40 nested schema vs the legacy flat one."""
+    return bool(items) and isinstance(items[0].get("turns"), list)
+
+
+def _tool_coverage(
+    tool_calls_made: list[str],
+    required: list[str],
+    acceptable: list[str],
+) -> dict:
+    """Compute per-turn tool-coverage flags.
+
+    `required_hit` is 1.0 iff every name in `required` appears in
+    `tool_calls_made`; `acceptable_hit` is 1.0 iff at least one
+    `acceptable` name appears (or if `acceptable` is empty, vacuously
+    `None`).
+    """
+    made = set(tool_calls_made)
+    req_hit = 1.0 if required and all(t in made for t in required) else (
+        1.0 if not required else 0.0
+    )
+    if acceptable:
+        acc_hit = 1.0 if any(t in made for t in acceptable) else 0.0
+    else:
+        acc_hit = None
+    return {"required_hit": req_hit, "acceptable_hit": acc_hit}
+
+
+def _run_nested_eval(
+    items: list[dict],
+    show_id: str,
+    backend_url: str,
+    auth_token: str,
+    top_k: int,
+) -> tuple[list[dict], list[dict]]:
+    """Run the eval over the nested (multi-turn) schema.
+
+    Returns (per_turn_results, per_item_results). Multi-turn items share
+    one `session_id` so the agent's L1 state carries between turns; each
+    turn after the first sends prior `(question, answer)` pairs in
+    `messages` so the model has chat history regardless of L1 state TTL.
+    """
+    import uuid as _uuid
+
+    per_turn: list[dict] = []
+    per_item: list[dict] = []
+    for i, item in enumerate(items, 1):
+        item_id = item["id"]
+        is_multi = bool(item.get("is_multi_turn"))
+        session_id = str(_uuid.uuid4())
+        messages: list[dict] = []
+        item_turns: list[dict] = []
+        for t_idx, turn in enumerate(item["turns"], 1):
+            question = turn["question"]
+            expected_kws = turn.get("expected_answer_keywords", [])
+            required = turn.get("expected_tool_calls_required", []) or []
+            acceptable = turn.get("expected_tool_calls_acceptable", []) or []
+            print(f"  [{i:02d}/{len(items)}] {item_id} turn {t_idx}/{len(item['turns'])}")
+
+            t0 = time.monotonic()
+            resp = _query_chat_with_trace(
+                backend_url,
+                show_id,
+                question,
+                auth_token,
+                session_id=session_id,
+                messages=messages,
+            )
+            latency_ms = (time.monotonic() - t0) * 1000
+
+            raw_answer = resp.get("answer") or ""
+            answer = _CITATION_RE.sub("", raw_answer).strip()
+            am = _answer_match(answer, expected_kws)
+            tool_names = [
+                tc.get("name", "") for tc in (resp.get("tool_calls") or [])
+            ]
+            cov = _tool_coverage(tool_names, required, acceptable)
+
+            turn_result = {
+                "item_id": item_id,
+                "turn_index": t_idx,
+                "is_multi_turn": is_multi,
+                "design_type": item.get("design_type", "unknown"),
+                "answer_match": am,
+                "tool_required_hit": cov["required_hit"],
+                "tool_acceptable_hit": cov["acceptable_hit"],
+                "tool_calls_made": tool_names,
+                "answer": answer[:300],
+                "latency_ms": round(latency_ms, 1),
+            }
+            per_turn.append(turn_result)
+            item_turns.append(turn_result)
+
+            messages.append({"role": "user", "content": question})
+            messages.append({"role": "assistant", "content": answer})
+
+        item_am_mean = mean([t["answer_match"] for t in item_turns])
+        item_required_mean = mean([t["tool_required_hit"] for t in item_turns])
+        per_item.append({
+            "id": item_id,
+            "is_multi_turn": is_multi,
+            "design_type": item.get("design_type", "unknown"),
+            "n_turns": len(item_turns),
+            "answer_match_mean": round(item_am_mean, 4),
+            "tool_required_hit_mean": round(item_required_mean, 4),
+        })
+    return per_turn, per_item
+
+
 def run_eval(
     dataset_path: Path,
     backend_url: str,
@@ -173,6 +313,38 @@ def run_eval(
     show_id = dataset["show_id"]
     items = dataset["items"]
 
+    if _is_nested_schema(items):
+        per_turn, per_item = _run_nested_eval(
+            items, show_id, backend_url, auth_token, top_k
+        )
+        scored_am = [t["answer_match"] for t in per_turn]
+        scored_req = [t["tool_required_hit"] for t in per_turn]
+        scored_acc = [t["tool_acceptable_hit"] for t in per_turn if t["tool_acceptable_hit"] is not None]
+        multi_turn_items = [it for it in per_item if it["is_multi_turn"]]
+        aggregate = {
+            "schema": "nested-multi-turn",
+            "n_items": len(per_item),
+            "n_turns": len(per_turn),
+            "n_multi_turn_items": len(multi_turn_items),
+            "recall_at_k_mean": None,  # nested schema does not carry chunk ground truth
+            "answer_match_mean": round(mean(scored_am), 4) if scored_am else None,
+            "tool_required_hit_mean": round(mean(scored_req), 4) if scored_req else None,
+            "tool_acceptable_hit_mean": (
+                round(mean(scored_acc), 4) if scored_acc else None
+            ),
+        }
+        return {
+            "label": label,
+            "dataset": str(dataset_path),
+            "show_id": show_id,
+            "top_k": top_k,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "aggregate": aggregate,
+            "turns": per_turn,
+            "items": per_item,
+        }
+
+    # Legacy flat schema (this-not-that-cool.json)
     results = []
     for i, item in enumerate(items, 1):
         qid = item["id"]
@@ -205,6 +377,7 @@ def run_eval(
     scored_r5 = [r["recall_at_k"] for r in results if r["recall_at_k"] is not None]
     scored_am = [r["answer_match"] for r in results]
     aggregate = {
+        "schema": "flat",
         "n": len(results),
         "n_scored_recall": len(scored_r5),
         "recall_at_k_mean": round(mean(scored_r5), 4) if scored_r5 else None,

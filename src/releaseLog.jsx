@@ -77,6 +77,29 @@ const RELEASE_LOG = [
     },
   },
   {
+    date: '2026-05-21', slug: 'agent-trace-telemetry', milestone: 'v1.8', tag: 'enhancement',
+    title: {
+      zh: '對話模式裝上「黑盒紀錄器」協助除錯',
+      en: 'Chat Mode Gains a Black-Box Recorder for Debugging',
+    },
+    summary: {
+      zh: '對話模式翻 default 前的觀測投資——把 AI 每一輪 LLM 呼叫的 latency 與 token、每個工具呼叫的參數與結果、各階段時間花在哪裡，全部結構化記錄成 trace 留下來；admin 帶 `?debug_trace=true` 才看得到完整內容，一般使用者回應形狀不變。同場補一支 `dogfood_trace_dump.py` 把 30 題對話批次跑完落盤，這份 trace 立刻派上用場：抓到 q03「45 歲開工歌觀點」失敗的真正原因是一個內部 SQL column 名拼錯——直接催生隔天的 chat-tool-error-isolation 修復。',
+      en: 'Observability investment before flipping the chat-mode default. Every per-round LLM call (latency, tokens), every tool dispatch (name, args, result), and every stage timing now ships as a structured trace. Admins see the full payload by appending `?debug_trace=true`; regular users see no change in response shape. Bundled with a `dogfood_trace_dump.py` script that batches 30 questions into a saved trace dump — which immediately paid off: it traced q03 ("45-year-old work-song views") down to a single misspelled SQL column name, directly triggering the next-day chat-tool-error-isolation fix.',
+    },
+    summaryBullets: {
+      zh: [
+        '每輪 LLM 呼叫、每個工具呼叫、每個階段時間都有結構化 trace',
+        'admin 帶 `?debug_trace=true` 看完整 trace；一般使用者不受影響',
+        '`dogfood_trace_dump.py` 批次跑完落盤，幫忙抓到一個關鍵 SQL bug',
+      ],
+      en: [
+        'Per-round LLM calls, per-tool dispatches, and per-stage timings are all structured into trace',
+        'Admins see the full trace via `?debug_trace=true`; regular users see no change',
+        '`dogfood_trace_dump.py` batches a dump; helped trace a critical SQL bug to its root',
+      ],
+    },
+  },
+  {
     date: '2026-05-21', slug: 'chat-agentic-tool-routing', milestone: 'v1.8', tag: 'feature',
     title: {
       zh: '對話模式升級：AI 自己決定要查什麼、查幾次',

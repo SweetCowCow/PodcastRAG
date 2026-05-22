@@ -93,9 +93,10 @@ class Settings(BaseSettings):
     provider_budget_usd_monthly_aihub: float = 80.0
     provider_budget_usd_monthly_openai: float = 30.0
 
-    # Agentic chat (chat-agentic-tool-routing change). Flag共存 roll-out：
-    # default false 走既有 rule-based pipeline；翻 true 走 chat_agent.agent.run_agent。
-    enable_agentic_chat: bool = False
+    # Agentic chat (Phase 2 default-on, enable-agentic-chat-default-on change).
+    # Flag 共存 roll-out：default true 走 chat_agent.agent.run_agent；顯式
+    # `ENABLE_AGENTIC_CHAT=false` 仍可退回 rule-based pipeline（30 天 kill-switch）。
+    enable_agentic_chat: bool = True
     agentic_chat_max_iterations: int = 10
     agentic_chat_l0_k_turns: int = 3
     agentic_chat_l1_ttl_seconds: int = 7200

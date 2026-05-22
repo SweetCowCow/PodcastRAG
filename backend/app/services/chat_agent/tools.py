@@ -232,9 +232,16 @@ def _chunk_to_dict(h: Any) -> dict:
         "chunk_id": str(h.chunk_id) if getattr(h, "chunk_id", None) else None,
         "episode_id": str(h.episode_id),
         "episode_title": getattr(h, "episode_title", "") or "",
+        "start_time": float(getattr(h, "start_time", 0.0) or 0.0),
+        "end_time": float(getattr(h, "end_time", 0.0) or 0.0),
         "text": getattr(h, "text", "") or "",
         "rrf_score": float(getattr(h, "rrf_score", 0.0) or 0.0),
         "source": getattr(h, "source", "transcript"),
+        "before_text": getattr(h, "before_text", "") or "",
+        "after_text": getattr(h, "after_text", "") or "",
+        "highlights": getattr(h, "highlights", "") or "",
+        "ai_summary_excerpt": getattr(h, "ai_summary_excerpt", "") or "",
+        "ai_summary_full": getattr(h, "ai_summary_full", None),
     }
 
 

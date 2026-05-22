@@ -50,6 +50,7 @@ backend/eval/datasets/_judge_minisset.json
 
 # Working notes / case studies (not source-controlled per project memory rules)
 docs/case-studies/
+docs/runbooks/
 docs/research/
 docs/roadmap.pdf
 docs/bills/
