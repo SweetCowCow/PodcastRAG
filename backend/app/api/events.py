@@ -77,7 +77,7 @@ async def post_event(
 
     row = Event(
         event_type=payload.event_type,
-        event_payload=payload.payload.model_dump(),
+        event_payload=payload.payload.model_dump(mode="json"),
         user_id=user.id if user is not None else None,
     )
     db.add(row)
