@@ -52,6 +52,31 @@ const MILESTONE_LABELS = {
 const RELEASE_LOG = [
   // ─── v1.8 — Chat Mode: Agentic (5/21~) ───
   {
+    date: '2026-05-23', slug: 'agent-token-budget-and-tool-truncate', milestone: 'v1.8', tag: 'fix',
+    title: {
+      zh: '對話模式不會再因為單題太複雜直接出錯',
+      en: 'Chat Mode No Longer Crashes on Heavy Cross-Episode Questions',
+    },
+    summary: {
+      zh: '修一個邊界但會炸的問題：問「節目裡迪拉怎麼描述中老年人的開工想法跟年輕時的差異」這類需要跨多集多輪 tool 查詢的問題時，AI 累積太多搜尋結果，整個對話超過 gpt-4o 128K context 上限，prod 直接 HTTP 500 噴錯給使用者。修法三層：(1) AI 每次 tool 查詢結果送回給模型前先截到 8K 字（前端 admin 觀測還是看得到全長）(2) 每輪 AI 呼叫前估算 messages 累積 token 數，超 100K 就從前面砍掉最舊的 tool 結果（保留 system prompt 跟最後一輪對話）(3) 真的不小心爆 context 時 catch BadRequestError 改回使用者友善訊息「這題涉及內容太多，我只能列出部分結果；試試把問題拆小，譬如指定單一集數」標 agent_truncated 收尾，不再 5xx。Prod smoke 5/5 全 HTTP 200，b20「中老年人開工想法」這題之前固定爆 209751 tokens 現在穩定回答。',
+      en: 'Fixes an edge-but-explosive issue: questions like "How does Dila describe middle-aged people\'s views on starting work versus when they were young?" require cross-episode multi-turn tool lookups, and the accumulated search results pushed the conversation past gpt-4o\'s 128K context limit, returning HTTP 500 to the user. Three-layer fix: (1) tool results are truncated to 8K chars before being sent back to the model (admin trace still sees the full result); (2) before each LLM round, estimate accumulated message tokens; if over 100K, pop the oldest tool results (keeping system prompt + last conversation turn); (3) if context truly overflows, catch BadRequestError and return a user-friendly message "This question covers too much content; I can only list partial results — try narrowing your question, e.g. specify a single episode" with agent_truncated=True, no more 5xx. Prod smoke 5/5 all HTTP 200; the b20 question that previously hit 209751 tokens consistently now answers stably.',
+    },
+    summaryBullets: {
+      zh: [
+        '對「跨多集 / 多輪查詢」類問題不再 5xx',
+        'AI 看到的 tool 結果有上限（8K 字），admin trace 仍保留全長',
+        '超過 context budget 自動裁掉最舊的 tool 結果，保留 system prompt + 最後對話',
+        '真的爆掉改回使用者友善訊息，不再露出內部錯誤',
+      ],
+      en: [
+        'Multi-episode / multi-turn lookup questions no longer return 5xx',
+        'Tool results sent to the model are capped (8K chars); admin trace keeps full content',
+        'When over budget, oldest tool results are dropped; system prompt + last turn preserved',
+        'If context truly overflows, a friendly user-facing message replaces the raw error',
+      ],
+    },
+  },
+  {
     date: '2026-05-22', slug: 'retrieval-episode-reference-handling', milestone: 'v1.8', tag: 'enhancement',
     title: {
       zh: '問「EP134 講什麼？」現在真的回 EP134 內容了',

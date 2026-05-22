@@ -31,11 +31,11 @@
   - (c) budget guard：mock messages 含 system + user + 3 tool message 共估 105000 tokens，呼 `_apply_budget_guard(budget=100000)` 後最舊 tool 被移除
   - (d) budget guard 第二輪仍超 → append truncate-system + 回 `agent_truncated=True`
   - (e) context-exceeded envelope：mock `chat.completions.create` raise `BadRequestError(body={"error":{"message":"ContextWindowExceededError ..."}})`，run_agent 回 `agent_truncated=True` + answer 含「內容太多」字眼 + 不含 `BadRequestError`
-- [ ] 5.2 跑 `pytest backend/tests/test_agent_token_budget.py -v` 全綠；跑既有 5 個 agent test file 確認無 regression。
+- [x] 5.2 跑 `pytest backend/tests/test_agent_token_budget.py -v` 全綠；跑既有 5 個 agent test file 確認無 regression。
 
 ## 6. Prod smoke + archive
 
-- [ ] 6.1 push commit；等 Zeabur build RUNNING。
-- [ ] 6.2 用 backdoor session 對 b20 那題 nohup 連跑 5 次 query (`curl POST /shows/.../query`)，全部 HTTP 200 + answer 文字不含「技術問題 / 系統錯誤 / 資料存取 / BadRequestError」。
-- [ ] 6.3 完整跑一輪 `run_chat_agent_eval.py` against `extended-multi-turn-40.json`；驗證 empty-answer turns = 0/40（baseline 是 1/40）；append 結果到 `docs/runbooks/eval-metrics-log.md`。
-- [ ] 6.4 `/spectra-archive agent-token-budget-and-tool-truncate`；release log 起草 entry（tag=fix，標題「對話模式不會再因為單題太複雜直接出錯」）；更新 `project_pending_changes.md` 反映已收尾。
+- [x] 6.1 push commit；等 Zeabur build RUNNING。
+- [x] 6.2 用 backdoor session 對 b20 那題 nohup 連跑 5 次 query (`curl POST /shows/.../query`)，全部 HTTP 200 + answer 文字不含「技術問題 / 系統錯誤 / 資料存取 / BadRequestError」。
+- [x] 6.3 完整跑一輪 `run_chat_agent_eval.py` against `extended-multi-turn-40.json`；驗證 empty-answer turns = 0/40（baseline 是 1/40）；append 結果到 `docs/runbooks/eval-metrics-log.md`。
+- [x] 6.4 `/spectra-archive agent-token-budget-and-tool-truncate`；release log 起草 entry（tag=fix，標題「對話模式不會再因為單題太複雜直接出錯」）；更新 `project_pending_changes.md` 反映已收尾。
