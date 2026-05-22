@@ -280,3 +280,41 @@ def test_empty_tool_calls_list():
     response = _agent_result_to_response(_result([]), quota_remaining=10)
     assert response.citations == []
     assert response.enumeration_episodes is None
+
+
+def test_find_episode_by_ref_populates_single_enumeration():
+    ep_id = str(uuid.uuid4())
+    tool_calls = [
+        _trace(
+            name="find_episode_by_ref",
+            payload={"episode": {
+                "episode_id": ep_id,
+                "title": "EP143｜從餐廳請客到自家廚房",
+                "published_at": None,
+                "guests": ["馬世芳"],
+                "ai_summary": "...",
+            }},
+        )
+    ]
+    response = _agent_result_to_response(_result(tool_calls), quota_remaining=10)
+    assert response.enumeration_episodes is not None
+    assert len(response.enumeration_episodes) == 1
+    assert str(response.enumeration_episodes[0].episode_id) == ep_id
+
+
+def test_get_episode_summary_populates_single_enumeration_partial_fields():
+    ep_id = str(uuid.uuid4())
+    tool_calls = [
+        _trace(
+            name="get_episode_summary",
+            payload={
+                "episode_id": ep_id,
+                "title": "EP143｜...",
+                "summary": "本集摘要文字",
+            },
+        )
+    ]
+    response = _agent_result_to_response(_result(tool_calls), quota_remaining=10)
+    assert response.enumeration_episodes is not None
+    assert len(response.enumeration_episodes) == 1
+    assert response.enumeration_episodes[0].ai_summary == "本集摘要文字"

@@ -583,6 +583,13 @@ _AGENTIC_SEARCH_TOOLS = frozenset(
 _AGENTIC_LISTING_TOOLS = frozenset(
     {"find_episodes_by_guest", "find_episodes_by_topic", "find_episodes_by_date"}
 )
+# Single-episode lookup tools — payload shape `{"episode": {...}}` (find_episode_by_ref)
+# or `{"episode_id", "title", "summary"}` (get_episode_summary). Treated as
+# enumeration with one entry so the frontend EpisodeRef card renders for
+# "EP143 主要在講什麼?" style queries.
+_AGENTIC_SINGLE_EPISODE_TOOLS = frozenset(
+    {"find_episode_by_ref", "get_episode_summary"}
+)
 
 
 def _collect_agentic_citations(
@@ -669,16 +676,31 @@ def _collect_agentic_enumeration(
     seen_episode_ids: set[str] = set()
     refs: list[EpisodeRef] = []
     for tc in tool_calls:
-        if tc.name not in _AGENTIC_LISTING_TOOLS or tc.raised is not None:
+        is_list = tc.name in _AGENTIC_LISTING_TOOLS
+        is_single = tc.name in _AGENTIC_SINGLE_EPISODE_TOOLS
+        if (not is_list and not is_single) or tc.raised is not None:
             continue
         invoked_listing = True
         if not tc.result_full:
             continue
         try:
             payload = _stdlib_json.loads(tc.result_full)
-            episodes = payload.get("episodes")
-            if not isinstance(episodes, list):
-                raise ValueError("result_full payload missing 'episodes' list")
+            if is_list:
+                episodes = payload.get("episodes")
+                if not isinstance(episodes, list):
+                    raise ValueError("result_full missing 'episodes' list")
+            elif tc.name == "find_episode_by_ref":
+                ep = payload.get("episode")
+                episodes = [ep] if isinstance(ep, dict) else []
+            else:  # get_episode_summary
+                if payload.get("episode_id"):
+                    episodes = [{
+                        "episode_id": payload["episode_id"],
+                        "title": payload.get("title", "") or "",
+                        "ai_summary": payload.get("summary"),
+                    }]
+                else:
+                    episodes = []
         except (ValueError, TypeError) as exc:
             logger.warning(
                 "Skipping malformed listing-tool result for enumeration: %s", exc

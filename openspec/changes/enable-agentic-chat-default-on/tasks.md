@@ -37,7 +37,7 @@
 
 ## 6. Prod smoke + 視覺驗證
 
-- [ ] 6.1 翻 default commit 推到 main 並等 Zeabur build 完成（用 `zeabur deployment list --service-id 69eb10360da29f05f49a4b0b` 確認 RUNNING）。
+- [x] 6.1 翻 default commit 推到 main 並等 Zeabur build 完成（用 `zeabur deployment list --service-id 69eb10360da29f05f49a4b0b` 確認 RUNNING）。
 - [ ] 6.2 用 chrome-devtools-mcp 走完整流程：登入 → 進「這不是音樂」節目 → chat tab 發「楊大正上過哪幾集？」→ 確認回應內 EnumerationSection 渲染含 2 集 episode card + 答案文字「2 集」一致 + 截圖。
 - [ ] 6.3 chrome-devtools-mcp 同 session 發「歌單那幾集 EP143 主要在講什麼？」→ 確認 ChatBubble 下方紫色 citation chip 區渲染（至少 1 chip）+ 截圖。截圖不入 git（依 `feedback_pptx_qa_jpg_cleanup.md` 規則做完即刪）。
 - [x] 6.4 任一步前端出錯（chip 沒出、enum card 沒出、5xx）→ STOP，回頭排查 mapper / 前端 prop。
