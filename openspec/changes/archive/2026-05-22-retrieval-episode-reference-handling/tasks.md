@@ -22,12 +22,12 @@
 
 - [x] 4.1 commit + push；等 Zeabur build RUNNING（用 `npx zeabur deployment list --service-id 69eb10360da29f05f49a4b0b` 確認最新 commit RUNNING）。
 - [x] 4.2 用 backdoor session（per `reference_e2e_backdoor.md` SOP）取 prod cookie；對 prod 直打 `POST /shows/{id}/search` query="迪拉胖在 EP134 講什麼" 看 `results[]` 的 `episode_title` 全部含「EP134」字眼。
-- [ ] 4.3 用 backdoor session nohup 跑 `python3 -u backend/scripts/run_chat_agent_eval.py --dataset backend/eval/datasets/extended-multi-turn-40.json ... --label retrieval-ep-ref-<date>`；驗 `aggregate.recall_at_k_mean ≥ 0.40` + b14/b22/mt02 t1/mt03 t1/mt04 t1 個別 recall 從 0 變 ≥ 0.5。
-- [ ] 4.4 append 一行到 `docs/runbooks/eval-metrics-log.md`：dataset=multi-turn-40 v2、Recall 升幅、per-turn deltas、change name。
-- [ ] 4.5 若 Recall < 0.40 → STOP，回頭看是 helper 沒命中、還是 SQL regex 跑出範圍、或 endpoint 沒接好。Trace 用 `?debug_trace=true` + chat agent endpoint 跑同 query 對照。
+- [x] 4.3 用 backdoor session nohup 跑 `python3 -u backend/scripts/run_chat_agent_eval.py --dataset backend/eval/datasets/extended-multi-turn-40.json ... --label retrieval-ep-ref-<date>`；驗 `aggregate.recall_at_k_mean ≥ 0.40` + b14/b22/mt02 t1/mt03 t1/mt04 t1 個別 recall 從 0 變 ≥ 0.5。
+- [x] 4.4 append 一行到 `docs/runbooks/eval-metrics-log.md`：dataset=multi-turn-40 v2、Recall 升幅、per-turn deltas、change name。
+- [x] 4.5 若 Recall < 0.40 → STOP，回頭看是 helper 沒命中、還是 SQL regex 跑出範圍、或 endpoint 沒接好。Trace 用 `?debug_trace=true` + chat agent endpoint 跑同 query 對照。
 
 ## 5. Archive
 
-- [ ] 5.1 spectra-archive 收尾（sync spec to main + delete in-progress dir）。
-- [ ] 5.2 在 release log 起草 entry：tag=enhancement / fix（你看怎麼分），標題「Chat / 語意搜尋對「EP X」題型撈得到正確段落了」，描述 (a) baseline 0.2267 → 跑後實測 (b) 修法 = endpoint 端 EP-ref 偵測 + episode_id filter (c) chat agent path 不變、純 search endpoint fix。
-- [ ] 5.3 更新 `project_pending_changes.md` 反映已 archive；下一條 follow-up 排序前移。
+- [x] 5.1 spectra-archive 收尾（sync spec to main + delete in-progress dir）。
+- [x] 5.2 在 release log 起草 entry：tag=enhancement / fix（你看怎麼分），標題「Chat / 語意搜尋對「EP X」題型撈得到正確段落了」，描述 (a) baseline 0.2267 → 跑後實測 (b) 修法 = endpoint 端 EP-ref 偵測 + episode_id filter (c) chat agent path 不變、純 search endpoint fix。
+- [x] 5.3 更新 `project_pending_changes.md` 反映已 archive；下一條 follow-up 排序前移。

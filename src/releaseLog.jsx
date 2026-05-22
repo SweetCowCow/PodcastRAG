@@ -52,6 +52,29 @@ const MILESTONE_LABELS = {
 const RELEASE_LOG = [
   // ─── v1.8 — Chat Mode: Agentic (5/21~) ───
   {
+    date: '2026-05-22', slug: 'retrieval-episode-reference-handling', milestone: 'v1.8', tag: 'enhancement',
+    title: {
+      zh: '問「EP134 講什麼？」現在真的回 EP134 內容了',
+      en: '"What does EP134 talk about?" Now Actually Returns EP134 Content',
+    },
+    summary: {
+      zh: '這版我們在跑回歸測試時抓到一個系統性問題：語意搜尋對「EP 134 講什麼？」這類「特定集數內容」的問題撈出來的段落經常不是 EP134 — 因為「EP134」這個字串在 episode 內文裡幾乎不會出現（內容是音樂、家常味、開工歌單⋯不是「EP134」三個字），embedding 跟 BM25 都沒辦法把問題對到正確段落。修法：在 `/search` endpoint 加一層 EP-reference 偵測，看到「EP134」這種 token 就把它轉成 episode UUID 再餵到 retrieval filter。chat agent 路徑早就有同等能力（agent 會主動呼 find_episode_by_ref tool），這次只是把 public 語意搜尋補齊。實測 Recall@5 從 0.23 拉到 0.42（+19pp），「EP134 開工歌單觀念」這類題目從 0 命中變 1.0 命中。',
+      en: 'This release catches a systemic issue uncovered during regression testing: the semantic search endpoint frequently retrieves wrong-episode segments when the user asks "what does EP134 talk about?" — because the string "EP134" almost never appears verbatim in transcripts (content is about music, home cooking, work playlists... not "EP134" three characters), so neither embedding nor BM25 can map the question to the right chunks. Fix: added an EP-reference detection layer in `/search` endpoint that converts tokens like "EP134" into episode UUIDs and feeds them to the retrieval filter. The chat agent path already had equivalent capability (the agent proactively calls find_episode_by_ref), this release just brings the public semantic search up to parity. Measured Recall@5 jumped from 0.23 to 0.42 (+19pp); questions like "EP134\'s work playlist concept" went from 0 hit to 1.0 hit.',
+    },
+    summaryBullets: {
+      zh: [
+        '問「EP X」的特定集數題型，搜尋結果現在精準命中該集',
+        'Recall@5 baseline 0.23 → 0.42（+19pp）',
+        '只動 public search endpoint，chat 對話模式不變',
+      ],
+      en: [
+        'Episode-specific questions ("EP X") now hit the right episode',
+        'Recall@5 baseline 0.23 → 0.42 (+19pp)',
+        'Only touches public search endpoint; chat mode unchanged',
+      ],
+    },
+  },
+  {
     date: '2026-05-22', slug: 'enable-agentic-chat-default-on', milestone: 'v1.8', tag: 'feature',
     title: {
       zh: 'Phase 2 翻牌：對話模式預設改用 AI 自主決策',
