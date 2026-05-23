@@ -40,7 +40,9 @@ from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from typing import Any, Awaitable, Callable
 
-from pydantic import BaseModel, Field, ValidationError
+from typing import Literal
+
+from pydantic import BaseModel, Field, ValidationError, model_validator
 from sqlalchemy import text
 from sqlalchemy.exc import DataError, IntegrityError, OperationalError, ProgrammingError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -111,6 +113,22 @@ class PinEpisodeInput(BaseModel):
 
 class UnpinEpisodeInput(BaseModel):
     pass
+
+
+class ListEpisodesInput(BaseModel):
+    show_id: uuid.UUID
+    n: int = Field(default=5, ge=1, le=20)
+    order: Literal["newest", "oldest"] = "newest"
+    topic: str | None = None
+    year_start: int | None = Field(default=None, ge=2000, le=2100)
+    year_end: int | None = Field(default=None, ge=2000, le=2100)
+
+    @model_validator(mode="after")
+    def _check_year_range(self) -> "ListEpisodesInput":
+        if self.year_start is not None and self.year_end is not None:
+            if self.year_start > self.year_end:
+                raise ValueError("year_start must be <= year_end")
+        return self
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -310,6 +328,24 @@ def _unpin_episode(inp: UnpinEpisodeInput, ctx: ToolContext) -> dict:
     return {"ok": True}
 
 
+async def _list_episodes(inp: ListEpisodesInput, ctx: ToolContext) -> dict:
+    out = await episode_finders.find_episodes_by_recency(
+        ctx.db,
+        ctx.show_id,
+        n=inp.n,
+        order=inp.order,
+        topic=inp.topic,
+        year_start=inp.year_start,
+        year_end=inp.year_end,
+    )
+    episodes = out["episodes"]
+    return {
+        "episodes": [e.model_dump(mode="json") for e in episodes],
+        "n_returned": len(episodes),
+        "n_total_matched": out["n_total_matched"],
+    }
+
+
 # ──────────────────────────────────────────────────────────────────────
 # Registry + dispatcher
 # ──────────────────────────────────────────────────────────────────────
@@ -394,6 +430,15 @@ TOOLS: list[ToolSpec] = [
         input_model=UnpinEpisodeInput,
         callable=_unpin_episode,
     ),
+    ToolSpec(
+        name="list_episodes",
+        description=(
+            "列出節目集數，支援依發布時間排序（最新 / 最舊）+ 可選 topic / year_range filter。"
+            "適合「最新 N 集 / 最舊 N 集 / 2024 年最後一集歌單」這類 recency-driven query。"
+        ),
+        input_model=ListEpisodesInput,
+        callable=_list_episodes,
+    ),
 ]
 
 
@@ -404,6 +449,7 @@ _ENUMERATION_TOOL_NAMES = {
     "find_episodes_by_guest",
     "find_episodes_by_topic",
     "find_episodes_by_date",
+    "list_episodes",
 }
 
 

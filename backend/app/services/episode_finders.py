@@ -15,6 +15,7 @@ from __future__ import annotations
 import json as _stdlib_json
 import uuid
 from datetime import datetime
+from typing import Any
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -266,12 +267,13 @@ async def find_by_ref(
     return _row_to_episode_ref(row) if row is not None else None
 
 
-_DATE_SQL = """
+_DATE_SQL_TEMPLATE = """
 SELECT id, title, published_at, guests, ai_summary
 FROM episodes
 WHERE show_id = :show_id
   AND published_at BETWEEN :start AND :end
-ORDER BY published_at DESC NULLS LAST
+ORDER BY published_at {order_dir} NULLS LAST
+{limit_clause}
 """
 
 
@@ -280,16 +282,156 @@ async def find_episodes_by_date_range(
     show_id: uuid.UUID,
     start: datetime,
     end: datetime,
+    *,
+    order: str = "newest",
+    limit: int | None = None,
 ) -> list[EpisodeRef]:
     """Episodes whose `published_at` falls inclusively between `start`
     and `end`. Both endpoints SHOULD be tz-aware (the entity extractor
     spec stipulates UTC); naive datetimes are passed through as-is and
     rely on Postgres comparing them at the column's timezone.
+
+    `order='newest'` (default) → DESC, `order='oldest'` → ASC.
+    `limit=None` (default) → unbounded; positive int → LIMIT N.
     """
-    params = {
+    if order not in ("newest", "oldest"):
+        raise ValueError(f"order must be 'newest' or 'oldest', got {order!r}")
+    if limit is not None and limit < 1:
+        raise ValueError(f"limit must be None or >= 1, got {limit!r}")
+
+    order_dir = "DESC" if order == "newest" else "ASC"
+    params: dict[str, Any] = {
         "show_id": show_id,
         "start": start,
         "end": end,
     }
-    result = await db.execute(text(_DATE_SQL), params)
+    limit_clause = ""
+    if limit is not None:
+        limit_clause = "LIMIT :limit"
+        params["limit"] = limit
+    sql = _DATE_SQL_TEMPLATE.format(order_dir=order_dir, limit_clause=limit_clause)
+    result = await db.execute(text(sql), params)
     return [_row_to_episode_ref(row) for row in result.mappings()]
+
+
+_RECENCY_SQL_TEMPLATE = """
+SELECT e.id, e.title, e.published_at, e.guests, e.ai_summary
+FROM episodes e
+WHERE e.show_id = :show_id
+  {year_clause}
+  {topic_clause}
+ORDER BY e.published_at {order_dir} NULLS LAST
+LIMIT :n
+"""
+
+_RECENCY_COUNT_SQL_TEMPLATE = """
+SELECT COUNT(*) AS total
+FROM episodes e
+WHERE e.show_id = :show_id
+  {year_clause}
+  {topic_clause}
+"""
+
+_YEAR_CLAUSE = (
+    "AND EXTRACT(YEAR FROM e.published_at AT TIME ZONE 'Asia/Taipei') "
+    "BETWEEN :year_start AND :year_end"
+)
+
+_TOPIC_CLAUSE = """
+AND (
+  (e.title_tsvector IS NOT NULL
+   AND e.title_tsvector @@ to_tsquery('simple', :tsquery_text))
+  OR EXISTS (
+    SELECT 1 FROM episode_description_chunks d
+    WHERE d.episode_id = e.id
+      AND d.text_tsvector IS NOT NULL
+      AND d.text_tsvector @@ to_tsquery('simple', :tsquery_text)
+  )
+)
+"""
+
+
+def _build_topic_tsquery(topic: str) -> str | None:
+    """Mirror find_episodes_by_topic's escape + jieba expansion path.
+    Returns None when topic yields no usable lexemes."""
+    import re as _re
+    cleaned = (topic or "").strip()
+    if not cleaned:
+        return None
+    safe = _re.sub(r"[&|!()<:>\\]", " ", cleaned).strip()
+    if not safe:
+        return None
+    toks = [tk for tk in tokenizer.tokenize(safe) if tk and tk.strip()]
+    kept = [tk for tk in toks if len(tk) >= 2 and tk not in TOPIC_STOPWORDS]
+    if not kept:
+        kept = [safe]
+    seen: set[str] = set()
+    expanded: list[str] = []
+    for tk in kept:
+        if tk not in seen:
+            seen.add(tk)
+            expanded.append(tk)
+    return " | ".join(expanded) if expanded else None
+
+
+async def find_episodes_by_recency(
+    db: AsyncSession,
+    show_id: uuid.UUID,
+    *,
+    n: int = 5,
+    order: str = "newest",
+    topic: str | None = None,
+    year_start: int | None = None,
+    year_end: int | None = None,
+) -> dict:
+    """Episodes ordered by `published_at` with optional topic + year filters.
+
+    Returns `{"episodes": list[EpisodeRef], "n_total_matched": int}` —
+    `n_total_matched` is the row count that would have been returned
+    without the LIMIT, useful for "list_episodes returned 5 of 8" UX.
+
+    Year filter uses `EXTRACT(YEAR FROM published_at AT TIME ZONE
+    'Asia/Taipei')` — Taiwan-local calendar year, inclusive both ends.
+    Topic filter reuses the simple_cjk + jieba expansion path from
+    `find_episodes_by_topic`.
+    """
+    if order not in ("newest", "oldest"):
+        raise ValueError(f"order must be 'newest' or 'oldest', got {order!r}")
+    if n < 1:
+        raise ValueError(f"n must be >= 1, got {n!r}")
+    if (year_start is None) != (year_end is None):
+        raise ValueError("year_start and year_end must both be set or both None")
+    if year_start is not None and year_end is not None and year_start > year_end:
+        raise ValueError("year_start must be <= year_end")
+
+    order_dir = "DESC" if order == "newest" else "ASC"
+    params: dict[str, Any] = {"show_id": show_id, "n": n}
+    year_clause = ""
+    if year_start is not None and year_end is not None:
+        year_clause = _YEAR_CLAUSE
+        params["year_start"] = year_start
+        params["year_end"] = year_end
+    topic_clause = ""
+    if topic:
+        tsquery_text = _build_topic_tsquery(topic)
+        if tsquery_text:
+            topic_clause = _TOPIC_CLAUSE
+            params["tsquery_text"] = tsquery_text
+
+    sql = _RECENCY_SQL_TEMPLATE.format(
+        order_dir=order_dir,
+        year_clause=year_clause,
+        topic_clause=topic_clause,
+    )
+    result = await db.execute(text(sql), params)
+    episodes = [_row_to_episode_ref(row) for row in result.mappings()]
+
+    count_sql = _RECENCY_COUNT_SQL_TEMPLATE.format(
+        year_clause=year_clause,
+        topic_clause=topic_clause,
+    )
+    count_params = {k: v for k, v in params.items() if k != "n"}
+    count_result = await db.execute(text(count_sql), count_params)
+    total = int(count_result.scalar() or 0)
+
+    return {"episodes": episodes, "n_total_matched": total}
