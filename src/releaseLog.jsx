@@ -52,6 +52,31 @@ const MILESTONE_LABELS = {
 const RELEASE_LOG = [
   // ─── v1.8 — Chat Mode: Agentic (5/21~) ───
   {
+    date: '2026-05-23', slug: 'admin-quota-bypass-fix', milestone: 'v1.8', tag: 'fix',
+    title: {
+      zh: 'Admin 帳號跑 eval 不再被自己擋',
+      en: 'Admin Accounts No Longer Block Themselves on Quota',
+    },
+    summary: {
+      zh: '修一個藏起來但卡住整條 eval pipeline 的問題：admin 帳號跟一般使用者一樣每天扣 30 次 chat quota，跑一輪 token-truncate eval gate（34 record × 平均 3 turn ≈ 102 個 chat 請求）開頭就把自己 quota 燒光，後續全部撞 HTTP 429 quota_exhausted，結果這輪 eval 的 answer_match 跌到 0.025（垃圾值）完全沒驗到 token-truncate 真實 fix 效果。修法簡單：backend `/query` endpoint 進來先看 `user.role`，admin 直接 bypass quota 扣減（total_queries 仍 +1 保留可觀測），response 回 `quota_remaining=-1` sentinel 表示無上限。一般使用者扣 quota / 收 429 行為完全不變。修完重跑同一輪 eval：35 個連續 admin chat request 全 HTTP 200、answer_match 從 0.025 → 0.595（A6 達標 ≥ 0.5），順便驗證了上一個 token-truncate fix 在 b20「中老年人開工想法」這題 0 個 turn 爆 context（之前固定 209751 tokens 噴 5xx）。',
+      en: 'Fixes a hidden-but-pipeline-blocking issue: admin accounts shared the same daily 30-chat quota as regular users, so running a single token-truncate eval gate (34 records × ~3 turns ≈ 102 chat requests) burned through the admin quota in the first batch and the rest of the run hit HTTP 429 quota_exhausted, dragging answer_match down to 0.025 (garbage) and completely missing the real token-truncate fix signal. Fix is simple: the backend `/query` endpoint now checks `user.role` first — admins skip quota decrement entirely (total_queries still increments for observability) and the response carries `quota_remaining=-1` as the unlimited sentinel. Non-admin quota behavior and 429 handling are unchanged. After the fix, the eval re-run: 35 sequential admin chat requests all returned HTTP 200, answer_match jumped from 0.025 → 0.595 (meets A6 ≥ 0.5), and the b20 "middle-aged people on starting work" question (which previously blew 209751 tokens into a 5xx) returned 0 truncated turns — also confirming the earlier token-truncate fix is doing its job.',
+    },
+    summaryBullets: {
+      zh: [
+        'Admin 帳號跑 chat 不再扣 quota、不會撞自己 429',
+        'total_queries 仍計數，admin 使用量還是看得到',
+        '一般使用者扣 quota / 收 429 的行為完全不變',
+        '解開 eval pipeline 卡住：token-truncate fix answer_match 0.025 → 0.595',
+      ],
+      en: [
+        'Admin chat requests no longer decrement quota and never hit self-induced 429',
+        'total_queries still increments so admin usage stays observable',
+        'Non-admin quota decrement and 429 behavior are unchanged',
+        'Unblocks the eval pipeline: token-truncate fix answer_match 0.025 → 0.595',
+      ],
+    },
+  },
+  {
     date: '2026-05-23', slug: 'landing-redesign-hotfix-transcript-and-audio', milestone: 'v1.8', tag: 'fix',
     title: {
       zh: '逐字稿、音訊播放、節目簡介都修好了',

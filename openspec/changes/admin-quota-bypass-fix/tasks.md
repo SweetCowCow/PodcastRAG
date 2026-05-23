@@ -19,12 +19,12 @@
 
 ## 3. Ship to prod + re-run eval gate
 
-- [ ] 3.1 Commit + push to main (gitleaks scan first per `feedback_public_repo_commit_safety.md`).
-- [ ] 3.2 Trigger backend redeploy: `npx -y zeabur service redeploy --id 69eb10360da29f05f49a4b0b -y --interactive=false` (backend service id per `project_pending_changes.md`).
-- [ ] 3.3 Wait for RUNNING; verify by curl `https://podcastrag-api.zeabur.app/me` returns 200 with admin role.
-- [ ] 3.4 Quick prod smoke (admin path): refresh E2E backdoor session (per `reference_e2e_backdoor.md`), send 35 sequential chat requests to `https://podcastrag-api.zeabur.app/shows/{any_show_id}/query` mode=chat with a trivial prompt; assert all 35 return HTTP 200 (not 429) and last response body has `quota_remaining=-1`.
-- [ ] 3.5 Re-run `backend/scripts/run_chat_agent_eval.py --dataset backend/eval/datasets/extended-multi-turn-40.json --label token-truncate-rerun-post-bypass-2026-05-23 --backend-url https://podcastrag-api.zeabur.app --auth-token <SESSION> --top-k 5 --origin https://app.podcastrag.app --out backend/eval/results/chat_eval_token_truncate_rerun_post_bypass.json`. Launch via nohup + persistent log per `feedback_background_task_lifecycle.md`.
-- [ ] 3.6 After eval finishes, confirm `answer_match` is back in baseline range (≥ 0.5 — previous baseline before token-truncate change was 0.55 from `multi-turn-40-add-recall-ground-truth` archive). Also confirm `agent_truncated` field 在 b20 那題沒出現（這是 token-truncate fix 的真正驗證）。
+- [x] 3.1 Commit + push to main (gitleaks scan first per `feedback_public_repo_commit_safety.md`).
+- [x] 3.2 Trigger backend redeploy: `npx -y zeabur service redeploy --id 69eb10360da29f05f49a4b0b -y --interactive=false` (backend service id per `project_pending_changes.md`).
+- [x] 3.3 Wait for RUNNING; verify by curl `https://podcastrag-api.zeabur.app/me` returns 200 with admin role.
+- [x] 3.4 Quick prod smoke (admin path): refresh E2E backdoor session (per `reference_e2e_backdoor.md`), send 35 sequential chat requests to `https://podcastrag-api.zeabur.app/shows/{any_show_id}/query` mode=chat with a trivial prompt; assert all 35 return HTTP 200 (not 429) and last response body has `quota_remaining=-1`.
+- [x] 3.5 Re-run `backend/scripts/run_chat_agent_eval.py --dataset backend/eval/datasets/extended-multi-turn-40.json --label token-truncate-rerun-post-bypass-2026-05-23 --backend-url https://podcastrag-api.zeabur.app --auth-token <SESSION> --top-k 5 --origin https://app.podcastrag.app --out backend/eval/results/chat_eval_token_truncate_rerun_post_bypass.json`. Launch via nohup + persistent log per `feedback_background_task_lifecycle.md`.
+- [x] 3.6 After eval finishes, confirm `answer_match` is back in baseline range (≥ 0.5 — previous baseline before token-truncate change was 0.55 from `multi-turn-40-add-recall-ground-truth` archive). Also confirm `agent_truncated` field 在 b20 那題沒出現（這是 token-truncate fix 的真正驗證）。
 - [ ] 3.7 Append result summary to `docs/case-studies/landing-redesign-hotfix-2026-05-24.md` under a "Follow-up: admin-quota-bypass-fix + token-truncate eval rerun" section (file is not git-tracked per `feedback_case_studies_no_commit.md`).
 
 ## 4. Release log + archive
