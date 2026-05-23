@@ -136,15 +136,6 @@ const TranscriptPage = ({ lang, show, episode, onBack, initSearch, highlightTime
           <Btn variant="secondary" size="sm" icon="play"
             disabled={!audio}
             onClick={() => {
-              // landing-redesign-hotfix-transcript-and-audio task 4.4 — single
-              // deploy cycle of instrumentation; remove in task 8.1 after prod
-              // smoke confirms which condition was previously falsy.
-              try { console.log('[transcript-play]', {
-                hasAudio: !!audio,
-                hasEpisode: !!episode,
-                hasUrl: !!episode?.audio_url,
-                paragraphsLen: paragraphs?.length,
-              }); } catch (_) { /* ignore */ }
               if (!audio) return;
               const startSec = (activeIdx != null && segments && segments[activeIdx])
                 ? segments[activeIdx].start_time : 0;

@@ -36,7 +36,7 @@
 - [x] 4.2 Modify the button JSX so the render condition becomes `episode && episode.audio_url` (drop the `audio &&` guard). Add `disabled={!audio}` to the `<Btn>` props.
 - [x] 4.3 Wrap the `onClick` body in a `if (!audio) return;` early-return so disabled state cannot trigger playback even if click somehow fires.
 - [x] 4.4 Add a single `console.log('[transcript-play]', { hasAudio: !!audio, hasEpisode: !!episode, hasUrl: !!episode?.audio_url, paragraphsLen: paragraphs?.length })` at the start of the `onClick` handler for one prod deploy cycle. Plan to remove this log in the archive PR after root cause is captured.
-- [ ] 4.5 After deploy, open TranscriptPage in chrome-devtools, confirm the button is in the DOM via `document.querySelectorAll('button')` snapshot. If disabled, click once and capture the console line to identify which condition is falsy.
+- [x] 4.5 After deploy, open TranscriptPage in chrome-devtools, confirm the button is in the DOM via `document.querySelectorAll('button')` snapshot. If disabled, click once and capture the console line to identify which condition is falsy.
 
 ## 5. Fix HomePage ShowCard description raw HTML leak
 
@@ -49,23 +49,23 @@
 - [x] 6.1 With B1 (multi-paragraph aggregation) merged locally, run `node src/utils/aggregateParagraphs.test.js` and `node src/utils/stripHtml.test.js` — both must exit 0.
 - [x] 6.2 Read `src/TranscriptPage.jsx:68-99` (the existing `deepLinkSecondsRef` + closest-segment + ±5 second window logic). Confirm the logic operates on `segments` (not `paragraphs`); if so, no code change is needed for B3 — verification only.
 - [x] 6.2a Fix `parseInt(sid, 10)` UUID lookup bug in paragraph render. `src/TranscriptPage.jsx:268` currently uses `parseInt(sid, 10)` to convert `segment_ids` strings back to indices, but `sid` is a UUID string (per `aggregateParagraphs.js:44` + API response) — `parseInt('58552e0b...', 10)` returns `58552` (stops at 'e'), causing `segments[58552]` to be `undefined` and the per-segment `<span id="seg-{N}">` anchors to render with garbage indices. Replace with the same `segments.findIndex(s => String(s.id ?? segments.indexOf(s)) === sid)` pattern already used on line 246 for `containsActive`. Without this fix, B1's paragraph-split improvement renders mostly-empty paragraphs and B3 deep-link scroll cannot find `seg-{closest}` anchor.
-- [ ] 6.3 If verification step 7.4 below shows scroll still mis-aligned after B1 + 6.2a ship, add a follow-up subtask here to switch the scroll target from segment index to paragraph index. Do NOT prematurely refactor.
+- [x] 6.3 If verification step 7.4 below shows scroll still mis-aligned after B1 + 6.2a ship, add a follow-up subtask here to switch the scroll target from segment index to paragraph index. Do NOT prematurely refactor.
 
 ## 7. Prod chrome-devtools-mcp smoke verification
 
-- [ ] 7.1 After ship to prod and Zeabur deployment reaches RUNNING, open `https://app.podcastrag.app/` in chrome-devtools-mcp.
-- [ ] 7.2 On the home page, take a full snapshot and confirm none of the ShowCard descriptions contain `<` or `>` or `&amp;` or `&lt;` substrings (use `evaluate_script` to scan all `[class*="card"], section` text content). Capture screenshot.
-- [ ] 7.3 Click ShowCard for 曼報, switch to 語意 tab, search "AI 泡沫", click "跳到這段內容" on the first result. Confirm the URL contains `?show_id=...&episode_id=...&t=N`.
-- [ ] 7.4 On TranscriptPage, evaluate `[...document.querySelectorAll('*')].filter(el => el.children.length === 0 && /^\d{2}:\d{2}$/.test(el.textContent?.trim() || '')).filter(el => el.getBoundingClientRect().x > 280).length` and confirm result `>= 20` (right-side paragraph timestamps). Capture screenshot.
-- [ ] 7.5 Confirm the right-side scroller `scrollTop` is within ±200px of the y-offset of the paragraph closest to `t` query param (deep-link scroll worked).
-- [ ] 7.6 Confirm the top bar "從此處播放" button exists and is enabled (`document.querySelector('button:not([disabled])')` matches). Click it. Confirm the StickyAudioBar appears at the bottom of the page (audio element `currentTime > 0` and isPlaying true).
-- [ ] 7.7 Click back to QueryPage, confirm StickyAudioBar still visible and audio still playing (currentTime keeps advancing).
-- [ ] 7.8 Append the 4 confirmation screenshots and the DOM evaluate outputs to `docs/case-studies/landing-redesign-hotfix-2026-05-24.md` (per `feedback_case_studies_no_commit.md` this file is NOT git-tracked).
+- [x] 7.1 After ship to prod and Zeabur deployment reaches RUNNING, open `https://app.podcastrag.app/` in chrome-devtools-mcp.
+- [x] 7.2 On the home page, take a full snapshot and confirm none of the ShowCard descriptions contain `<` or `>` or `&amp;` or `&lt;` substrings (use `evaluate_script` to scan all `[class*="card"], section` text content). Capture screenshot.
+- [x] 7.3 Click ShowCard for 曼報, switch to 語意 tab, search "AI 泡沫", click "跳到這段內容" on the first result. Confirm the URL contains `?show_id=...&episode_id=...&t=N`.
+- [x] 7.4 On TranscriptPage, evaluate `[...document.querySelectorAll('*')].filter(el => el.children.length === 0 && /^\d{2}:\d{2}$/.test(el.textContent?.trim() || '')).filter(el => el.getBoundingClientRect().x > 280).length` and confirm result `>= 20` (right-side paragraph timestamps). Capture screenshot.
+- [x] 7.5 Confirm the right-side scroller `scrollTop` is within ±200px of the y-offset of the paragraph closest to `t` query param (deep-link scroll worked).
+- [x] 7.6 Confirm the top bar "從此處播放" button exists and is enabled (`document.querySelector('button:not([disabled])')` matches). Click it. Confirm the StickyAudioBar appears at the bottom of the page (audio element `currentTime > 0` and isPlaying true).
+- [x] 7.7 Click back to QueryPage, confirm StickyAudioBar still visible and audio still playing (currentTime keeps advancing).
+- [x] 7.8 Append the 4 confirmation screenshots and the DOM evaluate outputs to `docs/case-studies/landing-redesign-hotfix-2026-05-24.md` (per `feedback_case_studies_no_commit.md` this file is NOT git-tracked).
 
 ## 8. Remove instrumentation and archive
 
-- [ ] 8.1 Remove the `console.log('[transcript-play]', ...)` line added in task 4.4 once root cause has been captured in the case study.
-- [ ] 8.2 Update `src/TranscriptPage.jsx` script tag in `index.html` (bump `?v=N` cache-bust suffix). Same for `src/HomePage.jsx` if ShowCard was inlined there in task 5.2.
-- [ ] 8.3 Verify `node src/utils/aggregateParagraphs.test.js` and `node src/utils/stripHtml.test.js` both still pass locally.
+- [x] 8.1 Remove the `console.log('[transcript-play]', ...)` line added in task 4.4 once root cause has been captured in the case study.
+- [x] 8.2 Update `src/TranscriptPage.jsx` script tag in `index.html` (bump `?v=N` cache-bust suffix). Same for `src/HomePage.jsx` if ShowCard was inlined there in task 5.2.
+- [x] 8.3 Verify `node src/utils/aggregateParagraphs.test.js` and `node src/utils/stripHtml.test.js` both still pass locally.
 - [ ] 8.4 Open release log; draft an entry summarising "逐字稿閱讀體驗修復 + 音訊播放入口修復 + 節目簡介顯示乾淨" in user-facing language (per `feedback_release_log_style.md`). Wait for user confirmation before committing the release log entry.
 - [ ] 8.5 Run `/spectra-archive landing-redesign-hotfix-transcript-and-audio` only after task 7.8 evidence collection completes AND user approves release log draft.
