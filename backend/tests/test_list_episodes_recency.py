@@ -134,14 +134,14 @@ async def test_n_total_matched_reports_full_count():
 
 def test_n_validation_rejects_above_20():
     with pytest.raises(ValidationError):
-        ListEpisodesInput(show_id=uuid.uuid4(), n=25)
+        ListEpisodesInput(n=25)
     with pytest.raises(ValidationError):
-        ListEpisodesInput(show_id=uuid.uuid4(), n=0)
+        ListEpisodesInput(n=0)
 
 
 def test_year_start_after_year_end_rejected():
     with pytest.raises(ValidationError):
-        ListEpisodesInput(show_id=uuid.uuid4(), year_start=2025, year_end=2024)
+        ListEpisodesInput(year_start=2025, year_end=2024)
 
 
 # ---------------------------------------------------------------------------

@@ -39,7 +39,7 @@
 
 ## 5. Prod chrome-devtools verification — recency tool (A)
 
-- [ ] 5.1 Commit + push tasks 1-4 to main (gitleaks scan first per `feedback_public_repo_commit_safety.md`). Trigger backend redeploy via Zeabur CLI (backend service id `69eb10360da29f05f49a4b0b`).
+- [x] 5.1 Commit + push tasks 1-4 to main (gitleaks scan first per `feedback_public_repo_commit_safety.md`). Trigger backend redeploy via Zeabur CLI (backend service id `69eb10360da29f05f49a4b0b`).
 - [ ] 5.2 After deploy reaches RUNNING and curl `/me` returns 200 with admin role, open chrome-devtools-mcp and navigate to https://app.podcastrag.app/. Switch to 對話 tab on 曼報 show.
 - [ ] 5.3 Run scenario S-A1 — recency query "最新一集的來賓是誰？": send the chat request with `?debug_trace=true`. Assert `tool_calls` array contains at least one entry where `name == "list_episodes"`. Assert `tool_calls[*].args` includes the current show_id and an `n` value between 1 and 5. Assert the final answer references an actual episode title returned by the tool call (cross-check via `/episodes/{id}` API). Save screenshot + trace JSON to `/tmp/ordinal_evidence/`.
 - [ ] 5.4 Run scenario S-A2 — "最舊五集的標題是什麼？": same protocol; assert `list_episodes` call with `order='oldest'` and `n` between 1 and 5; answer lists 5 actual episode titles in ascending date order.

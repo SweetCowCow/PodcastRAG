@@ -75,6 +75,8 @@ class FindEpisodesByTopicInput(BaseModel):
 class FindEpisodesByDateInput(BaseModel):
     start: date
     end: date
+    order: Literal["newest", "oldest"] = "newest"
+    limit: int | None = Field(default=None, ge=1, le=50)
 
 
 class GetEpisodeSummaryInput(BaseModel):
@@ -116,7 +118,6 @@ class UnpinEpisodeInput(BaseModel):
 
 
 class ListEpisodesInput(BaseModel):
-    show_id: uuid.UUID
     n: int = Field(default=5, ge=1, le=20)
     order: Literal["newest", "oldest"] = "newest"
     topic: str | None = None
@@ -178,7 +179,9 @@ async def _find_episodes_by_topic(inp: FindEpisodesByTopicInput, ctx: ToolContex
 async def _find_episodes_by_date(inp: FindEpisodesByDateInput, ctx: ToolContext) -> dict:
     start = datetime.combine(inp.start, datetime.min.time(), tzinfo=timezone.utc)
     end = datetime.combine(inp.end, datetime.max.time(), tzinfo=timezone.utc)
-    eps = await episode_finders.find_episodes_by_date_range(ctx.db, ctx.show_id, start, end)
+    eps = await episode_finders.find_episodes_by_date_range(
+        ctx.db, ctx.show_id, start, end, order=inp.order, limit=inp.limit
+    )
     return {"episodes": [e.model_dump(mode="json") for e in eps]}
 
 
