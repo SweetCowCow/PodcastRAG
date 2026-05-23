@@ -52,6 +52,31 @@ const MILESTONE_LABELS = {
 const RELEASE_LOG = [
   // ─── v1.8 — Chat Mode: Agentic (5/21~) ───
   {
+    date: '2026-05-24', slug: 'agentic-prompt-grounding-and-ordinal-tool', milestone: 'v1.8', tag: 'fix',
+    title: {
+      zh: '對話模式找「最新 / 最舊集數」變聰明',
+      en: 'Chat Mode Recency Lookup Now Works',
+    },
+    summary: {
+      zh: '修對話模式抓不到「最新一集 / 最舊五集 / 2024 年最後一集歌單 / 上週最舊一集」這類 recency 問題的問題。之前問「最新一集的來賓是誰？」對話 agent 會直接放棄回「無法確認」，因為手上沒有任何能 sort + limit 的工具。這次補了一個 list_episodes tool，可以指定要幾集 + 最新 / 最舊 + 可選 topic / 年份 filter，agent 看到 recency 問題就會用它。同時把既有的「找某段日期的集數」工具也補了排序 + 數量上限參數，「上週最舊一集」這類問題現在會自己算 datetime range + limit=1 直接答出真實 EP 編號。順手把對話 agent 的 SYSTEM_PROMPT 補了「絕對不能編造」清單（節目名 / 來賓姓名 / EP 編號 / 集數標題 / 來賓引號內的話 / 統計數字）— 部分場景有效（問不存在的來賓直接說查不到、不亂編節目名），但 LLM judge eval 量化顯示 hallucination severe rate 沒有顯著下降，需要下一輪 prompt 重做才能根治。',
+      en: 'Fixes "find latest / oldest episodes" queries in chat mode. Previously, asking "who was the guest on the latest episode?" would have the chat agent give up with "cannot confirm" because no existing tool could sort + limit. This change adds a list_episodes tool — specify how many episodes, newest or oldest, with optional topic / year filters. The existing date-range tool also gained sort + limit kwargs, so "the oldest episode from last week" now correctly computes a 7-day window with limit=1. Also added a "do not fabricate" list to the chat agent SYSTEM_PROMPT (show names, guest names, EP numbers, episode titles, quoted lines, counts) — partial wins in simple refusal cases (asking about a non-existent guest returns an honest "not found" instead of making one up), but LLM-as-judge evaluation shows hallucination severe rate did not materially drop; a second prompt iteration is needed.',
+    },
+    summaryBullets: {
+      zh: [
+        '問「最新三集是哪些」「最舊五集是哪些」「2024 年最後一集歌單」現在會直接答出真實 EP',
+        '問「上週最舊一集」會自己算 7 天日期範圍 + 取最舊 1 集，不再放棄',
+        '問不存在的來賓 / 不存在的引號內句子，會老實說「查不到」不再亂編',
+        '對「節目整體風格」這類推論題，目前還沒嚴格加註「請以節目實際內容為準」— 留下一輪 prompt 重做',
+      ],
+      en: [
+        'Asking "latest 3 episodes / oldest 5 episodes / last 2024 playlist episode" now returns real EPs',
+        '"Oldest episode from last week" auto-computes a 7-day range + limit=1, no more give-up',
+        'Asking about non-existent guests or fabricated quotes now honestly returns "not found"',
+        'Inference questions ("what\'s the show\'s overall style?") do not yet append the "please verify against the actual content" disclaimer — left for the next prompt iteration',
+      ],
+    },
+  },
+  {
     date: '2026-05-23', slug: 'admin-quota-bypass-fix', milestone: 'v1.8', tag: 'fix',
     title: {
       zh: 'Admin 帳號跑 eval 不再被自己擋',
