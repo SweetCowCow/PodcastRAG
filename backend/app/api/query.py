@@ -389,9 +389,21 @@ async def query_show(
     if show is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Show 不存在")
 
-    # Atomically decrement quota BEFORE any LLM/embedding call. If subsequent
-    # RAG calls fail, we do NOT refund (see design: 失敗成本權衡).
-    quota_remaining = await _atomic_decrement_quota(db, user.id)
+    # admin-quota-bypass-fix: admin role bypasses quota check entirely so
+    # admin-driven eval / dogfood / prod smoke don't drain their own quota
+    # and start hitting 429 mid-batch. total_queries still increments so admin
+    # usage stays observable. Non-admin path is unchanged (_atomic_decrement_quota
+    # still atomic + still raises 429 when remaining == 0).
+    if user.role == "admin":
+        await db.execute(
+            update(User)
+            .where(User.id == user.id)
+            .values(total_queries=User.total_queries + 1)
+        )
+        await db.commit()
+        quota_remaining = -1
+    else:
+        quota_remaining = await _atomic_decrement_quota(db, user.id)
 
     history = [m.model_dump() for m in payload.messages[-rag.HISTORY_WINDOW:]]
 
