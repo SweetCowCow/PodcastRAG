@@ -4,11 +4,16 @@
 // are identical in both contexts (decision 7 in
 // landing-and-mode-orchestration-redesign/design.md).
 //
-// Rules (per design decision 7):
+// Rules (per design decision 7 + landing-redesign-hotfix-transcript-and-audio D1):
 //   - Adjacent segments are merged into the same paragraph by default.
-//   - A new paragraph starts when:
+//   - A new paragraph starts when (first-match-wins, evaluated in order):
 //       (a) start_time(next) - end_time(prev) >= gap_threshold_seconds (default 1.5s)
-//       (b) speaker field changes between adjacent segments
+//       (b) speaker field changes between adjacent segments (both non-null)
+//       (c) cumulative paragraph duration >= max_paragraph_seconds (default 45s, hard ceiling)
+//       (d) current paragraph_text ends in [。！？.!?] AND duration >= min_paragraph_seconds (default 15s)
+//   - (c) + (d) added to handle Whisper word-level ASR output that has no
+//     speaker labels and gap=0 between every segment (would otherwise collapse
+//     an 80-minute episode into a single paragraph).
 //   - Empty / null input returns [].
 //   - Missing end_time falls back to start_time (defensive; never throws).
 //
@@ -24,6 +29,13 @@
     const gapThreshold = (opts && typeof opts.gap_threshold_seconds === 'number')
       ? opts.gap_threshold_seconds
       : 1.5;
+    const maxParagraphSec = (opts && typeof opts.max_paragraph_seconds === 'number')
+      ? opts.max_paragraph_seconds
+      : 45;
+    const minParagraphSec = (opts && typeof opts.min_paragraph_seconds === 'number')
+      ? opts.min_paragraph_seconds
+      : 15;
+    const SENTENCE_END_RE = /[。！？.!?]$/;
 
     const paragraphs = [];
     let cur = null;
@@ -57,8 +69,13 @@
       const prevEnd = cur.end_time != null ? cur.end_time : cur.start_time;
       const gap = (start != null && prevEnd != null) ? (start - prevEnd) : 0;
       const speakerChanged = (cur.speaker != null && speaker != null && cur.speaker !== speaker);
+      const curDuration = (cur.end_time != null && cur.start_time != null)
+        ? (cur.end_time - cur.start_time)
+        : 0;
+      const exceedsMax = curDuration >= maxParagraphSec;
+      const sentenceEndSplit = SENTENCE_END_RE.test(cur.paragraph_text) && curDuration >= minParagraphSec;
 
-      if ((gap != null && gap >= gapThreshold) || speakerChanged) {
+      if ((gap != null && gap >= gapThreshold) || speakerChanged || exceedsMax || sentenceEndSplit) {
         flush();
         cur = {
           paragraph_text: text,

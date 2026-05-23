@@ -132,9 +132,20 @@ const TranscriptPage = ({ lang, show, episode, onBack, initSearch, highlightTime
           <Input value={search} onChange={e => setSearch(e.target.value)} placeholder={t ? '關鍵字高亮搜尋...' : 'Highlight keywords...'} icon="search" />
         </div>
         {search && <span style={{ fontSize: 12, color: TOKEN.textMuted, whiteSpace: 'nowrap' }}>{matchCount} {t ? '個匹配' : 'matches'}</span>}
-        {audio && episode && episode.audio_url && (
+        {episode && episode.audio_url && (
           <Btn variant="secondary" size="sm" icon="play"
+            disabled={!audio}
             onClick={() => {
+              // landing-redesign-hotfix-transcript-and-audio task 4.4 — single
+              // deploy cycle of instrumentation; remove in task 8.1 after prod
+              // smoke confirms which condition was previously falsy.
+              try { console.log('[transcript-play]', {
+                hasAudio: !!audio,
+                hasEpisode: !!episode,
+                hasUrl: !!episode?.audio_url,
+                paragraphsLen: paragraphs?.length,
+              }); } catch (_) { /* ignore */ }
+              if (!audio) return;
               const startSec = (activeIdx != null && segments && segments[activeIdx])
                 ? segments[activeIdx].start_time : 0;
               audio.playFromTime(episode.id, startSec, {
@@ -230,9 +241,13 @@ const TranscriptPage = ({ lang, show, episode, onBack, initSearch, highlightTime
                   scroll-to-segment logic; the paragraph wrapper holds the
                   outer paragraph and within it the original segment lines
                   remain individually targetable. */}
+              {/* landing-redesign-hotfix-transcript-and-audio task 6.2a:
+                  segment_ids are UUID strings — must map back via findIndex,
+                  NOT parseInt (which would stop at the first non-digit char). */}
               {paragraphs.map((para, pIdx) => {
                 const segIds = para.segment_ids || [];
-                const containsActive = segIds.some(sid => String(segments.findIndex(s => String(s.id || segments.indexOf(s)) === sid)) === String(activeIdx));
+                const segIndexFor = (sid) => segments.findIndex((s, idx) => String(s.id != null ? s.id : idx) === sid);
+                const containsActive = segIds.some(sid => segIndexFor(sid) === activeIdx);
                 const matched = search.trim() && (para.paragraph_text || '').toLowerCase().includes(search.trim().toLowerCase());
                 return (
                   <div key={pIdx}
@@ -254,8 +269,8 @@ const TranscriptPage = ({ lang, show, episode, onBack, initSearch, highlightTime
                     <p style={{ margin: 0, color: containsActive ? TOKEN.text : TOKEN.textSecondary, fontSize: 14, lineHeight: 1.85, flex: 1 }}>
                       {/* Internal segment anchors preserved for deep-link */}
                       {segIds.map((sid, sIdx) => {
-                        const segIndex = parseInt(sid, 10);
-                        const seg = (!Number.isNaN(segIndex) && segments[segIndex]) ? segments[segIndex] : null;
+                        const segIndex = segIndexFor(sid);
+                        const seg = (segIndex >= 0 && segments[segIndex]) ? segments[segIndex] : null;
                         if (!seg) return null;
                         const active = activeIdx === segIndex;
                         const isHighlighted = highlightedIdx === segIndex;
