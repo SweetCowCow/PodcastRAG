@@ -67,5 +67,5 @@
 - [x] 8.1 Remove the `console.log('[transcript-play]', ...)` line added in task 4.4 once root cause has been captured in the case study.
 - [x] 8.2 Update `src/TranscriptPage.jsx` script tag in `index.html` (bump `?v=N` cache-bust suffix). Same for `src/HomePage.jsx` if ShowCard was inlined there in task 5.2.
 - [x] 8.3 Verify `node src/utils/aggregateParagraphs.test.js` and `node src/utils/stripHtml.test.js` both still pass locally.
-- [ ] 8.4 Open release log; draft an entry summarising "逐字稿閱讀體驗修復 + 音訊播放入口修復 + 節目簡介顯示乾淨" in user-facing language (per `feedback_release_log_style.md`). Wait for user confirmation before committing the release log entry.
-- [ ] 8.5 Run `/spectra-archive landing-redesign-hotfix-transcript-and-audio` only after task 7.8 evidence collection completes AND user approves release log draft.
+- [x] 8.4 Open release log; draft an entry summarising "逐字稿閱讀體驗修復 + 音訊播放入口修復 + 節目簡介顯示乾淨" in user-facing language (per `feedback_release_log_style.md`). Wait for user confirmation before committing the release log entry.
+- [x] 8.5 Run `/spectra-archive landing-redesign-hotfix-transcript-and-audio` only after task 7.8 evidence collection completes AND user approves release log draft.

@@ -52,6 +52,33 @@ const MILESTONE_LABELS = {
 const RELEASE_LOG = [
   // ─── v1.8 — Chat Mode: Agentic (5/21~) ───
   {
+    date: '2026-05-23', slug: 'landing-redesign-hotfix-transcript-and-audio', milestone: 'v1.8', tag: 'fix',
+    title: {
+      zh: '逐字稿、音訊播放、節目簡介都修好了',
+      en: 'Transcript Reading, Audio Playback, and Show Descriptions All Fixed',
+    },
+    summary: {
+      zh: '修了介面改版上線後抓到的 4 個視覺問題：(1) 點進逐字稿頁原本一集 80 分鐘的對話會擠成一大塊牆，看不到段落切點 — 現在自動切成 100 段左右，每段都帶時間戳，要找某一句話直接掃就好。(2) 「從此處播放」按鈕原本根本沒出現，整個站沒有任何方式聽音訊 — 現在按鈕固定在逐字稿頁右上角，點下去開始播 + 底部浮出迷你 player，切回查詢頁繼續播不中斷。(3) 搜尋結果點「跳到這段內容」原本只跳到頁首，現在會 scroll 到對應時間的段落並標亮。(4) 首頁節目卡片原本會看到 `<p>` `<br />` 這些原始 HTML 標籤外漏，現在乾淨的純文字 + 自動換行。順手也修了一個 pre-existing bug：逐字稿用 UUID 對應 segment 但用 parseInt 解析，導致段落內容對不上 — 一起整理掉。',
+      en: 'Fixes 4 visual regressions found after the landing redesign shipped: (1) Transcript pages used to render an 80-minute episode as one giant wall of text — now auto-split into ~100 paragraphs, each with a timestamp, so you can scan to find a quote. (2) The "Play here" button never rendered, leaving the site with no way to play audio — now it sits fixed on the transcript top bar, clicking starts playback + a mini player floats at the bottom and keeps playing when you navigate back to the query page. (3) "Jump to this segment" links from search results used to only scroll to the top — now they scroll to the matching timestamp paragraph and highlight it. (4) Show description cards on the home page used to leak raw `<p>` `<br />` HTML tags — now clean plain text with auto line-breaks. Also picked up a pre-existing bug where transcript paragraphs used parseInt to map UUID segment ids, mis-targeting content — patched along the way.',
+    },
+    summaryBullets: {
+      zh: [
+        '逐字稿不再整集擠一塊，自動切成多段帶時間戳',
+        '逐字稿頁右上角「從此處播放」按鈕回來了，底部浮出 mini player',
+        '音訊跨頁繼續播，不會被切回查詢頁中斷',
+        '搜尋結果「跳到這段內容」真的會 scroll 到對應段落',
+        '首頁節目簡介不再顯示原始 HTML 標籤',
+      ],
+      en: [
+        'Transcripts no longer render as one wall of text — auto-split with timestamps',
+        '"Play here" button now appears on the transcript page; mini player floats at the bottom',
+        'Audio keeps playing across page navigation, no more interruption',
+        '"Jump to this segment" links actually scroll to the correct paragraph',
+        'Home-page show descriptions render as clean text, no more raw HTML tags',
+      ],
+    },
+  },
+  {
     date: '2026-05-23', slug: 'agent-token-budget-and-tool-truncate', milestone: 'v1.8', tag: 'fix',
     title: {
       zh: '對話模式不會再因為單題太複雜直接出錯',
