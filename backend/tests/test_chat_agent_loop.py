@@ -127,7 +127,17 @@ async def test_run_agent_happy_path_enumeration():
             episode_id=ep_id,
             title="歌單 EP101",
             published_at=datetime(2024, 1, 1, tzinfo=timezone.utc),
-        )
+        ),
+        EpisodeRef(
+            episode_id=uuid.uuid4(),
+            title="歌單 EP112",
+            published_at=datetime(2024, 2, 1, tzinfo=timezone.utc),
+        ),
+        EpisodeRef(
+            episode_id=uuid.uuid4(),
+            title="歌單 EP120",
+            published_at=datetime(2024, 3, 1, tzinfo=timezone.utc),
+        ),
     ]
 
     with (

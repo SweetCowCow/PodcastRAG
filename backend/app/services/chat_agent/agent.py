@@ -16,6 +16,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -173,6 +174,17 @@ class StageTimings:
 
 
 @dataclass
+class EnumerationStateSnapshotInternal:
+    """state.last_enumeration_episodes captured at build_messages time
+    for the current turn. Plain dataclass to keep agent.py free of
+    schemas; query.py converts to the response model."""
+
+    last_enumeration_episodes: list[str] = field(default_factory=list)
+    last_enumeration_at: str | None = None
+    user_question: str = ""
+
+
+@dataclass
 class ChatAgentResult:
     answer: str
     tool_calls: list[ToolCallTrace]
@@ -181,6 +193,70 @@ class ChatAgentResult:
     usage: TokenUsage = field(default_factory=TokenUsage)
     llm_calls: list[LLMCallTrace] = field(default_factory=list)
     stage_timings: StageTimings = field(default_factory=StageTimings)
+    unverified_count: int = 0
+    enumeration_snapshot: EnumerationStateSnapshotInternal | None = None
+
+
+# Post-generation citation scan (agentic-severe-residual-fix-2026-05).
+# Matches:
+#   - EP\d+ tokens (case-insensitive)
+#   - quoted strings of ≥4 chars inside 「…」 (CJK) or "…" (ASCII)
+_EP_TOKEN_RE = re.compile(r"EP\d+", re.IGNORECASE)
+_QUOTE_RE = re.compile(r"「([^」]{4,})」|\"([^\"]{4,})\"")
+_UNVERIFIED_SUFFIX = "[未驗證]"
+
+
+def _annotate_unverified_tokens(
+    answer: str, tool_calls: list[ToolCallTrace]
+) -> tuple[str, int]:
+    """Append `[未驗證]` after every EP-token and quoted string in `answer`
+    that does NOT appear as a substring in the concatenation of all
+    `tool_calls[].result_full` strings.
+
+    Tokens already followed by `[未驗證]` (e.g. from a prior annotation)
+    are not re-annotated. Returns the annotated answer + the count of
+    annotations applied.
+    """
+    if not answer:
+        return answer, 0
+    reference_blob = "\n".join(
+        (tc.result_full or "") for tc in tool_calls if getattr(tc, "result_full", None)
+    )
+    if not reference_blob:
+        # No tool results to verify against — leave the answer untouched.
+        # The agent's grounded-refusal rules should already cover this path.
+        return answer, 0
+
+    count = 0
+
+    def _annotate_ep(m: re.Match) -> str:
+        nonlocal count
+        token = m.group(0)
+        end = m.end()
+        # Don't double-annotate.
+        if answer.startswith(_UNVERIFIED_SUFFIX, end):
+            return token
+        if token in reference_blob:
+            return token
+        count += 1
+        return token + _UNVERIFIED_SUFFIX
+
+    annotated = _EP_TOKEN_RE.sub(_annotate_ep, answer)
+
+    def _annotate_quote(m: re.Match) -> str:
+        nonlocal count
+        full = m.group(0)
+        inner = m.group(1) or m.group(2) or ""
+        end = m.end()
+        if annotated.startswith(_UNVERIFIED_SUFFIX, end):
+            return full
+        if inner in reference_blob:
+            return full
+        count += 1
+        return full + _UNVERIFIED_SUFFIX
+
+    annotated = _QUOTE_RE.sub(_annotate_quote, annotated)
+    return annotated, count
 
 
 async def run_agent(
@@ -210,6 +286,13 @@ async def run_agent(
     stage_timings.state_load_ms = (time.perf_counter() - _t) * 1000.0
 
     _t = time.perf_counter()
+    enumeration_snapshot = EnumerationStateSnapshotInternal(
+        last_enumeration_episodes=[str(e) for e in state.last_enumeration_episodes],
+        last_enumeration_at=(
+            state.last_enumeration_at.isoformat() if state.last_enumeration_at else None
+        ),
+        user_question=question,
+    )
     messages = build_messages(state, [], question)
     stage_timings.build_messages_ms = (time.perf_counter() - _t) * 1000.0
 
@@ -375,6 +458,8 @@ async def run_agent(
         logger.exception("chat_agent: L1 state persist failed (non-fatal)")
     stage_timings.state_save_ms = (time.perf_counter() - _t) * 1000.0
 
+    answer, unverified_count = _annotate_unverified_tokens(answer, trace)
+
     return ChatAgentResult(
         answer=answer,
         tool_calls=trace,
@@ -383,6 +468,8 @@ async def run_agent(
         usage=usage,
         llm_calls=llm_calls,
         stage_timings=stage_timings,
+        unverified_count=unverified_count,
+        enumeration_snapshot=enumeration_snapshot,
     )
 
 

@@ -20,6 +20,7 @@ from app.schemas.query import (
     AgentTraceResponse,
     ChatResponse,
     ChunkHit,
+    EnumerationStateSnapshot,
     EpisodeRef,
     LLMCallTraceResponse,
     PublicSearchRequest,
@@ -792,6 +793,15 @@ def _agent_result_to_response(
                 history_summary_ms=result.stage_timings.history_summary_ms,
                 llm_loop_total_ms=result.stage_timings.llm_loop_total_ms,
             ),
+            enumeration_state=(
+                EnumerationStateSnapshot(
+                    last_enumeration_episodes=result.enumeration_snapshot.last_enumeration_episodes,
+                    last_enumeration_at=result.enumeration_snapshot.last_enumeration_at,
+                    user_question=result.enumeration_snapshot.user_question,
+                )
+                if result.enumeration_snapshot is not None
+                else None
+            ),
         )
     else:
         # Scrub result_full on each tool-call entry so non-admin / non-debug
@@ -819,6 +829,7 @@ def _agent_result_to_response(
         quota_remaining=quota_remaining,
         tool_calls=tool_calls_out,
         agent_truncated=result.agent_truncated,
+        unverified_count=result.unverified_count,
         enumeration_episodes=agentic_enumeration,
         enumeration_total=enumeration_total,
         trace=trace_out,

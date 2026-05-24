@@ -119,11 +119,29 @@ class StageTimingsResponse(BaseModel):
     llm_loop_total_ms: float
 
 
+class EnumerationStateSnapshot(BaseModel):
+    """State of `ChatSessionState.last_enumeration_episodes` captured at
+    `_build_system_message` time for the current turn. Only populated
+    under admin debug_trace gate; otherwise omitted.
+
+    Added by agentic-severe-residual-fix-2026-05 to diagnose mt01 t2
+    multi-turn ordinal carry failure without altering carry logic.
+    """
+
+    last_enumeration_episodes: list[str] = Field(default_factory=list)
+    last_enumeration_at: str | None = None
+    user_question: str
+
+
 class AgentTraceResponse(BaseModel):
     """Full agent telemetry trace, returned only under admin debug_trace gate."""
 
     llm_calls: list[LLMCallTraceResponse] = Field(default_factory=list)
     stage_timings: StageTimingsResponse
+    # agentic-severe-residual-fix-2026-05: enumeration state at the
+    # moment build_messages composed the turn's system prompt. None
+    # when no snapshot was captured (e.g. error path) or non-admin.
+    enumeration_state: EnumerationStateSnapshot | None = None
 
 
 class ChatResponse(BaseModel):
@@ -138,6 +156,11 @@ class ChatResponse(BaseModel):
     # rule-based pipeline so the existing response shape is preserved.
     tool_calls: list[ToolCallTrace] | None = None
     agent_truncated: bool = False
+    # agentic-severe-residual-fix-2026-05: number of EP-tokens / quoted
+    # strings in `answer` that did NOT appear in any tool result this
+    # turn (annotated in-place with `[未驗證]` suffix). 0 when no
+    # mismatch, or when the agent path was bypassed.
+    unverified_count: int = 0
     # R3.3 Phase 9: present only when the query is an enumeration question
     # (entity-driven OR rule-pattern). `None` for non-enumeration queries
     # so the frontend can switch UI mode without inspecting `citations`.

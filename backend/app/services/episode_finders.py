@@ -208,9 +208,8 @@ _BY_REF_EP_NUMBER_SQL = """
 SELECT id, title, published_at, guests, ai_summary
 FROM episodes
 WHERE show_id = :show_id
-  AND (
-    title ILIKE :ep_token_lower OR title ILIKE :ep_token_upper
-    OR title ILIKE :chinese_ep_token
+  AND title ~* (
+    E'(^|[^0-9A-Za-z])(?:EP|第)\\s*' || :n || E'(?:集)?($|[^0-9])'
   )
 ORDER BY published_at DESC NULLS LAST
 LIMIT 1
@@ -252,9 +251,7 @@ async def find_by_ref(
         n = m.group(1)
         params = {
             "show_id": show_id,
-            "ep_token_lower": f"%ep{n}%",
-            "ep_token_upper": f"%EP{n}%",
-            "chinese_ep_token": f"%第{n}集%",
+            "n": n,
         }
         result = await db.execute(text(_BY_REF_EP_NUMBER_SQL), params)
         row = result.mappings().first()
