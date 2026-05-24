@@ -180,6 +180,7 @@ def _extract_trace_blob(resp: dict) -> dict | None:
         "tool_calls": tool_calls,
         "llm_calls": trace.get("llm_calls", []),
         "stage_timings": trace.get("stage_timings", {}),
+        "enumeration_state": trace.get("enumeration_state"),
     }
 
 
