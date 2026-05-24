@@ -458,7 +458,9 @@ async def run_agent(
         logger.exception("chat_agent: L1 state persist failed (non-fatal)")
     stage_timings.state_save_ms = (time.perf_counter() - _t) * 1000.0
 
-    answer, unverified_count = _annotate_unverified_tokens(answer, trace)
+    # Citation scan (task 4) reverted 2026-05-24 — annotation backfired
+    # on judge (quality -30pp). unverified_count stays at 0 / field kept
+    # in schema for forward-compat with a future soft-mode rework.
 
     return ChatAgentResult(
         answer=answer,
@@ -468,7 +470,7 @@ async def run_agent(
         usage=usage,
         llm_calls=llm_calls,
         stage_timings=stage_timings,
-        unverified_count=unverified_count,
+        unverified_count=0,
         enumeration_snapshot=enumeration_snapshot,
     )
 
