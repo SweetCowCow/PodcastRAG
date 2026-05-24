@@ -41,21 +41,21 @@
 
 ## 4. Re-run agent eval + LLM judge（spec req C、design D5、failure modes：judge 不穩三輪取多數）
 
-- [ ] 4.1 重跑 agent eval 對 prod backend、輸出 `backend/eval/results/chat_eval_grounding_v2.json`（dataset 鎖 `extended-multi-turn-40.json`）
-- [ ] 4.2 跑 LLM judge 對上一步結果，輸出 `backend/eval/results/llm_judge_grounding_v2.json`（judge_model 鎖 `gpt-4o`），且 result `meta` 寫 judge_model + dataset_file + run_at
-- [ ] 4.3 若同 prompt 跑兩次 severity 差 > 3 個 turn，再跑兩次共 3 輪取多數決，結果寫進 case study
+- [x] 4.1 重跑 agent eval 對 prod backend、輸出 `backend/eval/results/chat_eval_grounding_v2.json`（dataset 鎖 `extended-multi-turn-40.json`）
+- [x] 4.2 跑 LLM judge 對上一步結果，輸出 `backend/eval/results/llm_judge_grounding_v2.json`（judge_model 鎖 `gpt-4o`），且 result `meta` 寫 judge_model + dataset_file + run_at
+- [x] 4.3 若同 prompt 跑兩次 severity 差 > 3 個 turn，再跑兩次共 3 輪取多數決，結果寫進 case study
 
 ## 5. 驗 gate + 寫 case study
 
 實作 spec requirement「Hallucination gate for chat-agentic prompt changes」（design D4：gate 標準 + 評分視角校準）
 
-- [ ] 5.1 對 `llm_judge_grounding_v2.json` summary 驗三項：`hallucination_severe_count / 40 ≤ 0.10`、`hallucination_mild_count / 40 ≤ 0.275`、`answer_quality_mean ≥ 0.5375`
-- [ ] 5.2 若任一條 fail，回 task 2 重判分支或補 round 2（A+B 都做 + few-shot 加倍），不直接 archive
-- [ ] 5.3 三條都過後，把前後對比表寫進 `docs/case-studies/agentic-grounding-prompt-tune-v2-2026-05-24.md`：欄位 severe / mild / quality / 走的分支 / 兩次 judge run 時間戳
+- [x] 5.1 對 `llm_judge_grounding_v2.json` summary 驗三項：`hallucination_severe_count / 40 ≤ 0.10`、`hallucination_mild_count / 40 ≤ 0.275`、`answer_quality_mean ≥ 0.5375`
+- [x] 5.2 若任一條 fail，回 task 2 重判分支或補 round 2（A+B 都做 + few-shot 加倍），不直接 archive
+- [x] 5.3 三條都過後，把前後對比表寫進 `docs/case-studies/agentic-grounding-prompt-tune-v2-2026-05-24.md`：欄位 severe / mild / quality / 走的分支 / 兩次 judge run 時間戳
 
 ## 6. Spectra archive 前置（design 驗收條件 + 範圍邊界）
 
-- [ ] 6.1 驗 `prompts.py` git diff 只動 SYSTEM_PROMPT 字串，沒動 import / 函式簽名 / 其他常數
-- [ ] 6.2 case study 含三表（diagnose 分佈 / 分支選擇理由 / 前後對比），補進 docs
-- [ ] 6.3 跑 `spectra validate agentic-grounding-prompt-tune-v2` + `spectra analyze` 無 Critical / Warning
-- [ ] 6.4 跑 `/spectra-archive agentic-grounding-prompt-tune-v2`
+- [x] 6.1 驗 `prompts.py` git diff 只動 SYSTEM_PROMPT 字串，沒動 import / 函式簽名 / 其他常數
+- [x] 6.2 case study 含三表（diagnose 分佈 / 分支選擇理由 / 前後對比），補進 docs
+- [x] 6.3 跑 `spectra validate agentic-grounding-prompt-tune-v2` + `spectra analyze` 無 Critical / Warning
+- [x] 6.4 跑 `/spectra-archive agentic-grounding-prompt-tune-v2`
