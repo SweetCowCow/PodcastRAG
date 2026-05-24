@@ -14,32 +14,34 @@ Note on Faithfulness:
   `--auth-token` for a full faithfulness measurement; paste its judge_score_mean
   into the case study manually.
 
-Usage (two-pass, same backend):
-  1. Ensure ENABLE_AGENTIC_CHAT=false on the backend, then:
-       python backend/scripts/run_chat_agent_eval.py \\
-           --dataset backend/eval/datasets/this-not-that-cool.json \\
-           --backend-url https://api.podcastrag.app \\
-           --auth-token $TOKEN \\
-           --label rule-based \\
-           --out backend/eval/results/chat_eval_rule_based.json
+Credentials:
+  Session token + (optional) origin override come from env vars, NOT argv,
+  to keep secrets out of `ps aux` (per
+  `Requirement: Chat agent eval runner SHALL read credentials from
+  environment variables, not argv`).
 
-  2. Set ENABLE_AGENTIC_CHAT=true on the backend, then:
-       python backend/scripts/run_chat_agent_eval.py \\
-           --dataset backend/eval/datasets/this-not-that-cool.json \\
-           --backend-url https://api.podcastrag.app \\
-           --auth-token $TOKEN \\
-           --label agentic \\
-           --baseline backend/eval/results/chat_eval_rule_based.json \\
-           --out backend/eval/results/chat_eval_agentic.json
+    export PODCASTRAG_SESSION="$(cat /tmp/podcastrag_session.txt)"
+    export PODCASTRAG_ORIGIN="https://podcastrag.zeabur.app"    # optional
 
-  The second run prints the comparison table and writes
-  docs/case-studies/agentic-chat-eval-<YYYY-MM>.md.
+Usage (single run; debug_trace gate is always requested):
+    python backend/scripts/run_chat_agent_eval.py \\
+        --dataset backend/eval/datasets/extended-multi-turn-40.json \\
+        --backend-url https://podcastrag-api.zeabur.app \\
+        --label v1-with-trace \\
+        --out backend/eval/results/chat_eval_grounding_v1_with_trace.json
+
+A non-admin session triggers a one-time stderr warning and writes
+`turns[].trace = null`; the run does not fail (degraded mode).
+
+If a baseline rule-based run exists, pass `--baseline <file.json>` to
+print a comparison table.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import sys
 import time
@@ -120,23 +122,10 @@ def _search(backend_url: str, show_id: str, question: str, k: int, token: str) -
     return [f"ep:{h['episode_id']}@{float(h['start_time']):.2f}" for h in hits]
 
 
-def _query_chat(backend_url: str, show_id: str, question: str, token: str) -> str:
-    """Return the chat answer text (inline citations stripped)."""
-    try:
-        resp = _post(
-            f"{backend_url}/shows/{show_id}/query",
-            {"question": question, "mode": "chat", "messages": []},
-            token,
-            timeout=90.0,
-        )
-    except (urllib.error.URLError, json.JSONDecodeError) as exc:
-        print(f"  [warn] query failed: {exc}", file=sys.stderr)
-        return ""
-    raw = resp.get("answer") or ""
-    return _CITATION_RE.sub("", raw).strip()
+_TRACE_DEGRADE_WARNED = False
 
 
-def _query_chat_with_trace(
+def _query_chat(
     backend_url: str,
     show_id: str,
     question: str,
@@ -165,6 +154,33 @@ def _query_chat_with_trace(
         print(f"  [warn] query failed: {exc}", file=sys.stderr)
         return {}
     return resp
+
+
+def _extract_trace_blob(resp: dict) -> dict | None:
+    """Pull (tool_calls full + trace.llm_calls + trace.stage_timings) from
+    a /query?debug_trace=true response. Returns None when the admin gate
+    silently denied the trace (non-admin session or older backend), and
+    prints a one-time stderr warning so the runner keeps going in
+    degraded mode per spec requirement
+    `Chat agent eval runner SHALL capture debug_trace into result JSON`.
+    """
+    global _TRACE_DEGRADE_WARNED
+    tool_calls = resp.get("tool_calls")
+    trace = resp.get("trace")
+    if not tool_calls or trace is None:
+        if not _TRACE_DEGRADE_WARNED:
+            print(
+                "  [warn] debug_trace silently denied (session likely not admin or older backend); "
+                "continuing with degraded result — turns[].trace will be null",
+                file=sys.stderr,
+            )
+            _TRACE_DEGRADE_WARNED = True
+        return None
+    return {
+        "tool_calls": tool_calls,
+        "llm_calls": trace.get("llm_calls", []),
+        "stage_timings": trace.get("stage_timings", {}),
+    }
 
 
 # ────────────────────────────────────────────────────────────────────
@@ -269,7 +285,7 @@ def _run_nested_eval(
                 recall_at_k = _recall_at_k(retrieved, gt_chunks, top_k)
 
             t0 = time.monotonic()
-            resp = _query_chat_with_trace(
+            resp = _query_chat(
                 backend_url,
                 show_id,
                 question,
@@ -286,6 +302,7 @@ def _run_nested_eval(
                 tc.get("name", "") for tc in (resp.get("tool_calls") or [])
             ]
             cov = _tool_coverage(tool_names, required, acceptable)
+            trace_blob = _extract_trace_blob(resp)
 
             turn_result = {
                 "item_id": item_id,
@@ -299,6 +316,7 @@ def _run_nested_eval(
                 "tool_calls_made": tool_names,
                 "answer": answer[:300],
                 "latency_ms": round(latency_ms, 1),
+                "trace": trace_blob,
             }
             per_turn.append(turn_result)
             item_turns.append(turn_result)
@@ -378,18 +396,24 @@ def run_eval(
 
         # Answer quality via chat
         t0 = time.monotonic()
-        answer = _query_chat(backend_url, show_id, question, auth_token)
+        resp = _query_chat(backend_url, show_id, question, auth_token)
         latency_ms = (time.monotonic() - t0) * 1000
 
+        raw_answer = resp.get("answer") or ""
+        answer = _CITATION_RE.sub("", raw_answer).strip()
         am = _answer_match(answer, expected_kws)
+        tool_names = [tc.get("name", "") for tc in (resp.get("tool_calls") or [])]
+        trace_blob = _extract_trace_blob(resp)
 
         results.append({
             "id": qid,
             "type": item.get("type", "unknown"),
             "recall_at_k": r5,
             "answer_match": am,
+            "tool_calls_made": tool_names,
             "answer": answer[:300],
             "latency_ms": round(latency_ms, 1),
+            "trace": trace_blob,
         })
 
     # Aggregate
@@ -531,15 +555,21 @@ def _table_row(name: str, m: dict, gate_pp: float) -> str:
 # ────────────────────────────────────────────────────────────────────
 
 def _parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="Chat agent eval: compare rule-based vs agentic")
+    p = argparse.ArgumentParser(
+        description=(
+            "Chat agent eval: compare rule-based vs agentic. "
+            "Reads PODCASTRAG_SESSION (required) + PODCASTRAG_ORIGIN (optional) "
+            "from env — credentials are NOT accepted via argv (per "
+            "Requirement: Chat agent eval runner SHALL read credentials "
+            "from environment variables, not argv)."
+        )
+    )
     p.add_argument("--dataset", required=True, type=Path)
     p.add_argument("--backend-url", required=True)
-    p.add_argument("--auth-token", default="")
     p.add_argument("--top-k", type=int, default=5)
     p.add_argument("--label", default="agentic", help="Label for this run (e.g. 'rule-based' or 'agentic')")
     p.add_argument("--out", type=Path, required=True, help="Write JSON results to this file")
     p.add_argument("--baseline", type=Path, default=None, help="Baseline JSON from a previous rule-based run")
-    p.add_argument("--origin", default=None, help="Override Origin header (default: derive from backend-url)")
     p.add_argument(
         "--case-study-dir",
         type=Path,
@@ -552,9 +582,19 @@ def _parse_args() -> argparse.Namespace:
 def main() -> None:
     args = _parse_args()
 
+    auth_token = os.environ.get("PODCASTRAG_SESSION", "").strip()
+    if not auth_token:
+        print(
+            "ERROR: PODCASTRAG_SESSION env var is required; "
+            "export it from /tmp/podcastrag_session.txt before running.",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+
     global _ORIGIN_OVERRIDE
-    if args.origin:
-        _ORIGIN_OVERRIDE = args.origin
+    origin_override = os.environ.get("PODCASTRAG_ORIGIN", "").strip()
+    if origin_override:
+        _ORIGIN_OVERRIDE = origin_override
 
     print(f"Running chat eval: {args.label}")
     print(f"  dataset   : {args.dataset}")
@@ -564,7 +604,7 @@ def main() -> None:
     result = run_eval(
         dataset_path=args.dataset,
         backend_url=args.backend_url,
-        auth_token=args.auth_token,
+        auth_token=auth_token,
         top_k=args.top_k,
         label=args.label,
     )
