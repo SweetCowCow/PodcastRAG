@@ -52,6 +52,31 @@ const MILESTONE_LABELS = {
 const RELEASE_LOG = [
   // ─── v1.8 — Chat Mode: Agentic (5/21~) ───
   {
+    date: '2026-05-24', slug: 'agentic-severe-residual-fix-2026-05', milestone: 'v1.8', tag: 'fix',
+    title: {
+      zh: '對話模式查特定集數不再亂回別集',
+      en: 'Chat Mode No Longer Returns the Wrong Episode for "EP1" Queries',
+    },
+    summary: {
+      zh: '修兩個對話模式偷偷會出錯的場景。第一個：問「EP1 講什麼」這種具體集數參考，後端 SQL 之前用模糊比對抓「title 含 EP1 字串」的集數，結果 EP10、EP100、EP146 也會被撈到，再按發布日期排序取最新 → 你問 EP1 系統卻回 EP146。改成正規表達式精確比對「EP 1 後面不接其他數字」之後，問 EP1 找不到就老實說查不到，不再撈到別集。第二個：問「節目主持人陣容怎麼變化」這類問題，過去資料庫並沒有主持人變動紀錄，agent 卻會從集數列表硬推「初期主持人是 X、後期是 Y」這種編造內容。SYSTEM_PROMPT 補了「主持人變動類問題沒明確紀錄就必須拒答」的強制規則。順手在後台 admin debug_trace 模式加了個 enumeration_state 觀測欄位，未來 diagnose 多輪對話「第 N 集」這類問題時可以直接看到 state 內容。本輪也試了 post-generation 把不在 tool result 的 EP 號碼標 [未驗證] 的策略，但實測 LLM judge 看到滿屏 [未驗證] 反而把答案打成更差 → 已 revert，留 helper 供未來 silent 模式用。',
+      en: 'Fixes two quiet bugs in chat mode. First: asking about a specific episode like "what does EP1 talk about?" used to return the wrong episode (e.g. EP146) because the backend SQL did fuzzy substring matching on titles — EP10/EP100/EP146 all contain "EP1" as a substring, and the most recent one would win. Now uses a word-boundary regex that matches "EP 1 not followed by another digit" exactly. Asking EP1 when it doesn\'t exist now honestly returns "not found" instead of substituting a different episode. Second: asking "how has the host roster changed over time?" used to make the agent infer a host timeline from the episode list and fabricate names. The SYSTEM_PROMPT now contains an explicit rule that this question must be refused unless there\'s an explicit host-change marker in a tool result. Also added an enumeration_state field to the admin debug_trace view for diagnosing "what was the 3rd episode?"-style multi-turn questions. A post-generation "[未驗證]" annotation experiment was reverted — the LLM judge penalized answers cluttered with that tag instead of rewarding the honesty. Helper kept in code for a future silent-mode rework.',
+    },
+    summaryBullets: {
+      zh: [
+        '問「EP1 有講什麼」不會再被回 EP146 之類完全不同的集數',
+        '問「主持人陣容變化」不會再從集數列表硬推「初期主持人是某某」這種編造',
+        'Admin debug_trace 模式新增 enumeration_state 觀測，多輪 ordinal 對話 diagnose 變直接',
+        '剩下 multi-turn「第 N 集」這類 LLM 不遵守序數規則的情況留下一輪用 mechanical resolution 處理',
+      ],
+      en: [
+        'Asking "what about EP1?" no longer returns a completely different episode like EP146',
+        'Asking "how has the host roster changed?" no longer fabricates host names from the episode list',
+        'Admin debug_trace now exposes enumeration_state for easier multi-turn ordinal diagnosis',
+        'Remaining multi-turn "Nth episode" misfires (LLM ignoring ordinal instruction) deferred to a future mechanical-resolution change',
+      ],
+    },
+  },
+  {
     date: '2026-05-24', slug: 'agentic-grounding-prompt-tune-v2', milestone: 'v1.8', tag: 'fix',
     title: {
       zh: '節目沒講的內容不會再亂編',
