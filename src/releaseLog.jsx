@@ -52,6 +52,31 @@ const MILESTONE_LABELS = {
 const RELEASE_LOG = [
   // ─── v1.8 — Chat Mode: Agentic (5/21~) ───
   {
+    date: '2026-05-24', slug: 'agentic-grounding-prompt-tune-v2', milestone: 'v1.8', tag: 'fix',
+    title: {
+      zh: '節目沒講的內容不會再亂編',
+      en: 'Chat Mode Stops Making Things Up',
+    },
+    summary: {
+      zh: '修對話模式幻覺問題。上次補的「不能編造」清單只是寫進 SYSTEM_PROMPT，這次根據實測量化結果（嚴重幻覺率 22.5% 反而比之前 baseline 20% 還差），先把 9 個嚴重案例 + 11 個輕微案例的 root cause 分類過一輪，發現 78% 是「tool 查到相關但不含答案的段落，agent 就從這些 noise 裡推論編造」——例如問「嘻哈饒舌歌唱比賽冠軍是誰？」搜到的其實是大嘻哈時代的評審 panel，agent 就把評審名字當冠軍寫出來。對症加了兩個 few-shot 範例（noise 拒答 + show overview 不存在節目拒答），加上把 grounding 規則段提前到緊跟 tool-eager 之後。結果：嚴重幻覺率從 22.5% 砍到 12.5%（-44%），整體回答品質從 0.5375 提升到 0.6625（+12.5pp）。試過再加第三個「negative trap」範例反而讓 prompt 稀釋導致 regress，所以 round 2 直接 revert，剩下的 12.5% 留到下一輪用 tool layer 的方式處理（譬如加 get_show_overview 專屬 tool）。',
+      en: 'Fixes hallucination in chat mode. The previous "do not fabricate" list only made it into SYSTEM_PROMPT without measurement — turned out the eval showed severe hallucination rate 22.5% (worse than the 20% baseline). This round we first classified the 9 severe + 11 mild cases by root cause and found 78% were "tools returned topic-related but answer-empty chunks, and the agent inferred a fabrication from the noise" — e.g. asking "who won the hip-hop championship?" surfaced judge panel chunks from the show 大嘻哈時代, and the agent wrote the judges in as winners. Targeted fix: two few-shot examples (noise refusal + show-overview-on-missing-show refusal) plus moving the grounding rule section to immediately after the tool-eager instruction. Result: severe hallucination rate 22.5% → 12.5% (-44%), overall answer quality 0.5375 → 0.6625 (+12.5pp). A round 2 attempt to add a third "negative trap" few-shot diluted the prompt and regressed severe back to 17.5%, so it was reverted. The remaining 12.5% will be tackled in the next round via a tool-layer approach (e.g. a dedicated get_show_overview tool).',
+    },
+    summaryBullets: {
+      zh: [
+        '問「也好吃」這種不存在的節目，不會再憑名稱腦補節目介紹',
+        '問「嘻哈饒舌冠軍」這種 podcast 沒提的問題，會老實答「節目未提及」不會把評審當冠軍',
+        '整體回答品質從 0.5375 升到 0.6625（+12.5pp）— grounding 變嚴 ≠ 全拒答爛答',
+        '剩下的硬骨頭（negative trap 陷阱題）prompt 已到飽和，留待下一輪改 tool',
+      ],
+      en: [
+        'Asking about a non-existent show (e.g. 也好吃) no longer triggers a made-up show description',
+        'Asking about facts the podcast never mentioned (e.g. "who won the rap championship?") now honestly returns "not mentioned" instead of promoting a judge to winner',
+        'Overall answer quality jumped 0.5375 → 0.6625 (+12.5pp) — stricter grounding did not collapse into uniform refusals',
+        'The remaining hard cases (negative-trap questions) have hit prompt saturation; next round will tackle them at the tool layer',
+      ],
+    },
+  },
+  {
     date: '2026-05-24', slug: 'agentic-prompt-grounding-and-ordinal-tool', milestone: 'v1.8', tag: 'fix',
     title: {
       zh: '對話模式找「最新 / 最舊集數」變聰明',
