@@ -47,4 +47,4 @@
 - [x] 5.2 跑現有 unit test `backend/tests/test_chat_agent_loop.py` 等 chat agent 既有 test 不受影響（本 change 沒動 backend）
 - [x] 5.3 跑 `spectra validate eval-runner-debug-trace-capture` + `spectra analyze` 無 Critical / Warning
 - [x] 5.4 案例 study 文件 `docs/case-studies/eval-runner-debug-trace-capture-2026-05-24.md` 補 5 severe case 真實 root cause（基於 trace），對比 v2 archive 時的 LLM-classifier 推測結果是否吻合
-- [ ] 5.5 跑 `/spectra-archive eval-runner-debug-trace-capture`
+- [x] 5.5 跑 `/spectra-archive eval-runner-debug-trace-capture`
