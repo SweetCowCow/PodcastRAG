@@ -209,7 +209,7 @@ SELECT id, title, published_at, guests, ai_summary
 FROM episodes
 WHERE show_id = :show_id
   AND title ~* (
-    E'(^|[^0-9A-Za-z])(?:EP|第)\\s*' || :n || E'(?:集)?($|[^0-9])'
+    E'(^|[^0-9A-Za-z])(EP|第)\\s*' || :n || E'(集)?($|[^0-9])'
   )
 ORDER BY published_at DESC NULLS LAST
 LIMIT 1
