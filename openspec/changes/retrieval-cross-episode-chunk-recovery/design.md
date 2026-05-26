@@ -31,13 +31,13 @@ GT chunk 沒進 top-5，瓶頸從「跨集污染」轉到「主集內 RRF 排序
 
 ## Decisions
 
-### Use gemini-2.5-flash-lite for LLM rerank
+### Use gpt-4o-mini for LLM rerank
 
 選 LLM rerank（既有 stack）而非 cross-encoder。理由：
 
-- 既有 topic_seg / summary 都跑 `gemini-2.5-flash-lite`（Zeabur AI Hub），無新依賴
-- 單次 rerank ~20 chunks，prompt 2-3k token，p50 latency ~600-900ms（依現有 stack 經驗）
-- 成本：~$0.0003/query（gemini-flash-lite pricing），cross_episode 流量低，月成本 < $1
+- 用既有 `rewrite` step 的 `gpt-4o-mini`（Zeabur AI Hub）— 無新依賴
+- **原本計畫用 gemini-2.5-flash-lite（summary step），但 task 4.1 prod smoke 連 3 次 timeout（1.5s / 3s / 6s 都超）**：flash-lite 對 50 chunks rerank 不穩定（曾出 76kb 失控輸出 + 8.7s 延遲）。gpt-4o-mini 在同一 provider 上預期更穩定（~600-900ms / 50 chunks）。
+- 成本：~$0.0006/query（gpt-4o-mini pricing），cross_episode 流量低，月成本 < $5
 
 **Alternatives 拒絕**：
 - Cross-encoder（BGE-reranker-large）：要 host 新 model 或接 Cohere API，infra 成本不對等

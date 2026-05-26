@@ -43,7 +43,7 @@ Relevance heuristics (apply in priority order):
 # Hard-code the rerank model. We reuse the `summary` step's base_url + api_key
 # (Zeabur AI Hub) but lock the model so admin changes to summary don't
 # silently change rerank behavior.
-RERANK_MODEL = "gemini-2.5-flash-lite"
+RERANK_MODEL = "gpt-4o-mini"
 # 50 chunks × 100 chars excerpt ≈ 5k char prompt ≈ ~2k tokens — keeps LLM
 # processing time within timeout budget. 200 chars proved too slow in
 # prod smoke (4.4s latency on AI Hub flash-lite).

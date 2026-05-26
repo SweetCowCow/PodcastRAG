@@ -396,10 +396,13 @@ async def _search_with_topic_prefilter(
             episode_id_filter=epid_filter,
         )
         top_n_chunks = [_chunk_to_dict(h) for h in hits]
-        cfg = await get_step_config(ctx.db, "summary")
+        # Use `rewrite` step (gpt-4o-mini via AI Hub) — gemini-2.5-flash-lite
+        # consistently timed out at 6-9s on 50-chunk reranks during smoke; gpt-4o-mini
+        # has more predictable latency on the same provider.
+        cfg = await get_step_config(ctx.db, "rewrite")
         client = AsyncOpenAI(base_url=cfg.base_url, api_key=cfg.api_key)
         reranked, applied = await rag_rerank.llm_rerank(
-            inp.query, top_n_chunks, k=inp.k, client=client
+            inp.query, top_n_chunks, k=inp.k, client=client, model=cfg.model or "gpt-4o-mini"
         )
         return {
             "chunks": reranked,
