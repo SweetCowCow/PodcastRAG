@@ -1,13 +1,16 @@
-"""LLM-driven rerank for the prefilter retrieval path.
+"""Rerank wrappers for the prefilter retrieval path.
 
-Per change retrieval-cross-episode-chunk-recovery: after `retrieve_hybrid`
-returns a top-N pool (N=50 for the prefilter path), call gemini-2.5-flash-lite
-to reorder by question relevance and return the top-k.
+Two providers are supported:
 
-Fail-open: any failure (timeout, non-2xx, malformed JSON, output references
-unknown chunk_ids) falls back to the original RRF order's top-k. The caller
-distinguishes success/failure via the returned `applied` boolean and SHOULD
-log it on the agent envelope (envelope `rerank_applied` field) for RCA.
+- `voyage_rerank`: production path — calls Voyage rerank-2.5 via the
+  voyageai async SDK. p50 ~150ms for ~30 chunks. Used by
+  `_search_with_topic_prefilter`.
+- `llm_rerank`: deprecated reference — kept for regression coverage and as
+  prior-art for the previous (failed) AI Hub LLM-as-reranker attempt. Not
+  called by any production code path.
+
+Both follow the same `(chunks, applied)` fail-open contract: any failure
+returns `(chunks[:k], False)` instead of raising.
 """
 from __future__ import annotations
 
@@ -17,6 +20,10 @@ import logging
 from typing import Any
 
 from openai import AsyncOpenAI
+
+# voyageai is a hard dependency for the production rerank path. Import is
+# top-level so missing package is caught at startup, not on first query.
+import voyageai
 
 logger = logging.getLogger(__name__)
 
@@ -174,6 +181,89 @@ async def llm_rerank(
             if cid_str in seen or cid_str == "":
                 continue
             seen.add(cid_str)
+            reordered.append(c)
+            if len(reordered) >= k:
+                break
+
+    return reordered[:k], True
+
+
+# ─────────────────────────────────────────────────────────────────────────
+# Voyage rerank (production path)
+# ─────────────────────────────────────────────────────────────────────────
+
+VOYAGE_RERANK_MODEL = "rerank-2.5"
+
+
+async def voyage_rerank(
+    question: str,
+    chunks: list[dict],
+    k: int,
+    *,
+    client: voyageai.AsyncClient,
+    model: str = VOYAGE_RERANK_MODEL,
+    timeout_s: float = 3.0,
+) -> tuple[list[dict], bool]:
+    """Rerank `chunks` by relevance to `question` using Voyage cross-encoder.
+
+    Returns:
+        (chunks_top_k, applied) — `applied=True` when Voyage produced a
+        usable ordering; `False` when the original RRF order was used as
+        fallback (timeout / API error / all-unknown indices / empty input).
+
+    Fail-open: never raises. Caller surfaces `applied` on the agent envelope.
+
+    Partial-unknown handling: indices outside `[0, len(chunks))` are
+    discarded; if fewer than `k` valid chunks remain, the gap is back-filled
+    from the original input order. `applied=True` in this partial case —
+    Voyage's ordering signal is still informative.
+    """
+    if not chunks:
+        return [], False
+    if len(chunks) <= k:
+        return chunks[:k], False
+
+    documents = [(c.get("text") or "") for c in chunks]
+    try:
+        resp = await asyncio.wait_for(
+            client.rerank(
+                query=question,
+                documents=documents,
+                model=model,
+                top_k=k,
+            ),
+            timeout=timeout_s,
+        )
+    except (asyncio.TimeoutError, Exception) as exc:  # noqa: BLE001 — fail-open
+        logger.warning("voyage_rerank fallback (api error): %s", exc.__class__.__name__)
+        return chunks[:k], False
+
+    results = getattr(resp, "results", None) or []
+    if not results:
+        logger.warning("voyage_rerank fallback: empty results")
+        return chunks[:k], False
+
+    n = len(chunks)
+    seen: set[int] = set()
+    reordered: list[dict] = []
+    for r in results:
+        idx = getattr(r, "index", None)
+        if not isinstance(idx, int):
+            continue
+        if idx < 0 or idx >= n or idx in seen:
+            continue
+        seen.add(idx)
+        reordered.append(chunks[idx])
+
+    if not reordered:
+        logger.warning("voyage_rerank fallback: no valid indices in results")
+        return chunks[:k], False
+
+    if len(reordered) < k:
+        for i, c in enumerate(chunks):
+            if i in seen:
+                continue
+            seen.add(i)
             reordered.append(c)
             if len(reordered) >= k:
                 break

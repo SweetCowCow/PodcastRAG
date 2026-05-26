@@ -34,6 +34,7 @@ from __future__ import annotations
 import asyncio
 import inspect
 import logging
+import os
 import time
 import uuid
 from dataclasses import dataclass
@@ -47,12 +48,11 @@ from sqlalchemy import text
 from sqlalchemy.exc import DataError, IntegrityError, OperationalError, ProgrammingError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.services import episode_finders, rag
+import voyageai
+
+from app.services import episode_finders, rag, rag_rerank
 from app.services.ai_step_resolver import get_step_config
 
-# NOTE: `rag_rerank` is intentionally left in the codebase (unused here) so the
-# follow-up Voyage/Cohere rerank change can swap providers without re-creating
-# the wrapper. See docs/case-studies/retrieval-cross-episode-chunk-recovery-2026-05-26.md.
 from app.services.chat_agent.state import ChatSessionState, ChatSessionStateStore
 from app.services.embedding import embed_texts
 
@@ -377,13 +377,11 @@ async def _search_in_episodes(inp: SearchInEpisodesInput, ctx: ToolContext) -> d
     return {"chunks": [_chunk_to_dict(h) for h in hits]}
 
 
-# LLM-as-reranker path proved non-viable on Zeabur AI Hub (5 smoke iterations
-# 2026-05-26: 2 models × 3 N values × 3 timeouts all hit TimeoutError or
-# truncation — see docs/case-studies/retrieval-cross-episode-chunk-recovery-2026-05-26.md).
-# The wrapper + envelope stay in place so the follow-up change can swap in a
-# dedicated rerank API (Cohere / Voyage / Jina) without re-touching the tool
-# layer; current behavior is identity (no rerank, RRF top-k passthrough).
-_PREFILTER_RERANK_ENABLED = False
+# Voyage rerank wired in 2026-05-27 (change: retrieval-rerank-via-voyage).
+# Prefilter path retrieves top-N=30 then Voyage reorders to top-k. Replaces the
+# disabled LLM-as-reranker pipeline left by retrieval-cross-episode-chunk-recovery
+# (which proved non-viable across 6 AI Hub smoke iterations).
+_PREFILTER_RERANK_TOP_N = 30
 
 
 async def _search_with_topic_prefilter(
@@ -400,15 +398,29 @@ async def _search_with_topic_prefilter(
             show_id=ctx.show_id,
             query_embedding=vec,
             question=inp.query,
-            k=inp.k,
+            k=_PREFILTER_RERANK_TOP_N,
             episode_id_filter=epid_filter,
         )
+        top_n_chunks = [_chunk_to_dict(h) for h in hits]
+
+        voyage_key = os.environ.get("VOYAGE_API_KEY")
+        if voyage_key:
+            client = voyageai.AsyncClient(api_key=voyage_key)
+            reranked, applied = await rag_rerank.voyage_rerank(
+                inp.query, top_n_chunks, k=inp.k, client=client
+            )
+            final_chunks = reranked
+        else:
+            logger.warning("VOYAGE_API_KEY not set; skipping rerank")
+            final_chunks = top_n_chunks[: inp.k]
+            applied = False
+
         return {
-            "chunks": [_chunk_to_dict(h) for h in hits],
+            "chunks": final_chunks,
             "prefilter_episode_count": len(candidates),
             "fallback_to_full_pool": False,
-            "rerank_applied": False,
-            "rerank_input_count": 0,
+            "rerank_applied": applied,
+            "rerank_input_count": len(top_n_chunks),
         }
     # No topic match → fall back to full-show retrieval (no rerank)
     hits = await rag.retrieve_hybrid(

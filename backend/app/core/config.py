@@ -120,10 +120,20 @@ class Settings(BaseSettings):
             raise ValueError("E2E_LOGIN_TOKEN must be at least 32 chars")
         return v
 
+    # Voyage AI rerank key — used by `_search_with_topic_prefilter` via
+    # rag_rerank.voyage_rerank. None disables the rerank stage (fail-open).
+    voyage_api_key: str | None = None
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=False,
+        # `extra="ignore"` is critical security hygiene: pydantic's default
+        # `forbid` mode raises ValidationError that includes the offending env
+        # value verbatim — leaking secrets to stderr / logs when a new env var
+        # is added without a corresponding Settings field. (2026-05-27: real
+        # incident — VOYAGE_API_KEY hit this path before this fix landed.)
+        extra="ignore",
     )
 
     @property
