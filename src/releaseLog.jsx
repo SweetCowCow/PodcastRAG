@@ -52,6 +52,31 @@ const MILESTONE_LABELS = {
 const RELEASE_LOG = [
   // ─── v1.8 — Chat Mode: Agentic (5/21~) ───
   {
+    date: '2026-05-26', slug: 'retrieval-cross-episode-episode-prefilter', milestone: 'v1.8', tag: 'enhancement',
+    title: {
+      zh: '跨集問題不再被別集話題沖淡',
+      en: 'Cross-Episode Questions No Longer Diluted by Off-Topic Episodes',
+    },
+    summary: {
+      zh: '改善「跨集主題型」問題的檢索路徑。過去你問「節目裡迪拉怎麼描述中老年人的開工想法跟年輕時的差異？」這種需要跨集合成觀點的問題，agent 會把全節目所有集數的相關段落混在一起排序，結果常被別集主題接近但實際不相關的段落擠進前 5 名（譬如「家常味」主題的話題會混進「開工」主題的回答池），合成的答案就會被稀釋。這次新增了一個檢索工具，agent 會先把問題裡的主題（譬如「開工」）拿去找出真的有講這個主題的候選集（譬如 EP134 開工歌單那集），只在那幾集內做檢索 — 找不到候選才退回全節目搜尋。Prod 驗證：cross_episode 4 題中 2 題 agent 自發採用新工具（採用率 50%），且 b20 那題的回答從「在多集合成」變成「鎖定 EP134 馬力全開的開工歌單」單集為基礎正確作答，不再被別集污染。但內部 chunk_recall 指標還沒改善（0.244 持平）— 因為「縮對候選池」之後，主集內排序前 5 仍然漏掉黃金段落，瓶頸從「跨集污染」轉到「單集內排序」，已立後續 follow-up 處理。',
+      en: 'Improves retrieval for cross-episode topical questions. Previously, asking something like "how does 迪拉 describe middle-aged vs. young people\'s feelings about starting work after the new year?" — which needs synthesizing a view across episodes — would dump all show-wide chunks into one ranked pool, often letting topic-adjacent but actually unrelated chunks (e.g. "家常味" chunks bleeding into "開工" questions) crowd out the top 5, diluting the synthesized answer. We added a new retrieval tool that first finds the candidate episodes that actually discuss the topic the question is about (e.g. EP134\'s "馬力全開的開工歌單" for "開工"-topic questions), then searches only within those candidates — falling back to a full-show search if no candidates match. Prod verified: 2 of 4 cross-episode questions had the agent self-adopt the new tool (50% adoption rate), and the b20 question\'s answer shifted from "synthesizing across episodes" to "grounded in EP134 alone" with no off-episode pollution. The internal chunk_recall metric did not move (0.244 flat) — once the candidate pool is correctly narrowed, the top-5 ranking inside the main episode still misses the gold-standard chunks. The bottleneck shifted from "cross-episode pollution" to "in-episode ranking", which is filed as a separate follow-up.',
+    },
+    summaryBullets: {
+      zh: [
+        '新增「主題預過濾」檢索工具：先找對的集再檢索，不再讓別集話題擠進回答池',
+        'Agent 自發採用率 cross_episode 50%（4 題中 2 題），不靠改 SYSTEM_PROMPT 而靠工具描述讓 LLM 自己選對工具',
+        'b20 案例驗證：回答從「跨集合成」變成「鎖定 EP134 單集為基礎」，無別集污染',
+        '內部指標 chunk_recall 沒改善 — 縮對池後，主集內前 5 排序仍漏黃金段落，已立 follow-up',
+      ],
+      en: [
+        'New "topic-prefilter" retrieval tool: narrows to the right episodes first, no more off-episode chunks crowding the answer pool',
+        'Cross-episode adoption rate 50% (2/4) — achieved via tool description, not SYSTEM_PROMPT changes (avoids prompt saturation)',
+        'b20 validated: answer shifted from "synthesized across episodes" to "grounded in EP134 alone", no pollution',
+        'Internal chunk_recall metric flat — bottleneck moved to in-episode ranking; filed as separate follow-up',
+      ],
+    },
+  },
+  {
     date: '2026-05-26', slug: 'multi-turn-epref-resolution-fix', milestone: 'v1.8', tag: 'fix',
     title: {
       zh: '對話模式追問特定集數時不再亂掉',
