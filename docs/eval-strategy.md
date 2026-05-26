@@ -1,7 +1,10 @@
 # Eval 策略與三模式拆分
 
-**最後更新**：2026-05-26（chat-rag audit 試水 7 題完，schema + 指標清單 freeze）
+**最後更新**：2026-05-26（chat-rag audit 試水 7 題完，schema + 指標清單 freeze + v2 上線）
 **決議來源**：`eval-judge-incorporate-tool-grounding` discuss session + `chat-rag-dataset-audit-2026-05-25` 試水 audit
+**Schema v2 上線日期**：2026-05-26（change `eval-judge-incorporate-tool-grounding` apply 完成）
+**Baseline 落地**：`docs/case-studies/chat-rag-dataset-audit-2026-05-26-baseline.md`
+**Legacy v1 path**：semantic-mode dataset `this-not-that-cool.json` 與其相關 runner (`run_chat_agent_eval.py` 既有 v1 dispatch / `arm_a/b_*.py` bake-off 史檔 / `build_golden_set.py` 半 deprecated) 依 design D1 + `rag-eval-runner` MODIFIED Recall@K 要求保留，靠 `schema_version` 判斷走 v1 還是 v2 path
 
 ## 為什麼三模式 eval 要拆
 

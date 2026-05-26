@@ -1,0 +1,129 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "chat-rag-golden-v2.schema.json",
+  "title": "chat-rag golden dataset v2",
+  "description": "v2 schema for chat-rag eval. Replaces v1's expected_answer_keywords with LLM-judge-friendly fields. Supports must/acceptable tiers + three-tier chunk GT + multi-turn ordinal resolution.",
+  "type": "object",
+  "required": ["schema_version", "show_id", "items"],
+  "properties": {
+    "schema_version": {"const": "2.0"},
+    "show_id": {"type": "string", "format": "uuid"},
+    "show_slug": {"type": "string"},
+    "created_at": {"type": "string"},
+    "notes": {"type": "string"},
+    "items": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/item"}
+    }
+  },
+  "additionalProperties": true,
+  "$defs": {
+    "item": {
+      "type": "object",
+      "required": ["id", "design_type", "is_multi_turn", "audit_status"],
+      "properties": {
+        "id": {"type": "string"},
+        "design_type": {
+          "enum": [
+            "deep_dive",
+            "date_find",
+            "cross_episode",
+            "negative",
+            "leading_question_yes",
+            "multi_turn",
+            "multi_turn_ordinal",
+            "guest_find",
+            "show_overview",
+            "topic_find",
+            "summary"
+          ]
+        },
+        "source": {"type": "string"},
+        "is_multi_turn": {"type": "boolean"},
+        "question": {"type": "string"},
+        "expected_behavior": {"enum": ["answer", "refuse", "refusal_with_correction"]},
+        "expected_answer_summary": {"type": "string"},
+        "expected_answer_aliases": {
+          "type": ["object", "null"],
+          "additionalProperties": {"type": "array", "items": {"type": "string"}}
+        },
+        "expected_tool_calls_required": {"type": "array", "items": {"type": "string"}},
+        "expected_tool_calls_acceptable": {"type": "array", "items": {"type": "string"}},
+        "expected_tool_args": {"type": ["object", "null"]},
+        "expected_episode_uuids_must": {
+          "type": ["array", "null"],
+          "items": {"type": "string", "format": "uuid"}
+        },
+        "expected_episode_uuids_acceptable": {
+          "type": ["array", "null"],
+          "items": {"type": "string", "format": "uuid"}
+        },
+        "expected_episode_numbers_must": {
+          "type": ["array", "null"],
+          "items": {"type": "integer"}
+        },
+        "expected_episode_numbers_acceptable": {
+          "type": ["array", "null"],
+          "items": {"type": "integer"}
+        },
+        "expected_count": {"type": ["integer", "null"]},
+        "expected_top_n_episode_numbers": {
+          "type": ["array", "null"],
+          "items": {"type": "integer"}
+        },
+        "ground_truth_chunk_ids_must": {
+          "type": ["array", "null"],
+          "items": {"type": "string", "pattern": "^ep:[0-9a-f-]+@\\d+\\.\\d+$"}
+        },
+        "ground_truth_chunk_ids_either": {
+          "type": ["array", "null"],
+          "items": {"type": "string", "pattern": "^ep:[0-9a-f-]+@\\d+\\.\\d+$"}
+        },
+        "ground_truth_chunk_ids_acceptable": {
+          "type": ["array", "null"],
+          "items": {"type": "string", "pattern": "^ep:[0-9a-f-]+@\\d+\\.\\d+$"}
+        },
+        "expected_must_contradict_check": {"type": ["string", "null"]},
+        "audit_status": {"type": "string"},
+        "audit_notes": {"type": "string"},
+        "turns": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/turn"}
+        }
+      },
+      "not": {"required": ["expected_answer_keywords"]},
+      "allOf": [
+        {
+          "if": {"properties": {"is_multi_turn": {"const": true}}},
+          "then": {"required": ["turns"]}
+        }
+      ]
+    },
+    "turn": {
+      "type": "object",
+      "properties": {
+        "turn": {"type": "string"},
+        "question": {"type": "string"},
+        "expected_behavior": {"enum": ["answer", "refuse", "refusal_with_correction"]},
+        "expected_answer_summary": {"type": "string"},
+        "expected_answer_aliases": {"type": ["object", "null"]},
+        "expected_tool_calls_required": {"type": "array", "items": {"type": "string"}},
+        "expected_tool_calls_acceptable": {"type": "array", "items": {"type": "string"}},
+        "expected_tool_args": {"type": ["object", "null"]},
+        "expected_episode_uuids_must": {"type": ["array", "null"], "items": {"type": "string", "format": "uuid"}},
+        "expected_episode_uuids_acceptable": {"type": ["array", "null"], "items": {"type": "string", "format": "uuid"}},
+        "expected_episode_numbers_must": {"type": ["array", "null"], "items": {"type": "integer"}},
+        "expected_episode_numbers_acceptable": {"type": ["array", "null"], "items": {"type": "integer"}},
+        "expected_count": {"type": ["integer", "null"]},
+        "expected_top_n_episode_numbers": {"type": ["array", "null"], "items": {"type": "integer"}},
+        "ground_truth_chunk_ids_must": {"type": ["array", "null"]},
+        "ground_truth_chunk_ids_either": {"type": ["array", "null"]},
+        "ground_truth_chunk_ids_acceptable": {"type": ["array", "null"]},
+        "expected_must_contradict_check": {"type": ["string", "null"]},
+        "carry_from": {"type": ["string", "null"]},
+        "ordinal_resolution_check": {"type": ["boolean", "null"]}
+      },
+      "not": {"required": ["expected_answer_keywords"]}
+    }
+  }
+}

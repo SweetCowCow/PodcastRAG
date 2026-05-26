@@ -75,3 +75,5 @@ docker-compose.override.yaml
 
 # Golden set / dataset 備份檔（自動產生，不入版控）
 *.bak-*
+
+backend/eval/datasets/extended-multi-turn-40.v1.json.bak
