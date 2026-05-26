@@ -44,7 +44,10 @@ Relevance heuristics (apply in priority order):
 # (Zeabur AI Hub) but lock the model so admin changes to summary don't
 # silently change rerank behavior.
 RERANK_MODEL = "gemini-2.5-flash-lite"
-_DEFAULT_EXCERPT_CHARS = 200
+# 50 chunks × 100 chars excerpt ≈ 5k char prompt ≈ ~2k tokens — keeps LLM
+# processing time within timeout budget. 200 chars proved too slow in
+# prod smoke (4.4s latency on AI Hub flash-lite).
+_DEFAULT_EXCERPT_CHARS = 100
 
 
 def _build_user_content(question: str, chunks: list[dict]) -> str:
@@ -65,7 +68,7 @@ async def llm_rerank(
     *,
     client: AsyncOpenAI,
     model: str = RERANK_MODEL,
-    timeout_s: float = 3.0,
+    timeout_s: float = 6.0,
 ) -> tuple[list[dict], bool]:
     """Rerank chunks by LLM and return top-k.
 

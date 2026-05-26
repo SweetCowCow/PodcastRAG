@@ -67,7 +67,7 @@ The tool result envelope SHALL include:
 #### Scenario: Rerank failure falls back to original RRF order
 
 - **GIVEN** prefilter path produced 50 candidate chunks
-- **WHEN** the LLM rerank call times out (exceeds 3.0s), returns non-2xx, returns malformed JSON, or returns `ranked_chunk_ids` whose entries are all absent from the candidate set
+- **WHEN** the LLM rerank call times out (exceeds 6.0s), returns non-2xx, returns malformed JSON, or returns `ranked_chunk_ids` whose entries are all absent from the candidate set
 - **THEN** the tool SHALL return the first `k` chunks of the original RRF order
 - **AND** the envelope's `rerank_applied` SHALL be `false`
 - **AND** the envelope's `rerank_input_count` SHALL still report the actual number of chunks sent to rerank (e.g., `50`)
