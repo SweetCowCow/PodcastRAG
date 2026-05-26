@@ -603,7 +603,17 @@ async def query_show(
 
 _AGENTIC_CITATION_TOP_K = 5
 _AGENTIC_SEARCH_TOOLS = frozenset(
-    {"search_within_episode", "search_across_episodes", "search_in_episodes"}
+    {
+        "search_within_episode",
+        "search_across_episodes",
+        "search_in_episodes",
+        # search_with_topic_prefilter returns the same `chunks` envelope shape
+        # as the other search tools. Omission here was a latent bug from the
+        # original retrieval-cross-episode-episode-prefilter change — citations
+        # were silently dropped for any prefilter query, so chunk_recall
+        # graded those answers at 0 regardless of retrieval quality.
+        "search_with_topic_prefilter",
+    }
 )
 _AGENTIC_LISTING_TOOLS = frozenset(
     {"find_episodes_by_guest", "find_episodes_by_topic", "find_episodes_by_date"}
