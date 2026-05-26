@@ -43,15 +43,18 @@ GT chunk 沒進 top-5，瓶頸從「跨集污染」轉到「主集內 RRF 排序
 - Cross-encoder（BGE-reranker-large）：要 host 新 model 或接 Cohere API，infra 成本不對等
 - 純 heuristic re-fuse（BM25 + RRF 重算）：lever 跟 `retrieve_hybrid` 內部一樣，predict 效益接近 0
 
-### Top-N expand to 20 candidates
+### Top-N expand to 50 candidates
 
-抓 retrieve_hybrid top-20 餵 rerank。理由：
+抓 retrieve_hybrid top-50 餵 rerank。理由（**diagnostic task 1.1 結果調整後**）：
 
-- task 1 diagnostic 會先驗證 GT chunk 是否落在 top-20-50；若 GT 在 top-50 但不在 top-20，N 上調到 50。預設 20 是基於「合理 LLM context window + cost / latency 平衡」。
-- 20 chunks × ~150 tokens/chunk = ~3k token，gemini-flash-lite 16k context 充裕
+- Task 1.1 diagnostic 結果（`docs/case-studies/retrieval-cross-episode-chunk-recovery-2026-05-26.md` § 1）顯示 N=20 perfect rerank 理論上限只有 0.394 < 0.40 gate（b20: 1/4、b21: 3/5、b23: 1/3 在 top-20 內），不夠。N=50 perfect rerank 上限 0.683 ✅
+- 50 chunks × ~150 tokens/chunk = ~7.5k token，仍在 gemini-flash-lite 16k context 內
+- Latency 預估：50 chunks rerank p50 ~900ms-1.2s，含 retrieve_hybrid p50 ~500ms 仍在 2.5s 預算內
 
-**Alternative 拒絕**：
-- N=50：context 量 ×2.5、latency 預估翻倍。先試 20，diagnostic 證明需要再上調
+**Alternatives 拒絕**：
+- N=20：diagnostic 已證上限 0.394 < gate
+- N=100：context 接近 16k 邊界、latency 預估 p95 > 2.5s 預算；marginal gain（0.683 → 0.833）不值風險
+- b20 跟 retrieval miss 相關（2/4 GT chunks 不在 top-100）：rerank 無解，獨立 follow-up change `cross-episode-b20-retrieval-investigation` 處理
 
 ### Limit rerank to search_with_topic_prefilter path
 
@@ -83,12 +86,12 @@ LLM 輸出：JSON `{"ranked_chunk_ids": ["id1", "id2", ...]}`，回前 k 個（�
 
 **Observable behavior**：
 - `search_with_topic_prefilter` 呼叫成功時，回傳 chunks 數量仍為 `inp.k`（預設 5），但排序由 LLM rerank 決定（rerank 成功時）或 RRF 原順序（rerank 失敗 fallback）
-- Envelope 額外回傳 `rerank_applied: bool`（rerank 成功為 true）跟 `rerank_input_count: int`（送進 rerank 的 chunk 數，預期 = N=20，若主集池不足 N 個則為實際數）
+- Envelope 額外回傳 `rerank_applied: bool`（rerank 成功為 true）跟 `rerank_input_count: int`（送進 rerank 的 chunk 數，預期 = N=50，若主集池不足 N 個則為實際數）
 - 既有 envelope field `prefilter_episode_count` / `fallback_to_full_pool` 不變
 
 **Interface**：
 - `_search_with_topic_prefilter(inp, ctx)` 簽名不變
-- 新增 `backend/app/services/rag/rerank.py` 提供 `async def llm_rerank(question: str, chunks: list[dict], k: int) -> list[dict]`
+- 新增 `backend/app/services/rag_rerank.py` 提供 `async def llm_rerank(question: str, chunks: list[dict], k: int) -> list[dict]`
 - LLM call 走 `app/services/llm.py` 既有 client，model `gemini-2.5-flash-lite`
 
 **Error / failure modes**：
@@ -102,10 +105,11 @@ LLM 輸出：JSON `{"ranked_chunk_ids": ["id1", "id2", ...]}`，回前 k 個（�
 - prefilter path p95 latency < 2.5s（從 debug_trace `stage_timings` 量）
 
 **In scope**：
-- `_search_with_topic_prefilter` 改 top-20 + rerank
+- `_search_with_topic_prefilter` 改 top-50 + rerank
 - 新增 `rerank.py` 模組
-- Diagnostic 腳本
+- Diagnostic 腳本 + admin endpoint（task 1.1）
 - Unit test + prod eval + case study
+- **b20 retrieval miss 不在本 change scope**（會另開 follow-up change `cross-episode-b20-retrieval-investigation`）
 
 **Out of scope**：
 - 其他 retrieval tool 的排序

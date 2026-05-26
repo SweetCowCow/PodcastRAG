@@ -47,7 +47,9 @@ from sqlalchemy import text
 from sqlalchemy.exc import DataError, IntegrityError, OperationalError, ProgrammingError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.services import episode_finders, rag
+from openai import AsyncOpenAI
+
+from app.services import episode_finders, rag, rag_rerank
 from app.services.ai_step_resolver import get_step_config
 from app.services.chat_agent.state import ChatSessionState, ChatSessionStateStore
 from app.services.embedding import embed_texts
@@ -373,6 +375,9 @@ async def _search_in_episodes(inp: SearchInEpisodesInput, ctx: ToolContext) -> d
     return {"chunks": [_chunk_to_dict(h) for h in hits]}
 
 
+_PREFILTER_RERANK_TOP_N = 50
+
+
 async def _search_with_topic_prefilter(
     inp: SearchWithTopicPrefilterInput, ctx: ToolContext
 ) -> dict:
@@ -387,15 +392,23 @@ async def _search_with_topic_prefilter(
             show_id=ctx.show_id,
             query_embedding=vec,
             question=inp.query,
-            k=inp.k,
+            k=_PREFILTER_RERANK_TOP_N,
             episode_id_filter=epid_filter,
         )
+        top_n_chunks = [_chunk_to_dict(h) for h in hits]
+        cfg = await get_step_config(ctx.db, "summary")
+        client = AsyncOpenAI(base_url=cfg.base_url, api_key=cfg.api_key)
+        reranked, applied = await rag_rerank.llm_rerank(
+            inp.query, top_n_chunks, k=inp.k, client=client
+        )
         return {
-            "chunks": [_chunk_to_dict(h) for h in hits],
+            "chunks": reranked,
             "prefilter_episode_count": len(candidates),
             "fallback_to_full_pool": False,
+            "rerank_applied": applied,
+            "rerank_input_count": len(top_n_chunks),
         }
-    # No topic match → fall back to full-show retrieval
+    # No topic match → fall back to full-show retrieval (no rerank)
     hits = await rag.retrieve_hybrid(
         ctx.db,
         show_id=ctx.show_id,
@@ -407,6 +420,8 @@ async def _search_with_topic_prefilter(
         "chunks": [_chunk_to_dict(h) for h in hits],
         "prefilter_episode_count": 0,
         "fallback_to_full_pool": True,
+        "rerank_applied": False,
+        "rerank_input_count": 0,
     }
 
 
