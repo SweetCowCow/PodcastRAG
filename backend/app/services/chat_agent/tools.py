@@ -80,17 +80,26 @@ class FindEpisodesByDateInput(BaseModel):
 
 
 class GetEpisodeSummaryInput(BaseModel):
-    episode_id: uuid.UUID
+    episode_id: uuid.UUID | None = Field(
+        default=None,
+        description="Omit to use session focused_episode_id (auto-pinned by find_episode_by_ref).",
+    )
 
 
 class GetEpisodeSegmentsInput(BaseModel):
-    episode_id: uuid.UUID
+    episode_id: uuid.UUID | None = Field(
+        default=None,
+        description="Omit to use session focused_episode_id (auto-pinned by find_episode_by_ref).",
+    )
     topic_filter: str | None = None
 
 
 class SearchWithinEpisodeInput(BaseModel):
     query: str
-    episode_id: uuid.UUID
+    episode_id: uuid.UUID | None = Field(
+        default=None,
+        description="Omit to use session focused_episode_id (auto-pinned by find_episode_by_ref).",
+    )
     k: int = 5
 
 
@@ -161,9 +170,44 @@ class ToolSpec:
 # ──────────────────────────────────────────────────────────────────────
 
 
+_FALLBACK_USER_HINT = (
+    "No episode is in focus. Call find_episode_by_ref first to pin an episode, "
+    "or supply episode_id explicitly."
+)
+
+
+def _resolve_episode_id(
+    arg_episode_id: uuid.UUID | None, ctx: ToolContext
+) -> tuple[uuid.UUID | None, dict[str, Any]]:
+    """Pre-process episode_id: explicit > session focused > missing-error envelope.
+
+    Returns (effective_id_or_None, envelope_extras_to_merge_into_result).
+    When the returned id is None the caller SHALL short-circuit and return the
+    extras dict as the tool envelope (it already contains user_hint + error fields).
+    """
+    if arg_episode_id is not None:
+        return arg_episode_id, {"episode_id_source": "explicit"}
+    focused = getattr(ctx.state, "focused_episode_id", None)
+    if focused is not None:
+        return focused, {
+            "episode_id_source": "session_focused",
+            "effective_episode_id": str(focused),
+        }
+    return None, {
+        "episode_id_source": "missing",
+        "user_hint": _FALLBACK_USER_HINT,
+        "error": "episode_id required and no session focused_episode_id available",
+    }
+
+
 async def _find_episode_by_ref(inp: FindEpisodeByRefInput, ctx: ToolContext) -> dict:
     ep = await episode_finders.find_by_ref(ctx.db, ctx.show_id, inp.ref)
-    return {"episode": ep.model_dump(mode="json") if ep else None}
+    if ep is None:
+        return {"episode": None, "auto_pinned": False}
+    ctx.state.focused_episode_id = ep.episode_id
+    ctx.state.focused_episode_at = datetime.now(timezone.utc)
+    ctx.state_store.save(ctx.state)
+    return {"episode": ep.model_dump(mode="json"), "auto_pinned": True}
 
 
 async def _find_episodes_by_guest(inp: FindEpisodesByGuestInput, ctx: ToolContext) -> dict:
@@ -193,17 +237,21 @@ WHERE id = :episode_id AND show_id = :show_id
 
 
 async def _get_episode_summary(inp: GetEpisodeSummaryInput, ctx: ToolContext) -> dict:
+    effective_id, extras = _resolve_episode_id(inp.episode_id, ctx)
+    if effective_id is None:
+        return extras
     result = await ctx.db.execute(
         text(_EPISODE_SUMMARY_SQL),
-        {"episode_id": inp.episode_id, "show_id": ctx.show_id},
+        {"episode_id": effective_id, "show_id": ctx.show_id},
     )
     row = result.mappings().first()
     if row is None:
-        return {"summary": None, "error": "episode not found in this show"}
+        return {"summary": None, "error": "episode not found in this show", **extras}
     return {
-        "episode_id": str(inp.episode_id),
+        "episode_id": str(effective_id),
         "title": row["title"],
         "summary": row["ai_summary"] or "",
+        **extras,
     }
 
 
@@ -223,8 +271,11 @@ ORDER BY ts.start_time ASC
 
 
 async def _get_episode_segments(inp: GetEpisodeSegmentsInput, ctx: ToolContext) -> dict:
+    effective_id, extras = _resolve_episode_id(inp.episode_id, ctx)
+    if effective_id is None:
+        return extras
     topic_clause = ""
-    params: dict[str, Any] = {"episode_id": inp.episode_id, "show_id": ctx.show_id}
+    params: dict[str, Any] = {"episode_id": effective_id, "show_id": ctx.show_id}
     if inp.topic_filter:
         topic_clause = "AND ts.topic_label ILIKE :topic_filter"
         params["topic_filter"] = f"%{inp.topic_filter}%"
@@ -240,7 +291,7 @@ async def _get_episode_segments(inp: GetEpisodeSegmentsInput, ctx: ToolContext) 
         }
         for r in result.mappings()
     ]
-    return {"episode_id": str(inp.episode_id), "segments": segments}
+    return {"episode_id": str(effective_id), "segments": segments, **extras}
 
 
 async def _embed_query(db: AsyncSession, query: str) -> list[float]:
@@ -267,6 +318,9 @@ def _chunk_to_dict(h: Any) -> dict:
 
 
 async def _search_within_episode(inp: SearchWithinEpisodeInput, ctx: ToolContext) -> dict:
+    effective_id, extras = _resolve_episode_id(inp.episode_id, ctx)
+    if effective_id is None:
+        return extras
     vec = await _embed_query(ctx.db, inp.query)
     hits = await rag.retrieve_hybrid(
         ctx.db,
@@ -274,9 +328,9 @@ async def _search_within_episode(inp: SearchWithinEpisodeInput, ctx: ToolContext
         query_embedding=vec,
         question=inp.query,
         k=inp.k,
-        episode_id_filter=[inp.episode_id],
+        episode_id_filter=[effective_id],
     )
-    return {"chunks": [_chunk_to_dict(h) for h in hits]}
+    return {"chunks": [_chunk_to_dict(h) for h in hits], **extras}
 
 
 async def _search_across_episodes(inp: SearchAcrossEpisodesInput, ctx: ToolContext) -> dict:
@@ -318,10 +372,15 @@ async def _get_show_overview(inp: GetShowOverviewInput, ctx: ToolContext) -> dic
 
 
 def _pin_episode(inp: PinEpisodeInput, ctx: ToolContext) -> dict:
+    already = ctx.state.focused_episode_id == inp.episode_id
     ctx.state.focused_episode_id = inp.episode_id
     ctx.state.focused_episode_at = datetime.now(timezone.utc)
     ctx.state_store.save(ctx.state)
-    return {"ok": True, "focused_episode_id": str(inp.episode_id)}
+    return {
+        "ok": True,
+        "focused_episode_id": str(inp.episode_id),
+        "already_pinned": already,
+    }
 
 
 def _unpin_episode(inp: UnpinEpisodeInput, ctx: ToolContext) -> dict:
