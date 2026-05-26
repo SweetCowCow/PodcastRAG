@@ -107,6 +107,12 @@ async def llm_rerank(
                 ],
                 temperature=0.0,
                 response_format={"type": "json_object"},
+                # Cap output to ~2k tokens. Expected payload is `{"ranked_chunk_ids":
+                # ["<uuid>", ...]}` ≈ 50 UUIDs × ~14 tokens ≈ 700 tokens. 2000 is
+                # ~3x headroom. Without this cap gemini-flash-lite has been
+                # observed emitting 76kb+ payloads (truncated mid-string),
+                # producing invalid JSON and forcing rerank fallback every time.
+                max_tokens=2000,
             ),
             timeout=timeout_s,
         )
