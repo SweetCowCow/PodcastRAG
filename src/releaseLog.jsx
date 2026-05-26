@@ -52,6 +52,31 @@ const MILESTONE_LABELS = {
 const RELEASE_LOG = [
   // ─── v1.8 — Chat Mode: Agentic (5/21~) ───
   {
+    date: '2026-05-26', slug: 'eval-judge-incorporate-tool-grounding', milestone: 'v1.8', tag: 'enhancement',
+    title: {
+      zh: '對話模式的品質量得更準了',
+      en: 'Chat Mode Quality, Now Measured More Sharply',
+    },
+    summary: {
+      zh: '把「對話模式答得好不好」的內部量尺整個重做。過去用「答案裡有沒有出現某幾個關鍵詞」算分，遇到語意對但用詞不同（譬如預期「公務人員」、agent 答「電信局」，其實是同個意思）會誤判扣分；也擋不住「兜兩邊話術」這種典型錯誤（譬如問「為什麼不挑振奮歌」、agent 答「他也推薦振奮人心的歌」直接違反題目前提）；更看不出 agent 在多輪對話「第三集」這類序數指代時，到底有沒有正確抓到應該指的那一集。新版量尺改用 LLM 看完整 agent 工具呼叫紀錄（不只看最後一句回答）來打分，且加了三個新指標：判斷答案內提到的集數數字跟系統實際撈到的集數對不對得上（抓 LLM 數字嘴砲）、抓答案是否違反問題前提（contradict_check）、抓多輪序數指代有沒有解析到正確集數（ordinal_resolution_check）。同步重做 dataset schema 支援「必中集合 / bonus 集合」兩層 + 「重疊段落擇一即算」三層 chunk ground truth，解過去 chunk 切分跨邊界時會被冤枉扣分的問題。對使用者直接體感沒有變化，但這層基礎建設讓往後修對話模式的功能有更精準的反饋，避免再被指標本身的盲點帶歪方向。',
+      en: 'Rebuilt the internal yardstick for "how good is the chat mode\'s answer". The old grader scored by checking whether specific keywords appeared in the answer, which mis-judged semantically correct answers using different wording (e.g. expected "civil servant", agent said "telecom bureau employee" — same meaning); it also couldn\'t catch "argue both sides" failures (e.g. ask "why didn\'t he pick an upbeat song", agent answers "he also recommended upbeat songs" — directly contradicts the question premise); nor could it tell whether the agent correctly resolved "the third episode" in multi-turn ordinal references. The new grader uses an LLM that sees the full agent tool-call trace (not just the final answer text) and adds three new indicators: whether the count the agent mentions matches what the tool actually returned (catches LLM number hallucination), whether the answer violates the question premise (contradict_check), and whether multi-turn ordinal references resolve to the correct episode (ordinal_resolution_check). Also reworked the dataset schema to support two-tier "must-hit / bonus" episode sets and three-tier "either one counts" chunk ground truth, fixing cases where overlapping chunk boundaries unfairly penalized correct retrieval. No direct user-visible behavior change — this infrastructure makes future chat-mode work measurable instead of vibes-based, so we don\'t get misled by metric blind spots.',
+    },
+    summaryBullets: {
+      zh: [
+        '評分改用 LLM 看完整 agent 工具紀錄打分，解語意同義被誤判的問題',
+        '抓「兜兩邊話術」「LLM 數字嘴砲」「多輪序數指代抓錯集數」三類過去看不出來的錯誤',
+        'Dataset 改三層 ground truth 結構，重疊段落不再冤枉扣分',
+        '使用者體感沒變，純粹讓往後對話模式的優化決策有可信的反饋',
+      ],
+      en: [
+        'Switched to LLM-judge grading over full agent tool trace, fixing semantic-synonym false negatives',
+        'Catches three previously invisible failure modes: argue-both-sides, LLM number hallucination, multi-turn ordinal mis-resolution',
+        'Three-tier ground-truth structure stops overlapping chunk boundaries from being unfairly penalized',
+        'No user-visible change — pure foundation work so future chat-mode improvements have trustworthy feedback',
+      ],
+    },
+  },
+  {
     date: '2026-05-24', slug: 'agentic-severe-residual-fix-2026-05', milestone: 'v1.8', tag: 'fix',
     title: {
       zh: '對話模式查特定集數不再亂回別集',
