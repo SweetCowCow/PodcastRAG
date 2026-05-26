@@ -114,6 +114,19 @@ class SearchInEpisodesInput(BaseModel):
     k: int = 8
 
 
+class SearchWithTopicPrefilterInput(BaseModel):
+    topic: str = Field(
+        description=(
+            "Topic / theme keyword to pre-filter candidate episodes (e.g. '家常味', '歌單', '開工歌'). "
+            "Use this for cross-episode questions where a clear topic spans multiple episodes — "
+            "the tool first narrows to episodes matching this topic, then runs hybrid retrieval "
+            "ONLY within them, avoiding topic-related-but-wrong-episode chunks from dominating the pool."
+        )
+    )
+    query: str = Field(description="The full retrieval query (typically the user's question itself).")
+    k: int = 5
+
+
 class GetShowOverviewInput(BaseModel):
     pass
 
@@ -360,6 +373,43 @@ async def _search_in_episodes(inp: SearchInEpisodesInput, ctx: ToolContext) -> d
     return {"chunks": [_chunk_to_dict(h) for h in hits]}
 
 
+async def _search_with_topic_prefilter(
+    inp: SearchWithTopicPrefilterInput, ctx: ToolContext
+) -> dict:
+    candidates = await episode_finders.find_episodes_by_topic(
+        ctx.db, ctx.show_id, [inp.topic]
+    )
+    vec = await _embed_query(ctx.db, inp.query)
+    if candidates:
+        epid_filter = [ep.episode_id for ep in candidates]
+        hits = await rag.retrieve_hybrid(
+            ctx.db,
+            show_id=ctx.show_id,
+            query_embedding=vec,
+            question=inp.query,
+            k=inp.k,
+            episode_id_filter=epid_filter,
+        )
+        return {
+            "chunks": [_chunk_to_dict(h) for h in hits],
+            "prefilter_episode_count": len(candidates),
+            "fallback_to_full_pool": False,
+        }
+    # No topic match → fall back to full-show retrieval
+    hits = await rag.retrieve_hybrid(
+        ctx.db,
+        show_id=ctx.show_id,
+        query_embedding=vec,
+        question=inp.query,
+        k=inp.k,
+    )
+    return {
+        "chunks": [_chunk_to_dict(h) for h in hits],
+        "prefilter_episode_count": 0,
+        "fallback_to_full_pool": True,
+    }
+
+
 _SHOW_OVERVIEW_SQL = "SELECT title, description FROM shows WHERE id = :show_id"
 
 
@@ -464,7 +514,14 @@ TOOLS: list[ToolSpec] = [
     ),
     ToolSpec(
         name="search_across_episodes",
-        description="Semantic+keyword search across all episodes in the current show.",
+        description=(
+            "Fallback semantic+keyword search across all episodes in the current show. "
+            "For questions spanning a known topic / theme across episodes "
+            "(e.g. '主持人怎麼定義家常味', '迪拉跟 Leo 王 怎麼合作'), prefer "
+            "search_with_topic_prefilter(topic, query) — that one first narrows to "
+            "candidate episodes matching the topic, then retrieves within them, "
+            "avoiding topic-related-but-wrong-episode chunks from dominating the merged pool."
+        ),
         input_model=SearchAcrossEpisodesInput,
         callable=_search_across_episodes,
     ),
@@ -473,6 +530,18 @@ TOOLS: list[ToolSpec] = [
         description="Semantic+keyword search restricted to the given list of episode_ids.",
         input_model=SearchInEpisodesInput,
         callable=_search_in_episodes,
+    ),
+    ToolSpec(
+        name="search_with_topic_prefilter",
+        description=(
+            "Preferred tool for cross-episode topical questions. Internally first "
+            "calls find_episodes_by_topic(topic) to scope to candidate episodes, "
+            "then runs hybrid retrieval within them. Falls back to full-show retrieval "
+            "if the topic matches no episodes. Returns chunks + prefilter_episode_count "
+            "+ fallback_to_full_pool flag."
+        ),
+        input_model=SearchWithTopicPrefilterInput,
+        callable=_search_with_topic_prefilter,
     ),
     ToolSpec(
         name="get_show_overview",
