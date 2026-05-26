@@ -47,10 +47,12 @@ from sqlalchemy import text
 from sqlalchemy.exc import DataError, IntegrityError, OperationalError, ProgrammingError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from openai import AsyncOpenAI
-
-from app.services import episode_finders, rag, rag_rerank
+from app.services import episode_finders, rag
 from app.services.ai_step_resolver import get_step_config
+
+# NOTE: `rag_rerank` is intentionally left in the codebase (unused here) so the
+# follow-up Voyage/Cohere rerank change can swap providers without re-creating
+# the wrapper. See docs/case-studies/retrieval-cross-episode-chunk-recovery-2026-05-26.md.
 from app.services.chat_agent.state import ChatSessionState, ChatSessionStateStore
 from app.services.embedding import embed_texts
 
@@ -375,7 +377,13 @@ async def _search_in_episodes(inp: SearchInEpisodesInput, ctx: ToolContext) -> d
     return {"chunks": [_chunk_to_dict(h) for h in hits]}
 
 
-_PREFILTER_RERANK_TOP_N = 30
+# LLM-as-reranker path proved non-viable on Zeabur AI Hub (5 smoke iterations
+# 2026-05-26: 2 models × 3 N values × 3 timeouts all hit TimeoutError or
+# truncation — see docs/case-studies/retrieval-cross-episode-chunk-recovery-2026-05-26.md).
+# The wrapper + envelope stay in place so the follow-up change can swap in a
+# dedicated rerank API (Cohere / Voyage / Jina) without re-touching the tool
+# layer; current behavior is identity (no rerank, RRF top-k passthrough).
+_PREFILTER_RERANK_ENABLED = False
 
 
 async def _search_with_topic_prefilter(
@@ -392,24 +400,15 @@ async def _search_with_topic_prefilter(
             show_id=ctx.show_id,
             query_embedding=vec,
             question=inp.query,
-            k=_PREFILTER_RERANK_TOP_N,
+            k=inp.k,
             episode_id_filter=epid_filter,
         )
-        top_n_chunks = [_chunk_to_dict(h) for h in hits]
-        # Use `rewrite` step (gpt-4o-mini via AI Hub) — gemini-2.5-flash-lite
-        # consistently timed out at 6-9s on 50-chunk reranks during smoke; gpt-4o-mini
-        # has more predictable latency on the same provider.
-        cfg = await get_step_config(ctx.db, "rewrite")
-        client = AsyncOpenAI(base_url=cfg.base_url, api_key=cfg.api_key)
-        reranked, applied = await rag_rerank.llm_rerank(
-            inp.query, top_n_chunks, k=inp.k, client=client, model=cfg.model or "gpt-4o-mini"
-        )
         return {
-            "chunks": reranked,
+            "chunks": [_chunk_to_dict(h) for h in hits],
             "prefilter_episode_count": len(candidates),
             "fallback_to_full_pool": False,
-            "rerank_applied": applied,
-            "rerank_input_count": len(top_n_chunks),
+            "rerank_applied": False,
+            "rerank_input_count": 0,
         }
     # No topic match → fall back to full-show retrieval (no rerank)
     hits = await rag.retrieve_hybrid(

@@ -28,25 +28,10 @@ def _ctx() -> ToolContext:
     )
 
 
-@pytest.fixture(autouse=True)
-def _mock_rerank_deps(monkeypatch):
-    """Auto-mock get_step_config + rag_rerank.llm_rerank for all tests in this file.
-
-    These were added by change retrieval-cross-episode-chunk-recovery — every
-    prefilter happy-path test now hits both. Default mocks return identity rerank
-    (no reordering) and a stub StepConfig.
-    """
-    from app.services.chat_agent import tools as mod
-
-    monkeypatch.setattr(
-        mod, "get_step_config",
-        AsyncMock(return_value=SimpleNamespace(base_url="http://stub", api_key="stub-key", model="stub-model")),
-    )
-
-    async def _identity_rerank(question, chunks, k, *, client, **kw):
-        return chunks[:k], True
-
-    monkeypatch.setattr(mod.rag_rerank, "llm_rerank", _identity_rerank)
+# NOTE: an earlier draft of retrieval-cross-episode-chunk-recovery wired the
+# prefilter path through rag_rerank.llm_rerank, requiring autouse mocks here.
+# That path was disabled (5 timeout iterations on AI Hub — see case study);
+# rerank is now a no-op until the Voyage/Cohere follow-up. Autouse mock removed.
 
 
 def _fake_hit(ep: uuid.UUID, start: float, text: str = "snippet"):

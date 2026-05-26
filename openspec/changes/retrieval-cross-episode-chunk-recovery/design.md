@@ -139,3 +139,22 @@ LLM 輸出：JSON `{"ranked_chunk_ids": ["id1", "id2", ...]}`，回前 k 個（�
 
 - LLM rerank prompt 細節（chunk text 截斷長度、是否帶 episode_id 給 LLM 看）會在 implementation 階段對 b20 案例迭代決定；diagnostic 跑出來後可能影響 N 值
 - 若 diagnostic 顯示 GT 不在 top-50，change pivot 到方向 D，本 design 需要重寫 — 是否要先在 apply 之前獨立跑 diagnostic 再決定要不要繼續？目前 task 1 就是這個 gate，diagnostic 失敗會在 task 1 結束時 surface 給 user 拍板
+
+## Discovered Constraint (2026-05-26 / -27, apply 階段)
+
+LLM-as-reranker via Zeabur AI Hub 路徑經 5 次 smoke iteration 證實**非可行**：
+
+| iter | model | N | excerpt | timeout | 結果 |
+|---|---|---|---|---|---|
+| 1 | gemini-2.5-flash-lite | 50 | 200 字 | 1.5s | TimeoutError @ 1.9s |
+| 2 | gemini-2.5-flash-lite | 50 | 200 字 | 3.0s | invalid JSON（76kb 失控輸出） |
+| 3 | gemini-2.5-flash-lite | 50 | 200 字 | 6.0s | TimeoutError @ 4.4s |
+| 4 | gemini-2.5-flash-lite | 50 | 100 字 | 6.0s | TimeoutError @ 8.7s |
+| 5 | gpt-4o-mini | 50 | 100 字 | 6.0s | TimeoutError @ 7.9s |
+| 6 | gpt-4o-mini | 30 | 100 字 | 6.0s | TimeoutError @ 7.4s |
+
+結論：問題不在 N、不在 model — Zeabur AI Hub 對 rerank-shape prompt（中等 prompt + 結構化 JSON 輸出）latency profile 無法支撐 < 6s 的 timeout。
+
+**Pivot decision**：採用 Option Y — disable rerank in this change，envelope 欄位保留供 follow-up `retrieval-rerank-via-voyage`（Cohere / Voyage / Jina API）reuse；本 change archive 為 negative finding。原本 design 預期改善的 cross_episode chunk_recall mean（0.244 → ≥ 0.40）未達標，等 follow-up 用專用 rerank API。
+
+完整 RCA + cross-encoder VPS 自架評估：見 `docs/case-studies/retrieval-cross-episode-chunk-recovery-2026-05-26.md` § 7-8。

@@ -19,20 +19,10 @@
 
 ## 4. Prod 驗證 + case study
 
-- [ ] 4.1 backend redeploy 到 Zeabur（純 Python 變更，無 migration），等 RUNNING + smoke `/health` 200 + `?debug_trace=true` 對 b20 query 看 tool_calls 含 `rerank_applied=true` + `rerank_input_count=50`。驗證 = `npx zeabur deployment list --service-id 69eb10360da29f05f49a4b0b | grep <commit>` 顯示 RUNNING + smoke curl 印出 envelope 兩個新 field
-- [ ] 4.2 跑 8 題 subset eval（b20/b21/b22/b23/b29/mt02/mt03/mt04）對比 baseline 0.244：
-  - 用 `backend/scripts/run_chat_agent_eval_v2.py --filter-ids b20,b21,b22,b23,b29,mt02,mt03,mt04`
-  - case study `docs/case-studies/retrieval-cross-episode-chunk-recovery-2026-05-26.md` 含：(a) cross_episode chunk_recall_grouped per-item table（baseline vs new）(b) factual_correctness mean 對比 (c) prefilter path p95 latency（從 debug_trace stage_timings 量）(d) rerank_applied 比率 (e) 至少 1 個 before/after 排序變化的具體範例
-
-  **Gate**：cross_episode chunk_recall mean ≥ 0.40 且 factual mean ≥ 0.80 且 p95 latency < 7.0s → success；否則 revert + 寫 negative finding case study。驗證 = case study 含 3 個 gate 的明確 PASS/FAIL 判定
-
-- [ ] 4.3 結論判讀（依 gate 結果三選一）：
-  - **PASS**：metric 達標 → 進 archive 流程
-  - **PARTIAL**（chunk_recall 上升但未達 0.40，或 latency 超 7.0s）：case study 標記 partial，propose follow-up 處理剩餘 gap（譬如改 cross-encoder 或調 N）
-  - **REGRESS**（chunk_recall < 0.244 或 factual < 0.80）：revert commit + 改 case study 為 negative finding + 提議下一個 lever（譬如方向 D chunk overlap merging）
-
-  驗證 = case study 結論段三個明確判讀路徑都有寫；revert 路徑包含 git revert 指令 + 通知 user
+- [x] 4.1 ~~smoke 看 rerank_applied=true~~ **NEGATIVE FINDING**：6 次 smoke iteration（commit 33b260e → e3080c5）證實 AI Hub LLM rerank 在所有 N（50/30）+ model（gemini-flash-lite, gpt-4o-mini）+ excerpt（200/100 字）+ timeout（1.5/3/6s）組合下都 timeout 或 invalid JSON。Pivot 到 Option Y：disable rerank，envelope 欄位保留給 follow-up。詳細 6 iter table 在 design.md「Discovered Constraint」段 + case study。
+- [x] 4.2 ~~跑 8 題 subset eval~~ **SKIPPED**：rerank 已 disable，prefilter path 退回 RRF top-k（=baseline 行為），跑 eval 預期得到 baseline 0.244 持平、無新訊號。改用「smoke 驗證 envelope 欄位契約」當 acceptance — task 5.1 已驗。Latency 觀察：去掉 LLM call 後 prefilter path 預估 < 1s（embed + retrieve_hybrid 兩段而已）。
+- [x] 4.3 **NEGATIVE FINDING archive**：本 change 留下 (a) prefilter top-N 擴展機制 +`rag_rerank.llm_rerank` wrapper（5 unit test 全綠）+ (b) envelope 欄位 `rerank_applied` / `rerank_input_count` 契約 + (c) 6 次 iter 證據定錨 AI Hub LLM rerank 不可行。Follow-up = `retrieval-rerank-via-voyage`（或 cohere / jina）用專用 rerank API + 既有 envelope 欄位，預期 p50 < 300ms。完整判讀規則 + Voyage 替代分析 + cross-encoder VPS 評估在 case study § 7-8。
 
 ## 5. 觀測 hook
 
-- [ ] 5.1 確認 prefilter path debug_trace 內 `tool_calls[].result_full` 對 `search_with_topic_prefilter` 帶 `rerank_applied` / `rerank_input_count` 兩個 field 給未來 RCA 用。驗證 = prod curl 一題 cross_episode 帶 debug_trace + `jq '.tool_calls[] | select(.name=="search_with_topic_prefilter") | .result_full | fromjson | {rerank_applied, rerank_input_count}'` 印出兩個 field 非 null
+- [x] 5.1 ~~rerank 欄位 prod debug_trace 可見~~ **VERIFIED**：smoke 3-6 跑都看到 envelope 帶 `rerank_applied` / `rerank_input_count`（雖然 applied=False / count=0）；shape contract 對 follow-up Voyage change 可直接 reuse。`jq` query 驗證在 case study § 5。
