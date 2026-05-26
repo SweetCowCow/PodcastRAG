@@ -36,7 +36,7 @@ The backend SHALL expose `POST /shows/{show_id}/search` which SHALL be guarded b
 
 ### Requirement: RRF weight changes SHALL satisfy a non-regression gate
 
-Any change to the `RRF_WEIGHTS` constant in `backend/app/services/rag.py` SHALL pass a measurement gate before being merged. The gate is operationalised by a one-shot sweep harness at `backend/eval/scripts/rrf_weight_sweep.py` which, for each candidate weight tuple, computes:
+Any change to the `RRF_WEIGHTS` constant in `backend/app/services/rag.py` SHALL pass a measurement gate before being merged. The gate is operationalised by an admin endpoint `POST /admin/rrf/sweep` (implemented at `backend/app/api/admin/rrf_sweep.py`, require_admin gated, read-only — design drift from the original proposal's local sweep script after local DB hostname turned out to be unreachable). The endpoint, for each candidate weight tuple in the request body, computes:
 
 - `cross_episode_recall_mean`: mean `chunk_recall_grouped` score across the cross-episode focused mini-set (item ids `b20`, `b21`, `b23`)
 - `deep_dive_recall_mean`: mean `chunk_recall_grouped` score across the deep_dive items in the v2 dataset that carry chunk-level GT (item ids `b15`, `b16`, `b17`, `b19`)
