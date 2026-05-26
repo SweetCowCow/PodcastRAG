@@ -8,5 +8,5 @@
 
 ## 3. Prod smoke
 
-- [ ] 3.1 把 fix commit 推 main、等 Zeabur build + RUNNING（用 `zeabur deployment list --service-id <api-svc>` polling）。Build 卡 10 分鐘以上要走 redeploy SOP 排除 webhook 不穩。驗證：build status = SUCCESS、service status = RUNNING、`curl https://podcastrag-api.zeabur.app/healthz` 回 200
-- [ ] 3.2 對 prod 跑 4 個 EP-reference smoke query（EP1 / EP19 / EP143 / EP134），每題打 `POST /shows/45fc2462-17cf-42f5-98a7-68fe1a222228/query?debug_trace=true` mode=chat、檢查 response `tool_calls[0]` 含 `find_episode_by_ref` 且 `result_summary` 的 `ok=true`、`raised` 不存在。驗證：4/4 全 pass，無 `StatementError` 字眼
+- [x] 3.1 把 fix commit 推 main、等 Zeabur build + RUNNING（用 `zeabur deployment list --service-id <api-svc>` polling）。Build 卡 10 分鐘以上要走 redeploy SOP 排除 webhook 不穩。驗證：build status = SUCCESS、service status = RUNNING、`curl https://podcastrag-api.zeabur.app/health` 回 200
+- [x] 3.2 對 prod 跑 4 個 EP-reference smoke query（EP1 / EP19 / EP143 / EP134），每題打 `POST /shows/45fc2462-17cf-42f5-98a7-68fe1a222228/query?debug_trace=true` mode=chat、檢查 response `tool_calls[0]` 含 `find_episode_by_ref` 且 `result_summary` 的 `ok=true`、`raised` 不存在。驗證：4/4 全 pass，無 `StatementError` 字眼
