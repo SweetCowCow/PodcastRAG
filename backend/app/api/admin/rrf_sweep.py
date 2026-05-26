@@ -147,9 +147,20 @@ async def _retrieve_and_grade(
     )
     retrieved = [(str(h.episode_id), float(h.start_time)) for h in hits]
     graded = _grade_chunk_recall(item, retrieved)
+    # Debug instrumentation: include top-5 chunks + their source/score so we can
+    # see whether weight changes actually move the top-5 (rrf-sweep RCA 2026-05-26).
+    top5 = [
+        {
+            "ep": str(h.episode_id)[:8],
+            "start": round(float(h.start_time), 2),
+            "src": h.source,
+            "score": round(float(h.rrf_score), 5),
+        }
+        for h in hits
+    ]
     if graded is None:
-        return {"item_id": item["id"], "score": None, "error": "no chunk GT"}
-    return {"item_id": item["id"], **graded}
+        return {"item_id": item["id"], "score": None, "error": "no chunk GT", "top5": top5}
+    return {"item_id": item["id"], **graded, "top5": top5}
 
 
 def _means(per_item: list[dict]) -> dict[str, Any]:
