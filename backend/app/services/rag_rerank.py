@@ -65,7 +65,7 @@ async def llm_rerank(
     *,
     client: AsyncOpenAI,
     model: str = RERANK_MODEL,
-    timeout_s: float = 1.5,
+    timeout_s: float = 3.0,
 ) -> tuple[list[dict], bool]:
     """Rerank chunks by LLM and return top-k.
 

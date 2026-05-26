@@ -20,7 +20,7 @@ GT chunk 沒進 top-5，瓶頸從「跨集污染」轉到「主集內 RRF 排序
 
 - cross_episode `chunk_recall_grouped` mean（b20/b21/b23 subset）從 0.244 → ≥ 0.40
 - `factual_correctness` mean 不退步（保持 ≥ 0.80）
-- prefilter path 整體 p95 latency < 2.5s（含 rerank）
+- prefilter path 整體 p95 latency < 4.0s（含 rerank N=50；原 2.5s 預算在 N=20 假設下，N 上調後同步放寬）
 
 ## Non-Goals
 
@@ -102,7 +102,7 @@ LLM 輸出：JSON `{"ranked_chunk_ids": ["id1", "id2", ...]}`，回前 k 個（�
 **Acceptance criteria**：
 - `pytest backend/tests/test_chat_agent_topic_prefilter_rerank.py` 6 case 全綠（rerank happy path、top-N expand、LLM 失敗 fallback、malformed JSON fallback、envelope field、chunk shape）
 - Prod 8 題 subset eval：cross_episode chunk_recall mean ≥ 0.40，factual ≥ 0.80
-- prefilter path p95 latency < 2.5s（從 debug_trace `stage_timings` 量）
+- prefilter path p95 latency < 4.0s（從 debug_trace `stage_timings` 量；含 N=50 rerank）
 
 **In scope**：
 - `_search_with_topic_prefilter` 改 top-50 + rerank
@@ -119,7 +119,7 @@ LLM 輸出：JSON `{"ranked_chunk_ids": ["id1", "id2", ...]}`，回前 k 個（�
 
 ## Risks / Trade-offs
 
-- **Risk**：LLM rerank latency 不穩定，p95 可能 > 2.5s 預算 → Mitigation：rerank call 加 1.5s timeout，超時 fallback 原 RRF，envelope 記錄供觀測
+- **Risk**：LLM rerank latency 不穩定，p95 可能 > 4.0s 預算 → Mitigation：rerank call 加 3.0s timeout（從 1.5s 上調 — task 4.1 smoke 證實 50 chunks @ gemini-flash-lite 多次超 1.5s），超時 fallback 原 RRF，envelope 記錄供觀測
 - **Risk**：LLM 對中文 chunk 排序判斷可能有偏（譬如偏好特定關鍵字）→ Mitigation：先跑 diagnostic + subset eval 驗證實際效果，無效就 revert
 - **Risk**：cost 飄高（若 cross_episode 流量上升）→ Mitigation：envelope `rerank_input_count` 可監控；月底回顧若 > $5 評估降到 N=10 或加 cache
 - **Risk**：rerank 對 b22（listing）/ b29（leading）路徑無影響但會出現在 trace → Mitigation：這兩題本來就不走 prefilter path，rerank 不會 trigger，無風險

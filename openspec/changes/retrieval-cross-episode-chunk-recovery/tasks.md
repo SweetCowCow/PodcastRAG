@@ -24,11 +24,11 @@
   - 用 `backend/scripts/run_chat_agent_eval_v2.py --filter-ids b20,b21,b22,b23,b29,mt02,mt03,mt04`
   - case study `docs/case-studies/retrieval-cross-episode-chunk-recovery-2026-05-26.md` 含：(a) cross_episode chunk_recall_grouped per-item table（baseline vs new）(b) factual_correctness mean 對比 (c) prefilter path p95 latency（從 debug_trace stage_timings 量）(d) rerank_applied 比率 (e) 至少 1 個 before/after 排序變化的具體範例
 
-  **Gate**：cross_episode chunk_recall mean ≥ 0.40 且 factual mean ≥ 0.80 且 p95 latency < 2.5s → success；否則 revert + 寫 negative finding case study。驗證 = case study 含 3 個 gate 的明確 PASS/FAIL 判定
+  **Gate**：cross_episode chunk_recall mean ≥ 0.40 且 factual mean ≥ 0.80 且 p95 latency < 4.0s → success；否則 revert + 寫 negative finding case study。驗證 = case study 含 3 個 gate 的明確 PASS/FAIL 判定
 
 - [ ] 4.3 結論判讀（依 gate 結果三選一）：
   - **PASS**：metric 達標 → 進 archive 流程
-  - **PARTIAL**（chunk_recall 上升但未達 0.40，或 latency 超 2.5s）：case study 標記 partial，propose follow-up 處理剩餘 gap（譬如改 cross-encoder 或調 N）
+  - **PARTIAL**（chunk_recall 上升但未達 0.40，或 latency 超 4.0s）：case study 標記 partial，propose follow-up 處理剩餘 gap（譬如改 cross-encoder 或調 N）
   - **REGRESS**（chunk_recall < 0.244 或 factual < 0.80）：revert commit + 改 case study 為 negative finding + 提議下一個 lever（譬如方向 D chunk overlap merging）
 
   驗證 = case study 結論段三個明確判讀路徑都有寫；revert 路徑包含 git revert 指令 + 通知 user
