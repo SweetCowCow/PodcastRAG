@@ -86,14 +86,15 @@ tests:
 ---
 ### Requirement: Tool registry exposes eleven callables backed by real services
 
-The backend SHALL register exactly eleven callables in `chat_agent.tools.TOOLS`, corresponding to nine numbered tools from `agentic-framework-bakeoff`'s 9-tool spec (with tool 7 split into `search_within_episode` / `search_across_episodes` / `search_in_episodes` and tool 9 split into `pin_episode` / `unpin_episode`). Each callable SHALL declare a Pydantic `BaseModel` as its input schema. The OpenAI tool function schema SHALL be derived from that Pydantic model automatically (no hand-written JSON Schema). All previously stubbed tools from the bake-off SHALL be wired to production services:
+The backend SHALL register exactly fourteen callables in `chat_agent.tools.TOOLS`. This count comprises the original eleven from `agentic-framework-bakeoff`'s 9-tool spec (with tool 7 split into `search_within_episode` / `search_across_episodes` / `search_in_episodes` and tool 9 split into `pin_episode` / `unpin_episode`), plus `list_episodes` and `find_episodes_by_date` (added by prior changes without spec sync — recorded here for spec ↔ code alignment), plus `search_with_topic_prefilter` added by change `retrieval-cross-episode-episode-prefilter`. Each callable SHALL declare a Pydantic `BaseModel` as its input schema. The OpenAI tool function schema SHALL be derived from that Pydantic model automatically (no hand-written JSON Schema). All previously stubbed tools from the bake-off SHALL be wired to production services:
 
 - `get_episode_summary` SHALL read from the episode summary store via `summary_pipeline`.
 - `get_episode_segments` SHALL read from `topic_segmentation`.
 - `search_within_episode` and `search_in_episodes` SHALL call `rag.retrieve_hybrid` with `episode_id_filter` set.
-- `search_across_episodes` SHALL call `rag.retrieve_hybrid` without an episode filter.
+- `search_across_episodes` SHALL call `rag.retrieve_hybrid` without an episode filter. Its tool description SHALL note that it is the fallback path; for questions spanning a known topic / theme across episodes, the LLM SHOULD prefer `search_with_topic_prefilter` to avoid topic-related-but-wrong-episode chunks dominating the merged pool.
+- `search_with_topic_prefilter` SHALL internally call `episode_finders.find_episodes_by_topic(show_id, [topic])` to obtain a candidate episode set, then call `rag.retrieve_hybrid` with `episode_id_filter` set to the candidate set. When the candidate set is empty, the tool SHALL fall back to `rag.retrieve_hybrid` without an episode filter (matching `search_across_episodes` behavior) so the caller still receives some chunks rather than an empty result.
 - `find_episode_by_ref` SHALL call `episode_finders.find_by_ref`.
-- `find_episodes_by_guest` / `find_episodes_by_topic` / `find_episodes_by_date` SHALL call the corresponding `episode_finders` functions.
+- `find_episodes_by_guest` / `find_episodes_by_topic` / `find_episodes_by_date` / `list_episodes` SHALL call the corresponding `episode_finders` functions.
 - `get_show_overview` SHALL read from the show table.
 - `pin_episode` and `unpin_episode` SHALL write to `ChatSessionState.focused_episode_id`.
 
@@ -115,51 +116,12 @@ The backend SHALL register exactly eleven callables in `chat_agent.tools.TOOLS`,
 
 
 <!-- @trace
-source: chat-agentic-tool-routing
-updated: 2026-05-21
+source: retrieval-cross-episode-episode-prefilter
+updated: 2026-05-26
 code:
-  - .agents/skills/spectra-analyze/SKILL.md
-  - .agents/skills/spectra-commit/SKILL.md
-  - .agents/skills/spectra-ingest/SKILL.md
-  - backend/scripts/run_chat_agent_eval.py
-  - backend/app/services/chat_agent/__init__.py
-  - backend/app/core/config.py
-  - .agents/skills/spectra-verify/SKILL.md
-  - backend/scripts/agentic_bakeoff/results/comparison.md
-  - backend/app/services/chat_agent/prompts.py
-  - .codex/config.toml
-  - .tmp/citation-unify-en-collapsed.png
-  - backend/app/services/chat_agent/agent.py
-  - .agents/skills/spectra-archive/SKILL.md
-  - backend/scripts/agentic_bakeoff/results/a_native_openai_20260519T100220Z.json
-  - .agents/skills/spectra-propose/SKILL.md
-  - .agents/skills/spectra-audit/SKILL.md
-  - backend/app/services/episode_finders.py
-  - .agents/skills/spectra-discuss/SKILL.md
-  - .tmp/citation-unify-q1.png
-  - .tmp/citation-unify-q3.png
-  - AGENTS.md
-  - backend/app/services/chat_agent/state.py
-  - .agents/skills/spectra-apply/SKILL.md
-  - backend/app/services/chat_agent/memory.py
-  - .tmp/citation-unify-q1-q2-q3-zh-expanded.png
-  - backend/app/schemas/query.py
-  - .agents/skills/rag-eval-runner/SKILL.md
-  - .agents/skills/spectra-drift/SKILL.md
-  - .codex/hooks.json
-  - .agents/skills/spectra-ask/SKILL.md
-  - .agents/skills/spectra-debug/SKILL.md
-  - .tmp/citation-unify-q2.png
-  - .tmp/citation-unify-zh-all.png
   - backend/app/services/chat_agent/tools.py
-  - backend/eval/datasets/this-not-that-cool.json.bak-20260515T060258Z
-  - backend/app/api/query.py
 tests:
-  - backend/tests/test_chat_session_state.py
-  - backend/tests/test_quota_decrement_uniform.py
-  - backend/tests/test_chat_agent_multi_turn.py
-  - backend/tests/test_chat_agent_loop.py
-  - backend/tests/test_chat_agent_memory.py
+  - backend/tests/test_chat_agent_topic_prefilter.py
 -->
 
 ---
@@ -1125,4 +1087,62 @@ code:
   - backend/app/services/chat_agent/tools.py
 tests:
   - backend/tests/test_chat_agent_epref_carry.py
+-->
+
+---
+### Requirement: search_with_topic_prefilter SHALL pre-scope retrieval to topic-matching episodes
+
+The `search_with_topic_prefilter(topic: str, query: str, k: int = 5)` tool SHALL execute the following two-step retrieval:
+
+1. Call `episode_finders.find_episodes_by_topic(show_id, [topic])` to obtain a candidate episode list `candidates`.
+2. If `len(candidates) > 0`, call `rag.retrieve_hybrid(query, episode_id_filter=[ep.episode_id for ep in candidates], k=k)`.
+3. If `len(candidates) == 0`, fall back to `rag.retrieve_hybrid(query, k=k)` without filter so the caller still receives chunks (degraded gracefully, equivalent to `search_across_episodes`).
+
+The tool result envelope SHALL include:
+
+- `chunks`: same shape as other search tools (list of dicts via `_chunk_to_dict`)
+- `prefilter_episode_count`: integer, the size of `candidates` returned by the topic finder
+- `fallback_to_full_pool`: boolean, `true` when step 3 (empty-candidate fallback) was taken, `false` when step 2 ran
+
+#### Scenario: Topic match returns candidates, retrieval is scoped to them
+
+- **GIVEN** the show contains episodes EP143, EP107, EP66 whose `find_episodes_by_topic(topic="家常味")` returns `[EP143, EP107]`
+- **AND** the LLM calls `search_with_topic_prefilter(topic="家常味", query="馬世芳怎麼定義家常味", k=5)`
+- **WHEN** the tool dispatcher executes
+- **THEN** the underlying `rag.retrieve_hybrid` call SHALL pass `episode_id_filter=[EP143_uuid, EP107_uuid]`
+- **AND** the returned envelope's `prefilter_episode_count` SHALL equal `2`
+- **AND** the envelope's `fallback_to_full_pool` SHALL be `false`
+- **AND** no returned chunk SHALL have an `episode_id` outside `{EP143_uuid, EP107_uuid}`
+
+#### Scenario: No topic match falls back to full-show retrieval without filter
+
+- **GIVEN** `find_episodes_by_topic(topic="lorem-ipsum-no-match")` returns an empty list
+- **AND** the LLM calls `search_with_topic_prefilter(topic="lorem-ipsum-no-match", query="any question", k=5)`
+- **WHEN** the tool dispatcher executes
+- **THEN** the underlying `rag.retrieve_hybrid` call SHALL be invoked WITHOUT an `episode_id_filter` (full show pool)
+- **AND** the returned envelope's `prefilter_episode_count` SHALL equal `0`
+- **AND** the envelope's `fallback_to_full_pool` SHALL be `true`
+- **AND** `chunks` MAY contain up to `k` results spanning any episode
+
+#### Scenario: Envelope fields are always populated
+
+- **GIVEN** any successful invocation of `search_with_topic_prefilter`
+- **WHEN** the tool dispatcher records the result
+- **THEN** the envelope SHALL contain the keys `chunks`, `prefilter_episode_count`, and `fallback_to_full_pool` regardless of whether the prefilter path or fallback path executed
+- **AND** the chunk dict shape SHALL be identical to that returned by `search_across_episodes` and `search_in_episodes` (so downstream `_collect_agentic_citations` does not need branching)
+
+#### Scenario: Tool description guides LLM away from search_across_episodes for topical questions
+
+- **GIVEN** the OpenAI tool schema generated from `SearchWithTopicPrefilterInput`
+- **WHEN** the schema is rendered to the LLM
+- **THEN** the description string SHALL explicitly recommend this tool over `search_across_episodes` for questions that name a topic / theme spanning multiple episodes
+- **AND** the `search_across_episodes` tool description SHALL be updated to call itself the "fallback" path and refer the LLM to `search_with_topic_prefilter` for topical cross-episode queries
+
+<!-- @trace
+source: retrieval-cross-episode-episode-prefilter
+updated: 2026-05-26
+code:
+  - backend/app/services/chat_agent/tools.py
+tests:
+  - backend/tests/test_chat_agent_topic_prefilter.py
 -->
