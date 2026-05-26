@@ -52,6 +52,31 @@ const MILESTONE_LABELS = {
 const RELEASE_LOG = [
   // ─── v1.8 — Chat Mode: Agentic (5/21~) ───
   {
+    date: '2026-05-26', slug: 'multi-turn-epref-resolution-fix', milestone: 'v1.8', tag: 'fix',
+    title: {
+      zh: '對話模式追問特定集數時不再亂掉',
+      en: 'Chat Mode No Longer Loses Track of Episodes Across Follow-Up Questions',
+    },
+    summary: {
+      zh: '修對話模式多輪追問的兩個討厭問題。第一個：你先問「EP140 第二彈是哪兩位來賓？」，agent 答對楊大正跟張凱婷；緊接著追問「他們推薦哪間餐廳？」，agent 卻會回「集數編號 140 的格式是否正確？請提供 UUID」直接放棄 — 因為它在第一輪識別了 EP140 但沒記住，第二輪不知道你在問哪集。第二個：類似情境下 agent 有時不放棄，反而漂到別集 — 你問 EP19 的動漫歌單，追問「大家推薦了哪些歌？」結果跳到 EP112 來答，再追問「這些歌出自哪部作品？」更扯，agent 編造「EP112 和 EP46 是否是完整的節目編號？」整個迷路。修法是讓 agent 在識別到某一集後自動把焦點鎖定到那一集，後續追問如果沒明確說別的集就會自動繼續在那一集裡查 — 純機械邏輯，不靠改 SYSTEM_PROMPT 讓 LLM「學」這個習慣。Prod 驗證：mt02/mt03/mt04 三題的「放棄」「漂到別集」「編造集號」全部消失；同時 mt01 的「第三集是什麼」這類序數指代問題仍 fail（屬另一個 mechanical fix follow-up，刻意不在這次 scope 內以保持隔離）。',
+      en: 'Fixes two annoying chat-mode multi-turn behaviors. First: ask "who were the two guests on the EP140 second course episode?", agent correctly says 楊大正 and 張凱婷; immediately follow up with "which restaurants did they recommend?", and agent returns "is episode number 140 in the correct format? please provide UUID" — it identified EP140 in turn 1 but didn\'t remember, so turn 2 has no idea which episode you mean. Second: in similar scenarios agent sometimes doesn\'t give up — it drifts to a completely different episode. Ask about EP19\'s anime playlist, follow up with "what songs did they recommend?" and it switches to EP112 instead; follow up once more with "what works are those songs from?" and agent makes up "EP112 and EP46 — are those complete episode numbers?", fully lost. Fix: when agent resolves an episode reference, the tool layer auto-pins focus to that episode; subsequent turns that don\'t mention a different episode will transparently scope queries to the pinned one. Pure mechanical wiring — no SYSTEM_PROMPT changes asking the LLM to "learn" this habit. Prod verified: mt02/mt03/mt04 all stopped giving up / drifting / fabricating episode numbers. mt01\'s "what\'s the third episode?" ordinal-reference bug remains failing (deliberately out of scope for this change to keep cause-and-effect isolated — separate follow-up).',
+    },
+    summaryBullets: {
+      zh: [
+        '多輪對話中追問「他們推薦哪間餐廳」這種延續題不再被 agent 反問「請提供 UUID」放棄',
+        '不會再從 EP19 追問突然漂到 EP112、EP46 這種完全不相關的集數',
+        '靠 tool 層機械 auto-pin，不動 SYSTEM_PROMPT（避免 prompt 飽和風險）',
+        '序數指代問題（「第三集是什麼」）仍 fail — 屬另一個 follow-up，本次刻意隔離',
+      ],
+      en: [
+        'Follow-up questions like "what restaurants did they recommend" no longer get refused with "please provide UUID"',
+        'Asking about EP19 then following up no longer drifts to unrelated episodes like EP112 or EP46',
+        'Achieved via mechanical auto-pin at the tool layer — no SYSTEM_PROMPT changes (avoids prompt saturation risk)',
+        'Ordinal reference bug ("what\'s the third episode") still fails — separate follow-up, deliberately out of scope',
+      ],
+    },
+  },
+  {
     date: '2026-05-26', slug: 'eval-judge-incorporate-tool-grounding', milestone: 'v1.8', tag: 'enhancement',
     title: {
       zh: '對話模式的品質量得更準了',
