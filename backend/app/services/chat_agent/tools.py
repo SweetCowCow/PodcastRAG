@@ -375,7 +375,7 @@ async def _search_in_episodes(inp: SearchInEpisodesInput, ctx: ToolContext) -> d
     return {"chunks": [_chunk_to_dict(h) for h in hits]}
 
 
-_PREFILTER_RERANK_TOP_N = 50
+_PREFILTER_RERANK_TOP_N = 30
 
 
 async def _search_with_topic_prefilter(

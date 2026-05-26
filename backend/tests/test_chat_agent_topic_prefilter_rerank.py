@@ -57,7 +57,7 @@ def patched(monkeypatch):
 
     state = {
         "candidates": [SimpleNamespace(episode_id=EP143)],
-        "hits": [_fake_hit(EP143, float(i)) for i in range(50)],
+        "hits": [_fake_hit(EP143, float(i)) for i in range(_PREFILTER_RERANK_TOP_N)],
         "rerank_result": None,  # (chunks, applied) or None to use identity
         "retrieve_captured": {},
         "rerank_captured": {},
@@ -97,7 +97,7 @@ async def test_prefilter_calls_retrieve_with_k50(patched):
     out = await _search_with_topic_prefilter(
         SearchWithTopicPrefilterInput(topic="X", query="q", k=5), _ctx()
     )
-    assert patched["retrieve_captured"]["k"] == _PREFILTER_RERANK_TOP_N == 50
+    assert patched["retrieve_captured"]["k"] == _PREFILTER_RERANK_TOP_N
     assert patched["retrieve_captured"]["episode_id_filter"] == [EP143]
     assert len(out["chunks"]) == 5
 
@@ -109,7 +109,7 @@ async def test_prefilter_calls_rerank_after_retrieve(patched):
         SearchWithTopicPrefilterInput(topic="X", query="q", k=5), _ctx()
     )
     assert patched["rerank_captured"]["called"] is True
-    assert patched["rerank_captured"]["chunks_len"] == 50
+    assert patched["rerank_captured"]["chunks_len"] == _PREFILTER_RERANK_TOP_N
     assert patched["rerank_captured"]["k"] == 5
 
 
@@ -120,7 +120,7 @@ async def test_envelope_has_rerank_fields(patched):
         SearchWithTopicPrefilterInput(topic="X", query="q", k=5), _ctx()
     )
     assert out["rerank_applied"] is True
-    assert out["rerank_input_count"] == 50
+    assert out["rerank_input_count"] == _PREFILTER_RERANK_TOP_N
 
 
 @pytest.mark.asyncio
@@ -160,7 +160,7 @@ async def test_rerank_failure_returns_rrf_top_k(patched):
         SearchWithTopicPrefilterInput(topic="X", query="q", k=5), _ctx()
     )
     assert out["rerank_applied"] is False
-    assert out["rerank_input_count"] == 50
+    assert out["rerank_input_count"] == _PREFILTER_RERANK_TOP_N
     assert len(out["chunks"]) == 5
 
 
