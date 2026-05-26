@@ -172,14 +172,14 @@ code:
 ---
 ### Requirement: Semantic search endpoint returns ranked chunks
 
-The backend SHALL expose `POST /shows/{show_id}/search` which SHALL be guarded by the `optional_auth_with_ip_limit` dependency (see auth-system + ip-rate-limit capabilities). The endpoint accepts body `{"question": "<non-empty string>", "k": <optional int 1-50, default 8>}`. The endpoint SHALL embed the question using the configured embedding step, jieba-tokenise the question for lexical matching using the current custom dictionary (see tokenizer-dictionary capability), and perform hybrid retrieval combining semantic (pgvector cosine distance) and lexical (PostgreSQL tsvector ts_rank) signals via Reciprocal Rank Fusion. Retrieval SHALL be performed against three lexical pools — `transcript_chunks.text_tsvector`, `episode_description_chunks.text_tsvector`, AND `episodes.title_tsvector` — combined with the semantic pool over `transcript_chunks` AND `episode_description_chunks`, with each pool weighted by a configurable Python-side constant (default: chunk × 1.0, description × 0.7, title × 0.5). All pools SHALL be filtered to the specified `show_id`, ranked individually, then unioned by RRF score. Each result SHALL carry a `source` discriminator equal to `"transcript"`, `"description"`, or `"title"`. The endpoint SHALL NOT include any LLM-generated answer. The endpoint SHALL NOT decrement `quota_remaining` even for authenticated callers.
+The backend SHALL expose `POST /shows/{show_id}/search` which SHALL be guarded by the `optional_auth_with_ip_limit` dependency (see auth-system + ip-rate-limit capabilities). The endpoint accepts body `{"question": "<non-empty string>", "k": <optional int 1-50, default 8>}`. The endpoint SHALL embed the question using the configured embedding step, jieba-tokenise the question for lexical matching using the current custom dictionary (see tokenizer-dictionary capability), and perform hybrid retrieval combining semantic (pgvector cosine distance) and lexical (PostgreSQL tsvector ts_rank) signals via Reciprocal Rank Fusion. Retrieval SHALL be performed against three lexical pools — `transcript_chunks.text_tsvector`, `episode_description_chunks.text_tsvector`, AND `episodes.title_tsvector` — combined with the semantic pool over `transcript_chunks` AND `episode_description_chunks`, with each pool weighted by a configurable Python-side constant `RRF_WEIGHTS` defined in `backend/app/services/rag.py`. The default values after this change SHALL be those selected by the weight sweep documented at `docs/case-studies/rrf-cross-episode-weight-sweep-2026-05-26.md`; the sweep procedure SHALL bump the `description` pool weight relative to the prior baseline (chunk × 1.0, description × 0.7, title × 0.5) to address cross-episode chunk_recall degradation, AND the chosen weights SHALL satisfy the acceptance gate defined in `Requirement: RRF weight changes SHALL satisfy a non-regression gate`. All pools SHALL be filtered to the specified `show_id`, ranked individually, then unioned by RRF score. Each result SHALL carry a `source` discriminator equal to `"transcript"`, `"description"`, or `"title"`. The endpoint SHALL NOT include any LLM-generated answer. The endpoint SHALL NOT decrement `quota_remaining` even for authenticated callers.
 
 #### Scenario: RRF combines semantic and lexical ranks across three pools
 
 - **GIVEN** chunk `A` ranks 3 in semantic, 25 in chunk-lexical, absent from description-lexical, absent from title-lexical
-- **AND** the configured RRF weights are chunk=1.0, description=0.7, title=0.5
+- **AND** the configured `RRF_WEIGHTS` are loaded from `backend/app/services/rag.py`
 - **WHEN** the endpoint computes RRF scores with constant `k=60`
-- **THEN** chunk `A`'s RRF score SHALL be `1/(60+3) + 1.0 × 1/(60+25) + 0.7 × 1/(60+999) + 0.5 × 1/(60+999)` (absent-side ranks are sentinel 999)
+- **THEN** chunk `A`'s RRF score SHALL be `1/(60+3) + RRF_WEIGHTS["chunk"] × 1/(60+25) + RRF_WEIGHTS["description"] × 1/(60+999) + RRF_WEIGHTS["title"] × 1/(60+999)` (absent-side ranks are sentinel 999)
 
 #### Scenario: Title-pool match contributes lexical signal
 
@@ -198,103 +198,23 @@ The backend SHALL expose `POST /shows/{show_id}/search` which SHALL be guarded b
 #### Scenario: Anonymous request under rate limit returns top-K hybrid results
 
 - **GIVEN** an unauthenticated visitor whose IP counter is 5 and `ip_search_rate_limit_per_day=20`
-- **WHEN** the visitor calls `POST /shows/{show_id}/search` with body `{"question": "歌單"}`
-- **THEN** the response SHALL be 200 with up to 8 ranked results
+- **WHEN** they POST `/shows/<id>/search` with a non-empty question
+- **THEN** the endpoint SHALL return up to `k` hybrid-ranked chunks combining transcript and description sources
+- **AND** the IP counter SHALL be incremented to 6
 
 
 <!-- @trace
-source: r3-3-metadata-filter
-updated: 2026-05-16
+source: retrieval-cross-episode-recall-improvement
+updated: 2026-05-26
 code:
-  - backend/scripts/pilot_reembed_descriptions.py
-  - backend/eval/datasets/this-not-that-cool.json
-  - docs/ai-steps.md
-  - src/AdminEpisodeGuestsTab.jsx
-  - backend/app/services/embedding.py
-  - backend/app/services/rag.py
-  - src/AdminTokenizerTab.jsx
-  - index.html
-  - backend/app/api/admin/__init__.py
-  - backend/app/models/episode_description_chunk.py
-  - backend/alembic/versions/t8a9b0c1d2e3_chunking_version_description_chunks.py
-  - backend/app/services/tokenizer.py
-  - backend/app/api/admin/ai_steps.py
-  - backend/app/services/llm_prompts.py
-  - src/App.jsx
-  - backend/app/services/citation_parser.py
-  - backend/app/schemas/query.py
-  - backend/app/models/ai_step.py
-  - src/AdminPage.jsx
-  - backend/app/services/query_entity.py
-  - backend/app/services/topic_segmentation.py
-  - backend/app/models/episode.py
-  - src/TranscriptPage.jsx
-  - backend/scripts/backfill_guests.py
-  - backend/alembic/versions/w1d2e3f4a5b6_r33_add_entity_extraction_step.py
-  - backend/eval/datasets/_pending_review.json
-  - CLAUDE.md
-  - backend/eval/scripts/bakeoff_entity_extractor.py
-  - backend/eval/datasets/_schema.json
-  - backend/app/workers/topic_task.py
-  - src/QueryPage.jsx
-  - backend/scripts/backfill_topic_labels.py
-  - backend/alembic/versions/v0c1d2e3f4a5_r33_episodes_guests_and_title_tsv.py
-  - backend/app/schemas/episode_guests.py
-  - backend/scripts/backfill_embedding_v2.py
-  - backend/alembic/versions/u9b0c1d2e3f4_add_embedding_v2_columns.py
-  - backend/app/api/shows.py
-  - backend/app/api/query.py
-  - backend/eval/metrics/recall.py
-  - backend/eval/datasets/README.md
-  - backend/app/services/rss_parser.py
-  - docs/roadmap.md
-  - backend/app/services/sync.py
-  - backend/eval/scripts/validate_schema.py
-  - src/ReleaseLogPage.jsx
-  - backend/app/services/description_rechunker.py
   - src/releaseLog.jsx
-  - backend/eval/runners/run.py
-  - backend/app/api/admin/episode_guests.py
-  - backend/app/api/admin/chunking_status.py
-  - backend/scripts/backfill_title_tsv.py
-  - backend/app/services/key_resolver.py
-  - backend/app/models/transcript_chunk.py
-  - backend/eval/datasets/this-not-that-cool.json.bak-20260515T060258Z
-  - src/Shared.jsx
-  - backend/app/workers/celery_app.py
-  - backend/scripts/cleanup_v1_description_chunks.py
-  - backend/app/workers/tasks.py
-  - backend/eval/scripts/embedding_bakeoff.py
-  - backend/app/services/description_indexer.py
-  - backend/app/schemas/query_entity.py
-  - backend/eval/scripts/build_golden_set.py
+  - backend/app/api/admin/rrf_sweep.py
+  - backend/app/services/chat_agent/tools.py
+  - backend/app/api/admin/__init__.py
+  - backend/eval/scripts/rrf_weight_sweep.py
 tests:
-  - backend/tests/test_golden_set_dataset.py
-  - backend/tests/test_strip_citations.py
-  - backend/tests/test_eval_dataset_schema.py
-  - backend/tests/test_citation_parser.py
-  - backend/tests/test_eval_runner_flags.py
-  - backend/tests/test_description_retrieval_prefer_v2.py
-  - backend/tests/test_rss_guests_extraction.py
-  - backend/tests/test_backfill_guests.py
-  - backend/tests/test_rag_query_response_shape.py
-  - backend/tests/test_answer_malformed_json_salvage.py
-  - backend/tests/test_rag_embedding_v2_flag.py
-  - backend/tests/test_chunking_version_coexistence.py
-  - backend/tests/test_query_chat_metadata_filter.py
-  - backend/tests/test_rag_retrieval_flags.py
-  - backend/tests/test_rag_multi_column_bm25.py
-  - backend/tests/test_topic_segmentation_persist.py
-  - backend/tests/test_admin_episode_guests.py
-  - backend/tests/test_key_resolver.py
-  - backend/tests/test_eval_runner_dispatch.py
-  - backend/tests/test_description_chunker_120.py
-  - backend/tests/test_embedding_v2_dual_write.py
-  - backend/tests/test_ai_summary_full_field.py
-  - backend/tests/test_episode_guests_schema.py
-  - backend/tests/test_llm_prompts.py
-  - backend/tests/test_description_rechunker.py
-  - backend/tests/test_query_entity.py
+  - backend/tests/test_chat_agent_epref_carry.py
+  - backend/tests/test_admin_rrf_sweep.py
 -->
 
 ---
@@ -522,6 +442,52 @@ When the detector returns a non-empty list, the endpoint SHALL pass it as `episo
 - **WHEN** the detector runs
 - **THEN** the returned UUID list SHALL contain only `EP1`'s UUID (NOT `EP143`'s)
 
+---
+### Requirement: RRF weight changes SHALL satisfy a non-regression gate
+
+Any change to the `RRF_WEIGHTS` constant in `backend/app/services/rag.py` SHALL pass a measurement gate before being merged. The gate is operationalised by an admin endpoint `POST /admin/rrf/sweep` (implemented at `backend/app/api/admin/rrf_sweep.py`, require_admin gated, read-only — design drift from the original proposal's local sweep script after local DB hostname turned out to be unreachable). The endpoint, for each candidate weight tuple in the request body, computes:
+
+- `cross_episode_recall_mean`: mean `chunk_recall_grouped` score across the cross-episode focused mini-set (item ids `b20`, `b21`, `b23`)
+- `deep_dive_recall_mean`: mean `chunk_recall_grouped` score across the deep_dive items in the v2 dataset that carry chunk-level GT (item ids `b15`, `b16`, `b17`, `b19`)
+
+A candidate weight tuple SHALL be accepted only if BOTH conditions hold:
+
+1. `cross_episode_recall_mean` SHALL be strictly greater than the baseline measured under the prior weights (chunk × 1.0, description × 0.7, title × 0.5)
+2. `deep_dive_recall_mean` SHALL NOT decrease by more than 0.05 absolute compared to the prior baseline (a small regression is permitted to reflect natural noise; >0.05 is treated as material regression and rejects the candidate)
+
+The selected tuple, the full sweep table, and the prior baseline numbers SHALL be persisted in `docs/case-studies/rrf-cross-episode-weight-sweep-2026-05-26.md`.
+
+#### Scenario: Candidate weights with cross-episode gain and no deep-dive regression are accepted
+
+- **GIVEN** the prior baseline cross_episode_recall_mean is 0.33 and deep_dive_recall_mean is 0.75
+- **AND** a candidate weight tuple yields cross_episode_recall_mean 0.55 and deep_dive_recall_mean 0.73
+- **WHEN** the sweep harness evaluates the gate
+- **THEN** the candidate SHALL be marked `accepted` in the sweep table
+- **AND** the candidate SHALL be eligible for selection as the new `RRF_WEIGHTS` default
+
+#### Scenario: Candidate weights with cross-episode gain but unacceptable deep-dive regression are rejected
+
+- **GIVEN** the prior baseline deep_dive_recall_mean is 0.75
+- **AND** a candidate weight tuple yields deep_dive_recall_mean 0.68 (regression of 0.07 absolute)
+- **WHEN** the sweep harness evaluates the gate
+- **THEN** the candidate SHALL be marked `rejected` in the sweep table regardless of cross_episode gain
+- **AND** the candidate SHALL NOT be selected as the new `RRF_WEIGHTS` default
+
+#### Scenario: Candidate weights with no cross-episode gain are rejected
+
+- **GIVEN** the prior baseline cross_episode_recall_mean is 0.33
+- **AND** a candidate weight tuple yields cross_episode_recall_mean 0.33 (no gain)
+- **WHEN** the sweep harness evaluates the gate
+- **THEN** the candidate SHALL be marked `rejected` (failing condition 1)
+- **AND** the prior baseline weights SHALL remain the default
+
+#### Scenario: Sweep result is persisted before merge
+
+- **GIVEN** the sweep harness has been executed and produced a sweep table
+- **WHEN** the RRF_WEIGHTS constant in rag.py is updated
+- **THEN** the commit changing rag.py SHALL include or reference `docs/case-studies/rrf-cross-episode-weight-sweep-2026-05-26.md`
+- **AND** that file SHALL contain the full sweep table with at least 3 candidate tuples evaluated plus the baseline row
+
 ## 相關集數清單（共 2 集）
 這個問題的搜尋結果鎖定以下集數，作為你回答的依據：
 1. EP143「從餐廳請客到自家廚房」(2026-04-29, ft. 馬世芳)
@@ -599,6 +565,21 @@ tests:
   - backend/tests/test_chat_agent_multi_turn.py
   - backend/tests/test_chat_agent_loop.py
   - backend/tests/test_chat_agent_memory.py
+-->
+
+
+<!-- @trace
+source: retrieval-cross-episode-recall-improvement
+updated: 2026-05-26
+code:
+  - src/releaseLog.jsx
+  - backend/app/api/admin/rrf_sweep.py
+  - backend/app/services/chat_agent/tools.py
+  - backend/app/api/admin/__init__.py
+  - backend/eval/scripts/rrf_weight_sweep.py
+tests:
+  - backend/tests/test_chat_agent_epref_carry.py
+  - backend/tests/test_admin_rrf_sweep.py
 -->
 
 ---
