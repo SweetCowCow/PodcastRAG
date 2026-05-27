@@ -737,11 +737,19 @@
       "expected_count": null,
       "expected_top_n_episode_numbers": null,
       "ground_truth_chunk_ids_must": null,
-      "ground_truth_chunk_ids_either": null,
+      "ground_truth_chunk_ids_either": [
+        "ep:19bf7738-d6c5-4795-9209-47c639c6c466@919.56",
+        "ep:ce8c1483-86b3-4e08-896e-47ca69c17039@377.50",
+        "ep:7cde96d3-e536-4b1f-8aec-fc756270b34f@4324.90",
+        "ep:7dd49293-bbd1-41a0-8d18-b0d49b5e0254@1052.94",
+        "ep:7dd49293-bbd1-41a0-8d18-b0d49b5e0254@1073.30",
+        "ep:fef8a2ae-7c44-4338-9e63-5abd9c96b758@1360.86",
+        "ep:fef8a2ae-7c44-4338-9e63-5abd9c96b758@1536.58"
+      ],
       "ground_truth_chunk_ids_acceptable": null,
       "expected_must_contradict_check": null,
       "audit_status": "human-verified-2026-05-25",
-      "audit_notes": "原題『主持陣容變化』因 ASR 錯字 + 時序事件 audit 成本高，簡化為『識別固定參與者』。Transcript 內有明確證據。Agent 必須走 search_across_episodes 才能答，壓力測試 search 路徑。"
+      "audit_notes": "2026-05-27 audit (post-EP129 case study；distributed-evidence 補 either):\nexpected answer 列 3 個 recurring participants（非來賓）: 杜宗祐 / 方品融 / 阿名\neither 結構分組邏輯（grader 用 flat list，但 auditor 確保每個 entity 至少 1 chunk）:\n- 杜宗祐 (ASR 儲存為「杜忠祐」, 3 chunks): EP119 @919.56「Ghetto 有個朋友叫杜忠祐」/ EP52 @377.50「杜忠祐說他很有信心」/ EP122 @4324.90「留守的杜忠祐」\n- 方品融 (2 chunks): EP94 @1052.94 / @1073.30 迪拉介紹「方品融是 24 歲女饒舌歌手」+ EP141 description 多筆（未挑進 either 因 description chunks 排序行為與 transcript 不同）\n- 阿名 (ASR 也作「阿明」, 2 chunks): 15CM 一萬粉絲 Q&A @1360.86「阿明你剪接」/ @1536.58「阿明這集剪得很辛苦」\nASR 錯字未在本 change 修（per design non-goal「不修 ASR」）；grader chunk_id match by start_time ±10s 不受名字 ASR 影響。\n原 must=0 root cause: dataset auditor 過去把 distributed-evidence 題型誤當「無 chunk-level evidence」，但實際 transcript 證據充足。"
     },
     {
       "id": "b23",
@@ -749,7 +757,7 @@
       "source": "existing:q24-leo-wang-encounter-arc",
       "is_multi_turn": false,
       "audit_status": "pending",
-      "audit_notes": "Auto-migrated from v1; needs human audit per docs/eval-strategy.md",
+      "audit_notes": "2026-05-27 audit (post-EP129 hallucination case study; user 親自聽逐字稿驗證):\nmust chunks 主體驗證:\n- EP107 @1766.87: 迪拉自述「我記得我是在一個Live house / 然後我看表演看完一半 / 後面突然有人點我 / 他說我是Leo王」— 主體 = 迪拉↔Leo 王 ✓\n- EP107 @1819.35: 同段延續「就在那 Live house 的時候 他點我 / 我是Leo王 / 喔那是你們第一次見面 / 對 第一次見面」— 主體 = 迪拉↔Leo 王 ✓\nacceptable chunks（移自原 must，主體不符但屬 bystander context）:\n- EP116 @187.48: 小老虎自述「迪拉給我安排演出在 Revolver / 那次就在給我來當一個暖場嘉賓 / 我更早是他的樂迷的意思」— 主體 = 小老虎↔Leo 王（迪拉只是 venue arranger），不應作 must；保留 acceptable 給 retrieval 寬鬆評分用。\n原 must 三 chunks 標錯 root cause: dataset auditor 看到「迪拉給我安排演出」就誤判成「迪拉 vs Leo 王」第一次見面。",
       "question": "迪拉跟 Leo王 是怎麼從不認識變成合作夥伴的？他們第一次見面的故事是什麼？",
       "expected_behavior": "answer",
       "expected_answer_summary": "PENDING AUDIT",
@@ -770,11 +778,12 @@
       "expected_must_contradict_check": null,
       "ground_truth_chunk_ids_must": [
         "ep:8b3d4c1d-be8d-4dde-b12c-4cbe9b60ef21@1766.87",
-        "ep:8b3d4c1d-be8d-4dde-b12c-4cbe9b60ef21@1819.35",
-        "ep:cb96f6f8-58fb-43fd-bbd6-da1b585d9f60@187.48"
+        "ep:8b3d4c1d-be8d-4dde-b12c-4cbe9b60ef21@1819.35"
       ],
       "ground_truth_chunk_ids_either": null,
-      "ground_truth_chunk_ids_acceptable": null
+      "ground_truth_chunk_ids_acceptable": [
+        "ep:cb96f6f8-58fb-43fd-bbd6-da1b585d9f60@187.48"
+      ]
     },
     {
       "id": "b24",
