@@ -1,13 +1,17 @@
 """chat-rag v2 LLM judge wrapper.
 
-Single LLM call returns three structured verdicts:
+Single LLM call returns four structured verdicts:
 - factual_correctness {score, rationale}
 - refusal_appropriateness {verdict, is_refusal_with_correction, rationale}
 - answer_contradict_check {passed, rationale} | null
+- pronoun_attribution_check {verdict, rationale} | null
 
 Reads prompt from backend/eval/prompts/chat_judge_v2.md (cache-friendly prefix).
-Truncates tool result_full to 800 chars before sending to judge (see design D4).
-1 retry on malformed JSON; persistent failure → marks all three as "error".
+Truncates tool result_full to `RESULT_FULL_CAP_CHARS` (matches the agent loop's
+`agentic_tool_result_max_chars`) before sending to judge so the judge sees the
+same payload window the agent LLM saw — required for pronoun-attribution
+verification per change `judge-pronoun-attribution-check`.
+1 retry on malformed JSON; persistent failure → marks all four as "error".
 """
 from __future__ import annotations
 
@@ -23,7 +27,9 @@ from openai import OpenAI
 from backend.eval.judge_config import JUDGE_PROVIDER_BASE_URL, PRODUCTION_JUDGE_MODEL
 
 PROMPT_PATH = Path(__file__).parent / "prompts" / "chat_judge_v2.md"
-RESULT_TRUNCATE_CHARS = 800
+# Cap matches agent loop `settings.agentic_tool_result_max_chars` (8000) so the
+# judge sees the same content the agent LLM saw when generating the answer.
+RESULT_FULL_CAP_CHARS = 8000
 
 
 def load_prompt_text() -> str:
@@ -34,18 +40,25 @@ def load_prompt_sha256() -> str:
     return hashlib.sha256(load_prompt_text().encode("utf-8")).hexdigest()
 
 
-def _truncate_result(result: Any) -> str:
+def _coerce_to_str(result: Any) -> str:
     if result is None:
         return ""
     if isinstance(result, str):
-        s = result
-    else:
-        try:
-            s = json.dumps(result, ensure_ascii=False)
-        except (TypeError, ValueError):
-            s = str(result)
-    if len(s) > RESULT_TRUNCATE_CHARS:
-        return s[:RESULT_TRUNCATE_CHARS] + "[truncated]"
+        return result
+    try:
+        return json.dumps(result, ensure_ascii=False)
+    except (TypeError, ValueError):
+        return str(result)
+
+
+def _cap_result_full(result: Any) -> str:
+    """Cap tool result to `RESULT_FULL_CAP_CHARS`, preserving the agent loop's
+    truncation suffix shape when capping is triggered.
+    """
+    s = _coerce_to_str(result)
+    if len(s) > RESULT_FULL_CAP_CHARS:
+        omitted = len(s) - RESULT_FULL_CAP_CHARS
+        return f"{s[:RESULT_FULL_CAP_CHARS]}... (truncated, {omitted} chars omitted)"
     return s
 
 
@@ -67,7 +80,7 @@ def build_payload(
             {
                 "name": tc.get("name"),
                 "args": tc.get("args"),
-                "result_summary": _truncate_result(result),
+                "result_full": _cap_result_full(result),
             }
         )
 
@@ -106,6 +119,11 @@ def _error_envelope(msg: str) -> dict[str, Any]:
             "_error": True,
         },
         "answer_contradict_check": {"passed": False, "rationale": f"error: {msg}", "_error": True},
+        "pronoun_attribution_check": {
+            "verdict": "error",
+            "rationale": f"error: {msg}",
+            "_error": True,
+        },
     }
 
 
@@ -151,6 +169,9 @@ def invoke_judge(
             # answer_contradict_check is optional/null
             if "answer_contradict_check" not in parsed:
                 parsed["answer_contradict_check"] = None
+            # pronoun_attribution_check is optional/null
+            if "pronoun_attribution_check" not in parsed:
+                parsed["pronoun_attribution_check"] = None
             return parsed
         except (json.JSONDecodeError, ValueError, KeyError) as e:
             last_err = e

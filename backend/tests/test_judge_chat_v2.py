@@ -7,7 +7,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 from backend.eval.judge_chat_v2 import (
-    RESULT_TRUNCATE_CHARS,
+    RESULT_FULL_CAP_CHARS,
     _extract_json,
     build_payload,
     invoke_judge,
@@ -37,30 +37,46 @@ class _StubClient:
         self.chat = _Chat()
 
 
-def test_build_payload_truncates_tool_result():
+def test_build_payload_passes_result_full_under_cap():
+    """Tool result under cap passes through as result_full untouched."""
     item = {
         "id": "b14",
         "question": "Q?",
         "expected_answer_summary": "S",
         "expected_must_contradict_check": "X",
     }
-    long = "x" * 5000
+    short = "x" * 500
     resp = {
         "answer": "A",
-        "tool_calls": [{"name": "t", "args": {"a": 1}, "result_full": long}],
+        "tool_calls": [{"name": "t", "args": {"a": 1}, "result_full": short}],
     }
     payload = build_payload(item, resp)
-    summary = payload["tool_calls"][0]["result_summary"]
-    assert len(summary) <= RESULT_TRUNCATE_CHARS + len("[truncated]")
-    assert summary.endswith("[truncated]")
+    tc = payload["tool_calls"][0]
+    assert tc["result_full"] == short
+    assert "result_summary" not in tc  # field renamed
     assert payload["expected_must_contradict_check"] == "X"
 
 
-def test_invoke_judge_happy_path_three_keys():
+def test_build_payload_caps_tool_result_over_limit():
+    """Tool result over cap is truncated with the agent-loop suffix."""
+    item = {"id": "x", "question": "Q?", "expected_answer_summary": "S"}
+    long = "x" * (RESULT_FULL_CAP_CHARS + 1234)
+    resp = {
+        "answer": "A",
+        "tool_calls": [{"name": "t", "args": {}, "result_full": long}],
+    }
+    payload = build_payload(item, resp)
+    capped = payload["tool_calls"][0]["result_full"]
+    assert capped.startswith("x" * RESULT_FULL_CAP_CHARS)
+    assert "(truncated, 1234 chars omitted)" in capped
+
+
+def test_invoke_judge_happy_path_four_keys():
     good = (
         '{"factual_correctness": {"score": 1.0, "rationale": "ok"},'
         ' "refusal_appropriateness": {"verdict": "appropriate", "is_refusal_with_correction": false, "rationale": "ok"},'
-        ' "answer_contradict_check": null}'
+        ' "answer_contradict_check": null,'
+        ' "pronoun_attribution_check": null}'
     )
     client = _StubClient([good])
     out = invoke_judge({"question": "Q"}, client=client, model="stub-model")
@@ -68,6 +84,21 @@ def test_invoke_judge_happy_path_three_keys():
     assert out["factual_correctness"]["score"] == 1.0
     assert out["refusal_appropriateness"]["verdict"] == "appropriate"
     assert out["answer_contradict_check"] is None
+    assert out["pronoun_attribution_check"] is None
+
+
+def test_invoke_judge_missing_pronoun_check_defaults_to_null():
+    """Backward-compatible: judge response without pronoun_attribution_check
+    SHALL be filled with null so callers can safely .get()."""
+    no_pronoun = (
+        '{"factual_correctness": {"score": 1.0, "rationale": "ok"},'
+        ' "refusal_appropriateness": {"verdict": "appropriate", "is_refusal_with_correction": false, "rationale": "ok"},'
+        ' "answer_contradict_check": null}'
+    )
+    client = _StubClient([no_pronoun])
+    out = invoke_judge({"question": "Q"}, client=client, model="stub-model")
+    assert "pronoun_attribution_check" in out
+    assert out["pronoun_attribution_check"] is None
 
 
 def test_invoke_judge_retries_once_then_errors():

@@ -52,6 +52,31 @@ const MILESTONE_LABELS = {
 const RELEASE_LOG = [
   // ─── v1.8 — Chat Mode: Agentic (5/21~) ───
   {
+    date: '2026-05-27', slug: 'judge-pronoun-attribution-check', milestone: 'v1.8', tag: 'enhancement',
+    title: {
+      zh: '判分 AI 學會看出「把別人的故事套到你問的那個人身上」',
+      en: 'The Grading AI Now Catches "Wrong-Person Story Attribution"',
+    },
+    summary: {
+      zh: '修內部「打分 AI」的兩個盲點。第一個盲點是物理層：打分 AI 過去看到的資料只有「摘要」（每段截斷到 500 字），跟回答用的 AI 看到的完整段落（最多 8000 字）不一樣 — 等於用刪節版去判斷一個寫了完整劇本的演員，根本沒上下文。第二個盲點是邏輯層：過去判分 AI 只比對「答案 vs 期望摘要的表面用詞」，看到 b23 那種「段落講的是迪拉跟呂安初遇，但回答 AI 把『他』『我』全套用到 Leo 王身上」的代詞錯誤套用，判分 AI 完全抓不到、還給 0.95 高分。本次修法：(1) 餵完整段落給判分 AI、不再用 500 字截斷版 (2) 新增第 4 個指標「代詞主體驗證」三態：完美對齊 / 合理推測 / 張冠李戴 (3) 用 b23 案例當示範教 AI 怎麼判。完整 34 題重跑後，三大主要指標全部往上：跨集問題抓取準確度 0.382→0.482、答案事實正確性 0.831→0.892、拒答適切性 0.971→1.000；代詞驗證分佈 4 完美對齊 / 1 合理推測 / 0 張冠李戴 / 29 不適用 — 0 個張冠李戴反映前兩週的 dataset + retrieval 修正真實生效，回答 AI 不再撈到無關段落了。對使用者體感無直接影響，但內部評分基準變得更可信，後續任何對話品質改造都有更準的反饋。',
+      en: 'Fixed two blind spots in the internal grading AI. Physical blind spot: the grading AI was only seeing a "summary" of each tool result (truncated to 500 chars), while the answering agent saw the full 8000-char chunk — like grading an actor based on a CliffsNotes summary of the script. Logical blind spot: the rubric only compared surface wording between answer and expected, so cases like b23 (where chunks tell a 迪拉-呂安 first-meeting story but the agent maps all the "he/I/we" pronouns onto Leo 王) sailed through with factual=0.95. This change: (1) feeds the full chunk text to the grading AI (no more 500-char truncation), (2) adds a 4th indicator "pronoun attribution check" with three states (grounded / inferred / hallucinated), (3) uses b23 as the canonical example to teach the rubric. After re-running all 34 items, the three main metrics all moved up: cross-episode retrieval precision 0.382→0.482, answer factual correctness 0.831→0.892, refusal appropriateness 0.971→1.000. Pronoun-attribution distribution: 4 grounded / 1 inferred / 0 hallucinated / 29 null — zero hallucinations reflects that the prior two weeks\' dataset + retrieval fixes genuinely solved the b23-class problem (agents no longer reach unrelated chunks). No direct user-facing change, but our internal grading baseline is now trustworthy, giving future chat-mode improvements honest feedback.',
+    },
+    summaryBullets: {
+      zh: [
+        '修判分 AI 物理層盲點：從看「500 字摘要」改成看「完整 8000 字段落」，跟回答 AI 看的對齊',
+        '新增第 4 個指標「代詞主體驗證」三態：完美對齊 / 合理推測 / 張冠李戴',
+        '全 34 題重跑：跨集準確度 0.382→0.482、事實正確性 0.831→0.892、拒答適切性 0.971→1.000，三大指標全提升',
+        '0 個張冠李戴 = dataset + retrieval 前置修正真實生效；後續對話模式改造有可信反饋',
+      ],
+      en: [
+        'Fixed grading AI physical blind spot — now sees the full 8000-char chunk instead of a 500-char summary, matching what the answering agent sees',
+        'Added 4th indicator "pronoun attribution check" with three states: grounded / inferred / hallucinated',
+        'Full 34-item re-eval: cross-episode precision 0.382→0.482, factual 0.831→0.892, refusal 0.971→1.000 — all three main metrics up',
+        '0 hallucinations confirms prior dataset + retrieval fixes genuinely solved the b23-class problem; future chat-mode work now has trustworthy feedback',
+      ],
+    },
+  },
+  {
     date: '2026-05-27', slug: 'b23-dataset-and-retrieval-rca-fix', milestone: 'v1.8', tag: 'fix',
     title: {
       zh: '從一題對話 mode 答錯案例挖出 4 層連鎖問題',
