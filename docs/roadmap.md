@@ -140,7 +140,8 @@ R3 拆三段做（每段都跑 eval baseline 對照升幅）：
 
 ## 衍生待 propose（未開 change 但有共識）
 
-- **`b23-dataset-and-retrieval-rca-fix`**（衍自 2026-05-27 case study b23 audit + user 親自聽 EP129 證實 agent hallucinate）— 三層問題同時動：(1) dataset audit 修 b23 EP116 GT（標錯，那段是小老虎-Leo 王不是迪拉-Leo 王）+ 補 b22 chunk-level GT (2) `find_episodes_by_topic` 對「人名關係型 query」改走 guest 索引（`episodes.guests` JSONB）（3) retrieve_hybrid chunk-level 召回（b20 GT 兩個 chunk top-100 都不在；b23 GT chunks 在 EP107 內 rank 17/36）
+- ✅ **`b23-dataset-and-retrieval-rca-fix`** done 2026-05-27（commits `927fa18` + `f2bd784`）— b23 chunk_recall 0→0.5（dataset GT 修正主因）；episode_finders.find_episodes_by_topic 加 guest-index dispatch path（≥2 distinct guest names 觸發）+ envelope `prefilter_source` 觀測欄位；admin diagnose 擴 top_n=500 + chunking_context；揭露 b20 retrieve_hybrid 召回根本性 miss（@1790/@1808 連 top-500 都沒撈到）留 follow-up `chunk-level-retrieval-rca-b20-style`
+- **`chunk-level-retrieval-rca-b20-style`**（衍自 b20 Phase 3 diagnostic）— retrieve_hybrid 對 EP134 @1790.18 / @1808.78 在 top-500 都沒撈到，疑似 chunking 邊界或 lexical 召回根本問題；先 query prod DB `transcript_chunks WHERE episode_id=c1d87278 AND start_time BETWEEN 1780 AND 1820` 看 chunks 存在性
 - **`agent-pronoun-grounding`**（follow-up，未急）— b23 揭露 agent 拿到無關 chunk 後 LLM 自動把代詞「他/她/我」解析成 query 主體 → 表面 grounded 實際 hallucinate；需 SYSTEM_PROMPT 或 grounding rule 加「代詞解析驗證」
 - **`judge-pronoun-attribution-check`**（follow-up，未急）— judge 對 b23 hallucinate 給 factual=0.95；judge prompt 需加 pronoun-attribution 驗證步驟或新指標
 - **eval baseline 寫死**：cross_episode mean chunk_recall **0.283**（舊 0.244 deprecated，污染期 citation collector bug 數據）

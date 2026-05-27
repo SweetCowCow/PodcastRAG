@@ -52,6 +52,33 @@ const MILESTONE_LABELS = {
 const RELEASE_LOG = [
   // ─── v1.8 — Chat Mode: Agentic (5/21~) ───
   {
+    date: '2026-05-27', slug: 'b23-dataset-and-retrieval-rca-fix', milestone: 'v1.8', tag: 'fix',
+    title: {
+      zh: '從一題對話 mode 答錯案例挖出 4 層連鎖問題',
+      en: 'A Single Wrong-Answer Bug Exposed Four Layers of Hidden Issues',
+    },
+    summary: {
+      zh: '從一題對話模式答錯的案例（user 問「迪拉跟 Leo 王怎麼從不認識變成合作夥伴？」），user 親自聽逐字稿驗證後挖出 4 層連鎖問題。第一層是檢索：原本回答把 EP129（迪拉跟「呂安」的故事，跟 Leo 王完全無關）誤當成正確來源。第二層是 LLM 代詞解析：AI 拿到無關段落後自動把段落內的「他」「我」誤套到 query 主體（Leo 王），表面看引用真實逐字稿、實際語意全錯。第三層是內部評分機制：判分用的 LLM 沒有檢查代詞指向是否一致，所以這種「表面 grounded 實際 hallucinate」的回答竟然拿到高分通過。第四層是內部測資本身：dataset 標的「正確段落」之一（EP116 @187.48）也標錯了 — 那段其實是小老虎跟 Leo 王相識的故事，迪拉只是搭橋安排演出，跟「迪拉跟 Leo 王第一次見面」是兩件事。修法：(1) dataset 修兩題的標註 — b23 移除 EP116 標錯段、b22 補上 7 個分散的人物證據段落 (2) 後端 episode finder 新增 guest-index 派遣路徑，當 query 含 ≥2 個可辨識的來賓名稱時，加跑來賓索引找出真有那些人參與的集數 (3) 內部 diagnose 工具擴到 top-500 + 可看前後段落 (4) 把 b20 揭露的另一個 retrieve 召回根本問題（某些段落連 top-500 都沒撈到）紀錄為下一個 follow-up。Prod 重跑：b23 真實提升 chunk_recall 0→0.5，其他題 deep_dive 對照組全部維持。內部評分指標的代詞驗證 + LLM 代詞紀律則記為兩條獨立 follow-up，不在本次 scope。',
+      en: 'A single wrong-answer case in chat mode (user asked "how did 迪拉 and Leo 王 go from strangers to collaborators?") cascaded into four hidden issues, exposed only after the user personally listened to the cited transcript. Layer 1 was retrieval: the answer was sourced from EP129 (a story about 迪拉 and 呂安, entirely unrelated to Leo 王). Layer 2 was LLM pronoun resolution: the AI took the unrelated chunk and auto-mapped pronouns like "he/I" to the query subjects, producing an answer that looked grounded but was semantically wrong. Layer 3 was the internal evaluation grader: the LLM judge didn\'t verify pronoun-referent consistency, so "looks grounded but actually hallucinated" answers got high scores. Layer 4 was the dataset itself: one of the "correct ground-truth chunks" (EP116 @187.48) was also mislabelled — that segment is actually about 小老虎 meeting Leo 王 (迪拉 was just the venue arranger), not 迪拉 meeting Leo 王. Fixes: (1) dataset corrections for two items — b23 removed the mislabelled EP116 chunk; b22 added 7 person-evidence chunks; (2) backend episode finder gained a guest-index dispatch path that triggers when a query mentions ≥2 known guest names; (3) admin diagnose endpoint extended to top-500 with neighbour-chunk context; (4) the orthogonal retrieve_hybrid recall gap exposed by b20 (some ground-truth chunks not even in top-500) is filed as a separate follow-up. Prod re-eval: b23 chunk_recall improved from 0 → 0.5; deep_dive control group all unchanged. LLM pronoun grounding + judge pronoun-attribution checks remain separate follow-ups, deliberately out of scope.',
+    },
+    summaryBullets: {
+      zh: [
+        '一個對話模式答錯案例挖出 4 層問題：retrieval miss + LLM 代詞 hallucinate + judge 抓不到 + dataset 也標錯',
+        'b23 真實提升：chunk_recall 0→0.5；dataset 內部測資的代詞驗證紀律寫進 spec',
+        '後端新增 guest-index 派遣路徑，未來涉及多人關係的 query 可走來賓索引而非主題索引',
+        '內部 diagnose 工具擴到 top-500 + 看前後段落，揭露 b20 的另一個 retrieve 召回根本問題（留 follow-up）',
+        'LLM 代詞解析 grounding + judge 代詞驗證留為兩條獨立 follow-up',
+      ],
+      en: [
+        'A single wrong-answer case exposed 4 layers: retrieval miss + LLM pronoun hallucination + judge blind spot + dataset mislabel',
+        'b23 real improvement: chunk_recall 0→0.5; dataset pronoun-referent verification discipline now in spec',
+        'Backend added guest-index dispatch — multi-person-relationship queries can route via guest index instead of topic index',
+        'Admin diagnose extended to top-500 with neighbour context, exposing a separate retrieve_hybrid recall gap (filed as follow-up)',
+        'LLM pronoun grounding + judge pronoun-attribution checks filed as two independent follow-ups',
+      ],
+    },
+  },
+  {
     date: '2026-05-27', slug: 'eval-baseline-citation-bug-revalidation', milestone: 'v1.8', tag: 'enhancement',
     title: {
       zh: '對話模式內部評分數據洗乾淨了，找到下一步該動哪裡',
