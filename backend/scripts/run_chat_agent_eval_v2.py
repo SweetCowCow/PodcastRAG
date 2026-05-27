@@ -25,10 +25,12 @@ from __future__ import annotations
 
 import argparse
 import json
+import subprocess
 import sys
 import time
 import urllib.request
 import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -39,6 +41,78 @@ from backend.eval.runner_v2_aggregate import (
     dataset_schema_version,
     render_markdown,
 )
+
+CITATION_FIX_COMMIT = "287e73b"
+
+
+def _utc_now_iso() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _citation_fix_applied(prod_commit: str | None, confirm_flag: bool) -> bool:
+    """Decide whether prod backend includes the `_AGENTIC_SEARCH_TOOLS` whitelist fix.
+
+    Uses `git merge-base --is-ancestor 287e73b <commit>` when commit is available and
+    falls back to the `--citation-fix-confirmed` flag when git context is missing.
+    """
+    if confirm_flag:
+        return True
+    if not prod_commit:
+        return False
+    try:
+        result = subprocess.run(
+            ["git", "merge-base", "--is-ancestor", CITATION_FIX_COMMIT, prod_commit],
+            capture_output=True,
+            timeout=10,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return False
+    return result.returncode == 0
+
+
+def _build_provenance(
+    *,
+    prod_commit: str | None,
+    citation_fix_confirmed: bool,
+    dataset_path: Path,
+    dataset_schema_version_str: str,
+    run_started_at: str,
+    run_completed_at: str,
+) -> dict[str, Any]:
+    return {
+        "backend_commit": prod_commit or "unknown",
+        "dataset_path": str(dataset_path),
+        "dataset_schema_version": dataset_schema_version_str,
+        "run_started_at": run_started_at,
+        "run_completed_at": run_completed_at,
+        "citation_collector_fix_applied": _citation_fix_applied(
+            prod_commit, citation_fix_confirmed
+        ),
+    }
+
+
+def _write_output(
+    output_path: Path,
+    *,
+    results: list[dict[str, Any]],
+    aggregate_report: dict[str, Any],
+    judge_model: str,
+    judge_sha: str,
+    provenance: dict[str, Any],
+) -> None:
+    payload = {
+        "schema_version": "2.0",
+        "provenance": provenance,
+        "judge_prompt_sha256": judge_sha,
+        "judge_model": judge_model,
+        "n_items": len(results),
+        "results": results,
+        "aggregate": aggregate_report,
+    }
+    output_path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
 
 
 def _post_query(
@@ -207,10 +281,37 @@ def main() -> int:
     ap.add_argument("--output", required=True)
     ap.add_argument("--report", required=True)
     ap.add_argument("--judge-model", default=None)
+    ap.add_argument(
+        "--prod-commit",
+        default=None,
+        help="Prod backend git commit hash this eval is being run against. "
+        "Recorded in output provenance. Used to derive citation_collector_fix_applied.",
+    )
+    ap.add_argument(
+        "--citation-fix-confirmed",
+        action="store_true",
+        help="Explicitly assert that the prod backend includes commit 287e73b "
+        "(citation collector fix). Fallback when --prod-commit cannot be checked "
+        "via git merge-base.",
+    )
+    ap.add_argument(
+        "--force",
+        action="store_true",
+        help="Overwrite output file if it already exists. Default refuses.",
+    )
     args = ap.parse_args()
 
+    output_path = Path(args.output)
+    if output_path.exists() and not args.force:
+        print(
+            f"existing baseline at {output_path}; pass --force to overwrite",
+            file=sys.stderr,
+        )
+        return 2
+
     dataset = json.loads(Path(args.dataset).read_text(encoding="utf-8"))
-    if dataset_schema_version(dataset) != "2.0":
+    schema_version_str = dataset_schema_version(dataset)
+    if schema_version_str != "2.0":
         print(
             f"[warn] dataset schema_version != 2.0; aborting",
             file=sys.stderr,
@@ -229,59 +330,79 @@ def main() -> int:
         Path(args.session_cookie_file), Path(args.me_json)
     )
 
-    results: list[dict[str, Any]] = []
-    for idx, item in enumerate(items, 1):
-        start = time.time()
-        print(f"[{idx}/{len(items)}] {item['id']} ({item['design_type']}) ...", flush=True)
-        try:
-            res = _run_one_item(
-                item,
-                backend=args.backend,
-                show_id=show_id,
-                cookie_header=cookie_header,
-                csrf_header=csrf_header,
-                judge_model=args.judge_model,
-                extra_kwargs_by_grader={},
-            )
-            results.append(res)
-            print(f"   done in {time.time() - start:.1f}s", flush=True)
-        except Exception as e:  # noqa: BLE001
-            print(f"   FAILED: {e}", file=sys.stderr)
-            results.append(
-                {
-                    "item_id": item["id"],
-                    "design_type": item.get("design_type"),
-                    "indicators": {},
-                    "error": str(e)[:300],
-                }
-            )
-
-    agg = aggregate(results)
     judge_sha = load_prompt_sha256()
-    Path(args.output).write_text(
-        json.dumps(
-            {
-                "schema_version": "2.0",
-                "judge_prompt_sha256": judge_sha,
-                "judge_model": args.judge_model or "PRODUCTION_JUDGE_MODEL default",
-                "n_items": len(results),
-                "results": results,
-                "aggregate": agg,
-            },
-            ensure_ascii=False,
-            indent=2,
-        ),
-        encoding="utf-8",
+    judge_model = args.judge_model or "PRODUCTION_JUDGE_MODEL default"
+    run_started_at = _utc_now_iso()
+    results: list[dict[str, Any]] = []
+    interrupted = False
+    failure: Exception | None = None
+    try:
+        for idx, item in enumerate(items, 1):
+            start = time.time()
+            print(
+                f"[{idx}/{len(items)}] {item['id']} ({item['design_type']}) ...",
+                flush=True,
+            )
+            try:
+                res = _run_one_item(
+                    item,
+                    backend=args.backend,
+                    show_id=show_id,
+                    cookie_header=cookie_header,
+                    csrf_header=csrf_header,
+                    judge_model=args.judge_model,
+                    extra_kwargs_by_grader={},
+                )
+                results.append(res)
+                print(f"   done in {time.time() - start:.1f}s", flush=True)
+            except Exception as e:  # noqa: BLE001
+                print(f"   FAILED: {e}", file=sys.stderr)
+                results.append(
+                    {
+                        "item_id": item["id"],
+                        "design_type": item.get("design_type"),
+                        "indicators": {},
+                        "error": str(e)[:300],
+                    }
+                )
+    except KeyboardInterrupt:
+        interrupted = True
+        print("\n[interrupt] writing partial output with provenance...", file=sys.stderr)
+    except Exception as e:  # noqa: BLE001
+        failure = e
+        print(f"\n[fatal] {e}; writing partial output", file=sys.stderr)
+
+    run_completed_at = _utc_now_iso()
+    provenance = _build_provenance(
+        prod_commit=args.prod_commit,
+        citation_fix_confirmed=args.citation_fix_confirmed,
+        dataset_path=Path(args.dataset),
+        dataset_schema_version_str=schema_version_str,
+        run_started_at=run_started_at,
+        run_completed_at=run_completed_at,
+    )
+
+    agg = aggregate(results) if results else {"by_design_type": {}, "overall": {}}
+    title_suffix = " (partial)" if (interrupted or failure) else ""
+    _write_output(
+        output_path,
+        results=results,
+        aggregate_report=agg,
+        judge_model=judge_model,
+        judge_sha=judge_sha,
+        provenance=provenance,
     )
     Path(args.report).write_text(
         render_markdown(
             agg,
-            title=f"Chat-RAG v2 baseline ({Path(args.dataset).name}, n={len(results)})",
+            title=f"Chat-RAG v2 baseline ({Path(args.dataset).name}, n={len(results)}){title_suffix}",
             judge_prompt_sha256=judge_sha,
         ),
         encoding="utf-8",
     )
     print(f"\n✓ wrote {args.output} + {args.report}")
+    if failure:
+        raise failure
     return 0
 
 

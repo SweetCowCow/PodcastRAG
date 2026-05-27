@@ -52,6 +52,31 @@ const MILESTONE_LABELS = {
 const RELEASE_LOG = [
   // ─── v1.8 — Chat Mode: Agentic (5/21~) ───
   {
+    date: '2026-05-27', slug: 'eval-baseline-citation-bug-revalidation', milestone: 'v1.8', tag: 'enhancement',
+    title: {
+      zh: '對話模式內部評分數據洗乾淨了，找到下一步該動哪裡',
+      en: 'Chat-Mode Eval Baseline Cleaned; Next Bottleneck Identified',
+    },
+    summary: {
+      zh: '回頭洗一筆內部數據污染。上週新增「主題預過濾」檢索工具後，agent 在這條路徑撈到的段落沒被內部評分機制納入計算（程式有個白名單漏更新），導致連續好幾天的「跨集問題」評分數據都被低估到 0 — 我們以為改善沒效果，其實是評分本身在說謊。修白名單之後（commit 287e73b）重跑全 34 題乾淨基準，發現「跨集問題」真實的內部 chunk_recall 是 0.283，而非過去誤以為的 0.244；過去三個 archive change 的對照基準需要重新解讀。重洗過程順手把 4 道跨集題（b20/b21/b22/b23）的內部 retrieve 結果與 ground truth 命中位置全部列出來放大鏡 audit，發現 b22 / b23 退步的真實原因不是 rerank 排序問題（rerank 改不到 root cause），而是 b22 屬於「LLM 答案策略題」、b23 是「主題預過濾的候選集找錯」— 這個發現直接讓原本計畫的 voyage-rerank-tune-b22-b23 change 可以改寫為兩條更精準的子 change（topic-finder 強化 + meta-question 答案策略），省下一輪錯誤方向的調整。對使用者直接體感沒變化，但內部評分數據從此可信，且下一步的優化方向更明確。',
+      en: 'Cleaned up internal eval data contamination from the past week. After adding the "topic-prefilter" retrieval tool last week, chunks returned via that path were not being counted by the internal scoring mechanism (an unsynced whitelist), making the "cross-episode" question scores look flat at zero for several days — we thought our improvements were not working, when actually the scoring itself was lying. After fixing the whitelist (commit 287e73b), we re-ran the full 34-item clean baseline and found the real internal chunk_recall for cross-episode questions is 0.283, not the 0.244 we had been comparing against; three recently archived changes need their "vs baseline" verdicts re-read. While we were at it, we put all four cross-episode questions (b20/b21/b22/b23) under a microscope — listing their retrieved chunks vs ground-truth chunk positions — and discovered the real reason b22/b23 regressed is NOT a rerank ordering problem (rerank cannot reach the root cause). b22 is actually an "LLM answer-strategy" question type and b23 is a "topic-prefilter picks the wrong candidate episodes" problem. This finding lets us rewrite the originally planned voyage-rerank-tune-b22-b23 change into two more targeted sub-changes (topic-finder hardening + meta-question answer strategy), saving a round of misdirected tuning. No direct user-visible behavior change, but internal eval data is now trustworthy, and the next direction of work is much clearer.',
+    },
+    summaryBullets: {
+      zh: [
+        '修內部評分白名單漏更新（commit 287e73b），洗掉過去一週「跨集問題」評分被低估到 0 的污染數據',
+        '真實內部基準 cross_episode chunk_recall = 0.283（過去以為的 0.244 已 deprecated）',
+        '對 b20/b21/b22/b23 做完整放大鏡 audit，揭露「b22/b23 退步」真因不在 rerank',
+        '原本計畫的 voyage-rerank-tune-b22-b23 change 可重寫為兩條精準子 change，省一輪錯誤方向的調整',
+      ],
+      en: [
+        'Fixed internal-scoring whitelist gap (commit 287e73b), cleaning up a week of "cross-episode" scores misreported as 0',
+        'Real internal cross_episode chunk_recall = 0.283 (the 0.244 we had been comparing to is now deprecated)',
+        'Full microscope audit on b20-b23 revealed b22/b23 regressions are NOT rerank issues',
+        'Originally planned voyage-rerank-tune change can be rewritten as two targeted sub-changes, saving a round of misdirected work',
+      ],
+    },
+  },
+  {
     date: '2026-05-26', slug: 'retrieval-cross-episode-episode-prefilter', milestone: 'v1.8', tag: 'enhancement',
     title: {
       zh: '跨集問題不再被別集話題沖淡',

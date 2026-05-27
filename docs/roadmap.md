@@ -140,6 +140,10 @@ R3 拆三段做（每段都跑 eval baseline 對照升幅）：
 
 ## 衍生待 propose（未開 change 但有共識）
 
+- **`b23-dataset-and-retrieval-rca-fix`**（衍自 2026-05-27 case study b23 audit + user 親自聽 EP129 證實 agent hallucinate）— 三層問題同時動：(1) dataset audit 修 b23 EP116 GT（標錯，那段是小老虎-Leo 王不是迪拉-Leo 王）+ 補 b22 chunk-level GT (2) `find_episodes_by_topic` 對「人名關係型 query」改走 guest 索引（`episodes.guests` JSONB）（3) retrieve_hybrid chunk-level 召回（b20 GT 兩個 chunk top-100 都不在；b23 GT chunks 在 EP107 內 rank 17/36）
+- **`agent-pronoun-grounding`**（follow-up，未急）— b23 揭露 agent 拿到無關 chunk 後 LLM 自動把代詞「他/她/我」解析成 query 主體 → 表面 grounded 實際 hallucinate；需 SYSTEM_PROMPT 或 grounding rule 加「代詞解析驗證」
+- **`judge-pronoun-attribution-check`**（follow-up，未急）— judge 對 b23 hallucinate 給 factual=0.95；judge prompt 需加 pronoun-attribution 驗證步驟或新指標
+- **eval baseline 寫死**：cross_episode mean chunk_recall **0.283**（舊 0.244 deprecated，污染期 citation collector bug 數據）
 - **`citation-display-unify`** — R3.3 prod 驗證 user follow-up #2：ChatBubble 兩個 source 區塊（chip + enum card）混淆，需 discuss 三方案（合併 / 視覺指示 / 互斥渲染）後 propose
 - **eval golden set 擴張到 曼報 + 壹加壹電台** — 各 ~30+ 題人工 sentinel，等本節目 30+ 題到位再啟動
 - **R3.x 候選未 propose**：topic seg 自動類別建議 / segment_categories admin UI / 業配段降權 multiplier / dict weight_in_lexical_query 通用化
