@@ -63,8 +63,8 @@ async def test_prefilter_scopes_to_candidates(monkeypatch):
         SimpleNamespace(episode_id=EP107),
     ]
     monkeypatch.setattr(
-        mod.episode_finders, "find_episodes_by_topic",
-        AsyncMock(return_value=candidates),
+        mod.episode_finders, "find_episodes_by_topic_with_source",
+        AsyncMock(return_value=(candidates, "topic_index")),
     )
     monkeypatch.setattr(mod, "_embed_query", AsyncMock(return_value=[0.0] * 8))
 
@@ -96,8 +96,8 @@ async def test_prefilter_empty_falls_back(monkeypatch):
     from app.services.chat_agent import tools as mod
 
     monkeypatch.setattr(
-        mod.episode_finders, "find_episodes_by_topic",
-        AsyncMock(return_value=[]),
+        mod.episode_finders, "find_episodes_by_topic_with_source",
+        AsyncMock(return_value=([], "topic_index")),
     )
     monkeypatch.setattr(mod, "_embed_query", AsyncMock(return_value=[0.0] * 8))
 
@@ -134,8 +134,8 @@ async def test_envelope_fields_always_populated(monkeypatch):
 
     # Path 1: with candidates
     monkeypatch.setattr(
-        mod.episode_finders, "find_episodes_by_topic",
-        AsyncMock(return_value=[SimpleNamespace(episode_id=EP143)]),
+        mod.episode_finders, "find_episodes_by_topic_with_source",
+        AsyncMock(return_value=([SimpleNamespace(episode_id=EP143)], "topic_index")),
     )
     out1 = await _search_with_topic_prefilter(
         SearchWithTopicPrefilterInput(topic="X", query="q"), _ctx()
@@ -144,8 +144,8 @@ async def test_envelope_fields_always_populated(monkeypatch):
 
     # Path 2: empty candidates → fallback
     monkeypatch.setattr(
-        mod.episode_finders, "find_episodes_by_topic",
-        AsyncMock(return_value=[]),
+        mod.episode_finders, "find_episodes_by_topic_with_source",
+        AsyncMock(return_value=([], "topic_index")),
     )
     out2 = await _search_with_topic_prefilter(
         SearchWithTopicPrefilterInput(topic="Y", query="q"), _ctx()
@@ -159,8 +159,8 @@ async def test_chunk_dict_shape_matches_existing_tools(monkeypatch):
     from app.services.chat_agent import tools as mod
 
     monkeypatch.setattr(
-        mod.episode_finders, "find_episodes_by_topic",
-        AsyncMock(return_value=[SimpleNamespace(episode_id=EP143)]),
+        mod.episode_finders, "find_episodes_by_topic_with_source",
+        AsyncMock(return_value=([SimpleNamespace(episode_id=EP143)], "topic_index")),
     )
     monkeypatch.setattr(mod, "_embed_query", AsyncMock(return_value=[0.0] * 8))
 

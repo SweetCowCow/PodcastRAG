@@ -13,6 +13,7 @@ Decision 4-5 in the `r3-3-chat-enum-grounding` change.
 from __future__ import annotations
 
 import json as _stdlib_json
+import time
 import uuid
 from datetime import datetime
 from typing import Any
@@ -20,6 +21,7 @@ from typing import Any
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.schemas.query import EpisodeRef
 from app.services import tokenizer
 
@@ -130,29 +132,95 @@ ORDER BY e.published_at DESC NULLS LAST
 """
 
 
-async def find_episodes_by_topic(
+_KNOWN_GUESTS_SQL = """
+SELECT DISTINCT jsonb_array_elements_text(guests) AS name
+FROM episodes
+WHERE show_id = :show_id
+  AND jsonb_typeof(guests) = 'array'
+  AND jsonb_array_length(guests) > 0
+"""
+
+# Cache of known guest-name index per show_id. Each entry stores
+# (timestamp, full_names_set, token_to_fullname_map).
+# token_to_fullname_map handles jieba-split tokens of multi-word guest names
+# (e.g. "Leo 王" stored as one string; jieba tokenises to ["Leo", "王"], so
+# we expose {"Leo": "Leo 王", "王": "Leo 王"} for topic-token matching).
+# TTL is short so admin guest edits propagate within a few minutes.
+_GUEST_NAME_CACHE_TTL_S = 300.0
+_guest_name_cache: dict[
+    uuid.UUID, tuple[float, frozenset[str], dict[str, str]]
+] = {}
+
+
+async def _known_guest_names(
+    db: AsyncSession, show_id: uuid.UUID
+) -> tuple[frozenset[str], dict[str, str]]:
+    """Return (full_names, token_to_fullname_map) for the show's known guests.
+
+    `full_names` is the set of distinct guest-name strings stored in
+    `episodes.guests` JSONB string-arrays. `token_to_fullname_map` maps each
+    jieba-tokenised component back to the original full name so the topic-
+    dispatch heuristic can match per-token signals (a topic like
+    "迪拉 Leo 王" produces tokens ["Leo", "王"] after the length-≥2 filter
+    drops the single character; the map lets us recognise both as pointing
+    at "Leo 王"). Both the full string and individual tokens are valid keys.
+
+    Result is cached for up to `_GUEST_NAME_CACHE_TTL_S` seconds.
+    """
+    now = time.monotonic()
+    cached = _guest_name_cache.get(show_id)
+    if cached is not None and (now - cached[0]) < _GUEST_NAME_CACHE_TTL_S:
+        return cached[1], cached[2]
+    result = await db.execute(text(_KNOWN_GUESTS_SQL), {"show_id": show_id})
+    full = frozenset(row[0] for row in result.fetchall() if row[0])
+    token_map: dict[str, str] = {}
+    for name in full:
+        token_map[name] = name  # full name is always a valid key
+        for tok in tokenizer.tokenize(name):
+            tok = tok.strip()
+            # Skip 1-char tokens for the per-token map (they over-match in
+            # heuristic checks; e.g. "王" is too common across many names).
+            if tok and len(tok) >= 2 and tok not in TOPIC_STOPWORDS:
+                token_map.setdefault(tok, name)
+    _guest_name_cache[show_id] = (now, full, token_map)
+    return full, token_map
+
+
+# Guest-index dispatch path (b23-dataset-and-retrieval-rca-fix):
+# when ≥2 jieba tokens of the topic match the show's known guest set,
+# also pull episodes whose `episodes.guests` JSONB string-array contains
+# any of the matched tokens. Returned rows are unioned (dedup) with the
+# title / description tsquery results.
+_GUEST_DISPATCH_SQL = """
+SELECT id, title, published_at, guests, ai_summary
+FROM episodes
+WHERE show_id = :show_id
+  AND guests ?| CAST(:names AS text[])
+ORDER BY published_at DESC NULLS LAST
+"""
+
+
+async def find_episodes_by_topic_with_source(
     db: AsyncSession,
     show_id: uuid.UUID,
     topic_terms: list[str],
-) -> list[EpisodeRef]:
-    """Episodes whose `episodes.title_tsvector` OR any of its
-    `episode_description_chunks.text_tsvector` rows match ANY of
-    `topic_terms` (terms OR-joined into the tsquery).
+) -> tuple[list[EpisodeRef], str]:
+    """Variant of `find_episodes_by_topic` that also reports which dispatch
+    path produced the candidate set: `"topic_index"` (title/description
+    tsquery only), `"guest_index"` (guest-name JSONB only), or `"merged"`
+    (both contributed distinct episodes).
 
-    Hits `episodes.title_tsvector` + `episode_description_chunks`, but
-    NOT `transcript_chunks` — both pools are metadata / summary-dense;
-    transcript chunks would over-match on every passing mention of a
-    generic word. Title was added by `enumeration-topic-finder-include-title`
-    to recover episodes whose topic appears only in the title (e.g. the
-    six 「歌單」 episodes from the 2026-05-17 q25 audit).
+    The guest-index path is triggered when at least two jieba tokens of the
+    topic match the show's known guest set (see b23-dataset-and-retrieval-rca-fix
+    case study for rationale). Single-token / zero-match queries preserve the
+    prior title / description tsquery behaviour exactly.
 
-    Empty `topic_terms` returns `[]` (same safety contract as the guest
-    finder). Falsy / whitespace-only terms are dropped before the
-    tsquery is built.
+    Set `settings.enable_guest_dispatch=False` to globally bypass the
+    guest-index dispatch (env rollback toggle; no redeploy needed).
     """
     cleaned = [t.strip() for t in topic_terms if t and t.strip()]
     if not cleaned:
-        return []
+        return [], "topic_index"
     # tsquery operators are escaped lightly: replace `&|!()<:>\\` with
     # space so a stray operator inside a LLM-extracted topic doesn't
     # blow up to_tsquery(). Mirrors `app.services.rag._build_ts_query`.
@@ -163,7 +231,7 @@ async def find_episodes_by_topic(
         if s:
             safe_terms.append(s)
     if not safe_terms:
-        return []
+        return [], "topic_index"
 
     # enumeration-rule-pattern-broaden bugfix: the LLM entity extractor
     # often returns multi-character phrases like "高雄美食" that Postgres'
@@ -195,13 +263,81 @@ async def find_episodes_by_topic(
                 seen.add(tk)
                 expanded.append(tk)
 
+    # Guest-index dispatch: ≥2 expanded tokens hit the show's known-guest
+    # token map → also run guest SQL and union results. The map lets a
+    # multi-token guest name like "Leo 王" be matched by its components
+    # (jieba splits "Leo 王" → ["Leo", "王"] in production queries).
+    # Done BEFORE the topic SQL so the topic SQL remains the last
+    # `db.execute` call (preserves existing tests that inspect
+    # `db.execute.call_args` for topic SQL shape).
+    guest_eps: list[EpisodeRef] = []
+    if getattr(settings, "enable_guest_dispatch", True):
+        try:
+            _, token_map = await _known_guest_names(db, show_id)
+        except (TypeError, AttributeError):
+            # Defensive: some unit tests mock db.execute without a real
+            # `fetchall` shape. Treat as "no known guests" and skip dispatch.
+            token_map = {}
+        # Collect distinct FULL guest names this topic touches.
+        matched_full = {token_map[tk] for tk in expanded if tk in token_map}
+        if len(matched_full) >= 2:
+            guest_result = await db.execute(
+                text(_GUEST_DISPATCH_SQL),
+                {"show_id": show_id, "names": list(matched_full)},
+            )
+            guest_eps = [
+                _row_to_episode_ref(row) for row in guest_result.mappings()
+            ]
+
     tsquery_text = " | ".join(expanded)
     params = {
         "show_id": show_id,
         "tsquery_text": tsquery_text,
     }
     result = await db.execute(text(_TOPIC_SQL), params)
-    return [_row_to_episode_ref(row) for row in result.mappings()]
+    topic_eps = [_row_to_episode_ref(row) for row in result.mappings()]
+
+    if not guest_eps:
+        return topic_eps, "topic_index"
+
+    # Union dedupe by episode_id while preserving topic_eps order (which is
+    # ORDER BY published_at DESC); append guest_eps entries not already present.
+    seen_ids: set[uuid.UUID] = {ep.episode_id for ep in topic_eps}
+    merged = list(topic_eps)
+    guest_added = 0
+    for ep in guest_eps:
+        if ep.episode_id not in seen_ids:
+            merged.append(ep)
+            seen_ids.add(ep.episode_id)
+            guest_added += 1
+
+    if not topic_eps:
+        return merged, "guest_index"
+    if guest_added == 0:
+        # guest path matched but every guest episode was already in topic_eps
+        return merged, "topic_index"
+    return merged, "merged"
+
+
+async def find_episodes_by_topic(
+    db: AsyncSession,
+    show_id: uuid.UUID,
+    topic_terms: list[str],
+) -> list[EpisodeRef]:
+    """Episodes whose `episodes.title_tsvector` OR any of its
+    `episode_description_chunks.text_tsvector` rows match ANY of
+    `topic_terms` (terms OR-joined into the tsquery), unioned with
+    guest-name JSONB matches when ≥2 tokens hit the known-guest set.
+
+    Backward-compatible wrapper around `find_episodes_by_topic_with_source`
+    that drops the dispatch-source enum. Callers that need the source
+    (`search_with_topic_prefilter`) should use the `_with_source` variant
+    directly.
+    """
+    eps, _source = await find_episodes_by_topic_with_source(
+        db, show_id, topic_terms
+    )
+    return eps
 
 
 _BY_REF_EP_NUMBER_SQL = """

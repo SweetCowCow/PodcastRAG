@@ -97,6 +97,10 @@ class Settings(BaseSettings):
     # Flag 共存 roll-out：default true 走 chat_agent.agent.run_agent；顯式
     # `ENABLE_AGENTIC_CHAT=false` 仍可退回 rule-based pipeline（30 天 kill-switch）。
     enable_agentic_chat: bool = True
+    # b23-dataset-and-retrieval-rca-fix: guest-index dispatch for
+    # find_episodes_by_topic (triggers when ≥2 tokens match known guest
+    # names). Set ENABLE_GUEST_DISPATCH=false to bypass without redeploy.
+    enable_guest_dispatch: bool = True
     agentic_chat_max_iterations: int = 10
     agentic_chat_l0_k_turns: int = 3
     agentic_chat_l1_ttl_seconds: int = 7200

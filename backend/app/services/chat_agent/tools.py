@@ -387,8 +387,10 @@ _PREFILTER_RERANK_TOP_N = 30
 async def _search_with_topic_prefilter(
     inp: SearchWithTopicPrefilterInput, ctx: ToolContext
 ) -> dict:
-    candidates = await episode_finders.find_episodes_by_topic(
-        ctx.db, ctx.show_id, [inp.topic]
+    candidates, prefilter_source = (
+        await episode_finders.find_episodes_by_topic_with_source(
+            ctx.db, ctx.show_id, [inp.topic]
+        )
     )
     vec = await _embed_query(ctx.db, inp.query)
     if candidates:
@@ -418,6 +420,7 @@ async def _search_with_topic_prefilter(
         return {
             "chunks": final_chunks,
             "prefilter_episode_count": len(candidates),
+            "prefilter_source": prefilter_source,
             "fallback_to_full_pool": False,
             "rerank_applied": applied,
             "rerank_input_count": len(top_n_chunks),
@@ -433,6 +436,7 @@ async def _search_with_topic_prefilter(
     return {
         "chunks": [_chunk_to_dict(h) for h in hits],
         "prefilter_episode_count": 0,
+        "prefilter_source": prefilter_source,
         "fallback_to_full_pool": True,
         "rerank_applied": False,
         "rerank_input_count": 0,

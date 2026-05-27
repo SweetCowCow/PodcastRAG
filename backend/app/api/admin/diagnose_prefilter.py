@@ -44,7 +44,7 @@ DATASET_PATH = (
     Path(__file__).resolve().parents[3] / "eval" / "datasets" / "extended-multi-turn-40.json"
 )
 
-_CUTOFFS = (5, 20, 50, 100)
+_CUTOFFS = (5, 20, 50, 100, 200, 500)
 
 
 def _parse_chunk_id(cid: str) -> tuple[str, float] | None:
@@ -107,9 +107,16 @@ def _derive_prefilter_episodes(item: dict) -> list[uuid.UUID]:
 
 
 class DiagnoseRequest(BaseModel):
+    # `items` is the preferred parameter name (b23-dataset-and-retrieval-rca-fix
+    # Phase 3); `mini_set_ids` is preserved as an alias for prior callers.
     mini_set_ids: list[str] = Field(default_factory=lambda: ["b20", "b21", "b23"])
-    top_n: int = Field(default=100, ge=5, le=200)
+    items: list[str] | None = None
+    top_n: int = Field(default=100, ge=5, le=500)
+    include_chunking_context: bool = False
     show_id: str = DEFAULT_SHOW_ID
+
+    def resolved_items(self) -> list[str]:
+        return self.items if self.items else self.mini_set_ids
 
 
 router = APIRouter(prefix="/diagnose", tags=["admin-diagnose"])
@@ -124,7 +131,7 @@ async def diagnose_prefilter_rank(
     embed_step = await get_step_config(db, "embedding")
 
     out: list[dict[str, Any]] = []
-    for iid in req.mini_set_ids:
+    for iid in req.resolved_items():
         item = items_by_id.get(iid)
         if item is None:
             out.append({"item_id": iid, "error": "not in dataset"})
@@ -194,7 +201,59 @@ async def diagnose_prefilter_rank(
         for gr in gt_ranks:
             bucket_counts[gr["cutoff_in"]] += 1
 
-        out.append({
+        # Optional chunking-context: for each GT chunk, emit the surrounding
+        # ±2 chunks in the retrieved pool (by index near the matched rank,
+        # or "missing" if GT itself is absent) plus the GT chunk's start_time.
+        # Used by Phase 3 diagnostic to inspect chunking-boundary issues.
+        if req.include_chunking_context:
+            chunking_context: list[dict[str, Any]] = []
+            for gr in gt_ranks:
+                gt_cid = gr["gt_chunk_id"]
+                parsed = _parse_chunk_id(gt_cid)
+                gt_ep = parsed[0] if parsed else None
+                gt_st = parsed[1] if parsed else None
+                rank = gr["rank"]
+                neighbors: list[dict[str, Any]] = []
+                if rank is not None:
+                    lo = max(0, rank - 3)  # rank is 1-based; show ±2 around rank-1
+                    hi = min(len(hits), rank + 2)
+                    for i in range(lo, hi):
+                        h = hits[i]
+                        neighbors.append({
+                            "rank": i + 1,
+                            "episode_id": str(h.episode_id),
+                            "start_time": float(h.start_time),
+                            "text_preview": (getattr(h, "text", "") or "")[:200],
+                            "is_gt": (i + 1) == rank,
+                        })
+                else:
+                    # GT miss: list 3 closest retrieved chunks from the same episode
+                    same_ep = [
+                        (i, h) for i, h in enumerate(hits)
+                        if gt_ep and str(h.episode_id) == gt_ep
+                    ]
+                    same_ep.sort(
+                        key=lambda x: abs(float(x[1].start_time) - (gt_st or 0))
+                    )
+                    for i, h in same_ep[:3]:
+                        neighbors.append({
+                            "rank": i + 1,
+                            "episode_id": str(h.episode_id),
+                            "start_time": float(h.start_time),
+                            "text_preview": (getattr(h, "text", "") or "")[:200],
+                            "is_gt": False,
+                        })
+                chunking_context.append({
+                    "gt_chunk_id": gt_cid,
+                    "gt_episode_id": gt_ep,
+                    "gt_start_time": gt_st,
+                    "rank": rank,
+                    "neighbors": neighbors,
+                })
+        else:
+            chunking_context = None
+
+        item_out = {
             "item_id": iid,
             "question": question,
             "top_n": req.top_n,
@@ -203,6 +262,9 @@ async def diagnose_prefilter_rank(
             "gt_total": len(gt_ranks),
             "gt_ranks": gt_ranks,
             "bucket_counts": bucket_counts,
-        })
+        }
+        if chunking_context is not None:
+            item_out["chunking_context"] = chunking_context
+        out.append(item_out)
 
     return {"items": out}

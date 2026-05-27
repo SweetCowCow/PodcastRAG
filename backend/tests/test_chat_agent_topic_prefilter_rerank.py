@@ -65,7 +65,7 @@ def patched(monkeypatch):
     }
 
     async def fake_finder(db, show_id, topics):
-        return state["candidates"]
+        return state["candidates"], "topic_index"
 
     async def fake_retrieve(db, *, show_id, query_embedding, question, k, episode_id_filter=None, **kw):
         state["retrieve_captured"]["k"] = k
@@ -83,7 +83,7 @@ def patched(monkeypatch):
     # Ensure VOYAGE_API_KEY appears set so the prefilter path takes the rerank
     # branch rather than the unset-key fallback.
     monkeypatch.setenv("VOYAGE_API_KEY", "test-key")
-    monkeypatch.setattr(mod.episode_finders, "find_episodes_by_topic", fake_finder)
+    monkeypatch.setattr(mod.episode_finders, "find_episodes_by_topic_with_source", fake_finder)
     monkeypatch.setattr(mod, "_embed_query", AsyncMock(return_value=[0.0] * 8))
     monkeypatch.setattr(mod.rag, "retrieve_hybrid", fake_retrieve)
     monkeypatch.setattr(mod.rag_rerank, "voyage_rerank", fake_voyage)
