@@ -21,10 +21,11 @@ const STATS_VECTORS_COUNT = 113000;      // transcript_chunks rows
 
 // Tag labels (used by both pages).
 const TAG_LABELS = {
-  feature:     { zh: '新功能',   en: 'Feature' },
-  fix:         { zh: 'Bug 修復', en: 'Fix' },
-  enhancement: { zh: '系統優化', en: 'Enhancement' },
-  ui:          { zh: '介面調整', en: 'UI' },
+  feature:     { zh: '新功能',         en: 'Feature' },
+  fix:         { zh: 'Bug 修復',       en: 'Fix' },
+  enhancement: { zh: '系統優化',       en: 'Enhancement' },
+  ui:          { zh: '介面調整',       en: 'UI' },
+  experiment:  { zh: '實驗（未上線）', en: 'Experiment (Not Shipped)' },
 };
 
 const MILESTONE_LABELS = {
@@ -51,6 +52,31 @@ const MILESTONE_LABELS = {
 // Entries — newest milestone first; within each milestone newest date first.
 const RELEASE_LOG = [
   // ─── v1.8 — Chat Mode: Agentic (5/21~) ───
+  {
+    date: '2026-05-28', slug: 'retrieve-quality-step1-idf-and-prefilter-failed', milestone: 'v1.8', tag: 'experiment',
+    title: {
+      zh: 'IDF 加權實驗（兩 Layer 都試失敗、已 revert）',
+      en: 'IDF Weighting Experiment (Two Layers Tried, Both Reverted)',
+    },
+    summary: {
+      zh: '為了改善「跨集問題」的內部 chunk_recall（從 0.482 想拉到 0.55+），這週試了兩條方向，**兩條都沒過、全部回滾**，使用者體感沒變化、整理一下教訓寫進路線圖避免下次再撞。第一條（Layer A）是給段落關鍵字打分時加上「IDF 加權」— 罕見詞（譬如「振奮」）權重給 1.0、常見詞（「什麼」）給 0.05。直覺上應該讓罕見詞主導排序。實際跑完 34 題內部 baseline：chunk_recall 0.482 → 0.382（退 0.1），7 題退步。Root cause：在 podcast transcript 領域，IDF 假設「罕見詞 = 答案信號」**完全不成立** — 罕見詞往往是「整集主題」（譬如「伴手禮」在那一集滿地都是），加權後反而把「跟主題相關但不是答案」的段落推上去、把真答案擠出 top-K。第二條（Layer B）是改 chat agent 的 prompt，看到「EP134」「第 134 集」這類明確集數 reference 時強制走「先找集數、再在那集內搜尋」。本來假設純 prompt 改、不會動 retrieval。實際 chunk_recall 0.482 → 0.340 退更慘。Root cause：prompt 改了 agent 對同一問題重新措辭 search query 的方式，下游 ts_rank 收到不同 token、命中不同段落 — **prompt change 從來不是 orthogonal 於 retrieval**。兩條教訓 + 一條「show-wide DB probe 是 false positive validator」教訓寫進工程紀錄。**下一步轉向評估框架升級**（per-question tool trace 落地、episode-scoped retrieval probe、span-level metric），先有更好的觀察工具才能避免下次類似盲點再撞。Prod 沒實質變動，僅留下一個未使用的 token-frequency 資料表（無 schema 衝擊，未來實驗可能 reuse）。',
+      en: 'Tried two directions this week to push internal cross-episode chunk_recall from 0.482 toward 0.55+; **both failed and were reverted**, no user-visible change, lessons captured to avoid repeats. Layer A added "IDF weighting" to lexical scoring — rare tokens (e.g. "振奮") get 1.0 weight, common tokens ("什麼") get 0.05. Intuitively rare tokens should dominate ranking. Actual 34-item baseline: chunk_recall 0.482 → 0.382 (-0.1), 7 cases regressed. Root cause: in the podcast-transcript domain, the IDF assumption "rare token = answer signal" **completely fails** — rare tokens are usually the episode\'s overall topic (e.g. "伴手禮" appears everywhere within that one episode), so weighting them up promotes "topic-related-but-not-answer" chunks and pushes the actual answer out of top-K. Layer B changed the chat agent\'s prompt to mandate "find episode first, then search within it" for explicit EP-references like "EP134" / "第 134 集". Assumed to be pure prompt nudge with zero retrieval risk. Actual chunk_recall 0.482 → 0.340 (worse than A). Root cause: the new prompt changed how the agent re-phrased its search query for the same user question, downstream ts_rank received different tokens and hit different chunks — **prompt changes are never orthogonal to retrieval**. Two lessons plus a third ("show-wide DB probe is a false positive validator for episode-scoped retrieval") are now in engineering notes. **Next direction pivots to evaluation framework upgrade** (per-question tool trace, episode-scoped retrieval probe, span-level metrics) — better observability tooling first, before touching retrieval or prompts again. No prod functional change; only a leftover unused token-frequency table (no schema impact, possible future-experiment reuse).',
+    },
+    summaryBullets: {
+      zh: [
+        '本週試 IDF 加權 + EP-ref dispatch 兩條 retrieval 改善方向 — 兩條都退步、全部 revert，使用者體感沒變化',
+        'Layer A (IDF 加權) root cause：podcast domain 罕見詞 = 整集主題、不是答案信號 — 加權把錯段落推上去',
+        'Layer B (EP-ref prompt) root cause：prompt 改了 agent 對 search 工具的 query 措辭、下游 retrieval 跟著飄',
+        '下動轉向：先升級評估框架（trace 落地 + episode-scoped probe）再動 retrieval，避免再撞觀察盲點',
+      ],
+      en: [
+        'Tried two retrieval-improvement directions (IDF weighting + EP-ref dispatch) — both regressed and were reverted, no user-visible change',
+        'Layer A (IDF weighting) root cause: in podcast domain, rare tokens are episode topics not answer signals — weighting them up promoted wrong chunks',
+        'Layer B (EP-ref prompt) root cause: prompt nudge changed how the agent worded its search query, downstream retrieval drifted with it',
+        'Next pivot: upgrade evaluation framework first (tool trace + episode-scoped probe) before touching retrieval again, to avoid blind spots',
+      ],
+    },
+  },
   {
     date: '2026-05-27', slug: 'judge-pronoun-attribution-check', milestone: 'v1.8', tag: 'enhancement',
     title: {
