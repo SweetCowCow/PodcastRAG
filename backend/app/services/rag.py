@@ -21,7 +21,6 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services import api_health, tokenizer
-from app.services.lexical_idf import build_bucketed_ts_queries, get_idf_buckets
 from app.services.llm_prompts import Lang, render_answer_prompt
 
 RETRIEVAL_TOP_K = 8
@@ -254,82 +253,6 @@ def _build_ts_query(question: str) -> str | None:
     return " | ".join(cleaned)
 
 
-# IDF bucket weights for the lexical rank sum (see lexical_idf.py).
-# A = rare/high-IDF tokens, D = common/low-IDF tokens.
-# Per-bucket scalar multipliers tunable here without DB changes.
-IDF_BUCKET_WEIGHTS: dict[str, float] = {
-    "a": 1.0,
-    "b": 0.5,
-    "c": 0.2,
-    "d": 0.05,
-}
-
-# Bucketed lexical CTE: rank = weighted sum of per-bucket ts_rank.
-# Match predicate keeps using the full OR-joined :ts_query so lexical
-# bridge is preserved (no token is removed from the match set).
-# `to_tsquery('simple', NULL)` returns NULL, and `ts_rank(vec, NULL)`
-# returns NULL — COALESCE collapses empty buckets to 0 contribution.
-_TRANSCRIPT_RRF_SQL_BUCKETED = """
-WITH semantic AS (
-    SELECT c.id AS chunk_id,
-           ROW_NUMBER() OVER (
-               ORDER BY __EMB_LHS_C__ <=> __EMB_RHS__
-           ) AS rank_s
-    FROM transcript_chunks c
-    JOIN transcripts t ON t.id = c.transcript_id
-    JOIN episodes e ON e.id = t.episode_id
-    WHERE e.show_id = :show_id
-      AND t.status = 'completed'
-      AND __EMB_NN_C__
-      {episode_filter}
-      {metadata_filter}
-    LIMIT :per_side
-),
-lexical AS (
-    SELECT c.id AS chunk_id,
-           ROW_NUMBER() OVER (
-               ORDER BY (
-                   COALESCE(ts_rank(c.text_tsvector, to_tsquery('simple', :tsq_a)), 0) * :wa
-                 + COALESCE(ts_rank(c.text_tsvector, to_tsquery('simple', :tsq_b)), 0) * :wb
-                 + COALESCE(ts_rank(c.text_tsvector, to_tsquery('simple', :tsq_c)), 0) * :wc
-                 + COALESCE(ts_rank(c.text_tsvector, to_tsquery('simple', :tsq_d)), 0) * :wd
-               ) DESC
-           ) AS rank_l
-    FROM transcript_chunks c
-    JOIN transcripts t ON t.id = c.transcript_id
-    JOIN episodes e ON e.id = t.episode_id
-    WHERE e.show_id = :show_id
-      AND t.status = 'completed'
-      AND c.text_tsvector IS NOT NULL
-      AND c.text_tsvector @@ to_tsquery('simple', :ts_query)
-      {episode_filter}
-      {metadata_filter}
-    LIMIT :per_side
-),
-combined AS (
-    SELECT COALESCE(s.chunk_id, l.chunk_id) AS chunk_id,
-           1.0 / (:rrf_k + COALESCE(s.rank_s, 999))
-         + :weight_chunk * 1.0 / (:rrf_k + COALESCE(l.rank_l, 999)) AS rrf_score
-    FROM semantic s
-    FULL OUTER JOIN lexical l USING (chunk_id)
-)
-SELECT cb.chunk_id,
-       cb.rrf_score,
-       c.start_time,
-       c.end_time,
-       c.text,
-       e.id AS episode_id,
-       e.title AS episode_title
-FROM combined cb
-JOIN transcript_chunks c ON c.id = cb.chunk_id
-JOIN transcripts t ON t.id = c.transcript_id
-JOIN episodes e ON e.id = t.episode_id
-ORDER BY cb.rrf_score DESC
-LIMIT :k
-"""
-
-# Legacy unweighted path — kept as fallback when IDF lookup fails
-# (e.g. freq table empty for a show, or DB error during lookup).
 _TRANSCRIPT_RRF_SQL = """
 WITH semantic AS (
     SELECT c.id AS chunk_id,
@@ -632,53 +555,16 @@ async def retrieve(
     md_filter = _metadata_filter_clause("e", base_params, metadata_filters)
 
     if ts_query:
-        base_params["ts_query"] = ts_query
-        base_params["per_side"] = RRF_PER_SIDE
-        base_params["rrf_k"] = RRF_K
-        base_params["weight_chunk"] = RRF_WEIGHTS["chunk"]
-
-        # Try the IDF-bucketed lexical path. On any failure (empty freq table,
-        # DB lookup error), fall back to the legacy unweighted SQL — retrieval
-        # must not break on IDF cache absence.
-        use_bucketed = False
-        bucketed_qs: dict[str, str | None] = {}
-        try:
-            tokens = [t.strip() for t in ts_query.split("|") if t.strip()]
-            if tokens:
-                buckets = await get_idf_buckets(db, show_id, tokens)
-                if buckets:
-                    bucketed_qs = build_bucketed_ts_queries(ts_query, buckets)
-                    # Need at least one non-empty bucket to use the bucketed
-                    # path; otherwise legacy path is equivalent + simpler.
-                    if any(v is not None for v in bucketed_qs.values()):
-                        use_bucketed = True
-        except Exception:
-            import logging as _logging
-            _logging.getLogger(__name__).warning(
-                "IDF lookup failed, falling back to unweighted lexical rank",
-                exc_info=True,
-            )
-            use_bucketed = False
-
-        if use_bucketed:
-            sql_template = _TRANSCRIPT_RRF_SQL_BUCKETED
-            base_params["tsq_a"] = bucketed_qs["a"]
-            base_params["tsq_b"] = bucketed_qs["b"]
-            base_params["tsq_c"] = bucketed_qs["c"]
-            base_params["tsq_d"] = bucketed_qs["d"]
-            base_params["wa"] = IDF_BUCKET_WEIGHTS["a"]
-            base_params["wb"] = IDF_BUCKET_WEIGHTS["b"]
-            base_params["wc"] = IDF_BUCKET_WEIGHTS["c"]
-            base_params["wd"] = IDF_BUCKET_WEIGHTS["d"]
-        else:
-            sql_template = _TRANSCRIPT_RRF_SQL
-
         sql = text(
-            _resolve_embed_placeholders(sql_template).format(
+            _resolve_embed_placeholders(_TRANSCRIPT_RRF_SQL).format(
                 episode_filter=ep_filter,
                 metadata_filter=md_filter,
             )
         )
+        base_params["ts_query"] = ts_query
+        base_params["per_side"] = RRF_PER_SIDE
+        base_params["rrf_k"] = RRF_K
+        base_params["weight_chunk"] = RRF_WEIGHTS["chunk"]
         result = await db.execute(sql, base_params)
         return [
             ChunkHit(
