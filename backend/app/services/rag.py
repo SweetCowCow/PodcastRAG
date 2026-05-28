@@ -44,47 +44,6 @@ RRF_WEIGHTS: dict[str, float] = {
 TITLE_RRF_PER_SIDE = 20
 
 
-# Stop-words filtered out of `_build_ts_query` to prevent the OR-joined
-# tsquery from matching ~all chunks in the show (noise flood).
-# Background: 2026-05-28 prod probe found that without filtering, the b20
-# query OR-joins ~16 tokens including 的/不/在/為/什麼/一首, which match
-# 39,323 chunks across the show — GT chunks rank #18K-32K and get cut by
-# LIMIT :per_side=50. See archived RCA case study
-# `docs/case-studies/chunk-level-retrieval-rca-b20-2026-05-27.md`.
-_STOP_WORDS: frozenset[str] = frozenset({
-    # 中文虛詞 / 助詞 / 連接詞
-    "的", "是", "在", "為", "不", "也", "都", "又", "還", "就", "才",
-    "把", "被", "給", "讓", "對", "跟", "和", "與", "及", "或", "而",
-    "了", "過", "著", "啦", "嗎", "呢", "吧", "喔", "嘛", "啊", "呀",
-    "之", "於", "以", "由", "從", "向", "往", "至", "到", "由",
-    # 指示 / 代詞
-    "這", "那", "哪", "此", "該", "某", "各", "每", "任",
-    "我", "你", "他", "她", "它", "我們", "你們", "他們", "她們", "它們",
-    "自己", "別人",
-    # 數量詞
-    "一", "二", "三", "四", "五", "六", "七", "八", "九", "十",
-    "多", "少", "些", "個", "件", "種", "次", "回", "下",
-    "一個", "一首", "一些", "一下", "一直", "一樣", "一定",
-    # 疑問詞
-    "什麼", "怎麼", "怎樣", "如何", "為何", "為什麼", "多少",
-    "哪裡", "哪些", "哪個", "誰",
-    # 高頻動詞 / 助動詞
-    "有", "沒", "沒有", "會", "不會", "要", "不要", "能", "不能",
-    "可以", "可能", "應該", "需要", "想", "覺得", "知道", "說",
-    "做", "用",
-    # 連接 / 轉折
-    "所以", "因為", "但是", "可是", "然後", "之後", "之前", "後來",
-    "如果", "雖然", "不過", "只是", "而且", "並且",
-    # 英文 stop-words
-    "the", "a", "an", "and", "or", "but", "if", "of", "in", "on", "at",
-    "to", "for", "with", "by", "from", "as", "is", "are", "was", "were",
-    "be", "been", "being", "have", "has", "had", "do", "does", "did",
-    "will", "would", "can", "could", "should", "may", "might", "must",
-    "this", "that", "these", "those", "it", "its", "i", "you", "he", "she",
-    "we", "they", "what", "which", "who", "when", "where", "why", "how",
-})
-
-
 @dataclass
 class MetadataFilters:
     """Episode-level hard filters extracted from the user question.
@@ -267,16 +226,6 @@ def _build_ts_query(question: str) -> str | None:
         # tsquery operators: escape `&|!()<:>`
         tok = re.sub(r"[&|!()<:>\\]", " ", tok).strip()
         if not tok:
-            continue
-        # Stop-word filter (2026-05-28). High-frequency particles flood the
-        # OR-joined tsquery pool; see _STOP_WORDS docblock.
-        if tok in _STOP_WORDS:
-            continue
-        # Single-character token drop (2026-05-28). CJK 1-char tokens are
-        # near-universally stop-word-like; English 1-char tokens have ~zero
-        # discriminative power. Acts as second-line defence when _STOP_WORDS
-        # misses an entry.
-        if len(tok) < 2:
             continue
         # Drop tokens flagged as show-name in tokenizer_custom_terms — these
         # are too generic to discriminate (e.g. show name appears across
