@@ -541,7 +541,14 @@ TOOLS: list[ToolSpec] = [
     ),
     ToolSpec(
         name="search_within_episode",
-        description="Semantic+keyword search restricted to one episode.",
+        description=(
+            "Semantic+keyword search restricted to one episode. "
+            "Whenever the user names a specific episode by number (EP\\d+), 第N集 "
+            "reference, or quoted episode title, this is the FIRST choice for the "
+            "retrieval step (after find_episode_by_ref pins the episode) — "
+            "do NOT fall back to search_across_episodes / search_with_topic_prefilter / "
+            "retrieve_hybrid global search for these episode-referenced queries."
+        ),
         input_model=SearchWithinEpisodeInput,
         callable=_search_within_episode,
     ),
