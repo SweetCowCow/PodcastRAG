@@ -32,17 +32,17 @@
 
 ## 4. Phase 4 — 結合驗證 + PR template 軟約定
 
-- [ ] 4.1 對全 34 題 chat baseline 跑新 pipeline → 對比舊 `baseline-post-judge-v2-2026-05-27.json`：既有 6 grader score per-item 在 floating-point tolerance 內一致；新 6 grader score 全部非 null。落地 `backend/eval/results/baseline-eval-framework-upgrade-2026-05-XX-chat.json`。
+- [x] 4.1 對全 34 題 chat baseline 跑新 pipeline → 對比舊 `baseline-post-judge-v2-2026-05-27.json`：既有 6 grader score per-item 在 floating-point tolerance 內一致；新 6 grader score 全部非 null。落地 `backend/eval/results/baseline-eval-framework-upgrade-2026-05-XX-chat.json`。
 - [x] 4.2 加 PR template section（`.github/PULL_REQUEST_TEMPLATE.md` 或專案 markdown convention）：「Retrieval change checklist」含跑 `retrieve_probe.py` + 貼結果；「Prompt change checklist」含跑 `prompt_fingerprint_diff.py` + 貼結果。
 - [x] 4.3 在 `docs/runbooks/` 寫 `eval-framework-upgrade-runbook.md`（不入 commit per 慣例）：操作員怎麼跑 probe / fingerprint diff / 看 Langfuse UI / SQL audit eval_traces，含常見 RCA query 範例。
-- [ ] 4.4 prod 灰度測：對一段時間 prod chat user 流量 toggle `EVAL_TRACING_ENABLED=true` 觀察 P95 latency 增量 **< 100ms**（含 Cloud SDK HTTP 往返到 cloud.langfuse.com 的額外延遲，比自架 ~50ms 容忍度寬鬆，per design Risks 表）；若達標可考慮 default 開；不達標關掉 + 寫 follow-up「優化 span_writer 寫入 P95 / 評估自架降低 SDK 延遲」。同時對 cloud.langfuse.com → Settings → Usage 看實測 units 消耗、跟 ~10 units/trace 估算對校。
+- [x] 4.4 prod 灰度測：對一段時間 prod chat user 流量 toggle `EVAL_TRACING_ENABLED=true` 觀察 P95 latency 增量 **< 100ms**（含 Cloud SDK HTTP 往返到 cloud.langfuse.com 的額外延遲，比自架 ~50ms 容忍度寬鬆，per design Risks 表）；若達標可考慮 default 開；不達標關掉 + 寫 follow-up「優化 span_writer 寫入 P95 / 評估自架降低 SDK 延遲」。同時對 cloud.langfuse.com → Settings → Usage 看實測 units 消耗、跟 ~10 units/trace 估算對校。
 
 ## 5. Phase 5 — Case study + memory + roadmap
 
-- [ ] 5.1 寫 `docs/case-studies/eval-framework-upgrade-2026-05-XX.md`：含 (a) Background 連回 step1-idf-and-prefilter 失敗教訓 (b) Phase 1-4 全程紀錄 (c) Langfuse + DeepEval + 5 grader + 2 CLI 部署結果 (d) dry-run 對 archived 失敗 case 的驗證結論 (e) follow-up 建議。
-- [ ] 5.2 更新 memory：(a) `feedback_idf_show_wide_failed_2026_05_28.md` 加「現有 retrieve_probe.py 可預先驗證 episode-scoped ranking」follow-up 段 (b) `feedback_prompt_change_retrieval_side_effect.md` 加「現有 prompt_fingerprint_diff.py 可預先驗證 query 字面 drift」follow-up 段 (c) `feedback_show_wide_probe_false_positive.md` 同步更新 (d) `project_pending_changes.md` + `project_pending_change_candidates.md` 標 BM25 / EP-scoped IDF 可重新開始討論（已有觀察工具）(e) `project_langfuse_cloud_free_track_usage.md` 加實測 baseline（真實 units/trace、第一週用量）替換掉估算數字（per `feedback_no_guessed_numbers_from_memory.md` 紀律）。
-- [ ] 5.3 更新 `docs/roadmap.md`：標 eval-framework-upgrade ✅ + 解凍 BM25 / EP-scoped IDF 候選 + Langfuse 服務列進部署狀態表。
-- [ ] 5.4 release log entry：tag `enhancement`，bilingual zh/en，使用者視角講「內部評分基準升級、新增 5 個品質指標 + trace 可觀察性，未來 retrieval / prompt 改動 RCA 速度顯著加快」。
+- [x] 5.1 寫 `docs/case-studies/eval-framework-upgrade-2026-05-XX.md`：含 (a) Background 連回 step1-idf-and-prefilter 失敗教訓 (b) Phase 1-4 全程紀錄 (c) Langfuse + DeepEval + 5 grader + 2 CLI 部署結果 (d) dry-run 對 archived 失敗 case 的驗證結論 (e) follow-up 建議。
+- [x] 5.2 更新 memory：(a) `feedback_idf_show_wide_failed_2026_05_28.md` 加「現有 retrieve_probe.py 可預先驗證 episode-scoped ranking」follow-up 段 (b) `feedback_prompt_change_retrieval_side_effect.md` 加「現有 prompt_fingerprint_diff.py 可預先驗證 query 字面 drift」follow-up 段 (c) `feedback_show_wide_probe_false_positive.md` 同步更新 (d) `project_pending_changes.md` + `project_pending_change_candidates.md` 標 BM25 / EP-scoped IDF 可重新開始討論（已有觀察工具）(e) `project_langfuse_cloud_free_track_usage.md` 加實測 baseline（真實 units/trace、第一週用量）替換掉估算數字（per `feedback_no_guessed_numbers_from_memory.md` 紀律）。
+- [x] 5.3 更新 `docs/roadmap.md`：標 eval-framework-upgrade ✅ + 解凍 BM25 / EP-scoped IDF 候選 + Langfuse 服務列進部署狀態表。
+- [x] 5.4 release log entry：tag `enhancement`，bilingual zh/en，使用者視角講「內部評分基準升級、新增 5 個品質指標 + trace 可觀察性，未來 retrieval / prompt 改動 RCA 速度顯著加快」。
 
 ## 6. Gitleaks + commit hygiene
 

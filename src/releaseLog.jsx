@@ -53,6 +53,33 @@ const MILESTONE_LABELS = {
 const RELEASE_LOG = [
   // ─── v1.8 — Chat Mode: Agentic (5/21~) ───
   {
+    date: '2026-05-30', slug: 'eval-framework-upgrade', milestone: 'v1.8', tag: 'enhancement',
+    title: {
+      zh: '評分基準升級：6 個新指標 + 兩支「PR 前先驗證」CLI 工具',
+      en: 'Evaluation Framework Upgrade: 6 New Metrics + 2 Pre-PR Verification CLIs',
+    },
+    summary: {
+      zh: '升級內部評分基準，避免下次再撞到 2026-05-28 IDF 實驗的觀察盲點。這次的改動使用者體感**沒直接變化**，但對「未來任何 retrieval / prompt 改動的事前驗證流程」是個底層升級。三件事：(1) 接入業界標準的評分套件 DeepEval，新增 6 個語意層級指標 — 像是「答案的關聯度」「檢索片段是否真的覆蓋到答案」「答案是否忠實於檢索片段」等，補既有「比對段落 ID 是否一字不差」這種容易誤判的脆弱指標。實際跑全 34 題基準時，這次新指標就抓到一個關鍵 insight：表面看起來退步 0.1 的 chunk_recall 其實**不是真的退步** — agent 撈到的相鄰段落（差 13 秒）內容跟正確段落實質重疊、答案品質完全沒變，只是 ID 比對嚴格。新指標的「語意 precision 0.92」直接證實 retrieval 仍健康，避免我們花一整週去追一個假退步。(2) 加進 PR template 的兩支 CLI：`retrieve_probe.py` 可以在改 retrieval 前對特定問題跑 episode-scoped 排序檢查、確認 ground-truth 段落還在前 K 名；`prompt_fingerprint_diff.py` 可以在改 prompt 前對比兩個 backend 看 agent 對同一問題會不會生出不同的 search query — 這兩支工具會自動 surface 之前要花幾小時 RCA 才發現的副作用。(3) 接入 Langfuse Cloud trace 觀察，每次 eval 跑都能在網頁上看 chat_agent_turn → llm_call → tool_call 三層 span tree，未來 RCA 不用再翻 log 拼湊。**一個未達設計目標的點**：原本希望 Langfuse SDK 對 prod 流量延遲增量 < 100ms，實際量到 P95 +3.4 秒、retrieval 重的題目 +5-6 秒，遠超預期。對策是維持 prod 預設關閉 tracing（只在 eval 跑時開），並開了「自架 Langfuse 評估」做為下一條 follow-up（自架 LAN 內延遲應該能拉回 <200ms）。',
+      en: 'Internal evaluation baseline upgrade — addresses the observability blind spots that caused the 2026-05-28 IDF experiment failure. **No direct user-visible change**, but a foundational upgrade for future retrieval/prompt change verification. Three things: (1) Integrated DeepEval, adding 6 new semantic-level metrics — answer relevancy, contextual recall (whether retrieved chunks cover the GT answer), contextual precision, faithfulness, semantic answer similarity, entity recall. These complement the existing brittle "chunk-ID byte-exact match" indicator. On the full 34-item baseline, the new metrics immediately surfaced an important insight: the apparent chunk_recall -0.1 regression was **not actually a regression** — the agent had landed on adjacent chunks (13s away) with substantively overlapping content, answer quality unchanged. New `contextual_precision=0.92` directly confirmed retrieval was still healthy, saving us a week of chasing a phantom regression. (2) Two new CLIs added to PR template: `retrieve_probe.py` runs episode-scoped ranking checks against specific items to confirm GT chunks are still in top-K before merging retrieval changes; `prompt_fingerprint_diff.py` compares two backends to surface whether the agent rephrases its search queries differently after a prompt change — both tools auto-surface side effects that previously required hours of RCA to find. (3) Langfuse Cloud tracing integration — every eval run emits a chat_agent_turn → llm_call → tool_call 3-level span tree viewable in the web UI, so future RCA no longer requires log-scraping. **One design miss**: the original target was <100ms Langfuse SDK latency overhead on prod traffic; actual measurement was P95 +3.4s, retrieval-heavy queries +5-6s, far exceeding expectations. Mitigation: keep prod tracing default-OFF (eval-only), opened follow-up "evaluate self-hosting Langfuse" — LAN-local RPC should bring it back under 200ms.',
+    },
+    summaryBullets: {
+      zh: [
+        '新增 6 個語意層級指標（DeepEval 4 個內建 + GEval 自寫 2 個），補既有「段落 ID 一字不差」這種脆弱指標',
+        '新指標立刻抓到：本次全 34 題 baseline 對比上輪「退步 0.1」是假警報、實質檢索健康，省下一週追假退步',
+        '兩支 PR 必跑 CLI：retrieve_probe.py 事前驗 GT 段落還在 top-K、prompt_fingerprint_diff.py 事前驗 agent 不會自己改 search query',
+        '接 Langfuse Cloud trace 觀察 — eval 跑時可看每個 agent step 的 span tree，未來 RCA 更快',
+        '未達設計目標：Cloud SDK 對 prod 延遲增量遠超預期（P95 +3.4s），prod 預設關閉、自架評估 follow-up 升優先',
+      ],
+      en: [
+        'Added 6 semantic-level metrics (4 DeepEval built-ins + 2 GEval custom rubrics), complementing the brittle "chunk-ID byte-exact match" indicator',
+        'New metrics immediately caught: this run\'s apparent "chunk_recall -0.1 regression" vs prior baseline was a false alarm — retrieval still healthy, saved a week of phantom-regression chasing',
+        'Two PR-mandatory CLIs: retrieve_probe.py pre-validates GT chunks still in top-K, prompt_fingerprint_diff.py pre-detects agent re-phrasing search queries',
+        'Langfuse Cloud tracing — eval runs emit a full span tree viewable in web UI, making future RCA significantly faster',
+        'Design miss: Cloud SDK latency overhead far exceeded target (P95 +3.4s vs <100ms goal); prod tracing default-OFF, self-host evaluation promoted as follow-up',
+      ],
+    },
+  },
+  {
     date: '2026-05-28', slug: 'retrieve-quality-step1-idf-and-prefilter-failed', milestone: 'v1.8', tag: 'experiment',
     title: {
       zh: 'IDF 加權實驗（兩 Layer 都試失敗、已 revert）',
