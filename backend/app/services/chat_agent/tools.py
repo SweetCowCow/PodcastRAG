@@ -664,34 +664,59 @@ def _make_envelope(exc: BaseException) -> dict:
     }
 
 
-async def _dispatch_tool(
+_SEARCH_TOOL_PREFIX = "search_"
+_TRACE_RESULT_CHUNK_CAP = 20  # cap for tool_result_chunks_json payload
+_TRACE_RESULT_FIELD_CAP = 1500  # per-string-field char cap
+
+
+def _extract_search_query(name: str, args: dict[str, Any]) -> str | None:
+    """Pull the `query` string from search_* tool args. None for other tools."""
+    if not name.startswith(_SEARCH_TOOL_PREFIX):
+        return None
+    q = args.get("query")
+    return q if isinstance(q, str) else None
+
+
+def _safe_args_snapshot(args: dict[str, Any]) -> dict[str, Any]:
+    """JSON-safe + cap-bounded copy of tool args for trace storage."""
+    out: dict[str, Any] = {}
+    for k, v in args.items():
+        if isinstance(v, str) and len(v) > _TRACE_RESULT_FIELD_CAP:
+            out[k] = v[:_TRACE_RESULT_FIELD_CAP] + f"... (+{len(v) - _TRACE_RESULT_FIELD_CAP} chars)"
+        else:
+            out[k] = v
+    return out
+
+
+def _extract_result_chunks_summary(result: dict[str, Any]) -> Any:
+    """For search_* tools, extract a capped chunk list for trace audit.
+
+    Looks for `chunks` / `results` / `items` keys. Returns the first
+    `_TRACE_RESULT_CHUNK_CAP` entries with overflow indicator. Returns
+    None when the result has no obvious chunks list (non-search tool).
+    """
+    for key in ("chunks", "results", "items"):
+        seq = result.get(key)
+        if isinstance(seq, list):
+            capped = seq[:_TRACE_RESULT_CHUNK_CAP]
+            payload: dict[str, Any] = {"key": key, "count": len(seq), "sample": capped}
+            if len(seq) > _TRACE_RESULT_CHUNK_CAP:
+                payload["truncated"] = True
+            return payload
+    return None
+
+
+async def _dispatch_tool_inner(
     name: str,
     args: dict[str, Any],
     ctx: ToolContext,
+    start: float,
 ) -> tuple[dict, str | None, float]:
-    """Validate `args`, run the tool inside a SAVEPOINT, catch exceptions.
+    """Inner dispatch — kept as the original logic, single-exit refactor.
 
-    Returns `(result_dict, raised_class_name_or_None, latency_ms)`. On
-    success `result_dict` is whatever the tool callable produced. On
-    failure `result_dict` is a structured Tool error envelope
-    `{"ok": false, "kind": "...", "internal_message": "...", "user_hint": "..."}`
-    so the LLM has a `kind` for decision-making and a `user_hint` for the
-    user-facing reply, while `internal_message` is preserved for trace /
-    log analysis.
-
-    SAVEPOINT isolation: the tool callable runs inside a SQLAlchemy
-    `begin_nested()` context manager so any DB exception triggers a
-    SAVEPOINT rollback before propagating. Subsequent tool calls on the
-    same `AsyncSession` then start from a clean transaction state instead
-    of inheriting `InFailedSQLTransactionError`.
-
-    Side effect: when an enumeration tool succeeds, its episode IDs are
-    written back to `ctx.state.last_enumeration_episodes` (FIFO-capped at
-    20) and the state is persisted with a refreshed TTL. This is what
-    fixes the bake-off multi-turn carry regression.
+    Extracted from `_dispatch_tool` so the outer wrapper can do trace
+    bookkeeping without touching error / SAVEPOINT logic.
     """
-
-    start = time.perf_counter()
     spec = TOOLS_BY_NAME.get(name)
     if spec is None:
         elapsed = (time.perf_counter() - start) * 1000.0
@@ -736,6 +761,61 @@ async def _dispatch_tool(
 
     elapsed = (time.perf_counter() - start) * 1000.0
     return result, None, elapsed
+
+
+async def _dispatch_tool(
+    name: str,
+    args: dict[str, Any],
+    ctx: ToolContext,
+) -> tuple[dict, str | None, float]:
+    """Validate `args`, run the tool inside a SAVEPOINT, catch exceptions.
+
+    Returns `(result_dict, raised_class_name_or_None, latency_ms)`. On
+    success `result_dict` is whatever the tool callable produced. On
+    failure `result_dict` is a structured Tool error envelope
+    `{"ok": false, "kind": "...", "internal_message": "...", "user_hint": "..."}`
+    so the LLM has a `kind` for decision-making and a `user_hint` for the
+    user-facing reply, while `internal_message` is preserved for trace /
+    log analysis.
+
+    SAVEPOINT isolation: the tool callable runs inside a SQLAlchemy
+    `begin_nested()` context manager so any DB exception triggers a
+    SAVEPOINT rollback before propagating. Subsequent tool calls on the
+    same `AsyncSession` then start from a clean transaction state instead
+    of inheriting `InFailedSQLTransactionError`.
+
+    Side effect: when an enumeration tool succeeds, its episode IDs are
+    written back to `ctx.state.last_enumeration_episodes` (FIFO-capped at
+    20) and the state is persisted with a refreshed TTL. This is what
+    fixes the bake-off multi-turn carry regression.
+
+    Trace observability (eval-framework-upgrade 2026-05-29): wraps the
+    inner dispatch with `trace_span("tool_call", ...)`. On exit, the span
+    record carries (tool_name, tool_args_json, search_query, and for
+    search_* tools, tool_result_chunks_json). No-op in prod traffic.
+    """
+    # Lazy import — keeps tools.py importable in environments without eval deps.
+    from eval.tracing.langfuse_setup import trace_span
+
+    start = time.perf_counter()
+    async with trace_span(
+        "tool_call", f"tool:{name}", stage_name="tool_dispatch"
+    ) as span_record:
+        # Populate eagerly so a tool exception (caught inside inner) still
+        # has tool_name / tool_args / search_query recorded.
+        span_record["tool_name"] = name
+        span_record["tool_args_json"] = _safe_args_snapshot(args)
+        sq = _extract_search_query(name, args)
+        if sq is not None:
+            span_record["search_query"] = sq
+
+        result, raised, elapsed = await _dispatch_tool_inner(name, args, ctx, start)
+
+        chunks_payload = _extract_result_chunks_summary(result)
+        if chunks_payload is not None:
+            span_record["tool_result_chunks_json"] = chunks_payload
+
+        return result, raised, elapsed
 
 
 def _writeback_enumeration_anchor(result: dict, ctx: ToolContext) -> None:

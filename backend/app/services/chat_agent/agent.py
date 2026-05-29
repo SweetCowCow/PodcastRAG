@@ -32,6 +32,11 @@ from app.services.chat_agent.memory import build_messages, update_history_summar
 from app.services.chat_agent.state import ChatSessionState, ChatSessionStateStore
 from app.services.chat_agent.tools import OPENAI_TOOLS_SPEC, ToolContext, _dispatch_tool
 
+# eval-framework-upgrade 2026-05-29: trace observability hooks.
+# `observe` is a no-op when EVAL_TRACING_ENABLED=false; `trace_span` is a
+# no-op when EVAL_TRACING_ENABLED=false OR eval context not bound (prod traffic).
+from eval.tracing.langfuse_setup import observe, trace_span
+
 logger = logging.getLogger(__name__)
 
 
@@ -108,6 +113,24 @@ def _apply_budget_guard(
         messages.pop(tool_idx)
         popped += 1
     return True, popped
+
+
+def _safe_messages_snapshot(messages: list[dict]) -> list[dict]:
+    """JSON-safe + size-capped snapshot of `messages` for trace storage.
+
+    Caps each message's `content` at 4000 chars to bound row size in
+    `eval_traces.llm_messages_json` (JSONB). The full untruncated content
+    remains in the live `messages` list — this snapshot is for trace audit.
+    """
+    cap = 4000
+    out: list[dict] = []
+    for m in messages:
+        snap = dict(m)
+        content = snap.get("content")
+        if isinstance(content, str) and len(content) > cap:
+            snap["content"] = content[:cap] + f"... (truncated, {len(content) - cap} chars)"
+        out.append(snap)
+    return out
 
 
 def _classify_llm_exception(exc: BaseException) -> str | None:
@@ -259,6 +282,7 @@ def _annotate_unverified_tokens(
     return annotated, count
 
 
+@observe(name="chat_agent_turn")
 async def run_agent(
     question: str,
     session_id: uuid.UUID,
@@ -332,54 +356,84 @@ async def run_agent(
             break
 
         _llm_t = time.perf_counter()
-        try:
-            response = await client.chat.completions.create(
-                model=answer_cfg.model,
-                messages=messages,
-                tools=OPENAI_TOOLS_SPEC,
-                tool_choice="auto",
-            )
-        except openai.BadRequestError as exc:
-            kind = _classify_llm_exception(exc)
-            if kind != "context_exceeded":
-                raise  # other 4xx routes through endpoint handler
+        # eval-framework-upgrade task 1.5: wrap LLM call with trace_span so eval
+        # runs land a row in eval_traces. No-op in prod traffic (no eval_context).
+        # `messages` is captured by reference; we snapshot to JSON-safe shape on exit.
+        async with trace_span(
+            "llm_call", f"round_{round_index}", stage_name="llm_loop"
+        ) as span_record:
+            try:
+                response = await client.chat.completions.create(
+                    model=answer_cfg.model,
+                    messages=messages,
+                    tools=OPENAI_TOOLS_SPEC,
+                    tool_choice="auto",
+                )
+            except openai.BadRequestError as exc:
+                kind = _classify_llm_exception(exc)
+                if kind != "context_exceeded":
+                    raise  # other 4xx routes through endpoint handler
+                llm_latency_ms = (time.perf_counter() - _llm_t) * 1000.0
+                logger.warning(
+                    "agent LLM context_exceeded at round %d: %s",
+                    round_index,
+                    type(exc).__name__,
+                )
+                llm_calls.append(
+                    LLMCallTrace(
+                        round_index=round_index,
+                        latency_ms=llm_latency_ms,
+                        prompt_tokens=0,
+                        completion_tokens=0,
+                        finish_reason="context_exceeded",
+                        had_tool_calls=False,
+                    )
+                )
+                span_record.update(
+                    {
+                        "llm_model": answer_cfg.model,
+                        "llm_finish_reason": "context_exceeded",
+                        "llm_messages_json": _safe_messages_snapshot(messages),
+                    }
+                )
+                answer = _CONTEXT_EXCEEDED_USER_HINT
+                agent_truncated = True
+                break
             llm_latency_ms = (time.perf_counter() - _llm_t) * 1000.0
-            logger.warning(
-                "agent LLM context_exceeded at round %d: %s",
-                round_index,
-                type(exc).__name__,
+            choice = response.choices[0]
+            msg = choice.message
+
+            if response.usage:
+                usage.prompt_tokens += response.usage.prompt_tokens or 0
+                usage.completion_tokens += response.usage.completion_tokens or 0
+
+            prompt_toks = (
+                (response.usage.prompt_tokens or 0) if response.usage else 0
+            )
+            completion_toks = (
+                (response.usage.completion_tokens or 0) if response.usage else 0
             )
             llm_calls.append(
                 LLMCallTrace(
                     round_index=round_index,
                     latency_ms=llm_latency_ms,
-                    prompt_tokens=0,
-                    completion_tokens=0,
-                    finish_reason="context_exceeded",
-                    had_tool_calls=False,
+                    prompt_tokens=prompt_toks,
+                    completion_tokens=completion_toks,
+                    finish_reason=choice.finish_reason or "",
+                    had_tool_calls=bool(msg.tool_calls),
                 )
             )
-            answer = _CONTEXT_EXCEEDED_USER_HINT
-            agent_truncated = True
-            break
-        llm_latency_ms = (time.perf_counter() - _llm_t) * 1000.0
-        choice = response.choices[0]
-        msg = choice.message
 
-        if response.usage:
-            usage.prompt_tokens += response.usage.prompt_tokens or 0
-            usage.completion_tokens += response.usage.completion_tokens or 0
-
-        llm_calls.append(
-            LLMCallTrace(
-                round_index=round_index,
-                latency_ms=llm_latency_ms,
-                prompt_tokens=(response.usage.prompt_tokens or 0) if response.usage else 0,
-                completion_tokens=(response.usage.completion_tokens or 0) if response.usage else 0,
-                finish_reason=choice.finish_reason or "",
-                had_tool_calls=bool(msg.tool_calls),
+            span_record.update(
+                {
+                    "llm_model": answer_cfg.model,
+                    "llm_finish_reason": choice.finish_reason or "",
+                    "llm_prompt_tokens": prompt_toks,
+                    "llm_completion_tokens": completion_toks,
+                    "llm_messages_json": _safe_messages_snapshot(messages),
+                    "llm_output_text": msg.content,
+                }
             )
-        )
 
         # Append assistant message to running context window.
         assistant_msg: dict = {"role": "assistant", "content": msg.content}
