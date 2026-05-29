@@ -16,6 +16,7 @@ Refactored 2026-05-29 per Langfuse v3 best practice (langfuse/skills review):
 from __future__ import annotations
 
 import logging
+import time
 from collections.abc import AsyncGenerator, Callable
 from contextlib import asynccontextmanager
 from contextvars import ContextVar
@@ -27,6 +28,30 @@ from uuid import UUID, uuid4
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
+
+# Read once at import time per design Decision 1 of langfuse-sdk-overhead-rca
+# (avoid per-call settings attribute lookup). Module reload required to toggle.
+_TIMING_PROBE_ENABLED: bool = settings.eval_tracing_timing_probe
+
+
+def _timed_call(span_name: str, op: str, fn: Callable[..., Any], *args: Any, **kwargs: Any) -> tuple[Any, float]:
+    """Run `fn(*args, **kwargs)` and return (result, elapsed_ms).
+
+    When `_TIMING_PROBE_ENABLED` is False, this still calls `fn` but skips
+    `perf_counter` and log emission — net cost is one extra function call
+    frame, sub-microsecond. When True, emits a `langfuse_timing:` logger
+    line per call so prod runtime log can be grep+aggregated post-hoc.
+    """
+    if not _TIMING_PROBE_ENABLED:
+        return fn(*args, **kwargs), 0.0
+    t0 = time.perf_counter()
+    result = fn(*args, **kwargs)
+    elapsed_ms = (time.perf_counter() - t0) * 1000.0
+    logger.info(
+        "langfuse_timing: span_name=%s op=%s elapsed_ms=%.3f",
+        span_name, op, elapsed_ms,
+    )
+    return result, elapsed_ms
 
 _F = TypeVar("_F", bound=Callable[..., Any])
 
@@ -201,11 +226,32 @@ async def trace_span(
     record: dict[str, Any] = {}
     started_at = datetime.now(UTC)
 
+    # Per-op timing accumulators for langfuse-sdk-overhead-rca measurement.
+    # Always set even when probe disabled — zero-cost when _TIMING_PROBE_ENABLED=False
+    # because _timed_call short-circuits and we skip the summary log.
+    t_enter_ms = 0.0
+    t_exit_ms = 0.0
+    t_update_ms = 0.0
+    t_get_trace_id_ms = 0.0
+
     # Open Cloud observation. Always — even if eval_context is None,
     # Cloud trace tree still benefits from nested span hierarchy.
-    with langfuse.start_as_current_observation(
+    # Manual timing of `with` enter/exit because context manager isn't a
+    # plain function call; _timed_call only fires logger when probe enabled.
+    if _TIMING_PROBE_ENABLED:
+        _t0 = time.perf_counter()
+    obs_cm = langfuse.start_as_current_observation(
         as_type=as_type, name=span_name
-    ) as obs:
+    )
+    obs = obs_cm.__enter__()
+    if _TIMING_PROBE_ENABLED:
+        t_enter_ms = (time.perf_counter() - _t0) * 1000.0
+        logger.info(
+            "langfuse_timing: span_name=%s op=enter elapsed_ms=%.3f",
+            span_name, t_enter_ms,
+        )
+
+    try:
         try:
             yield record
         finally:
@@ -216,15 +262,37 @@ async def trace_span(
                     cloud_payload[k] = record[k]
             if cloud_payload:
                 try:
-                    obs.update(**cloud_payload)
+                    _, t_update_ms = _timed_call(
+                        span_name, "update", obs.update, **cloud_payload,
+                    )
                 except Exception as exc:  # noqa: BLE001
                     logger.debug("obs.update failed: %s", exc)
 
             # Capture OTel IDs for PG join key alignment.
             try:
-                otel_trace_id = langfuse.get_current_trace_id()
+                otel_trace_id, t_get_trace_id_ms = _timed_call(
+                    span_name, "get_trace_id", langfuse.get_current_trace_id,
+                )
             except Exception:  # noqa: BLE001
                 otel_trace_id = None
+    finally:
+        if _TIMING_PROBE_ENABLED:
+            _t0 = time.perf_counter()
+        obs_cm.__exit__(None, None, None)
+        if _TIMING_PROBE_ENABLED:
+            t_exit_ms = (time.perf_counter() - _t0) * 1000.0
+            logger.info(
+                "langfuse_timing: span_name=%s op=exit elapsed_ms=%.3f",
+                span_name, t_exit_ms,
+            )
+            # Per-span summary line — caller can correlate via Uvicorn access log.
+            logger.info(
+                "langfuse_timing_summary: span_name=%s total_ms=%.3f "
+                "enter=%.3f exit=%.3f update=%.3f get_trace_id=%.3f",
+                span_name,
+                t_enter_ms + t_exit_ms + t_update_ms + t_get_trace_id_ms,
+                t_enter_ms, t_exit_ms, t_update_ms, t_get_trace_id_ms,
+            )
 
     # PG sink — only when eval runner has bound a run.
     ctx = get_eval_context()

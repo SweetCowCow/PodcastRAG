@@ -136,6 +136,11 @@ class Settings(BaseSettings):
     langfuse_secret_key: str | None = None
     langfuse_host: str = "https://cloud.langfuse.com"
     eval_tracing_enabled: bool = False
+    # Independent toggle for per-op timing probe inside trace_span — used by
+    # langfuse-sdk-overhead-rca to attribute +3.4s 4.4 overhead among four
+    # suspect Langfuse SDK calls. Off by default; turned on only during
+    # measurement windows.
+    eval_tracing_timing_probe: bool = False
 
     model_config = SettingsConfigDict(
         env_file=".env",
