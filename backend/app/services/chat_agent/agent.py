@@ -487,9 +487,13 @@ async def run_agent(
                     "model": answer_cfg.model,
                     "input": _msg_snap,
                     "output": msg.content,
+                    # Langfuse usage key names per token-and-cost-tracking.md:
+                    # "input" / "output" (NOT "input_tokens" / "output_tokens"
+                    # which the instrumentation.md example wrongly used and
+                    # which produces $0 cost in Cloud).
                     "usage_details": {
-                        "input_tokens": prompt_toks,
-                        "output_tokens": completion_toks,
+                        "input": prompt_toks,
+                        "output": completion_toks,
                     },
                     "metadata": {
                         "finish_reason": choice.finish_reason or "",
