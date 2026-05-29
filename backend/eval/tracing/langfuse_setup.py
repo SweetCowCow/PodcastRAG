@@ -33,6 +33,18 @@ logger = logging.getLogger(__name__)
 # (avoid per-call settings attribute lookup). Module reload required to toggle.
 _TIMING_PROBE_ENABLED: bool = settings.eval_tracing_timing_probe
 
+# Force this module's logger to INFO when probe enabled, otherwise default
+# (root WARNING) swallows our `langfuse_timing:` measurement lines. Uvicorn
+# captures stdout at INFO level for its own access log, so once we set the
+# logger level, our lines reach Zeabur runtime log capture too.
+if _TIMING_PROBE_ENABLED:
+    logger.setLevel(logging.INFO)
+    if not logger.handlers:
+        _h = logging.StreamHandler()
+        _h.setFormatter(logging.Formatter("%(levelname)s:     %(message)s"))
+        logger.addHandler(_h)
+        logger.propagate = False
+
 
 def _timed_call(span_name: str, op: str, fn: Callable[..., Any], *args: Any, **kwargs: Any) -> tuple[Any, float]:
     """Run `fn(*args, **kwargs)` and return (result, elapsed_ms).
