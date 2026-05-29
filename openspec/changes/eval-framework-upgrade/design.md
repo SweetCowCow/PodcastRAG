@@ -120,12 +120,16 @@ CREATE INDEX ix_eval_traces_search_query ON eval_traces (search_query) WHERE sea
 - 用 enum-style `span_type` + nullable 欄位涵蓋 LLM / Tool / Stage 三類，避免三張表 JOIN
 - `search_query` 獨立 index 因為 prompt fingerprint diff 主要 query 路徑
 
-### Decision 3: DeepEval 走 hybrid（4 個內建 + 1 個 GEval 自寫，保留 6 個自寫）
+### Decision 3: DeepEval 走 hybrid（4 個內建 + 2 個 GEval 自寫，保留 6 個自寫）
 
 **選**：
-- DeepEval **內建** 4 個 metric 接 chat eval：`AnswerRelevancyMetric` / `ContextualPrecisionMetric` / `FaithfulnessMetric` / `AnswerSimilarityMetric`
-- DeepEval **GEval custom rubric** 1 個：`context_entity_recall`（DeepEval 沒內建版）
+- DeepEval **內建** 4 個 metric 接 chat eval：`AnswerRelevancyMetric` / `ContextualPrecisionMetric` / `ContextualRecallMetric` / `FaithfulnessMetric`
+- DeepEval **GEval custom rubric** 2 個：
+  - `answer_similarity_geval`（比對 agent answer vs GT answer summary 的 semantic match — DeepEval 沒內建 `AnswerSimilarityMetric`，2026-05-29 import 驗證確認）
+  - `context_entity_recall`（entity-level retrieval coverage — DeepEval 沒內建版）
 - 自寫保留 6 個：chunk_recall_grouped / count_consistency / ordinal_resolution / answer_contradict_check / refusal_appropriateness / pronoun_attribution_check
+
+**為什麼加 ContextualRecallMetric**：補既有 `chunk_recall_grouped` 的盲點 — 後者走嚴格 chunk-ID + 10s 時間窗比對，chunking 邊界飄移就判 0；ContextualRecallMetric 走 LLM 語意比對，能抓到「retrieval 撈對了但 chunk 邊界偏移」的 case，delta 本身是 RCA signal（對齊本 change 的 retrieval-drift detection 目標）。
 
 **拒**：
 - 全 DeepEval（包括把 6 個自寫包成 DeepEval custom metric）→ 多 wrapper indirection、calibrate 數據作廢、跑 LLM call 走 DeepEval client 還要再 wrap AI Hub
@@ -203,7 +207,7 @@ CREATE INDEX ix_eval_traces_search_query ON eval_traces (search_query) WHERE sea
 
 - 每跑一次 chat agent query（含 `?debug_trace=true` 與否都跑）→ Langfuse Web UI 看得到對應 trace tree，含 LLM rounds + tool calls + stage timings
 - PG `eval_traces` 同步寫入，run_id 跟 eval result file 對得齊（譬如 result file = `baseline-step1-foo-2026-05-XX-chat.json` 內 `meta.run_id` = trace `run_id` column）
-- runner_v2_aggregate 跑完報告含 10 個 metric（既有 6 個 + 新 4 個 DeepEval + entity recall）
+- runner_v2_aggregate 跑完報告含 12 個 metric（既有 6 個 + 新 4 個 DeepEval 內建 + 2 個 GEval 自寫 answer_similarity_geval / entity recall）
 - `retrieve_probe.py --episode_id <X> --query <Y>` 印 top-50 chunks rank + 高亮 GT 位置
 - `prompt_fingerprint_diff.py --old <SHA1> --new <SHA2>` 印 markdown diff 表
 
@@ -225,7 +229,7 @@ CREATE INDEX ix_eval_traces_search_query ON eval_traces (search_query) WHERE sea
 **Acceptance criteria**:
 
 1. 對任一 chat agent query 跑完，PG `eval_traces` 內可查到 ≥3 個 span（at least 1 LLM call + 1 tool call + 1 stage）；**Langfuse Cloud Web UI** 看得到等效 trace tree
-2. 跑 chat baseline 全 34 題後，result file aggregate 含 10 個 metric（既有 6 + 新 4），無 null aggregate
+2. 跑 chat baseline 全 34 題後，result file aggregate 含 12 個 metric（既有 6 + 新 6），無 null aggregate
 3. `retrieve_probe.py` 對 b18 query + EP44 跑 → 印 top-50 chunks 含起始時間 + 哪些是 GT chunk
 4. `prompt_fingerprint_diff.py` 對任一既有 2 commit 跑 → 印 8 題 calibration 的 search query diff 表
 5. 跟 `feedback_idf_show_wide_failed_2026_05_28.md` 教訓對齊：retrieval PR 跑 probe + prompt PR 跑 fingerprint diff → 都能事前抓到 Layer A / Layer B 風格 side effect（dry-run 驗證在 task 中）

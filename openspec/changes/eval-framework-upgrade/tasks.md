@@ -11,15 +11,16 @@
 
 ## 2. Phase 2 — DeepEval 4 grader + entity recall + plugin loader 整合
 
-- [ ] 2.1 新增 `backend/eval/graders/answer_relevancy.py` — wrap DeepEval `AnswerRelevancyMetric`；grader plugin interface (`grade(item, response, judge_verdict) -> {score, passed, details}`)；LLM 失敗時回 `{score: null, passed: false, details: {error: ...}}`。
-- [ ] 2.2 新增 `backend/eval/graders/contextual_precision.py` — wrap DeepEval `ContextualPrecisionMetric`；同 interface。
-- [ ] 2.3 新增 `backend/eval/graders/answer_similarity.py` — wrap DeepEval `AnswerSimilarityMetric`；同 interface。
-- [ ] 2.4 新增 `backend/eval/graders/faithfulness_deepeval.py` — wrap DeepEval `FaithfulnessMetric`；同 interface。（命名加 `_deepeval` suffix 避免跟既有 `factual_correctness` 混淆）
-- [ ] 2.5 新增 `backend/eval/graders/context_entity_recall.py` — DeepEval `GEval` custom rubric 自寫 entity 抽取 + recall 計算；rubric prompt 清楚列舉 entity types (people / episode title / song / album / book / organisation)；回 `entities_found / entities_total` 比例。
-- [ ] 2.6 修 `backend/eval/graders/loader.py` — `discover_graders()` 自動發現新 5 個 grader（既有 plugin 機制，理論上不用改但要驗）。
-- [ ] 2.7 修 `backend/eval/judge_chat_v2.py` — 呼叫新 5 grader 加入 indicators dict；既有 6 grader 邏輯不動。
-- [ ] 2.8 修 `backend/eval/runner_v2_aggregate.py` — `aggregate()` 函式自動把新 indicators 加進 `by_indicator` dict（既有 plugin 化 aggregate 應該不用改但要驗）。
-- [ ] 2.9 對 8 題 calibration set 跑一次 chat eval → 驗證 (a) result file `indicators` 含 11 個 entry (b) 4 個 DeepEval grader + entity recall 都非 null。
+- [x] 2.1 新增 `backend/eval/graders/answer_relevancy.py` — wrap DeepEval `AnswerRelevancyMetric`；grader plugin interface (`grade(item, response, judge_verdict) -> {score, passed, details}`)；LLM 失敗時回 `{score: null, passed: false, details: {error: ...}}`。
+- [x] 2.2 新增 `backend/eval/graders/contextual_precision.py` — wrap DeepEval `ContextualPrecisionMetric`；同 interface。
+- [x] 2.3a 新增 `backend/eval/graders/answer_similarity_geval.py` — DeepEval `GEval` custom rubric 比對 `actual_output` (agent answer) vs `expected_output` (item.expected_answer_summary)，rubric 標準：內容覆蓋率 + 事實一致 + 不額外加料；同 interface。**Note**：原 spec 寫 `AnswerSimilarityMetric` 內建，但 deepeval 實際無此 class（2026-05-29 import 驗證失敗），改走 GEval 自寫 rubric 保留原 design 意圖。
+- [x] 2.3b 新增 `backend/eval/graders/contextual_recall.py` — wrap DeepEval `ContextualRecallMetric`，衡量 retrieved chunks 是否涵蓋 GT answer 所需資訊（語意比對，補既有 `chunk_recall_grouped` 嚴格 chunk-ID 比對抓不到的 chunk 邊界漂移）；同 interface。
+- [x] 2.4 新增 `backend/eval/graders/faithfulness_deepeval.py` — wrap DeepEval `FaithfulnessMetric`；同 interface。（命名加 `_deepeval` suffix 避免跟既有 `factual_correctness` 混淆）
+- [x] 2.5 新增 `backend/eval/graders/context_entity_recall.py` — DeepEval `GEval` custom rubric 自寫 entity 抽取 + recall 計算；rubric prompt 清楚列舉 entity types (people / episode title / song / album / book / organisation)；回 `entities_found / entities_total` 比例。
+- [x] 2.6 修 `backend/eval/graders/loader.py` — `discover_graders()` 自動發現新 6 個 grader（既有 plugin 機制，理論上不用改但要驗）。
+- [x] 2.7 修 `backend/eval/judge_chat_v2.py` — 呼叫新 6 grader 加入 indicators dict；既有 6 grader 邏輯不動。
+- [x] 2.8 修 `backend/eval/runner_v2_aggregate.py` — `aggregate()` 函式自動把新 indicators 加進 `by_indicator` dict（既有 plugin 化 aggregate 應該不用改但要驗）。
+- [ ] 2.9 對 8 題 calibration set 跑一次 chat eval → 驗證 (a) result file `indicators` 含 12 個 entry (b) 4 個 DeepEval 內建 grader（answer_relevancy / contextual_precision / contextual_recall / faithfulness_deepeval） + 2 個 GEval 自寫（answer_similarity_geval / context_entity_recall）都非 null。
 
 ## 3. Phase 3 — Episode-scoped retrieval probe CLI + Prompt fingerprint diff CLI
 
@@ -31,7 +32,7 @@
 
 ## 4. Phase 4 — 結合驗證 + PR template 軟約定
 
-- [ ] 4.1 對全 34 題 chat baseline 跑新 pipeline → 對比舊 `baseline-post-judge-v2-2026-05-27.json`：既有 6 grader score per-item 在 floating-point tolerance 內一致；新 5 grader score 全部非 null。落地 `backend/eval/results/baseline-eval-framework-upgrade-2026-05-XX-chat.json`。
+- [ ] 4.1 對全 34 題 chat baseline 跑新 pipeline → 對比舊 `baseline-post-judge-v2-2026-05-27.json`：既有 6 grader score per-item 在 floating-point tolerance 內一致；新 6 grader score 全部非 null。落地 `backend/eval/results/baseline-eval-framework-upgrade-2026-05-XX-chat.json`。
 - [ ] 4.2 加 PR template section（`.github/PULL_REQUEST_TEMPLATE.md` 或專案 markdown convention）：「Retrieval change checklist」含跑 `retrieve_probe.py` + 貼結果；「Prompt change checklist」含跑 `prompt_fingerprint_diff.py` + 貼結果。
 - [ ] 4.3 在 `docs/runbooks/` 寫 `eval-framework-upgrade-runbook.md`（不入 commit per 慣例）：操作員怎麼跑 probe / fingerprint diff / 看 Langfuse UI / SQL audit eval_traces，含常見 RCA query 範例。
 - [ ] 4.4 prod 灰度測：對一段時間 prod chat user 流量 toggle `EVAL_TRACING_ENABLED=true` 觀察 P95 latency 增量 **< 100ms**（含 Cloud SDK HTTP 往返到 cloud.langfuse.com 的額外延遲，比自架 ~50ms 容忍度寬鬆，per design Risks 表）；若達標可考慮 default 開；不達標關掉 + 寫 follow-up「優化 span_writer 寫入 P95 / 評估自架降低 SDK 延遲」。同時對 cloud.langfuse.com → Settings → Usage 看實測 units 消耗、跟 ~10 units/trace 估算對校。
