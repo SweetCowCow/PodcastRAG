@@ -46,5 +46,5 @@
 
 ## 6. Gitleaks + commit hygiene
 
-- [ ] 6.1 每階段 commit 前跑 `gitleaks protect --staged --no-banner --redact` ✅ 確認 0 finding。Langfuse env 變數加 backend/.env 走 user 給 secret SOP（per `feedback_secret_handoff_via_file.md` 走檔案不走 chat）。
-- [ ] 6.2 確認 commit message 不含 prod IP / DB password / token / Langfuse secret keys（per `feedback_public_repo_commit_safety.md`）。
+- [x] 6.1 每階段 commit 前跑 `gitleaks protect --staged --no-banner --redact` ✅ 確認 0 finding。Langfuse env 變數加 backend/.env 走 user 給 secret SOP（per `feedback_secret_handoff_via_file.md` 走檔案不走 chat）。
+- [x] 6.2 確認 commit message 不含 prod IP / DB password / token / Langfuse secret keys（per `feedback_public_repo_commit_safety.md`）。
