@@ -127,6 +127,14 @@ src/
 
 - 做 security scan / pptx 生成 / 其他重複任務之前，先用 `/skills` 列現有 skill，**用既有的別寫 ad-hoc 腳本**
 
+## 內容發布工作流（2026-05-30 改為 on-demand）
+
+- **模式**：Jacky 當下開口要 → Claude 直接產 `.docx` 草稿放 `docs/content/drafts/on-demand/` → Jacky 自己編輯 + 貼到平台發布
+- **草稿格式**：一律 `.docx`，純文字風格（無 markdown 符號），命名 `YYYY-MM-DD_平台_主題.docx`
+- **追蹤檔**：發完 Jacky 告知後，在 `docs/content/content-coverage.md` append 紀錄；A.3 是未用 case-study 庫存
+- **排程提醒已全停**（podcastrag-daily-reminder-weekday / -weekend / -weekly-planning）。**不要主動催發文**
+- `editorial-cadence-v2.md` 與 `throwback-series-plan.md` 保留作為主題參考，**不再**是按表執行的依據
+
 ## Secrets Hygiene
 
 - **絕不**在 chat 印 env vars / DB password / token（不准 `env` / `printenv` / `cat .env`）

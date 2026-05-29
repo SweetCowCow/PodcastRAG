@@ -53,6 +53,31 @@ const MILESTONE_LABELS = {
 const RELEASE_LOG = [
   // ─── v1.8 — Chat Mode: Agentic (5/21~) ───
   {
+    date: '2026-05-30', slug: 'langfuse-sdk-overhead-rca', milestone: 'v1.8', tag: 'experiment',
+    title: {
+      zh: '量測證實「外部觀察工具拖慢系統」是誤判 — RCA 兩輪後清白',
+      en: 'Measurement Cleared Langfuse Cloud SDK: "It Slows Us Down" Was a False Alarm',
+    },
+    summary: {
+      zh: '昨天 ship 評分框架升級時量到「打開 trace 觀察會讓 P95 延遲 +3.4 秒」、當下推給 Langfuse 雲服務本身慢、開了「自架 Langfuse 評估」當下一條 follow-up。今天 RCA 兩輪。第一輪 review 想「會不會其實是我們自己寫的 PG 雙寫沒做非阻塞」、寫了完整提案 + 設計 + 規格 + 任務、apply 開始時 grep 才發現雙寫 code path 從來沒被觸發過（runner 沒呼叫對應 binding 函式）— 假設破滅、暫存 change。第二輪做了 spike：在 trace 內部四個可疑 Langfuse 呼叫各包 timing wrapper、推到 prod 量。結果：每個 op 都 0.1-0.5 ms 級別、每 span total ~1 ms、30 span/query 也只 ~28 ms total overhead。**完全跟官方說的 0.1ms async-batched 一致**。對比同期跑出來的整體請求 P95 反而比昨天 4.4 OFF baseline **還快 2.3 秒** — 不可能是 SDK 加了 +3.4s。**結論：昨天那輪 +3.4s 是跨 session 量測雜訊**（兩個獨立 session 之間 prod 流量背景 / cache / 網路條件不同）、SDK 是清白的、自架 follow-up 取消。教訓：跨 session P95 比較不能當 RCA attribution 證據、要同 session 內 timing instrumentation 才算數。Spike 工具留在 codebase 預設關、未來想再量直接 toggle 一個環境變數。',
+      en: 'Yesterday\'s eval framework ship measured "+3.4s P95 latency when tracing turned on" and we blamed Langfuse Cloud SDK, opening "evaluate self-hosting Langfuse" as the next follow-up. Today: two rounds of RCA. Round 1 hypothesised it was our own PG dual-sink not doing fire-and-forget; wrote full proposal + design + spec + tasks, then grep during apply found the PG sink code path was never triggered (runner never called the binding function). Hypothesis falsified, change parked. Round 2 spike: wrapped four suspect Langfuse SDK calls inside trace_span with `time.perf_counter` timing, deployed to prod, measured. Result: each op 0.1-0.5 ms, per-span total ~1 ms, 30 spans/query = ~28 ms total overhead. **Exactly matches the 0.1ms async-batched figure in official Langfuse docs**. Overall request P95 with tracing ON was actually **2.3s faster** than yesterday\'s 4.4 OFF baseline — definitively not a +3.4s SDK overhead. **Conclusion: yesterday\'s +3.4s was cross-session measurement noise** (prod traffic / cache / network differed between two independent measurement sessions). SDK is innocent, self-host follow-up cancelled. Lesson: cross-session P95 comparison is invalid as RCA attribution evidence; same-session timing instrumentation is required. Spike tooling stays in codebase default-off; re-measurement is one env var toggle away.',
+    },
+    summaryBullets: {
+      zh: [
+        '昨天 4.4 量到 +3.4s P95 推 SDK 慢 → 今天 RCA 兩輪後證實 SDK 清白、是跨 session 量測雜訊',
+        '加 timing wrapper 量到實際 SDK overhead 0.947 ms/span（與官方 docs 0.1ms 量級一致）',
+        '自架 Langfuse follow-up 取消（自架主要動機「拉延遲」不存在）',
+        '教訓：跨 session P95 比較不能當 RCA attribution、要同 session 內 timing 證據才算數',
+      ],
+      en: [
+        'Yesterday\'s 4.4 measurement attributed +3.4s P95 to SDK overhead → today\'s 2-round RCA cleared the SDK, was cross-session noise',
+        'Timing wrappers showed real SDK overhead is 0.947 ms/span (matches official 0.1ms async-batched figure)',
+        'Self-host Langfuse follow-up cancelled (primary motivation "pull down latency" does not exist)',
+        'Lesson: cross-session P95 comparison invalid as RCA attribution evidence; same-session timing required',
+      ],
+    },
+  },
+  {
     date: '2026-05-30', slug: 'eval-framework-upgrade', milestone: 'v1.8', tag: 'enhancement',
     title: {
       zh: '評分基準升級：6 個新指標 + 兩支「PR 前先驗證」CLI 工具',
