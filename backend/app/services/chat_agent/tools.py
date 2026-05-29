@@ -798,22 +798,38 @@ async def _dispatch_tool(
     from eval.tracing.langfuse_setup import trace_span
 
     start = time.perf_counter()
+    safe_args = _safe_args_snapshot(args)
+    sq = _extract_search_query(name, args)
     async with trace_span(
-        "tool_call", f"tool:{name}", stage_name="tool_dispatch"
+        "tool_call",
+        f"tool:{name}",
+        stage_name="tool_dispatch",
+        as_type="tool",
     ) as span_record:
         # Populate eagerly so a tool exception (caught inside inner) still
-        # has tool_name / tool_args / search_query recorded.
+        # has tool_name / tool_args / search_query recorded for both sinks.
         span_record["tool_name"] = name
-        span_record["tool_args_json"] = _safe_args_snapshot(args)
-        sq = _extract_search_query(name, args)
+        span_record["tool_args_json"] = safe_args
         if sq is not None:
             span_record["search_query"] = sq
+
+        # Cloud sink — explicit input scrub (no internal ToolContext etc).
+        span_record["input"] = {"name": name, "args": safe_args}
+        if sq is not None:
+            span_record["metadata"] = {"search_query": sq}
 
         result, raised, elapsed = await _dispatch_tool_inner(name, args, ctx, start)
 
         chunks_payload = _extract_result_chunks_summary(result)
         if chunks_payload is not None:
             span_record["tool_result_chunks_json"] = chunks_payload
+
+        # Cloud sink — bounded output (full result chunked to chunks_payload).
+        span_record["output"] = (
+            chunks_payload
+            if chunks_payload is not None
+            else {"ok": result.get("ok", True), "raised": raised}
+        )
 
         return result, raised, elapsed
 

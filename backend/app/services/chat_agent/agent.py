@@ -19,7 +19,9 @@ import logging
 import re
 import time
 import uuid
+from contextlib import ExitStack
 from dataclasses import dataclass, field
+from typing import Any
 
 import openai
 from openai import AsyncOpenAI, OpenAI
@@ -33,9 +35,16 @@ from app.services.chat_agent.state import ChatSessionState, ChatSessionStateStor
 from app.services.chat_agent.tools import OPENAI_TOOLS_SPEC, ToolContext, _dispatch_tool
 
 # eval-framework-upgrade 2026-05-29: trace observability hooks.
-# `observe` is a no-op when EVAL_TRACING_ENABLED=false; `trace_span` is a
-# no-op when EVAL_TRACING_ENABLED=false OR eval context not bound (prod traffic).
-from eval.tracing.langfuse_setup import observe, trace_span
+# All helpers are no-ops when EVAL_TRACING_ENABLED=false (cheap import-time
+# gate). When enabled, observations land in both Langfuse Cloud and
+# (when eval_context is bound) the PG eval_traces table.
+from eval.tracing.langfuse_setup import (
+    get_eval_context,
+    observe,
+    propagate_attributes,
+    trace_span,
+    update_current_span,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -282,7 +291,7 @@ def _annotate_unverified_tokens(
     return annotated, count
 
 
-@observe(name="chat_agent_turn")
+@observe(name="chat_agent_turn", as_type="agent")
 async def run_agent(
     question: str,
     session_id: uuid.UUID,
@@ -295,6 +304,25 @@ async def run_agent(
     iterates the LLM up to `agentic_chat_max_iterations` rounds dispatching
     tools, and returns a `ChatAgentResult`. Never raises 5xx from tool failures.
     """
+    # eval-framework-upgrade: scrub trace input/output to drop AsyncSession
+    # and other internal kwargs that @observe would auto-capture otherwise.
+    # propagate session_id + eval context (if bound) to all child observations.
+    update_current_span(
+        input={
+            "question": question,
+            "show_id": str(show_id),
+            "session_id": str(session_id),
+        },
+    )
+    _eval_ctx = get_eval_context() or {}
+    # propagate_attributes drops non-string metadata values silently — keep
+    # everything stringified (turn_idx is int, others already str).
+    _meta: dict[str, str] = {}
+    if "item_id" in _eval_ctx:
+        _meta["item_id"] = str(_eval_ctx["item_id"])
+        _meta["run_id"] = str(_eval_ctx["run_id"])
+        _meta["turn_idx"] = str(_eval_ctx["turn_idx"])
+
     answer_cfg = await get_step_config(db, "answer")
     client = AsyncOpenAI(
         base_url=answer_cfg.base_url,
@@ -326,6 +354,19 @@ async def run_agent(
     usage = TokenUsage()
     ctx = ToolContext(db=db, show_id=show_id, state=state, state_store=state_store)
 
+    # eval-framework-upgrade: propagate session_id + eval context as OTel
+    # attributes so every child observation (LLM call / tool dispatch)
+    # inherits them in Langfuse Cloud. ExitStack avoids indenting the
+    # rest of the function body.
+    _trace_attrs = ExitStack()
+    _trace_attrs.enter_context(
+        propagate_attributes(
+            session_id=str(session_id),
+            metadata={"show_id": str(show_id), **_meta} if _meta else {"show_id": str(show_id)},
+            tags=["chat_agent"] + (["eval_run"] if _meta else []),
+        )
+    )
+
     loop_t0 = time.perf_counter()
     for round_index in range(settings.agentic_chat_max_iterations):
         # Per-round token-budget guard. Trim oldest tool messages until
@@ -356,11 +397,14 @@ async def run_agent(
             break
 
         _llm_t = time.perf_counter()
-        # eval-framework-upgrade task 1.5: wrap LLM call with trace_span so eval
-        # runs land a row in eval_traces. No-op in prod traffic (no eval_context).
-        # `messages` is captured by reference; we snapshot to JSON-safe shape on exit.
+        # eval-framework-upgrade task 1.5: wrap LLM call with trace_span using
+        # Langfuse `generation` observation type — enables auto token cost
+        # calculation in Cloud + nested span hierarchy under chat_agent_turn.
         async with trace_span(
-            "llm_call", f"round_{round_index}", stage_name="llm_loop"
+            "llm_call",
+            f"round_{round_index}",
+            stage_name="llm_loop",
+            as_type="generation",
         ) as span_record:
             try:
                 response = await client.chat.completions.create(
@@ -391,9 +435,14 @@ async def run_agent(
                 )
                 span_record.update(
                     {
+                        # PG sink (legacy field names)
                         "llm_model": answer_cfg.model,
                         "llm_finish_reason": "context_exceeded",
                         "llm_messages_json": _safe_messages_snapshot(messages),
+                        # Cloud sink (Langfuse generation API)
+                        "model": answer_cfg.model,
+                        "input": _safe_messages_snapshot(messages),
+                        "metadata": {"finish_reason": "context_exceeded"},
                     }
                 )
                 answer = _CONTEXT_EXCEEDED_USER_HINT
@@ -424,14 +473,28 @@ async def run_agent(
                 )
             )
 
+            _msg_snap = _safe_messages_snapshot(messages)
             span_record.update(
                 {
+                    # PG sink (legacy field names)
                     "llm_model": answer_cfg.model,
                     "llm_finish_reason": choice.finish_reason or "",
                     "llm_prompt_tokens": prompt_toks,
                     "llm_completion_tokens": completion_toks,
-                    "llm_messages_json": _safe_messages_snapshot(messages),
+                    "llm_messages_json": _msg_snap,
                     "llm_output_text": msg.content,
+                    # Cloud sink (Langfuse generation API — enables auto cost)
+                    "model": answer_cfg.model,
+                    "input": _msg_snap,
+                    "output": msg.content,
+                    "usage_details": {
+                        "input_tokens": prompt_toks,
+                        "output_tokens": completion_toks,
+                    },
+                    "metadata": {
+                        "finish_reason": choice.finish_reason or "",
+                        "had_tool_calls": bool(msg.tool_calls),
+                    },
                 }
             )
 
@@ -515,6 +578,11 @@ async def run_agent(
     # Citation scan (task 4) reverted 2026-05-24 — annotation backfired
     # on judge (quality -30pp). unverified_count stays at 0 / field kept
     # in schema for forward-compat with a future soft-mode rework.
+
+    # eval-framework-upgrade: scrub trace output to just the final answer
+    # (avoid the full ChatAgentResult auto-dump in Langfuse Cloud).
+    update_current_span(output={"answer": answer, "truncated": agent_truncated})
+    _trace_attrs.close()
 
     return ChatAgentResult(
         answer=answer,
