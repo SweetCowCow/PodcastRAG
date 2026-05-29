@@ -12,6 +12,7 @@ Last verified: **2026-05-15** (Claude session)
 |---|---|---|---|---|
 | `this-not-that-cool.json` | **30** (v3, post-promote 2026-05-15) | **Main golden set** | retrieval-eval schema | 2026-05-15 |
 | `extended-multi-turn-40.json` | **34 records / 40 turns** (30 single + 4 multi-turn) | **Multi-turn extended** — only dataset with multi-turn dialogs | bakeoff schema (is_multi_turn + turns array) | 2026-05-21 |
+| `_calibration_8.json` | **8** (subset of extended-multi-turn-40) | **Calibration set** — PR-time retrieval/prompt diff（design Decision 5） | bakeoff schema, byte-equivalent items | 2026-05-29 |
 | `_pending_review.json` | 0 (cleared after promote) | **Staging buffer**, ready for next batch | retrieval-eval schema | 2026-05-15 |
 | `_judge_minisset.json` | 40 | **Judge bake-off** hand-scored set | answer + chunks + human_score | 2026-05-06 |
 | `_schema.json` | 0 | JSON schema (validator), not data | – | – |
@@ -39,6 +40,17 @@ Last verified: **2026-05-15** (Claude session)
 - **唯一用途**：驗 multi-turn ordinal carry / focused_episode pin / context retention 失敗模式（mt01「歌單有哪幾集？→ 第三集是什麼？」是經典 ordinal carry 考題）
 - **Used by**: `backend/scripts/agentic_bakeoff/runner/run_prototype.py`（已 archive 的 bake-off prototype runner）
 - **未來用途**: 後續 `chat-multi-turn-trace-investigation` 等 change 主要 dataset
+
+### `_calibration_8.json` — calibration subset
+
+- **Created**: 2026-05-29（`eval-framework-upgrade` task 3.1）
+- **Source**: `extended-multi-turn-40.json` 8 題 subset，每題 byte-equivalent（已用 `json.dumps(sort_keys=True)` SHA256 驗證）
+- **挑選**：涵蓋 8 個 design_type，每類 1 題
+  - `b01` show_overview · `b06` guest_find · `b08` topic_find · `b11` date_find
+  - `b18` deep_dive (EP-ref) · `b20` cross_episode · `b27` negative · `mt03` multi_turn
+- **用途**：PR-time retrieval / prompt change 跑 `retrieve_probe.py` + `prompt_fingerprint_diff.py` 的固定基準集；跑兩次 chat eval 約 $2 / 5 分鐘（design Decision 5）
+- **不適合**：用來算 baseline metric（樣本太小 / 不代表 distribution）；那是 full 34 題的工作
+- **重建**：若要修挑選清單，改 `pick` 後重跑 `/tmp/build_calib.py`（保 byte-equivalent + SHA256 verify）
 
 ### `_pending_review.json` — staging buffer
 

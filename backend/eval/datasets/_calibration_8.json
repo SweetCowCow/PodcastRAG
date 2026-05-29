@@ -1,0 +1,364 @@
+{
+  "schema_version": "2.0",
+  "show_id": "45fc2462-17cf-42f5-98a7-68fe1a222228",
+  "show_slug": "this-not-that-cool",
+  "created_at": "2026-05-19",
+  "source_dataset": "extended-multi-turn-40.json",
+  "purpose": "calibration set (8 題) — PR-time retrieval/prompt change diff 驗證；design Decision 5",
+  "design_type_coverage": {
+    "b01": "show_overview",
+    "b06": "guest_find",
+    "b08": "topic_find",
+    "b11": "date_find",
+    "b18": "deep_dive",
+    "b20": "cross_episode",
+    "b27": "negative",
+    "mt03": "multi_turn"
+  },
+  "items": [
+    {
+      "id": "b01",
+      "design_type": "show_overview",
+      "source": "existing:q01-show-name-origin",
+      "is_multi_turn": false,
+      "audit_status": "pending",
+      "audit_notes": "Auto-migrated from v1; needs human audit per docs/eval-strategy.md",
+      "question": "節目名「這又沒有很屌」是怎麼來的？",
+      "expected_behavior": "answer",
+      "expected_answer_summary": "PENDING AUDIT",
+      "expected_answer_aliases": null,
+      "expected_tool_calls_required": [
+        "get_show_overview"
+      ],
+      "expected_tool_calls_acceptable": [
+        "search_across_episodes"
+      ],
+      "expected_tool_args": null,
+      "expected_episode_uuids_must": null,
+      "expected_episode_uuids_acceptable": null,
+      "expected_episode_numbers_must": null,
+      "expected_episode_numbers_acceptable": null,
+      "expected_count": null,
+      "expected_top_n_episode_numbers": null,
+      "expected_must_contradict_check": null,
+      "ground_truth_chunk_ids_must": [
+        "ep:9359c207-1970-4ab4-acce-bf8d44967b68@252.60",
+        "ep:9359c207-1970-4ab4-acce-bf8d44967b68@257.00",
+        "ep:9359c207-1970-4ab4-acce-bf8d44967b68@258.40",
+        "ep:9359c207-1970-4ab4-acce-bf8d44967b68@262.20",
+        "ep:9359c207-1970-4ab4-acce-bf8d44967b68@265.00"
+      ],
+      "ground_truth_chunk_ids_either": null,
+      "ground_truth_chunk_ids_acceptable": null
+    },
+    {
+      "id": "b06",
+      "design_type": "guest_find",
+      "source": "new:N1",
+      "is_multi_turn": false,
+      "audit_status": "pending",
+      "audit_notes": "Auto-migrated from v1; needs human audit per docs/eval-strategy.md",
+      "question": "馬世芳上過《這又沒有很屌》哪幾集？",
+      "expected_behavior": "answer",
+      "expected_answer_summary": "PENDING AUDIT",
+      "expected_answer_aliases": null,
+      "expected_tool_calls_required": [
+        "find_episodes_by_guest"
+      ],
+      "expected_tool_calls_acceptable": [],
+      "expected_tool_args": null,
+      "expected_episode_uuids_must": null,
+      "expected_episode_uuids_acceptable": null,
+      "expected_episode_numbers_must": null,
+      "expected_episode_numbers_acceptable": null,
+      "expected_count": null,
+      "expected_top_n_episode_numbers": null,
+      "expected_must_contradict_check": null,
+      "ground_truth_chunk_ids_must": null,
+      "ground_truth_chunk_ids_either": null,
+      "ground_truth_chunk_ids_acceptable": null
+    },
+    {
+      "id": "b08",
+      "design_type": "topic_find",
+      "source": "existing:q25-list-playlist-episodes",
+      "is_multi_turn": false,
+      "audit_status": "pending",
+      "audit_notes": "Auto-migrated from v1; needs human audit per docs/eval-strategy.md",
+      "question": "節目裡有哪些集是歌單？",
+      "expected_behavior": "answer",
+      "expected_answer_summary": "PENDING AUDIT",
+      "expected_answer_aliases": null,
+      "expected_tool_calls_required": [
+        "find_episodes_by_topic"
+      ],
+      "expected_tool_calls_acceptable": [],
+      "expected_tool_args": null,
+      "expected_episode_uuids_must": null,
+      "expected_episode_uuids_acceptable": null,
+      "expected_episode_numbers_must": null,
+      "expected_episode_numbers_acceptable": null,
+      "expected_count": null,
+      "expected_top_n_episode_numbers": null,
+      "expected_must_contradict_check": null,
+      "ground_truth_chunk_ids_must": null,
+      "ground_truth_chunk_ids_either": null,
+      "ground_truth_chunk_ids_acceptable": null
+    },
+    {
+      "id": "b11",
+      "design_type": "date_find",
+      "source": "new:N4",
+      "is_multi_turn": false,
+      "question": "2024 年上半年（1-6 月）發過哪幾集？",
+      "expected_behavior": "answer",
+      "expected_answer_summary": "2024 年 1-6 月共 26 集，含 EP25-EP47（23 集）+ 3 集龍年特別企劃（年菜改造 / 初二回娘家 / 開工歌單）。Agent 應呼叫 find_episodes_by_date(2024-01-01, 2024-06-30) 並如實回報 26 集，不該編造數字。",
+      "expected_answer_aliases": null,
+      "expected_tool_calls_required": [
+        "find_episodes_by_date"
+      ],
+      "expected_tool_calls_acceptable": [],
+      "expected_tool_args": {
+        "find_episodes_by_date": {
+          "start": "2024-01-01",
+          "end": "2024-06-30"
+        }
+      },
+      "expected_episode_uuids_must": [
+        "53d60c90-e783-4eff-969c-02feb6f82d0c",
+        "79caf414-4d62-48a0-af91-5dffda70be8d",
+        "d6398c78-5a60-4aab-a835-40803d3ac9e9",
+        "dc1260c0-b95c-48f1-aa92-787696f64e91",
+        "9c2a9529-81d2-4407-96bc-e566f333dcae",
+        "b1d5ea60-f332-4159-96a0-91553bc674ed",
+        "ecd66de6-cb4f-40e2-ba62-b07f2ff94e10",
+        "89f0fab0-bca5-4695-b587-ac603db47cbe",
+        "3dea68b0-bd9b-4b91-975e-fdc96f40c256",
+        "ce0404c0-6c6f-4ca3-a7cd-e38f245f1ef0",
+        "368e1aa0-0796-488c-a47c-b5b6769ad02a",
+        "dcce2640-6ab8-4865-affd-41ace6c9ee6e",
+        "2c0f87b6-1d10-40db-a202-3746e4dade6b",
+        "780b332f-64bd-4e70-aa14-46f029be1528",
+        "a2006c63-fd4e-42da-b0ba-c23531da6d6f",
+        "5fb343b5-e459-48e8-bd3c-aed168f0bfa6",
+        "b7661ca4-a9a0-4d74-b3a6-c114d2019b9b",
+        "0431b7c8-ae3f-4cc5-bad6-2fd6c60a661f",
+        "49d0852e-362e-4477-9f9a-3e917abe75f5",
+        "e52f436d-33d7-4e10-a205-50f38535e28f",
+        "3e77db47-86ac-4dbe-bfb5-b7f319364b82",
+        "b46bedb7-2832-4024-936e-60349fa60c55",
+        "65030207-726d-43ba-80d4-d4c0efb97ac8",
+        "201bf4d9-0a5a-49cb-8d5b-875d8b78fa81",
+        "8367adc5-0763-4b03-b072-adb2cbce5a46",
+        "2ac5d7d5-5d24-4315-a6b0-071aea110fab"
+      ],
+      "expected_episode_uuids_acceptable": null,
+      "expected_episode_numbers_must": null,
+      "expected_episode_numbers_acceptable": null,
+      "expected_count": 26,
+      "expected_top_n_episode_numbers": null,
+      "ground_truth_chunk_ids_must": null,
+      "ground_truth_chunk_ids_either": null,
+      "ground_truth_chunk_ids_acceptable": null,
+      "expected_must_contradict_check": null,
+      "audit_status": "human-verified-2026-05-26",
+      "audit_notes": "Date range retrieval 100% 正確。Prod 抓到 LLM number hallucination — tool 回 26 集，answer 文字寫 27。新增 count_consistency 指標偵測。"
+    },
+    {
+      "id": "b18",
+      "design_type": "deep_dive",
+      "source": "existing:q22-ep44-gift-food-freshness-paradox",
+      "is_multi_turn": false,
+      "audit_status": "pending",
+      "audit_notes": "Auto-migrated from v1; needs human audit per docs/eval-strategy.md",
+      "question": "EP44《伴手禮是社交潤滑劑》來賓用什麼食物當作例子來講送禮糾結？為什麼『現吃好吃』的食物反而不適合當伴手禮？",
+      "expected_behavior": "answer",
+      "expected_answer_summary": "PENDING AUDIT",
+      "expected_answer_aliases": null,
+      "expected_tool_calls_required": [
+        "find_episode_by_ref",
+        "search_within_episode"
+      ],
+      "expected_tool_calls_acceptable": [
+        "get_episode_segments"
+      ],
+      "expected_tool_args": null,
+      "expected_episode_uuids_must": null,
+      "expected_episode_uuids_acceptable": null,
+      "expected_episode_numbers_must": null,
+      "expected_episode_numbers_acceptable": null,
+      "expected_count": null,
+      "expected_top_n_episode_numbers": null,
+      "expected_must_contradict_check": null,
+      "ground_truth_chunk_ids_must": [
+        "ep:65030207-726d-43ba-80d4-d4c0efb97ac8@1607.39"
+      ],
+      "ground_truth_chunk_ids_either": null,
+      "ground_truth_chunk_ids_acceptable": null
+    },
+    {
+      "id": "b20",
+      "design_type": "cross_episode",
+      "source": "existing:q04-mid-age-opening-view",
+      "is_multi_turn": false,
+      "audit_status": "pending",
+      "audit_notes": "Auto-migrated from v1; needs human audit per docs/eval-strategy.md",
+      "question": "節目裡迪拉怎麼描述中老年人的開工想法跟年輕時的差異？",
+      "expected_behavior": "answer",
+      "expected_answer_summary": "PENDING AUDIT",
+      "expected_answer_aliases": null,
+      "expected_tool_calls_required": [
+        "search_across_episodes"
+      ],
+      "expected_tool_calls_acceptable": [
+        "find_episodes_by_topic"
+      ],
+      "expected_tool_args": null,
+      "expected_episode_uuids_must": null,
+      "expected_episode_uuids_acceptable": null,
+      "expected_episode_numbers_must": null,
+      "expected_episode_numbers_acceptable": null,
+      "expected_count": null,
+      "expected_top_n_episode_numbers": null,
+      "expected_must_contradict_check": null,
+      "ground_truth_chunk_ids_must": [
+        "ep:c1d87278-7dba-4fb1-930d-c2bd3a3461d2@1719.78",
+        "ep:c1d87278-7dba-4fb1-930d-c2bd3a3461d2@1993.76",
+        "ep:c1d87278-7dba-4fb1-930d-c2bd3a3461d2@1790.18",
+        "ep:c1d87278-7dba-4fb1-930d-c2bd3a3461d2@1808.78"
+      ],
+      "ground_truth_chunk_ids_either": null,
+      "ground_truth_chunk_ids_acceptable": null
+    },
+    {
+      "id": "b27",
+      "design_type": "negative",
+      "source": "existing:q02-no-rap-championship",
+      "is_multi_turn": false,
+      "question": "迪拉胖在 EP1 有提到自己得過什麼嘻哈大賽冠軍嗎？",
+      "expected_behavior": "refusal_with_correction",
+      "expected_answer_summary": "EP1 中迪拉胖沒有提到自己得過嘻哈大賽冠軍。他在節目中提及的嘻哈相關身份是「大嘻哈評審」（不是參賽得獎者），另一個身份是顏社（廠牌）老闆。Agent 應拒答『冠軍』前提錯誤的問題，並可補充正確身份。",
+      "expected_answer_aliases": {
+        "顏社": [
+          "顏色"
+        ]
+      },
+      "expected_tool_calls_required": [
+        "find_episode_by_ref",
+        "search_within_episode"
+      ],
+      "expected_tool_calls_acceptable": [
+        "get_episode_segments"
+      ],
+      "expected_tool_args": {
+        "find_episode_by_ref": {
+          "ref_must_match_pattern": "^EP1$|^第1集$"
+        }
+      },
+      "expected_episode_uuids_must": [
+        "9359c207-1970-4ab4-acce-bf8d44967b68"
+      ],
+      "expected_episode_uuids_acceptable": null,
+      "expected_episode_numbers_must": [
+        1
+      ],
+      "expected_episode_numbers_acceptable": null,
+      "expected_count": null,
+      "expected_top_n_episode_numbers": null,
+      "ground_truth_chunk_ids_must": null,
+      "ground_truth_chunk_ids_either": null,
+      "ground_truth_chunk_ids_acceptable": null,
+      "expected_must_contradict_check": null,
+      "audit_status": "human-verified-2026-05-25",
+      "audit_notes": "Negative trap clean pass。Agent refuse + 補大嘻哈評審身份。SQL bug fix 是這題能跑通的前提。新增 alias「顏社」← 顏色 typo。"
+    },
+    {
+      "id": "mt03",
+      "design_type": "multi_turn",
+      "source": "new:mt03-focused-continuity-3turn",
+      "is_multi_turn": true,
+      "audit_status": "pending",
+      "audit_notes": "Auto-migrated from v1; needs human audit per docs/eval-strategy.md",
+      "turns": [
+        {
+          "question": "EP140 第二彈是哪兩位來賓？",
+          "expected_behavior": "answer",
+          "expected_answer_summary": "PENDING AUDIT",
+          "expected_answer_aliases": null,
+          "expected_tool_calls_required": [
+            "find_episode_by_ref",
+            "pin_episode",
+            "search_within_episode"
+          ],
+          "expected_tool_calls_acceptable": [
+            "get_episode_summary",
+            "get_episode_segments"
+          ],
+          "expected_tool_args": null,
+          "expected_episode_uuids_must": null,
+          "expected_episode_uuids_acceptable": null,
+          "expected_episode_numbers_must": null,
+          "expected_episode_numbers_acceptable": null,
+          "expected_count": null,
+          "expected_top_n_episode_numbers": null,
+          "expected_must_contradict_check": null,
+          "ground_truth_chunk_ids_must": [
+            "ep:d15bddde-153f-484f-bff6-0bb74415b718@0.00"
+          ],
+          "ground_truth_chunk_ids_either": null,
+          "ground_truth_chunk_ids_acceptable": null
+        },
+        {
+          "question": "他們在節目裡推薦哪間餐廳？",
+          "expected_behavior": "answer",
+          "expected_answer_summary": "PENDING AUDIT",
+          "expected_answer_aliases": null,
+          "expected_tool_calls_required": [
+            "search_within_episode"
+          ],
+          "expected_tool_calls_acceptable": [
+            "get_episode_segments"
+          ],
+          "expected_tool_args": null,
+          "expected_episode_uuids_must": null,
+          "expected_episode_uuids_acceptable": null,
+          "expected_episode_numbers_must": null,
+          "expected_episode_numbers_acceptable": null,
+          "expected_count": null,
+          "expected_top_n_episode_numbers": null,
+          "expected_must_contradict_check": null,
+          "ground_truth_chunk_ids_must": null,
+          "ground_truth_chunk_ids_either": null,
+          "ground_truth_chunk_ids_acceptable": null,
+          "carry_from": "agent uses L1 focused_episode_id=EP140",
+          "ordinal_resolution_check": true
+        },
+        {
+          "question": "他們推薦餐廳的什麼料理？",
+          "expected_behavior": "answer",
+          "expected_answer_summary": "PENDING AUDIT",
+          "expected_answer_aliases": null,
+          "expected_tool_calls_required": [
+            "search_within_episode"
+          ],
+          "expected_tool_calls_acceptable": [
+            "get_episode_segments"
+          ],
+          "expected_tool_args": null,
+          "expected_episode_uuids_must": null,
+          "expected_episode_uuids_acceptable": null,
+          "expected_episode_numbers_must": null,
+          "expected_episode_numbers_acceptable": null,
+          "expected_count": null,
+          "expected_top_n_episode_numbers": null,
+          "expected_must_contradict_check": null,
+          "ground_truth_chunk_ids_must": null,
+          "ground_truth_chunk_ids_either": null,
+          "ground_truth_chunk_ids_acceptable": null,
+          "carry_from": "still on EP140 focused",
+          "ordinal_resolution_check": true
+        }
+      ]
+    }
+  ]
+}

@@ -20,15 +20,15 @@
 - [x] 2.6 修 `backend/eval/graders/loader.py` — `discover_graders()` 自動發現新 6 個 grader（既有 plugin 機制，理論上不用改但要驗）。
 - [x] 2.7 修 `backend/eval/judge_chat_v2.py` — 呼叫新 6 grader 加入 indicators dict；既有 6 grader 邏輯不動。
 - [x] 2.8 修 `backend/eval/runner_v2_aggregate.py` — `aggregate()` 函式自動把新 indicators 加進 `by_indicator` dict（既有 plugin 化 aggregate 應該不用改但要驗）。
-- [ ] 2.9 對 8 題 calibration set 跑一次 chat eval → 驗證 (a) result file `indicators` 含 12 個 entry (b) 4 個 DeepEval 內建 grader（answer_relevancy / contextual_precision / contextual_recall / faithfulness_deepeval） + 2 個 GEval 自寫（answer_similarity_geval / context_entity_recall）都非 null。
+- [x] 2.9 對 8 題 calibration set 跑一次 chat eval → 驗證 (a) result file `indicators` 含 12 個 entry (b) 4 個 DeepEval 內建 grader（answer_relevancy / contextual_precision / contextual_recall / faithfulness_deepeval） + 2 個 GEval 自寫（answer_similarity_geval / context_entity_recall）都非 null。
 
 ## 3. Phase 3 — Episode-scoped retrieval probe CLI + Prompt fingerprint diff CLI
 
-- [ ] 3.1 新增 `backend/eval/datasets/_calibration_8.json` — 從 `extended-multi-turn-40.json` 挑 8 題覆蓋 design_type spectrum（建議：b01 show_overview / b06 guest_find / b08 topic_find / b11 date_find / b18 deep_dive EP-ref / b20 cross_episode / b27 negative / mt03 multi_turn）。SHA256 verify 每題 byte-equivalent。同時更新 `backend/eval/datasets/README.md` 加 calibration set 段落。
-- [ ] 3.2 新增 `backend/eval/scripts/retrieve_probe.py` — argparse `--show_id --episode_id --query --top_k`；import `app.services.rag.retrieve_hybrid` 跑 with `episode_id_filter`；印 top-k ranked chunks（chunk_id / start_time / rrf_score / GT 標註）；對 b18 EP44 + query 「伴手禮 現吃好吃 食物」跑驗證、確認 stdout 含 GT marker。
-- [ ] 3.3 新增 `backend/eval/scripts/prompt_fingerprint_diff.py` — argparse `--old-commit --new-commit --dataset`；對兩個 commit 各跑 chat eval（透過 `--backend-old/--backend-new` URL 對應已 deployed prod commit，或自動 wait deploy）→ SQL query `eval_traces` 抓 `search_query` per (item_id, turn_idx) → 印 markdown diff 表（item / turn / old_query / new_query / changed?）。
-- [ ] 3.4 dry-run 驗證 `retrieve_probe.py`：對 archived `step1-idf-and-prefilter` 的 IDF-bucketed SQL 跟 legacy `ts_rank` 對同一 b18 query + EP44 各跑 → 應印出 episode-scoped ranking 差異（驗證若當時有此工具，IDF 失敗能事前抓到）。結論寫進 case study。
-- [ ] 3.5 dry-run 驗證 `prompt_fingerprint_diff.py`：對 archived Layer B 兩個 commit（`c0149ff` revert 後 vs `0e38b16` Layer B 上）跑 → 應抓到 EP-ref query 的 search_query 字面變化（驗證若當時有此工具，Layer B 失敗能事前抓到）。結論寫進 case study。
+- [x] 3.1 新增 `backend/eval/datasets/_calibration_8.json` — 從 `extended-multi-turn-40.json` 挑 8 題覆蓋 design_type spectrum（建議：b01 show_overview / b06 guest_find / b08 topic_find / b11 date_find / b18 deep_dive EP-ref / b20 cross_episode / b27 negative / mt03 multi_turn）。SHA256 verify 每題 byte-equivalent。同時更新 `backend/eval/datasets/README.md` 加 calibration set 段落。
+- [x] 3.2 新增 `backend/eval/scripts/retrieve_probe.py` — argparse `--show_id --episode_id --query --top_k`；import `app.services.rag.retrieve_hybrid` 跑 with `episode_id_filter`；印 top-k ranked chunks（chunk_id / start_time / rrf_score / GT 標註）；對 b18 EP44 + query 「伴手禮 現吃好吃 食物」跑驗證、確認 stdout 含 GT marker。
+- [x] 3.3 新增 `backend/eval/scripts/prompt_fingerprint_diff.py` — argparse `--old-commit --new-commit --dataset`；對兩個 commit 各跑 chat eval（透過 `--backend-old/--backend-new` URL 對應已 deployed prod commit，或自動 wait deploy）→ SQL query `eval_traces` 抓 `search_query` per (item_id, turn_idx) → 印 markdown diff 表（item / turn / old_query / new_query / changed?）。
+- [x] 3.4 dry-run 驗證 `retrieve_probe.py`：對 archived `step1-idf-and-prefilter` 的 IDF-bucketed SQL 跟 legacy `ts_rank` 對同一 b18 query + EP44 各跑 → 應印出 episode-scoped ranking 差異（驗證若當時有此工具，IDF 失敗能事前抓到）。結論寫進 case study。
+- [x] 3.5 dry-run 驗證 `prompt_fingerprint_diff.py`：對 archived Layer B 兩個 commit（`c0149ff` revert 後 vs `0e38b16` Layer B 上）跑 → 應抓到 EP-ref query 的 search_query 字面變化（驗證若當時有此工具，Layer B 失敗能事前抓到）。結論寫進 case study。
 
 ## 4. Phase 4 — 結合驗證 + PR template 軟約定
 
