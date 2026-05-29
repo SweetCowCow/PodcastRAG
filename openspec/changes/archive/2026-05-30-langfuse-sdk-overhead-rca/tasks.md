@@ -54,6 +54,6 @@
 
 ## Phase 5: Commit hygiene + archive
 
-- [ ] 5.1 每階段 commit 前跑 `gitleaks protect --staged --no-banner --redact` 確認 0 finding
-- [ ] 5.2 確認 commit message 不含 prod IP / DB password / token / Langfuse secret keys
-- [ ] 5.3 /spectra-archive langfuse-sdk-overhead-rca
+- [x] 5.1 每階段 commit 前跑 `gitleaks protect --staged --no-banner --redact` 確認 0 finding
+- [x] 5.2 確認 commit message 不含 prod IP / DB password / token / Langfuse secret keys
+- [x] 5.3 /spectra-archive langfuse-sdk-overhead-rca
