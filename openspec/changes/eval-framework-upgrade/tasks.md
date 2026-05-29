@@ -33,8 +33,8 @@
 ## 4. Phase 4 — 結合驗證 + PR template 軟約定
 
 - [ ] 4.1 對全 34 題 chat baseline 跑新 pipeline → 對比舊 `baseline-post-judge-v2-2026-05-27.json`：既有 6 grader score per-item 在 floating-point tolerance 內一致；新 6 grader score 全部非 null。落地 `backend/eval/results/baseline-eval-framework-upgrade-2026-05-XX-chat.json`。
-- [ ] 4.2 加 PR template section（`.github/PULL_REQUEST_TEMPLATE.md` 或專案 markdown convention）：「Retrieval change checklist」含跑 `retrieve_probe.py` + 貼結果；「Prompt change checklist」含跑 `prompt_fingerprint_diff.py` + 貼結果。
-- [ ] 4.3 在 `docs/runbooks/` 寫 `eval-framework-upgrade-runbook.md`（不入 commit per 慣例）：操作員怎麼跑 probe / fingerprint diff / 看 Langfuse UI / SQL audit eval_traces，含常見 RCA query 範例。
+- [x] 4.2 加 PR template section（`.github/PULL_REQUEST_TEMPLATE.md` 或專案 markdown convention）：「Retrieval change checklist」含跑 `retrieve_probe.py` + 貼結果；「Prompt change checklist」含跑 `prompt_fingerprint_diff.py` + 貼結果。
+- [x] 4.3 在 `docs/runbooks/` 寫 `eval-framework-upgrade-runbook.md`（不入 commit per 慣例）：操作員怎麼跑 probe / fingerprint diff / 看 Langfuse UI / SQL audit eval_traces，含常見 RCA query 範例。
 - [ ] 4.4 prod 灰度測：對一段時間 prod chat user 流量 toggle `EVAL_TRACING_ENABLED=true` 觀察 P95 latency 增量 **< 100ms**（含 Cloud SDK HTTP 往返到 cloud.langfuse.com 的額外延遲，比自架 ~50ms 容忍度寬鬆，per design Risks 表）；若達標可考慮 default 開；不達標關掉 + 寫 follow-up「優化 span_writer 寫入 P95 / 評估自架降低 SDK 延遲」。同時對 cloud.langfuse.com → Settings → Usage 看實測 units 消耗、跟 ~10 units/trace 估算對校。
 
 ## 5. Phase 5 — Case study + memory + roadmap
