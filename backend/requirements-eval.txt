@@ -6,3 +6,4 @@
 # Production workers + most CI flows skip these.
 
 deepeval==2.2.5
+langfuse>=2.50,<4.0  # eval-framework-upgrade 2026-05-29: trace observability via Cloud Free

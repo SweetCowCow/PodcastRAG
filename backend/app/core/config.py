@@ -128,6 +128,15 @@ class Settings(BaseSettings):
     # rag_rerank.voyage_rerank. None disables the rerank stage (fail-open).
     voyage_api_key: str | None = None
 
+    # Langfuse Cloud (Free tier) — eval-framework-upgrade 2026-05-29.
+    # Span-level trace observability for chat agent eval runs. All four
+    # fields optional: missing keys disable trace upload (SDK no-ops),
+    # disabled flag short-circuits the @observe decorator path.
+    langfuse_public_key: str | None = None
+    langfuse_secret_key: str | None = None
+    langfuse_host: str = "https://cloud.langfuse.com"
+    eval_tracing_enabled: bool = False
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
