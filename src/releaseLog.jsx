@@ -53,6 +53,33 @@ const MILESTONE_LABELS = {
 const RELEASE_LOG = [
   // ─── v1.8 — Chat Mode: Agentic (5/21~) ───
   {
+    date: '2026-05-31', slug: 'eval-runner-eval-context-plumbing', milestone: 'v1.8', tag: 'enhancement',
+    title: {
+      zh: '評分跑分把「哪一題」「第幾輪」一路標記到資料庫 — RCA 一句 SQL 就能撈',
+      en: 'Eval Runs Now Tag Every Trace With Item + Turn — RCA Is One SQL Query Away',
+    },
+    summary: {
+      zh: '昨天的評分框架升級把觀察工具裝起來、把資料庫雙寫倉也建好了，但「評分跑分時把每個 LLM 呼叫 / 工具呼叫貼上題號跟輪次」這條最後一段沒通 — 結果是雙寫倉裡題號欄位全部空白、跨輪比對 RCA 沒法做。這次補完那段，使用者體感沒變化，但未來任何對話品質改動的事後 RCA 時間從「翻 log 拼湊一兩小時」變成「一句 SQL 撈出全部」。具體做法：跑分腳本每次出題前自己生一個 run_id（時間戳 + 隨機字尾）、每送一題就在 HTTP 標頭塞三個欄位（run_id / 題號 / 第幾輪）。後端只在管理員身分 + 三欄齊全時才把這些上下文綁進當下這個 request、結束就回 None；外部使用者完全不會誤觸發、資料庫不會被污染。實作過程踩到兩個 surprise：(1) 雙寫倉的 JSONB 欄位之前沒人真的寫進去，本次第一次跑就被資料庫拒收（驅動程式不認 Python dict、要先轉 JSON 字串再 CAST）— hotfix 修掉、現在每筆乾淨落地。(2) 線上環境本來以為 trace 是開的、實際還是關的 — 切開後再跑才看到 34 個 span 全部落到資料庫、8 個題目 + 多輪題 mt03 三輪全部都有。也附了一個示範腳本，未來任何「為什麼這版退步了」的 RCA，直接拿 SQL 比對兩個 run_id 的 search query 就能看出 agent 是不是改了措辭。',
+      en: 'Yesterday\'s eval framework upgrade installed the observability tooling and the dual-sink data warehouse, but the last mile — tagging every LLM/tool call within an eval run with its item id and turn index — was never wired up. Result: locator columns in the warehouse were empty, cross-run RCA SQL was impossible. This change closes that gap. No user-facing change, but post-hoc RCA for any chat-quality regression now drops from "1-2 hours scraping logs" to "one SQL query". How: the eval runner generates a run_id (timestamp + random suffix) per invocation and attaches three headers per request (run_id / item_id / turn_idx). Backend honors them only when the caller is an admin AND all three headers are present; prod user traffic is silently ignored, the warehouse stays clean. Two surprises along the way: (1) the warehouse\'s JSONB columns had never actually been written to before — the asyncpg driver rejected Python dicts on first real INSERT (needed JSON serialization + explicit CAST). Hotfix in same commit, now every span lands cleanly. (2) Tracing was assumed ON in prod but was actually OFF; after toggling, 34 spans landed for the calibration run (8 distinct items + multi-turn mt03 across 3 turns). A demo SQL script ships alongside, so future "why did this version regress?" questions can be answered by SQL-diffing the agent\'s search queries between two run_ids.',
+    },
+    summaryBullets: {
+      zh: [
+        '評分跑分時的每個 LLM/工具呼叫，現在都帶有 run_id / 題號 / 輪次 三個欄位落到資料庫',
+        '未來 RCA「為什麼這版退步？」一句 SQL 就能比兩版 agent search query 差異',
+        '只認管理員身分 + 三欄齊全才綁定 — 外部使用者流量不會誤污染資料倉',
+        '過程踩到兩個 surprise：JSONB 寫入機制壞著（hotfix 修掉）+ trace 線上其實是關的（已開）',
+        '本次跑完驗證：8 題 calibration + 多輪題 mt03 三輪 共 34 個 span 全部乾淨落地',
+      ],
+      en: [
+        'Every LLM/tool call in an eval run now carries run_id / item_id / turn_idx in the warehouse',
+        'Future "why did this version regress?" RCA is now one SQL diff between two run_ids on agent search queries',
+        'Admin-only + three-headers-present gate ensures prod user traffic never pollutes the eval warehouse',
+        'Two surprises caught along the way: JSONB write path was broken (hotfix in same commit) + tracing was OFF in prod despite assumption (now toggled ON)',
+        'Verification run landed 34 spans across 8 calibration items + multi-turn mt03 across 3 turns, all columns populated',
+      ],
+    },
+  },
+  {
     date: '2026-05-30', slug: 'langfuse-sdk-overhead-rca', milestone: 'v1.8', tag: 'experiment',
     title: {
       zh: '量測證實「外部觀察工具拖慢系統」是誤判 — RCA 兩輪後清白',
