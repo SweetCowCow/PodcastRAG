@@ -198,7 +198,7 @@ async def _load_from_sql(
 
     from app.core.config import settings
 
-    engine = create_async_engine(settings.DATABASE_URL)
+    engine = create_async_engine(settings.database_url)
     Session = async_sessionmaker(engine, expire_on_commit=False)
     out: dict[tuple[str, int], list[tuple[str, str]]] = {}
     try:

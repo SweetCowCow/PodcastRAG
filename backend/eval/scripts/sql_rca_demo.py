@@ -144,7 +144,7 @@ async def _section3_per_turn_tool_timeline(db, run_id: str) -> int:
 
 
 async def _run(run_id: str, compare_run_id: str | None) -> int:
-    engine = create_async_engine(settings.DATABASE_URL)
+    engine = create_async_engine(settings.database_url)
     Session = async_sessionmaker(engine, expire_on_commit=False)
     try:
         async with Session() as db:
