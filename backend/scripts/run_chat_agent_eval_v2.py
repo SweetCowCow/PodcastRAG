@@ -25,6 +25,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
+import secrets
 import subprocess
 import sys
 import time
@@ -33,6 +35,14 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+RUN_ID_PATTERN = re.compile(r"^eval-\d{8}T\d{6}Z-[0-9a-f]{8}$")
+
+
+def _generate_run_id() -> str:
+    """Format: eval-YYYYMMDDTHHMMSSZ-<8-char-hex> (per design Decision 4)."""
+    ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    return f"eval-{ts}-{secrets.token_hex(4)}"
 
 from backend.eval.graders.loader import discover_graders
 from backend.eval.judge_chat_v2 import build_payload, invoke_judge, load_prompt_sha256
@@ -99,9 +109,11 @@ def _write_output(
     judge_model: str,
     judge_sha: str,
     provenance: dict[str, Any],
+    run_id: str,
 ) -> None:
     payload = {
         "schema_version": "2.0",
+        "run_id": run_id,
         "provenance": provenance,
         "judge_prompt_sha256": judge_sha,
         "judge_model": judge_model,
@@ -124,6 +136,9 @@ def _post_query(
     csrf_header: str,
     session_id: str | None,
     messages: list[dict],
+    run_id: str,
+    item_id: str,
+    turn_idx: int,
     timeout: float = 120.0,
 ) -> dict[str, Any]:
     body: dict[str, Any] = {
@@ -142,6 +157,9 @@ def _post_query(
             "Cookie": cookie_header,
             "X-CSRF-Token": csrf_header,
             "Origin": "https://app.podcastrag.app",
+            "X-Eval-Run-Id": run_id,
+            "X-Eval-Item-Id": item_id,
+            "X-Eval-Turn-Idx": str(turn_idx),
         },
         method="POST",
     )
@@ -180,6 +198,7 @@ def _run_one_item(
     csrf_header: str,
     judge_model: str | None,
     extra_kwargs_by_grader: dict[str, dict[str, Any]],
+    run_id: str,
 ) -> dict[str, Any]:
     """Returns {'item_id', 'design_type', 'indicators': {...}, 'agent_response_summary': {...}}"""
     is_mt = bool(item.get("is_multi_turn"))
@@ -188,7 +207,7 @@ def _run_one_item(
     agent_responses: list[dict[str, Any]] = []
     turns = item.get("turns") if is_mt else [{"question": item.get("question"), **item}]
 
-    for turn in turns:
+    for turn_idx, turn in enumerate(turns):
         question = turn.get("question") or item.get("question")
         resp = _post_query(
             backend,
@@ -198,6 +217,9 @@ def _run_one_item(
             csrf_header=csrf_header,
             session_id=session_id,
             messages=list(messages),
+            run_id=run_id,
+            item_id=item["id"],
+            turn_idx=turn_idx,
         )
         agent_responses.append(resp)
         if is_mt:
@@ -299,7 +321,17 @@ def main() -> int:
         action="store_true",
         help="Overwrite output file if it already exists. Default refuses.",
     )
+    ap.add_argument(
+        "--run-id",
+        default=None,
+        help="Override auto-generated run_id. Default format: "
+        "eval-YYYYMMDDTHHMMSSZ-<8hex>. Used in X-Eval-Run-Id header and "
+        "result JSON top-level metadata.",
+    )
     args = ap.parse_args()
+
+    run_id = args.run_id or _generate_run_id()
+    print(f"[run_id] {run_id}", flush=True)
 
     output_path = Path(args.output)
     if output_path.exists() and not args.force:
@@ -352,6 +384,7 @@ def main() -> int:
                     csrf_header=csrf_header,
                     judge_model=args.judge_model,
                     extra_kwargs_by_grader={},
+                    run_id=run_id,
                 )
                 results.append(res)
                 print(f"   done in {time.time() - start:.1f}s", flush=True)
@@ -391,6 +424,7 @@ def main() -> int:
         judge_model=judge_model,
         judge_sha=judge_sha,
         provenance=provenance,
+        run_id=run_id,
     )
     Path(args.report).write_text(
         render_markdown(

@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.database import get_db
+from app.api.deps import bind_eval_context
 from app.core.security import optional_auth_with_ip_limit, require_authenticated_user
 from app.models.show import Show
 from app.models.user import User
@@ -382,6 +383,7 @@ async def query_show(
     user: User = Depends(require_authenticated_user),
     lang: str | None = Cookie(default=None),
     debug_trace: bool = Query(default=False),
+    _eval_ctx: None = Depends(bind_eval_context),
 ) -> SearchResponse | ChatResponse:
     # agent-trace-telemetry: admin-only gate for telemetry data. Non-admin
     # callers passing debug_trace=true are silently ignored (no 4xx, no trace).

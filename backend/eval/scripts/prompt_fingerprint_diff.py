@@ -35,12 +35,17 @@ once the runner emits eval_context (item_id, turn_idx) into spans.
 from __future__ import annotations
 
 import argparse
+import asyncio
 import json
 import sys
 import urllib.request
 import uuid
 from pathlib import Path
 from typing import Any
+
+from dotenv import load_dotenv
+
+load_dotenv(Path(__file__).resolve().parents[3] / "backend" / ".env")
 
 
 def _read_cookie_csrf(cookie_file: Path, me_json: Path) -> tuple[str, str]:
@@ -184,13 +189,65 @@ def _render_diff_markdown(
     return "\n".join(rows) + "\n"
 
 
+async def _load_from_sql(
+    run_id: str,
+) -> dict[tuple[str, int], list[tuple[str, str]]]:
+    """SQL path: SELECT search_query per (item_id, turn_idx, tool_name)."""
+    from sqlalchemy import text
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+    from app.core.config import settings
+
+    engine = create_async_engine(settings.DATABASE_URL)
+    Session = async_sessionmaker(engine, expire_on_commit=False)
+    out: dict[tuple[str, int], list[tuple[str, str]]] = {}
+    try:
+        async with Session() as db:
+            rows = (await db.execute(
+                text(
+                    """
+                    SELECT item_id, turn_idx, tool_name, search_query, started_at
+                    FROM eval_traces
+                    WHERE run_id = :run_id
+                      AND tool_name IS NOT NULL
+                      AND search_query IS NOT NULL
+                    ORDER BY item_id, turn_idx, started_at
+                    """
+                ),
+                {"run_id": run_id},
+            )).all()
+    finally:
+        await engine.dispose()
+    for r in rows:
+        key = (r.item_id, int(r.turn_idx))
+        out.setdefault(key, []).append((r.tool_name, r.search_query))
+    return out
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("--old-backend", required=True)
-    ap.add_argument("--new-backend", required=True)
-    ap.add_argument("--dataset", required=True)
-    ap.add_argument("--session-cookie-file", required=True)
-    ap.add_argument("--me-json", required=True)
+    ap.add_argument(
+        "--source",
+        choices=("http", "sql"),
+        default="http",
+        help="http (default): re-invoke chat via debug_trace; "
+        "sql: read eval_traces.search_query for given run_ids.",
+    )
+    ap.add_argument("--old-backend", default=None)
+    ap.add_argument("--new-backend", default=None)
+    ap.add_argument(
+        "--run-id-old",
+        default=None,
+        help="(sql mode) run_id of the OLD baseline run.",
+    )
+    ap.add_argument(
+        "--run-id-new",
+        default=None,
+        help="(sql mode) run_id of the NEW baseline run.",
+    )
+    ap.add_argument("--dataset", required=False)
+    ap.add_argument("--session-cookie-file", required=False)
+    ap.add_argument("--me-json", required=False)
     ap.add_argument(
         "--filter-ids",
         default="",
@@ -213,30 +270,51 @@ def main() -> int:
     )
     args = ap.parse_args()
 
-    dataset = json.loads(Path(args.dataset).read_text(encoding="utf-8"))
-    show_id = dataset["show_id"]
-    items = dataset.get("items") or []
-    if args.filter_ids:
-        ids = [s.strip() for s in args.filter_ids.split(",") if s.strip()]
-        by_id = {i["id"]: i for i in items}
-        items = [by_id[i] for i in ids if i in by_id]
+    if args.source == "sql":
+        if not (args.run_id_old and args.run_id_new):
+            print(
+                "[err] --source=sql requires --run-id-old and --run-id-new",
+                file=sys.stderr,
+            )
+            return 2
+        print(f"[sql] reading eval_traces for {args.run_id_old} vs {args.run_id_new}")
+        old = asyncio.run(_load_from_sql(args.run_id_old))
+        new = asyncio.run(_load_from_sql(args.run_id_new))
+        old_label = f"run:{args.run_id_old}"
+        new_label = f"run:{args.run_id_new}"
+    else:
+        if not (args.old_backend and args.new_backend
+                and args.dataset and args.session_cookie_file and args.me_json):
+            print(
+                "[err] --source=http requires --old-backend / --new-backend / "
+                "--dataset / --session-cookie-file / --me-json",
+                file=sys.stderr,
+            )
+            return 2
+        dataset = json.loads(Path(args.dataset).read_text(encoding="utf-8"))
+        show_id = dataset["show_id"]
+        items = dataset.get("items") or []
+        if args.filter_ids:
+            ids = [s.strip() for s in args.filter_ids.split(",") if s.strip()]
+            by_id = {i["id"]: i for i in items}
+            items = [by_id[i] for i in ids if i in by_id]
 
-    cookie_header, csrf_header = _read_cookie_csrf(
-        Path(args.session_cookie_file), Path(args.me_json)
-    )
+        cookie_header, csrf_header = _read_cookie_csrf(
+            Path(args.session_cookie_file), Path(args.me_json)
+        )
 
-    print(f"[old] {args.old_backend} ({len(items)} items)")
-    old = _run_eval_for_backend(
-        args.old_backend, items, show_id, cookie_header, csrf_header
-    )
-    print(f"[new] {args.new_backend} ({len(items)} items)")
-    new = _run_eval_for_backend(
-        args.new_backend, items, show_id, cookie_header, csrf_header
-    )
+        print(f"[old] {args.old_backend} ({len(items)} items)")
+        old = _run_eval_for_backend(
+            args.old_backend, items, show_id, cookie_header, csrf_header
+        )
+        print(f"[new] {args.new_backend} ({len(items)} items)")
+        new = _run_eval_for_backend(
+            args.new_backend, items, show_id, cookie_header, csrf_header
+        )
+        old_label = args.old_backend
+        new_label = args.new_backend
 
-    md = _render_diff_markdown(
-        old, new, args.old_backend, args.new_backend
-    )
+    md = _render_diff_markdown(old, new, old_label, new_label)
     if args.old_commit or args.new_commit:
         header = (
             f"<!-- old_commit={args.old_commit or '?'} "
