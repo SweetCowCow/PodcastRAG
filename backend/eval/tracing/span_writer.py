@@ -18,6 +18,7 @@ agent loop and eval runner MUST NOT block on span persistence.
 """
 from __future__ import annotations
 
+import json
 import logging
 from typing import Any
 from uuid import UUID
@@ -27,6 +28,13 @@ from sqlalchemy import text
 from app.core.database import AsyncSessionFactory
 
 logger = logging.getLogger(__name__)
+
+# JSONB columns where dict/list values must be serialized to JSON strings
+# before passing to asyncpg (raw text() SQL bypasses SQLAlchemy JSONB
+# type coercion, so asyncpg sees a Python dict and raises DataError).
+_JSONB_COLUMNS: frozenset[str] = frozenset(
+    {"llm_messages_json", "tool_args_json", "tool_result_chunks_json"}
+)
 
 
 # Column allowlist guards against typos and accidental injection of unknown
@@ -121,8 +129,28 @@ async def write_span(span_dict: dict[str, Any]) -> None:
                 )
                 return
 
+    # Serialize JSONB columns to JSON strings; raw text() SQL bypasses
+    # SQLAlchemy's JSONB type coercion so asyncpg can't infer the cast.
+    for col in _JSONB_COLUMNS:
+        if col in filtered and filtered[col] is not None and not isinstance(
+            filtered[col], (str, bytes)
+        ):
+            try:
+                filtered[col] = json.dumps(filtered[col], ensure_ascii=False, default=str)
+            except (TypeError, ValueError) as exc:
+                logger.warning(
+                    "eval_traces: skipping span; cannot json-serialize %s (%s)",
+                    col,
+                    exc,
+                )
+                return
+
     columns = list(filtered.keys())
-    placeholders = ", ".join(f":{c}" for c in columns)
+    # Cast JSONB columns explicitly so asyncpg sends a TEXT and PG parses.
+    placeholders = ", ".join(
+        f"CAST(:{c} AS JSONB)" if c in _JSONB_COLUMNS else f":{c}"
+        for c in columns
+    )
     column_list = ", ".join(columns)
     sql = text(
         f"INSERT INTO eval_traces ({column_list}) VALUES ({placeholders}) "
