@@ -1,6 +1,6 @@
 # PodcastRAG 路線圖
 
-> 最後更新：2026-05-31 晚（`unified-segment-citation-card` ✅ archive + prod 驗證上線 — 三模式引用呈現收斂到共用 `SegmentCitationCard`：雙模式高亮 + 播放/跳轉兩鈕 + 顯示數量與 top_k 解耦 + 列舉題展開片段卡；`SourceCard` 改 thin wrapper、`highlightTerms` 移成 canonical。prod 三模式 smoke 全綠。commit `50388d9`。下動候選：apply `per-show-mode-example-prompts`（引用系列下一條，含後端 LLM 預產）／Tier 1 `chunk-level-retrieval-rca-b20-style` RCA／unpark `voyage-rerank-tune-b22-b23`。**release log entry 待補**）
+> 最後更新：2026-05-31 晚（`per-show-mode-example-prompts` ✅ archive + prod 驗證上線 — 每節目×每模式 LLM 預產引導範例 + 冷啟動 chip fallback；後端新表 + 生成服務 + GET/backfill endpoint + summary 鏈式，前端 per-mode placeholder + TrendingQueriesChips fallback。prod 三節目 backfill 3/3/3、修掉 chat 長題被 60 字上限濾掉的缺陷。同 session 先完成 `unified-segment-citation-card`（三模式共用片段卡）。剩 parked 1 條 `voyage-rerank-tune-b22-b23`。下動候選：Tier 1 `chunk-level-retrieval-rca-b20-style` RCA／`semantic-topk-bump-and-show-more`／unpark voyage。**兩條 release log entry 待補**）
 
 本文件記錄 PodcastRAG 後續開發的優先順序與規劃。依 Phase 排序，**Phase A 阻擋公開最先**，再做評測基線，再優化 RAG，最後商業化。
 
@@ -126,11 +126,10 @@ R3 拆三段做（每段都跑 eval baseline 對照升幅）：
 ## Active + Parked changes（2026-05-31 snapshot）
 
 **Active**（0 個）：
-- （unified-segment-citation-card 已 2026-05-31 archive，無進行中 change）
+- （per-show-mode-example-prompts 已 2026-05-31 archive，無進行中 change）
 
-**Parked**（2 個）：
-1. `per-show-mode-example-prompts` (0/9) — 每節目×每模式引導：per-mode placeholder + chip（trending 優先、冷啟動 fallback LLM 預產範例）；後端新表 `show_example_prompts` + 生成服務 + GET endpoint + 鏈式觸發 + admin backfill。2026-05-31 propose。**引用呈現重構主 change 已 archive，這是同系列下一條。**
-2. `voyage-rerank-tune-b22-b23` (0/9) — 對 retrieval-rerank-via-voyage 的 b22/b23 調參。
+**Parked**（1 個）：
+1. `voyage-rerank-tune-b22-b23` (0/9) — 對 retrieval-rerank-via-voyage 的 b22/b23 調參。
 
 **待 propose / 待 discuss**：見下方「衍生待 propose」段。
 
@@ -150,9 +149,10 @@ R3 拆三段做（每段都跑 eval baseline 對照升幅）：
 - **eval baseline 寫死**：cross_episode mean chunk_recall **0.283**（舊 0.244 deprecated，污染期 citation collector bug 數據）
 - ✅ **`citation-display-unify`** — **已於 2026-05-18 ship**（隨 landing-and-mode-orchestration-redesign decision 5 + ConversationSourcePanel）：列舉題走 EnumerationSection 主從佈局、內容題走 ConversationSourcePanel 依集分組。此條先前誤列為待辦（drift），2026-05-31 更正。**後續迭代** → 見下方兩個 2026-05-31 propose 的 parked change。
 - ✅ **`unified-segment-citation-card`** done 2026-05-31（archive `2026-05-31-unified-segment-citation-card`）— 三模式共用片段卡 + 播放/跳轉兩鈕 + 顯示數量與 top_k 解耦 + 列舉題展開片段卡。prod 三模式 smoke 全綠。
-- **`per-show-mode-example-prompts`**（2026-05-31 propose，parked 0/9）— 每節目×每模式引導範例（per-mode placeholder + trending 優先/冷啟動 LLM 預產範例 chip）。**引用呈現主 change 已 archive，這是同系列下一條候選。**
+- ✅ **`per-show-mode-example-prompts`** done 2026-05-31（archive `2026-05-31-per-show-mode-example-prompts`）— 每節目×每模式 LLM 預產引導範例 + 冷啟動 chip fallback。prod 三節目 backfill 3/3/3、前端 placeholder+chip smoke 全綠。
 - **eval golden set 擴張到 曼報 + 壹加壹電台** — 各 ~30+ 題人工 sentinel，等本節目 30+ 題到位再啟動
 - **R3.x 候選未 propose**：topic seg 自動類別建議 / segment_categories admin UI / 業配段降權 multiplier / dict weight_in_lexical_query 通用化
+- 🆕 **`semantic-topk-bump-and-show-more`**（2026-05-31 user 問起）— 語意搜尋現顯示 8 筆＝`PublicSearchRequest.k` default 8（`schemas/query.py:182`，API 已支援 1–50；`rag.py` `RETRIEVAL_TOP_K=8`）；前端 `handleSearch` 沒傳 k。retrieval 是 pgvector 向量搜尋、只有 query embedding 一次固定成本，回 8 vs 30 筆成本幾乎一樣（**非每筆 LLM**）。候選：default 提到 ~15–20，或加「顯示更多」漸進載入（再 query 較大 k）。屬顯示深度調整、不動 ranking，風險低但仍應獨立 change（含 eval 對照）。`SemanticResultList` 目前無顯示 cap（全部渲染），需配合加 cap+show-more 才不會一次傾倒。
 - **R2.2 prompt redo** — Faithfulness 拉回（依賴 R3.x + R1.3）
 - **R1.3 judge re-bake-off** — Phase B，等 R3.x 全跑完啟動
 - **Golden set audit q25 expected 對齊** — 4 集多撈 / 6 集漏，人工複查（屬 dataset quality）
@@ -166,6 +166,7 @@ R3 拆三段做（每段都跑 eval baseline 對照升幅）：
 
 | Change(s) | Archive 路徑 | 摘要 |
 |-----------|-------------|------|
+| **2026-05-31** `per-show-mode-example-prompts` ✅ done + 上線 | `openspec/changes/archive/2026-05-31-per-show-mode-example-prompts/` | 9/9 task done。每節目×每模式 LLM 預產引導範例（冷啟動 trending<3 fallback）。後端：`show_example_prompts` 表（migration `d8e9f0a1b2c3`）+ `services/example_prompts.py`（gather_materials + generate_for_show，沿用 summary step、fail-open、idempotent delete-then-insert、**per-mode 題目長度上限** index30/semantic70/chat120）+ 公開 GET `/shows/{id}/example-prompts` + admin backfill（單一 inline / 全 show enqueue）+ `workers/example_prompts_task.py` 鏈式（summary 批次全完成 enqueue 一次）。前端：i18n 三 per-mode placeholder + `TrendingQueriesChips` 加 mode prop（trending≥3 熱搜 / <3 fallback「範例」chip）+ QueryPage 三 tab 接線。本機 9 pytest 全綠 + migration 升降可逆。**Prod 驗證**：三節目（這又沒有很屌/曼報/壹加壹電台）trending 皆 0 全冷啟動，backfill 後各 3/3/3；前端三模式 placeholder + 範例 chip + 點擊執行全綠。順手抓到並修：全域 60 字上限把 chat 長題全濾掉（壹加壹電台 chat 0→3，commit `ed56f1b`）。生成內容抓到 ASR 錯字「寰宇龍虎報→豹」（非本 change bug，入 ASR backlog）。commits `71f2e44` + `ed56f1b`。 |
 | **2026-05-31** `unified-segment-citation-card` ✅ done + 上線 | `openspec/changes/archive/2026-05-31-unified-segment-citation-card/` | 11/11 task done。三模式（索引/語意/對話）引用呈現收斂到單一共用葉子 `src/SegmentCitationCard.jsx`：片段文字 + 雙模式高亮（多詞兩色橘實線/青虛線 ← `highlightTerms` 移入本檔成 canonical、KeywordResults 不再重複宣告 / server `highlights` 單色 indigo via `.scc-server-hl` scoped CSS）+ 集標題 + 時間戳 +「播放此段」/「跳到逐字稿」兩顆獨立鈕（取代舊 `onSourceJump` 播放+導航綁一起）。`SourceCard` 改 thin wrapper 轉呼叫；`SemanticResultList`（relevance bar 移進卡內 `relevance` prop）/`ConversationSourcePanel`（每組 cap 5 + 顯示更多、與 top_k 解耦）/`KeywordResults`（T1/T2/T3 leaf）全換共用卡；`EnumerationSection` 集卡加「展開查看各段」inline 片段卡（不離頁）。`LANGUAGE.md` 補引用片段卡 + citation/source/segment 三層語意。Spec：segment-citation-card 新增 + conversation-source-panel/semantic-mode-result-ui 修改進 canonical（added 5/modified 3）。本機整合（9 元件 global、無 collision/JS error）+ prod 三模式 smoke 全綠（索引 T2 展開 25 卡兩色、語意 8 卡 relevance bar 100/87/74、對話 5 集分組 description「打開該集」vs transcript「播放+跳轉」、列舉「歌單哪幾集」展開 8 inline 卡）。commit `50388d9`。 |
 | **2026-05-31** `keyword-index-mode` ✅ done + 上線 | `openspec/changes/archive/2026-05-31-keyword-index-mode/` | 26/26 task done。第三模式「索引」：`POST /shows/{id}/keyword-search` 嚴格 AND 多關鍵字三段式（T1 同 chunk AND / T2 跨三池 episode AND / T3 OR fallback 僅 T1+T2=0）+ 100 cap + 5s timeout；`app_settings.keyword_t2_collapse_threshold`（migration `c7d8e9f0a1b2`）；`KeywordResults.jsx` sectioned 結果頁（兩色高亮、T2 inline 展開查看各段、collapse chip、分頁、empty state、mode switcher）；QueryPage 索引 tab 接線。本機 20 unit+integration 測試（真實 Postgres）全綠；prod smoke「歌單/馬世芳 歌單/馬世芳 滅火器/空查詢」四 scenario + 422 錯誤 UI 驗證。Bonus 修正 `/events` SearchExecutedPayload.mode 接受 `index`（commit `35e6850`+`d851f15`）。同 session discuss 收斂引用呈現 → propose 兩 parked change。 |
 | **2026-05-31** `eval-runner-eval-context-plumbing` ✅ done | `openspec/changes/archive/2026-05-31-eval-runner-eval-context-plumbing/` | 11/11 task done。Runner v2 startup 生 run_id (`eval-YYYYMMDDTHHMMSSZ-<8hex>`) + 每 turn 注入 `X-Eval-Run-Id` / `X-Eval-Item-Id` / `X-Eval-Turn-Idx`；backend `bind_eval_context` FastAPI dependency 在 admin + 三 header 齊 + turn_idx int>=0 → `set_eval_context()`、reset on request end；非 admin / 缺 header / malformed silent skip（不 4xx）。新增 `sql_rca_demo.py`（3 段：per-turn span count / cross-run query diff / per-turn tool timeline）+ `prompt_fingerprint_diff.py --source=sql` 路徑。Phase 5 prod 驗：run `eval-20260530T181920Z-465dd6d2` → 34 span / 8 distinct items / mt03 turn_idx 0,1,2 全 NOT NULL；admin caller 無 X-Eval-* header → eval_traces baseline 不增。**Hotfix 同 change `842d69d`**：span_writer JSONB serialization（asyncpg DataError dormant bug，首次真正 exercise PG sink 才暴露；三欄 `json.dumps + CAST AS JSONB`）。同 session 抓到 prod `EVAL_TRACING_ENABLED=false`（記憶寫 ON 不符）、toggle + redeploy 後生效。完整 case study: `docs/case-studies/eval-runner-eval-context-plumbing-2026-05-31.md` |

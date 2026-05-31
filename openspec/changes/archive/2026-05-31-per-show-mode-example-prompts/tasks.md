@@ -26,4 +26,4 @@
 
 ## 6. 收尾
 
-- [ ] 6.1 跑 `spectra validate per-show-mode-example-prompts` + 本 change 範圍 pytest（`backend/tests/test_example_prompts*.py`）全綠 + 對 prod 做 (i) admin backfill 一個冷啟動節目、(ii) 前端三模式 chip/placeholder smoke 截圖。驗證：(a) `spectra validate` exit 0；(b) pytest 全綠；(c) prod smoke 截圖貼 PR（冷啟動節目顯示預產範例 chip、點擊執行）。
+- [x] 6.1 跑 `spectra validate per-show-mode-example-prompts` + 本 change 範圍 pytest（`backend/tests/test_example_prompts*.py`）全綠 + 對 prod 做 (i) admin backfill 一個冷啟動節目、(ii) 前端三模式 chip/placeholder smoke 截圖。驗證：(a) `spectra validate` exit 0；(b) pytest 全綠；(c) prod smoke 截圖貼 PR（冷啟動節目顯示預產範例 chip、點擊執行）。
