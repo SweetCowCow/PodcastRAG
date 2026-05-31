@@ -55,6 +55,33 @@ const MILESTONE_LABELS = {
 const RELEASE_LOG = [
   // ─── v2.0 — Unified Query Experience (5/31) ───
   {
+    date: '2026-05-31', slug: 'semantic-topk-bump-and-show-more', milestone: 'v2.0', tag: 'enhancement',
+    title: {
+      zh: '語意搜尋一次給你更多片段 — 預設看 10 集、「顯示更多」往下加，不用重新查',
+      en: 'Semantic Search Now Surfaces More — 10 Episodes Shown First, "Show More" Reveals the Rest Without Re-querying',
+    },
+    summary: {
+      zh: '語意模式過去固定只回 8 個片段——這不是刻意的設計，而是前端送查詢時沒帶「要幾筆」這個參數、後端就用了預設值 8。這版把語意查詢一次抓 25 筆（後端 API 本來就支援、不用改），讓你看到更多相關片段。為了不一次把整面卡片倒給你，結果預設先顯示 10 集，下方多一顆「顯示更多」按鈕、每按一次往下多顯示 5 集，全部顯示完按鈕就消失。重點是「顯示更多」純粹是把已經抓回來的結果往下展開，不會重新打一次搜尋——所以瞬間反應、不耗額外資源。排序完全沒變（只是看得更多、更深），跟以前一樣由相關度高到低。為什麼是抓 25 不是抓更多（譬如 50）？因為後端在組裝每個片段的前後文、高亮、摘要時是逐筆處理，抓越多初始回應越慢；25 是「給足深度」與「回應夠快」之間的平衡點。索引與對話模式的顯示不受影響。',
+      en: 'Semantic mode previously returned a fixed 8 clips — not by design, but because the frontend never sent a "how many" parameter, so the backend used its default of 8. This release fetches 25 clips per semantic query (the backend API already supported this — no backend change), surfacing more relevant clips. To avoid dumping a wall of cards at once, results show the first 10 episodes initially with a "Show more" button below that reveals 5 more episodes per click, disappearing once everything is shown. Crucially, "Show more" simply expands results already fetched — it does NOT fire a new search — so it is instant and costs nothing extra. Ordering is unchanged (you just see more, deeper) — still highest-relevance first. Why 25 and not more (e.g. 50)? The backend assembles each clip\'s surrounding context, highlights, and summary one clip at a time, so fetching more makes the initial response slower; 25 balances depth against responsiveness. Index and Chat mode displays are unaffected.',
+    },
+    summaryBullets: {
+      zh: [
+        '語意查詢一次抓 25 筆（原本固定 8；後端 API 本就支援、零後端改動）',
+        '結果預設顯示 10 集 + 「顯示更多」每次 +5，全部顯示完按鈕消失',
+        '「顯示更多」是展開已抓回的結果、不重新搜尋 → 瞬間反應、零額外成本',
+        '排序完全不變（仍由相關度高到低）—— 只是看得更多更深',
+        '抓 25 非 50：後端逐筆組前後文/高亮/摘要，抓太多初始回應變慢，25 是深度與速度平衡點',
+      ],
+      en: [
+        'Semantic queries now fetch 25 clips (was a fixed 8; backend API already supported it — zero backend change)',
+        'Results show 10 episodes first + "Show more" reveals 5 per click, button disappears when all shown',
+        '"Show more" expands already-fetched results, no new search → instant, zero extra cost',
+        'Ordering unchanged (still highest-relevance first) — you just see more, deeper',
+        '25 not 50: the backend assembles context/highlights/summary per clip, so over-fetching slows the initial response; 25 balances depth vs speed',
+      ],
+    },
+  },
+  {
     date: '2026-05-31', slug: 'unified-segment-citation-card', milestone: 'v2.0', tag: 'ui',
     title: {
       zh: '三種搜尋模式的引用卡長相統一了 — 每段都能單獨試聽、或跳到逐字稿看上下文',

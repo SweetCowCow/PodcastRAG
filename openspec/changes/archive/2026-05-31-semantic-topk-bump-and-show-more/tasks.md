@@ -8,4 +8,4 @@
 
 ## 3. 收尾
 
-- [ ] 3.1 `spectra validate semantic-topk-bump-and-show-more` exit 0 + 對 `src/QueryPage.jsx` / `src/SemanticResultList.jsx` 跑 babel transform 無 parse error + prod smoke 語意查詢確認：request body `k=25`、初始 10 group、「顯示更多」+5 不重打 API、露完按鈕消失、排序與既有一致、索引/對話模式不受影響。驗證：(a) validate exit 0；(b) babel transform OK；(c) prod smoke 截圖（初始 10 + 顯示更多後）貼 PR。
+- [x] 3.1 `spectra validate semantic-topk-bump-and-show-more` exit 0 + 對 `src/QueryPage.jsx` / `src/SemanticResultList.jsx` 跑 babel transform 無 parse error + prod smoke 語意查詢確認：request body `k=25`、初始 10 group、「顯示更多」+5 不重打 API、露完按鈕消失、排序與既有一致、索引/對話模式不受影響。驗證：(a) validate exit 0；(b) babel transform OK；(c) prod smoke 截圖（初始 10 + 顯示更多後）貼 PR。

@@ -1,6 +1,6 @@
 # PodcastRAG 路線圖
 
-> 最後更新：2026-05-31 晚（`per-show-mode-example-prompts` ✅ archive + prod 驗證上線 — 每節目×每模式 LLM 預產引導範例 + 冷啟動 chip fallback；後端新表 + 生成服務 + GET/backfill endpoint + summary 鏈式，前端 per-mode placeholder + TrendingQueriesChips fallback。prod 三節目 backfill 3/3/3、修掉 chat 長題被 60 字上限濾掉的缺陷。同 session 先完成 `unified-segment-citation-card`（三模式共用片段卡）。剩 parked 1 條 `voyage-rerank-tune-b22-b23`。下動候選：Tier 1 `chunk-level-retrieval-rca-b20-style` RCA／`semantic-topk-bump-and-show-more`／unpark voyage。**兩條 release log entry 待補**）
+> 最後更新：2026-05-31 晚（`semantic-topk-bump-and-show-more` ✅ archive + prod 驗證上線 — 語意過撈 k=25 + 初始 10 group + 顯示更多 +5（純前端、不動排序）。本 session 共完成 3 條 change：`unified-segment-citation-card`（三模式共用片段卡）+ `per-show-mode-example-prompts`（冷啟動引導範例）+ 本條。剩 parked 1 條 `voyage-rerank-tune-b22-b23`。下動候選：Tier 1 `chunk-level-retrieval-rca-b20-style` RCA／unpark voyage。release log：v2.0 兩條已上線、本條待補一條）
 
 本文件記錄 PodcastRAG 後續開發的優先順序與規劃。依 Phase 排序，**Phase A 阻擋公開最先**，再做評測基線，再優化 RAG，最後商業化。
 
@@ -128,9 +128,8 @@ R3 拆三段做（每段都跑 eval baseline 對照升幅）：
 **Active**（0 個）：
 - （per-show-mode-example-prompts 已 2026-05-31 archive，無進行中 change）
 
-**Parked**（2 個）：
-1. ⭐ `semantic-topk-bump-and-show-more` (0/3) — 語意搜尋過撈 k=25（前端帶 k、後端不動）+ `SemanticResultList` 初始顯示 10 group + 「顯示更多」每次 client-side +5。純前端、不動排序（Recall@K 不受影響）。2026-05-31 discuss→propose。**已可 apply**。
-2. `voyage-rerank-tune-b22-b23` (0/9) — 對 retrieval-rerank-via-voyage 的 b22/b23 調參。
+**Parked**（1 個）：
+1. `voyage-rerank-tune-b22-b23` (0/9) — 對 retrieval-rerank-via-voyage 的 b22/b23 調參。
 
 **待 propose / 待 discuss**：見下方「衍生待 propose」段。
 
@@ -153,7 +152,7 @@ R3 拆三段做（每段都跑 eval baseline 對照升幅）：
 - ✅ **`per-show-mode-example-prompts`** done 2026-05-31（archive `2026-05-31-per-show-mode-example-prompts`）— 每節目×每模式 LLM 預產引導範例 + 冷啟動 chip fallback。prod 三節目 backfill 3/3/3、前端 placeholder+chip smoke 全綠。
 - **eval golden set 擴張到 曼報 + 壹加壹電台** — 各 ~30+ 題人工 sentinel，等本節目 30+ 題到位再啟動
 - **R3.x 候選未 propose**：topic seg 自動類別建議 / segment_categories admin UI / 業配段降權 multiplier / dict weight_in_lexical_query 通用化
-- ✅ **`semantic-topk-bump-and-show-more`** 已 propose+parked 2026-05-31（0/3，已可 apply）— 2026-05-31 discuss 收斂：過撈 k=25（非 50，因 `enrich_hits` 是 O(k) 循序 SQL、延遲隨 k 線性成長；無 per-hit LLM 故 $ 成本不變）+ 前端初始 10 group + 顯示更多 +5 client-slice（不重打 API，因 endpoint 無 offset）。純前端、不動排序。
+- ✅ **`semantic-topk-bump-and-show-more`** done 2026-05-31（archive `2026-05-31-semantic-topk-bump-and-show-more`）— 語意過撈 k=25 + 初始 10 group + 顯示更多 +5。prod smoke「找到 25 個相關片段」、顯示更多不重打 API、排序不變。
 - **R2.2 prompt redo** — Faithfulness 拉回（依賴 R3.x + R1.3）
 - **R1.3 judge re-bake-off** — Phase B，等 R3.x 全跑完啟動
 - **Golden set audit q25 expected 對齊** — 4 集多撈 / 6 集漏，人工複查（屬 dataset quality）
@@ -167,6 +166,7 @@ R3 拆三段做（每段都跑 eval baseline 對照升幅）：
 
 | Change(s) | Archive 路徑 | 摘要 |
 |-----------|-------------|------|
+| **2026-05-31** `semantic-topk-bump-and-show-more` ✅ done + 上線 | `openspec/changes/archive/2026-05-31-semantic-topk-bump-and-show-more/` | 3/3 task done。語意搜尋過撈 k=25（前端 search 帶 k；endpoint 已支援 1–50；後端零改動）+ `SemanticResultList` 顯示上限：初始 10 group + 「顯示更多」每次 client-side +5（不重打 API，因 endpoint 無 offset）、全露完按鈕消失。k 壓在 25 因 `enrich_hits` 是 O(k) 循序 SQL（延遲線性，無 per-hit LLM 故 $ 不變）。純前端、不動排序（Recall@K 不受影響）。spec `semantic-mode-result-ui` +1 requirement（4 scenarios）。本機 render 測試 + prod smoke 全綠：request body k=25、「找到 25 個相關片段」、初始 10 group、顯示更多 +5 不重打 API（/search 請求數仍=1）、前 5 名排序不變。commit `d3aa949`。 |
 | **2026-05-31** `per-show-mode-example-prompts` ✅ done + 上線 | `openspec/changes/archive/2026-05-31-per-show-mode-example-prompts/` | 9/9 task done。每節目×每模式 LLM 預產引導範例（冷啟動 trending<3 fallback）。後端：`show_example_prompts` 表（migration `d8e9f0a1b2c3`）+ `services/example_prompts.py`（gather_materials + generate_for_show，沿用 summary step、fail-open、idempotent delete-then-insert、**per-mode 題目長度上限** index30/semantic70/chat120）+ 公開 GET `/shows/{id}/example-prompts` + admin backfill（單一 inline / 全 show enqueue）+ `workers/example_prompts_task.py` 鏈式（summary 批次全完成 enqueue 一次）。前端：i18n 三 per-mode placeholder + `TrendingQueriesChips` 加 mode prop（trending≥3 熱搜 / <3 fallback「範例」chip）+ QueryPage 三 tab 接線。本機 9 pytest 全綠 + migration 升降可逆。**Prod 驗證**：三節目（這又沒有很屌/曼報/壹加壹電台）trending 皆 0 全冷啟動，backfill 後各 3/3/3；前端三模式 placeholder + 範例 chip + 點擊執行全綠。順手抓到並修：全域 60 字上限把 chat 長題全濾掉（壹加壹電台 chat 0→3，commit `ed56f1b`）。生成內容抓到 ASR 錯字「寰宇龍虎報→豹」（非本 change bug，入 ASR backlog）。commits `71f2e44` + `ed56f1b`。 |
 | **2026-05-31** `unified-segment-citation-card` ✅ done + 上線 | `openspec/changes/archive/2026-05-31-unified-segment-citation-card/` | 11/11 task done。三模式（索引/語意/對話）引用呈現收斂到單一共用葉子 `src/SegmentCitationCard.jsx`：片段文字 + 雙模式高亮（多詞兩色橘實線/青虛線 ← `highlightTerms` 移入本檔成 canonical、KeywordResults 不再重複宣告 / server `highlights` 單色 indigo via `.scc-server-hl` scoped CSS）+ 集標題 + 時間戳 +「播放此段」/「跳到逐字稿」兩顆獨立鈕（取代舊 `onSourceJump` 播放+導航綁一起）。`SourceCard` 改 thin wrapper 轉呼叫；`SemanticResultList`（relevance bar 移進卡內 `relevance` prop）/`ConversationSourcePanel`（每組 cap 5 + 顯示更多、與 top_k 解耦）/`KeywordResults`（T1/T2/T3 leaf）全換共用卡；`EnumerationSection` 集卡加「展開查看各段」inline 片段卡（不離頁）。`LANGUAGE.md` 補引用片段卡 + citation/source/segment 三層語意。Spec：segment-citation-card 新增 + conversation-source-panel/semantic-mode-result-ui 修改進 canonical（added 5/modified 3）。本機整合（9 元件 global、無 collision/JS error）+ prod 三模式 smoke 全綠（索引 T2 展開 25 卡兩色、語意 8 卡 relevance bar 100/87/74、對話 5 集分組 description「打開該集」vs transcript「播放+跳轉」、列舉「歌單哪幾集」展開 8 inline 卡）。commit `50388d9`。 |
 | **2026-05-31** `keyword-index-mode` ✅ done + 上線 | `openspec/changes/archive/2026-05-31-keyword-index-mode/` | 26/26 task done。第三模式「索引」：`POST /shows/{id}/keyword-search` 嚴格 AND 多關鍵字三段式（T1 同 chunk AND / T2 跨三池 episode AND / T3 OR fallback 僅 T1+T2=0）+ 100 cap + 5s timeout；`app_settings.keyword_t2_collapse_threshold`（migration `c7d8e9f0a1b2`）；`KeywordResults.jsx` sectioned 結果頁（兩色高亮、T2 inline 展開查看各段、collapse chip、分頁、empty state、mode switcher）；QueryPage 索引 tab 接線。本機 20 unit+integration 測試（真實 Postgres）全綠；prod smoke「歌單/馬世芳 歌單/馬世芳 滅火器/空查詢」四 scenario + 422 錯誤 UI 驗證。Bonus 修正 `/events` SearchExecutedPayload.mode 接受 `index`（commit `35e6850`+`d851f15`）。同 session discuss 收斂引用呈現 → propose 兩 parked change。 |
