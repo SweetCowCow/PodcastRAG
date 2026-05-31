@@ -30,4 +30,4 @@
 
 - [x] 6.1 在 `openspec/LANGUAGE.md` 補 canonical entry：`引用片段卡 / SegmentCitationCard`，並界定 `citation`（被答案引用的片段）/ `source`（檢索命中的片段）/ `segment`（逐字稿片段）三者差異與 `avoid` 同義詞（對應 proposal Vocabulary）。驗證：`LANGUAGE.md` 出現新 entry 含 definition/avoid/why。
 
-- [ ] 6.2 跑 `spectra validate unified-segment-citation-card` + babel transform 全部改動 JSX 無 parse error + 對 prod 三模式（索引/語意/對話含列舉題）做手動 smoke（截圖貼 PR）。驗證：(a) `spectra validate` exit 0；(b) `node` babel transform 改動的 `.jsx` 全 OK；(c) 三模式 smoke 確認共用卡 + 兩色/單色高亮 + 播放/跳轉兩鈕 + 顯示上限 + 列舉展開皆正確。
+- [x] 6.2 跑 `spectra validate unified-segment-citation-card` + babel transform 全部改動 JSX 無 parse error + 對 prod 三模式（索引/語意/對話含列舉題）做手動 smoke（截圖貼 PR）。驗證：(a) `spectra validate` exit 0；(b) `node` babel transform 改動的 `.jsx` 全 OK；(c) 三模式 smoke 確認共用卡 + 兩色/單色高亮 + 播放/跳轉兩鈕 + 顯示上限 + 列舉展開皆正確。
