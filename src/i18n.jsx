@@ -73,6 +73,19 @@ const ERROR_MESSAGES = {
     zh: () => '查詢額度已用完，請聯絡管理員加值',
     en: () => 'Query quota exhausted — contact admin to top up',
   },
+  // keyword-index-mode
+  EMPTY_QUERY: {
+    zh: () => '請輸入有效關鍵字',
+    en: () => 'Please enter a valid keyword',
+  },
+  KEYWORD_SEARCH_TIMEOUT: {
+    zh: () => '搜尋逾時，請縮短關鍵字',
+    en: () => 'Search timed out — try fewer keywords',
+  },
+  SHOW_NOT_FOUND: {
+    zh: () => '找不到此節目',
+    en: () => 'Show not found',
+  },
 };
 
 function formatError(errorBody, lang) {

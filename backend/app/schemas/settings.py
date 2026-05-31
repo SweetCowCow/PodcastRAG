@@ -8,6 +8,7 @@ class AppSettingsOut(BaseModel):
 
     max_concurrent_transcriptions: int
     monthly_cost_cap_usd: Decimal | None
+    keyword_t2_collapse_threshold: int
 
 
 class AppSettingsUpdate(BaseModel):
@@ -15,3 +16,6 @@ class AppSettingsUpdate(BaseModel):
 
     max_concurrent_transcriptions: int | None = Field(default=None, ge=1, le=3)
     monthly_cost_cap_usd: Decimal | None = None
+    # keyword-index-mode: T2 collapse threshold (≥1; no upper bound — a high
+    # value simply never collapses T2).
+    keyword_t2_collapse_threshold: int | None = Field(default=None, ge=1)

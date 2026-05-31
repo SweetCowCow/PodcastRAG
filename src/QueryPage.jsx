@@ -234,6 +234,13 @@ const QueryPage = ({ lang, show, onBack, onOpenEpisode, queryMode, user, onUserC
   const [messages, setMessages] = React.useState(MOCK_CHAT);
   const [searching, setSearching] = React.useState(false);
   const [searchResults, setSearchResults] = React.useState(null);
+  // keyword-index-mode: index tab state. kwResult holds the sectioned response;
+  // offsets/query refs drive incremental "show 5 more" pagination per section.
+  const [kwResult, setKwResult] = React.useState(null);
+  const [kwSearching, setKwSearching] = React.useState(false);
+  const [kwError, setKwError] = React.useState(null);
+  const kwOffsetsRef = React.useRef({ t1: 0, t2: 0 });
+  const kwQueryRef = React.useRef('');
   const [selectedEp, setSelectedEp] = React.useState(null);
   const [sending, setSending] = React.useState(false);
   const [episodes, setEpisodes] = React.useState(null);
@@ -372,6 +379,112 @@ const QueryPage = ({ lang, show, onBack, onOpenEpisode, queryMode, user, onUserC
     }
   };
 
+  // ─── keyword-index-mode: index tab search + pagination ───────────────
+  const KW_LIMIT = 25;
+  const KW_STEP = 5;
+
+  const handleKeywordSearch = async (overrideQuery) => {
+    const query = (overrideQuery ?? queryText).trim();
+    if (!query || kwSearching) return;
+    setKwSearching(true);
+    setKwError(null);
+    setKwResult(null);
+    kwOffsetsRef.current = { t1: 0, t2: 0 };
+    kwQueryRef.current = query;
+    try {
+      let res;
+      try {
+        res = await apiFetch(`/shows/${show.id}/keyword-search`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query, limit: KW_LIMIT }),
+        });
+      } catch (netErr) {
+        throw new Error(networkErrorMessage(lang));
+      }
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new Error(formatError(body, lang));
+      }
+      setKwResult(await res.json());
+      _sendSearchExecuted({ showId: show.id, queryText: query, mode: 'index' });
+    } catch (err) {
+      setKwError(err.message);
+    } finally {
+      setKwSearching(false);
+    }
+  };
+
+  // Incremental "show 5 more" for a section: fetch the next slice and merge the
+  // returned items into the accumulated list. Hard-capped at 100 per section.
+  const handleKeywordMore = async (section) => {
+    if (!kwResult) return;
+    const cur = kwOffsetsRef.current;
+    const nextOffset = (section === 't1' ? cur.t1 : cur.t2) + KW_STEP;
+    const total = section === 't1' ? kwResult.t1.total : kwResult.t2.total;
+    if (nextOffset >= Math.min(total, 100)) return;
+    try {
+      const body = {
+        query: kwQueryRef.current,
+        limit: KW_STEP,
+        offset_t1: section === 't1' ? nextOffset : 0,
+        offset_t2: section === 't2' ? nextOffset : 0,
+      };
+      const res = await apiFetch(`/shows/${show.id}/keyword-search`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      setKwResult(prev => {
+        if (!prev) return prev;
+        if (section === 't1') {
+          return { ...prev, t1: { ...prev.t1, items: [...prev.t1.items, ...data.t1.items] } };
+        }
+        return { ...prev, t2: { ...prev.t2, items: [...prev.t2.items, ...data.t2.items] } };
+      });
+      kwOffsetsRef.current = section === 't1'
+        ? { ...cur, t1: nextOffset }
+        : { ...cur, t2: nextOffset };
+    } catch (_) { /* best-effort pagination */ }
+  };
+
+  // T2 inline expand: fetch the episode's transcript segments and return the
+  // ones matching any query term, so the card can list them in place (no
+  // navigation). Uses the existing GET /episodes/{id}/transcript endpoint.
+  const onKeywordExpandEpisode = async (episodeId) => {
+    try {
+      const res = await apiFetch(`/episodes/${episodeId}/transcript`);
+      if (!res.ok) return [];
+      const data = await res.json();
+      const segs = data.segments || [];
+      const terms = (kwResult && kwResult.terms) || [];
+      if (!terms.length) return segs;
+      return segs.filter(s =>
+        terms.some(tm => (s.text || '').toLowerCase().includes(tm.toLowerCase())),
+      );
+    } catch (_) {
+      return [];
+    }
+  };
+
+  // Jump from a T1/T3 hit: the keyword-search response carries no audio_url, so
+  // look it up from the loaded episodes list before delegating to onSourceJump.
+  const onKeywordJump = (hit) => {
+    const ep = (episodes || []).find(e => e.id === hit.episode_id);
+    onSourceJump(
+      {
+        episode_id: hit.episode_id,
+        episode_title: hit.episode_title,
+        start_time: hit.start_time,
+        audio_url: ep ? ep.audio_url : null,
+      },
+      0,
+      null,
+    );
+  };
+
   // landing-and-mode-orchestration-redesign decision 2: 固定三 tab 順序，
   // 不受 queryMode tweak 影響（legacy tweak only flipped between chat/search
   // 兩 tab visibility — 新設計 always shows all three; tweak is now no-op for
@@ -481,35 +594,54 @@ const QueryPage = ({ lang, show, onBack, onOpenEpisode, queryMode, user, onUserC
     </div>
   );
 
-  // ─── Index tab placeholder (decision 2 / task 4.4) ─────────────────
+  // ─── Index tab (keyword-index-mode) ────────────────────────────────
   const indexTabContent = (
     <div data-testid="mode-pane-index" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       <div style={{ padding: '16px 24px', borderBottom: `1px solid ${TOKEN.surfaceBorder}`, background: TOKEN.surface, flexShrink: 0 }}>
         <div style={{ display: 'flex', gap: 8 }}>
           <Input value={queryText} onChange={e => setQueryText(e.target.value)}
-            placeholder={t ? '在此節目中搜尋關鍵字（即將推出）' : 'Search keywords in this show (coming soon)'}
+            placeholder={t ? '輸入關鍵字（多個字會全部命中）' : 'Enter keywords (all must match)'}
             icon="search"
-            onSubmit={() => { /* task 4.4: no retrieval, no event emit */ }}
+            onSubmit={() => handleKeywordSearch()}
           />
-          <Btn disabled icon="search">{t ? '搜尋' : 'Search'}</Btn>
+          <Btn icon="search" onClick={() => handleKeywordSearch()} disabled={kwSearching || !queryText.trim()}>
+            {t ? '搜尋' : 'Search'}
+          </Btn>
         </div>
       </div>
-      <div style={{ flex: 1, overflowY: 'auto', padding: '40px 24px', textAlign: 'center', color: TOKEN.textSecondary }}>
-        <div style={{ fontSize: 36, marginBottom: 12 }}>🔎</div>
-        <h3 style={{ margin: '0 0 8px', color: TOKEN.text, fontSize: 17, fontWeight: 700 }}>
-          {uiString('mode_index_placeholder_title', lang)}
-        </h3>
-        <p style={{ margin: '0 auto 18px', maxWidth: 460, fontSize: 13, lineHeight: 1.7 }}>
-          {uiString('mode_index_placeholder_body', lang)}
-        </p>
-        <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
-          <Btn variant="secondary" size="sm" onClick={() => setActiveTab('semantic')}>
-            {uiString('mode_index_try_semantic', lang)}
-          </Btn>
-          <Btn variant="secondary" size="sm" onClick={() => setActiveTab('chat')}>
-            {uiString('mode_index_try_chat', lang)}
-          </Btn>
-        </div>
+      <div style={{ flex: 1, overflowY: 'auto', padding: '16px 24px' }}>
+        {kwSearching && (
+          <div style={{ color: TOKEN.textMuted, textAlign: 'center', padding: '40px 0' }}>
+            {t ? '搜尋中...' : 'Searching...'}
+          </div>
+        )}
+        {!kwSearching && kwError && (
+          <div style={{ color: TOKEN.danger, textAlign: 'center', padding: '24px 0', fontSize: 13 }}>
+            {kwError}
+          </div>
+        )}
+        {!kwSearching && !kwError && kwResult && (
+          <KeywordResults
+            result={kwResult}
+            terms={kwResult.terms}
+            showId={show.id}
+            lang={lang}
+            onMoreT1={() => handleKeywordMore('t1')}
+            onMoreT2={() => handleKeywordMore('t2')}
+            onJumpTo={onKeywordJump}
+            onExpandEpisode={onKeywordExpandEpisode}
+            onSwitchMode={(mode) => setActiveTab(mode)}
+            onExample={(q) => { setQueryText(q); setTimeout(() => handleKeywordSearch(q), 0); }}
+          />
+        )}
+        {!kwSearching && !kwError && !kwResult && (
+          <div style={{ color: TOKEN.textMuted, textAlign: 'center', padding: '60px 0' }}>
+            <Icon name="search" size={36} color={TOKEN.textMuted} />
+            <p style={{ marginTop: 12, fontSize: 14 }}>
+              {t ? '輸入關鍵字，精準找出命中的段落與集數' : 'Enter keywords to find exact-match segments and episodes'}
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );

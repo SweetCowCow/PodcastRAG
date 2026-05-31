@@ -25,6 +25,7 @@ async def _get_or_create(db: AsyncSession) -> AppSettings:
             id=SINGLETON_ID,
             max_concurrent_transcriptions=1,
             monthly_cost_cap_usd=None,
+            keyword_t2_collapse_threshold=10,
         )
         db.add(row)
         await db.flush()
@@ -50,6 +51,9 @@ async def update_settings(
             "max_concurrent_transcriptions", 1
         ),
         "monthly_cost_cap_usd": provided.get("monthly_cost_cap_usd"),
+        "keyword_t2_collapse_threshold": provided.get(
+            "keyword_t2_collapse_threshold", 10
+        ),
     }
     stmt = pg_insert(AppSettings).values(**insert_values)
     if provided:

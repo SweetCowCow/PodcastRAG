@@ -15,6 +15,7 @@ from app.schemas.errors import ErrorCode, ErrorResponse
 from app.api.episodes import router as episodes_router
 from app.api.events import router as events_router
 from app.api.health import router as health_router
+from app.api.keyword_search import router as keyword_search_router
 from app.api.qa_feedback import router as qa_feedback_router
 from app.api.query import router as query_router
 from app.api.queue import router as queue_router
@@ -137,6 +138,7 @@ app.include_router(schedules_router)
 app.include_router(episodes_router)
 app.include_router(transcripts_router)
 app.include_router(query_router)
+app.include_router(keyword_search_router)
 app.include_router(admin_router)
 app.include_router(admin_processing_stats_router)
 app.include_router(admin_provider_usage_router)
