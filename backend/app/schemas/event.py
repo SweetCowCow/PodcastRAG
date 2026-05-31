@@ -14,15 +14,16 @@ class CitationClickPayload(BaseModel):
 
 class SearchExecutedPayload(BaseModel):
     """landing-and-mode-orchestration-redesign: emitted after a successful
-    Semantic or Chat query so trending-queries can rank popular questions
-    per show.
+    Index, Semantic, or Chat query so trending-queries can rank popular
+    questions per show. (`index` added by keyword-index-mode once the index
+    tab went live.)
     """
 
     model_config = ConfigDict(extra="forbid")
 
     show_id: uuid.UUID
     query_text: str = Field(min_length=1, max_length=500)
-    mode: Literal["semantic", "chat"]
+    mode: Literal["index", "semantic", "chat"]
 
 
 class EventCreate(BaseModel):
