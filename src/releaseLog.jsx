@@ -47,10 +47,39 @@ const MILESTONE_LABELS = {
   'v1.6': { zh: 'v1.6 — 搜尋結果看得更清楚',       en: 'v1.6 — Search Results, Now Readable' },
   'v1.7': { zh: 'v1.7 — 搜尋準度大幅提升',         en: 'v1.7 — Retrieval Quality, Materially Better' },
   'v1.8': { zh: 'v1.8 — 對話模式 agent 化',         en: 'v1.8 — Chat Mode, Now Agentic' },
+  'v1.9': { zh: 'v1.9 — 索引模式：多關鍵字精準搜尋', en: 'v1.9 — Index Mode: Precise Multi-Keyword Search' },
 };
 
 // Entries — newest milestone first; within each milestone newest date first.
 const RELEASE_LOG = [
+  // ─── v1.9 — Index Mode: Precise Multi-Keyword Search (5/31) ───
+  {
+    date: '2026-05-31', slug: 'keyword-index-mode', milestone: 'v1.9', tag: 'feature',
+    title: {
+      zh: '第三種搜尋模式「索引」上線 — 多關鍵字精準比對',
+      en: 'Third Search Mode "Index" Is Live — Precise Multi-Keyword Matching',
+    },
+    summary: {
+      zh: '查詢頁三個 tab 裡的「索引」過去是「即將推出」佔位，這版正式接通 — 你現在可以一次打多個關鍵字（譬如「馬世芳 歌單」），系統用「嚴格比對」找出真的同時講到這些詞的內容，跟另外兩個模式定位完全不同：「語意」是找意思相近（就算用詞不一樣也撈得到）、「對話」是問一個問題請 AI 整理答案，而「索引」就像對整個節目下 Ctrl+F、要求每個關鍵字都要命中。結果分三層、由準到寬呈現：第一層是「同一段話裡同時出現所有關鍵字」（最精準）；第二層是「同一集裡這些詞分散在不同段落／標題／簡介」（同集相關但不在同一句）；只有當前兩層都掛蛋時，第三層才退而求其次列出「任一關鍵字命中」的結果，避免你看到一片空白。每個關鍵字在結果裡用兩種顏色高亮區分（橘色實線＝逐字稿命中、青色虛線＝標題／簡介命中），第二層的每一集還能就地展開看到實際命中的各個段落，不用跳頁。單次最多回 100 筆、5 秒逾時保護。上線前在 prod 跑四個情境驗證全綠：「歌單」單詞（第一層滿載 100 筆＋第二層 56 集折疊＋分頁）、「馬世芳 歌單」（第二層就地展開 26 段、兩色高亮都對）、「馬世芳 滅火器」（前兩層 0 命中、正確退到第三層 — 也順帶暴露「滅火器」被 Whisper 聽成錯字、逐字稿裡根本沒這三個字，屬已知的 ASR 錯字 backlog）、空查詢（空狀態正確）。另外修掉一個剛接通就會踩到的小 bug：每次用索引搜尋，後端記錄搜尋事件的 API 都會回 422 錯誤（它的合法模式清單沒加進新的 index），現在補上了。',
+      en: 'The "Index" tab in the query page — previously a "coming soon" placeholder — is now fully wired up. You can type multiple keywords at once (e.g. "馬世芳 歌單") and the system finds content that genuinely mentions all of them, using strict matching. This positions it distinctly from the other two modes: "Semantic" finds meaning-similar content (even with different wording), "Chat" answers a question via the AI, and "Index" is like running Ctrl+F across the entire show, requiring every keyword to hit. Results come in three tiers, precise to loose: Tier 1 is "all keywords appear in the same passage" (most precise); Tier 2 is "the keywords are spread across different segments / title / description within the same episode" (same-episode relevant but not in one sentence); only when both Tiers 1 and 2 come back empty does Tier 3 fall back to listing "any keyword matches" so you never face a blank screen. Each keyword is highlighted in two colors (orange solid = transcript hit, cyan dashed = title/description hit), and every Tier 2 episode can be expanded in place to see the actual matching segments without navigating away. Capped at 100 results per search with a 5-second timeout. Four prod scenarios verified green before launch: single word "歌單" (Tier 1 maxed at 100 + Tier 2 with 56 episodes collapsed + pagination), "馬世芳 歌單" (Tier 2 inline-expanded 26 segments, both highlight colors correct), "馬世芳 滅火器" (0 hits in Tiers 1-2, correctly fell back to Tier 3 — incidentally exposing that "滅火器" was misheard by Whisper as a typo and the three characters appear nowhere in the transcript, a known ASR-typo backlog item), and an empty query (correct empty state). Also fixed a small bug that fired the moment the feature went live: every index search made the backend\'s search-event-logging API return a 422 error (its list of valid modes had not been updated to include the new "index" mode) — now patched.',
+    },
+    summaryBullets: {
+      zh: [
+        '第三種搜尋模式「索引」上線，與「語意」「對話」三模式到齊',
+        '一次打多個關鍵字、嚴格比對（每個詞都要命中），像對整個節目下 Ctrl+F — 跟語意（意思相近）、對話（問 AI）定位不同',
+        '結果由準到寬分三層：同段全中／同集分散／任一詞命中（僅前兩層皆空才退此層）',
+        '關鍵字兩色高亮（橘＝逐字稿、青＝標題／簡介）＋ 第二層可就地展開看實際命中段落',
+        '上線前 prod 四情境驗證全綠；煙霧測試順帶再現「滅火器」Whisper ASR 錯字（已知 backlog）。另修掉每次索引搜尋都噴的 422 事件記錄 bug',
+      ],
+      en: [
+        'Index mode is now live — the third and final search mode joins Semantic and Chat',
+        'Type multiple keywords with strict AND matching (every word must hit), like Ctrl+F across the whole show — distinct from Semantic (meaning-similar) and Chat (ask the AI)',
+        'Three-tier results, precise to loose: same-passage / same-episode-scattered / any-keyword fallback (only when the first two are empty)',
+        'Two-color keyword highlighting (orange = transcript, cyan = title/description) + expand-in-place to see Tier 2 matching segments',
+        'Four prod scenarios verified green; smoke test incidentally re-surfaced the "滅火器" Whisper ASR-typo (known backlog). Also fixed a 422 on the search-event API that fired on every index search',
+      ],
+    },
+  },
   // ─── v1.8 — Chat Mode: Agentic (5/21~) ───
   {
     date: '2026-05-31', slug: 'eval-runner-eval-context-plumbing', milestone: 'v1.8', tag: 'enhancement',
