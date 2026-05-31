@@ -68,7 +68,7 @@
 
 實作 spec Requirements「Incremental pagination per section」、「Bottom mode switcher chip always visible」、「Zero-result empty state with examples」。
 
-- [ ] 8.1 在 `<KeywordResults>` 為 T1 與 T2 各加「顯示更多 5 段／集」btn（對應 Requirement「Incremental pagination per section」），行為：點擊時呼叫 `onMoreT1` / `onMoreT2` callback（由 QueryPage 提供）並 merge 結果；累積到 100 或等於 `total` 時 btn 隱藏。驗證：手動 — 對 `t1.total=40` 的查詢連點 3 次「顯示更多 5 段」（每次 offset+=5），確認 25+5+5+5=40 後 btn 消失。
+- [x] 8.1 在 `<KeywordResults>` 為 T1 與 T2 各加「顯示更多 5 段／集」btn（對應 Requirement「Incremental pagination per section」），行為：點擊時呼叫 `onMoreT1` / `onMoreT2` callback（由 QueryPage 提供）並 merge 結果；累積到 100 或等於 `total` 時 btn 隱藏。驗證：手動 — 對 `t1.total=40` 的查詢連點 3 次「顯示更多 5 段」（每次 offset+=5），確認 25+5+5+5=40 後 btn 消失。
 
 - [x] 8.2 加 `<BottomModeSwitcher onSwitchMode>`（對應 Requirement「Bottom mode switcher chip always visible」），行為：於 results、loading-with-data、zero-result 三狀態下都渲染於頁尾；點擊 chip 呼叫 `onSwitchMode('semantic' | 'chat')`，由 `QueryPage` wire 到既有 `setActiveTab`（`QueryPage.jsx:231`）。query 字串由既有跨 tab 共用 state `queryText`（`QueryPage.jsx:233`）自動保留，switcher 不自行搬運（2026-05-31 ingest 校正）。驗證：手動 — 三狀態各驗一次 chip 出現，且切到 semantic tab 後輸入框已預填原 query。
 
@@ -78,12 +78,12 @@
 
 實作 spec Requirement「Index tab renders sectioned T1 / T2 / T3 layout」於 QueryPage 索引 tab 的接線部分。
 
-- [ ] 9.1 在 `src/QueryPage.jsx` 索引 tab 接線（對應 Requirement「Index tab renders sectioned T1 / T2 / T3 layout」）：**目前索引 tab 是「即將推出」placeholder（disabled 輸入框 `QueryPage.jsx:490` + 空狀態 `:555`），改為**：使用者送出後 POST `/shows/{show_id}/keyword-search`，state 存 response，render `<KeywordResults>` 並提供 `onMoreT1` / `onMoreT2`（用當前 offset+5 重打並 merge）、`onJumpTo`（呼叫既有 `audio.playFromTime(episode_id, start_time, { audio_url })`）與 `onSwitchMode`（wire 到既有 `setActiveTab`）。驗證：手動 — 整段 e2e 在 prod 跑「世運 滅火器」「歌單」「馬世芳」三組查詢，三組各 section 渲染、高亮、pagination、switcher 全部行為對齊上述 spec。
+- [x] 9.1 在 `src/QueryPage.jsx` 索引 tab 接線（對應 Requirement「Index tab renders sectioned T1 / T2 / T3 layout」）：**目前索引 tab 是「即將推出」placeholder（disabled 輸入框 `QueryPage.jsx:490` + 空狀態 `:555`），改為**：使用者送出後 POST `/shows/{show_id}/keyword-search`，state 存 response，render `<KeywordResults>` 並提供 `onMoreT1` / `onMoreT2`（用當前 offset+5 重打並 merge）、`onJumpTo`（呼叫既有 `audio.playFromTime(episode_id, start_time, { audio_url })`）與 `onSwitchMode`（wire 到既有 `setActiveTab`）。驗證：手動 — 整段 e2e 在 prod 跑「世運 滅火器」「歌單」「馬世芳」三組查詢，三組各 section 渲染、高亮、pagination、switcher 全部行為對齊上述 spec。
 
-- [ ] 9.2 在 QueryPage 索引 tab 加 loading / error UI：fetching 時顯示 spinner、422 顯示「請輸入有效關鍵字」、503 顯示「搜尋逾時，請縮短關鍵字」、500 顯示通用錯誤。驗證：手動 — devtools network throttle 強製造 timeout、改 query 為純標點，逐一確認三種錯誤訊息對應正確。
+- [x] 9.2 在 QueryPage 索引 tab 加 loading / error UI：fetching 時顯示 spinner、422 顯示「請輸入有效關鍵字」、503 顯示「搜尋逾時，請縮短關鍵字」、500 顯示通用錯誤。驗證：手動 — devtools network throttle 強製造 timeout、改 query 為純標點，逐一確認三種錯誤訊息對應正確。
 
 ## 10. 收尾
 
 - [x] 10.1 在 backend 新增 fixture seed script `backend/tests/fixtures/keyword_search_seed.py`，建一 show + 3 episodes 涵蓋 T1/T2/T3 三情境，供 manual prod 驗證重複使用。驗證：`python -m backend.tests.fixtures.keyword_search_seed --dry-run` 列出將建的 row count 與 episode titles，不真寫 DB。
 
-- [ ] 10.2 跑 `spectra validate keyword-index-mode` 與本 change 範圍的 pytest 全集，並對 prod 三組查詢做手動 smoke。驗證：(a) `spectra validate` exit 0、(b) `pytest backend/tests/test_keyword_search*.py -q` 全綠、(c) 手動 smoke 三組查詢截圖貼進 PR description。
+- [x] 10.2 跑 `spectra validate keyword-index-mode` 與本 change 範圍的 pytest 全集，並對 prod 三組查詢做手動 smoke。驗證：(a) `spectra validate` exit 0、(b) `pytest backend/tests/test_keyword_search*.py -q` 全綠、(c) 手動 smoke 三組查詢截圖貼進 PR description。

@@ -1,6 +1,6 @@
 # PodcastRAG 路線圖
 
-> 最後更新：2026-05-31 凌晨（`eval-runner-eval-context-plumbing` ✅ archive。eval runner v2 跑分時把 run_id / item_id / turn_idx 三欄塞進 X-Eval-* HTTP header、backend `bind_eval_context` dependency 在 admin role + 三欄齊全時 set_eval_context()，PG eval_traces 三欄寫滿。Phase 5 prod verify：34 spans / 8 distinct items / mt03 三輪 locator NOT NULL。Hotfix `842d69d` 修 span_writer JSONB serialization（asyncpg DataError dormant bug，首次 plumbing exercise 才暴露）。也順手抓到 prod `EVAL_TRACING_ENABLED` 實際是 false（與記憶不符）、toggle + redeploy 後生效。下動候選：Tier 1 `chunk-level-retrieval-rca-b20-style` RCA spike 或 unpark `voyage-rerank-tune-b22-b23`）
+> 最後更新：2026-05-31 下午（`keyword-index-mode` ✅ archive + prod 驗證上線 — 第三模式「索引」：`POST /shows/{id}/keyword-search` 嚴格 AND 三段式 T1/T2/T3 + `KeywordResults.jsx` sectioned 結果頁 + `app_settings.keyword_t2_collapse_threshold`。本機 20 測試 + prod smoke 四 scenario 全綠；順手修 `/events` 接受 `mode=index`。同 session discuss 收斂引用呈現重構並 propose 兩個 parked change：`unified-segment-citation-card` + `per-show-mode-example-prompts`。下動候選：apply `unified-segment-citation-card`（已可，keyword 已 archive）／Tier 1 `chunk-level-retrieval-rca-b20-style` RCA／unpark `voyage-rerank-tune-b22-b23`）
 
 本文件記錄 PodcastRAG 後續開發的優先順序與規劃。依 Phase 排序，**Phase A 阻擋公開最先**，再做評測基線，再優化 RAG，最後商業化。
 
@@ -123,20 +123,19 @@ R3 拆三段做（每段都跑 eval baseline 對照升幅）：
 
 （2026-05-13 R3.2 milestone 全部 archive 收尾後清空 — 詳見下方「已 archive」段）
 
-## Active + Parked changes（2026-05-18 深夜 snapshot）
+## Active + Parked changes（2026-05-31 snapshot）
 
-**Active**（2 個）：
-- F2 `task-failure-monitoring-and-circuit-breaker` (28/31) — code 全 ship、主動 smoke 卡 publish bug 待解
-- `celery-publish-routing-fix-and-f2-smoke` (9/20) — 解 publish silent drop + F1 cron_tick leak + F2 完整 smoke + 同時 archive F2。Agent code+test+commit 完，user push 完，4 service redeploy 中
+**Active**（0 個）：
+- （keyword-index-mode 已 2026-05-31 archive，無進行中 change）
 
-**Parked**（4 個，推薦 apply 順序）：
-1. ⏳ `agentic-framework-bakeoff` (19) — research spike，跑 A 原生 / B Pydantic AI / E Google ADK × 30 題比較，3-5 天，先做才能定 `chat-agentic-tool-routing` 主 change framework
-2. ⏳ `keyword-index-mode` (26) — 第三模式新功能 + SQL CTE T1/T2/T3 + 結果頁 sectioned
-3. ⏳ `landing-and-mode-orchestration-redesign` (49) — HomePage 合併 + 三模式 trio + Lock card 新版 + sticky audio。**等 `chat-agentic-tool-routing` response shape 定再做**
-4. — `rag-vs-longcontext-benchmark` (19) — research benchmark；需 user 共草 20 新題 + playwright cookie 才能 apply
+**Parked**（3 個）：
+1. ⭐ `unified-segment-citation-card` (0/11) — 統一索引/語意/對話三模式引用呈現：共用 `<SegmentCitationCard>`（片段+雙模式高亮+「播放此段」/「跳到逐字稿」兩鈕）、容器各保留、列舉題集卡可展開片段卡、顯示數量與 top_k 解耦。**已可 apply**（keyword-index-mode 已 archive，依賴解除）。2026-05-31 propose。
+2. `per-show-mode-example-prompts` (0/9) — 每節目×每模式引導：per-mode placeholder + chip（trending 優先、冷啟動 fallback LLM 預產範例）；後端新表 `show_example_prompts` + 生成服務 + GET endpoint + 鏈式觸發 + admin backfill。2026-05-31 propose。
+3. `voyage-rerank-tune-b22-b23` (0/9) — 對 retrieval-rerank-via-voyage 的 b22/b23 調參。
 
-**待 propose**（discuss 已收斂）：
-- `chat-agentic-tool-routing` — 主 change。9 tool + L0/L1 memory + bake-off A/B/E 三選一。等 `agentic-framework-bakeoff` 出結果再 propose
+**待 propose / 待 discuss**：見下方「衍生待 propose」段。
+
+> 早期擱置的 `agentic-framework-bakeoff` / `chat-agentic-tool-routing` / `landing-and-mode-orchestration-redesign` / `rag-vs-longcontext-benchmark` 等：landing-redesign 已 2026-05-23 archive；其餘 agentic 路線仍在「衍生待 propose」追蹤，未進現役 parked queue。
 
 ## 衍生待 propose（未開 change 但有共識）
 
@@ -150,7 +149,9 @@ R3 拆三段做（每段都跑 eval baseline 對照升幅）：
 - **`agent-pronoun-grounding`**（follow-up，未急）— b23 揭露 agent 拿到無關 chunk 後 LLM 自動把代詞「他/她/我」解析成 query 主體 → 表面 grounded 實際 hallucinate；需 SYSTEM_PROMPT 或 grounding rule 加「代詞解析驗證」。**unblocked**（judge 已可量代詞 hallucination）
 - ✅ **`judge-pronoun-attribution-check`** done 2026-05-27（eval-only 不 redeploy）— judge 改餵 result_full + 加 pronoun_attribution_check 三態指標 + b23 為 Example 4；新 baseline `baseline-post-judge-v2-2026-05-27.json` chunk_recall_grouped 0.382→0.482、factual 0.831→0.892、refusal 0.971→1.000 全部提升；0 hallucinated case 反映 dataset + retrieval 前置 fix 真實效果
 - **eval baseline 寫死**：cross_episode mean chunk_recall **0.283**（舊 0.244 deprecated，污染期 citation collector bug 數據）
-- **`citation-display-unify`** — R3.3 prod 驗證 user follow-up #2：ChatBubble 兩個 source 區塊（chip + enum card）混淆，需 discuss 三方案（合併 / 視覺指示 / 互斥渲染）後 propose
+- ✅ **`citation-display-unify`** — **已於 2026-05-18 ship**（隨 landing-and-mode-orchestration-redesign decision 5 + ConversationSourcePanel）：列舉題走 EnumerationSection 主從佈局、內容題走 ConversationSourcePanel 依集分組。此條先前誤列為待辦（drift），2026-05-31 更正。**後續迭代** → 見下方兩個 2026-05-31 propose 的 parked change。
+- ⭐ **`unified-segment-citation-card`**（2026-05-31 propose，parked 0/11）— 統一三模式引用為共用片段卡 + 播放/跳轉兩鈕 + 顯示數量與 top_k 解耦 + 列舉題集卡可展開片段卡。已可 apply。
+- **`per-show-mode-example-prompts`**（2026-05-31 propose，parked 0/9）— 每節目×每模式引導範例（per-mode placeholder + trending 優先/冷啟動 LLM 預產範例 chip）。
 - **eval golden set 擴張到 曼報 + 壹加壹電台** — 各 ~30+ 題人工 sentinel，等本節目 30+ 題到位再啟動
 - **R3.x 候選未 propose**：topic seg 自動類別建議 / segment_categories admin UI / 業配段降權 multiplier / dict weight_in_lexical_query 通用化
 - **R2.2 prompt redo** — Faithfulness 拉回（依賴 R3.x + R1.3）
@@ -166,6 +167,7 @@ R3 拆三段做（每段都跑 eval baseline 對照升幅）：
 
 | Change(s) | Archive 路徑 | 摘要 |
 |-----------|-------------|------|
+| **2026-05-31** `keyword-index-mode` ✅ done + 上線 | `openspec/changes/archive/2026-05-31-keyword-index-mode/` | 26/26 task done。第三模式「索引」：`POST /shows/{id}/keyword-search` 嚴格 AND 多關鍵字三段式（T1 同 chunk AND / T2 跨三池 episode AND / T3 OR fallback 僅 T1+T2=0）+ 100 cap + 5s timeout；`app_settings.keyword_t2_collapse_threshold`（migration `c7d8e9f0a1b2`）；`KeywordResults.jsx` sectioned 結果頁（兩色高亮、T2 inline 展開查看各段、collapse chip、分頁、empty state、mode switcher）；QueryPage 索引 tab 接線。本機 20 unit+integration 測試（真實 Postgres）全綠；prod smoke「歌單/馬世芳 歌單/馬世芳 滅火器/空查詢」四 scenario + 422 錯誤 UI 驗證。Bonus 修正 `/events` SearchExecutedPayload.mode 接受 `index`（commit `35e6850`+`d851f15`）。同 session discuss 收斂引用呈現 → propose 兩 parked change。 |
 | **2026-05-31** `eval-runner-eval-context-plumbing` ✅ done | `openspec/changes/archive/2026-05-31-eval-runner-eval-context-plumbing/` | 11/11 task done。Runner v2 startup 生 run_id (`eval-YYYYMMDDTHHMMSSZ-<8hex>`) + 每 turn 注入 `X-Eval-Run-Id` / `X-Eval-Item-Id` / `X-Eval-Turn-Idx`；backend `bind_eval_context` FastAPI dependency 在 admin + 三 header 齊 + turn_idx int>=0 → `set_eval_context()`、reset on request end；非 admin / 缺 header / malformed silent skip（不 4xx）。新增 `sql_rca_demo.py`（3 段：per-turn span count / cross-run query diff / per-turn tool timeline）+ `prompt_fingerprint_diff.py --source=sql` 路徑。Phase 5 prod 驗：run `eval-20260530T181920Z-465dd6d2` → 34 span / 8 distinct items / mt03 turn_idx 0,1,2 全 NOT NULL；admin caller 無 X-Eval-* header → eval_traces baseline 不增。**Hotfix 同 change `842d69d`**：span_writer JSONB serialization（asyncpg DataError dormant bug，首次真正 exercise PG sink 才暴露；三欄 `json.dumps + CAST AS JSONB`）。同 session 抓到 prod `EVAL_TRACING_ENABLED=false`（記憶寫 ON 不符）、toggle + redeploy 後生效。完整 case study: `docs/case-studies/eval-runner-eval-context-plumbing-2026-05-31.md` |
 | **2026-05-30** `langfuse-sdk-overhead-rca` ✅ spike done | `openspec/changes/archive/2026-05-30-langfuse-sdk-overhead-rca/` | Investigation-only spike。加 per-op timing probe (`EVAL_TRACING_TIMING_PROBE` env)、prod 量測證實 Langfuse Cloud SDK overhead 平均 0.947 ms/span、P95 1.689 ms/span、30 span ~28ms — 4.4 P95 +3.4s attribution 給 SDK 是錯的、是 cross-session noise。Forward decision: CLOSE `langfuse-self-host-evaluation` follow-up。完整 RCA: `docs/case-studies/langfuse-sdk-overhead-rca-2026-05-30.md` |
 | **2026-05-30** `eval-framework-upgrade` ✅ PARTIAL ship | `openspec/changes/archive/2026-05-30-eval-framework-upgrade/` | 33/33 task done。Langfuse Cloud Free + PG eval_traces 雙 sink、6 個新 grader (4 DeepEval 內建 + 2 GEval 自寫)、`_calibration_8.json` 8 題 byte-equivalent subset、`retrieve_probe.py` + `prompt_fingerprint_diff.py` 兩 CLI、PR template Retrieval/Prompt checklist、runbook、全 34 baseline。**未達 4.4 acceptance**：prod 灰度 P95 +3375ms FAIL (<100ms gate)、tracing 預設 OFF、open follow-up `langfuse-self-host-evaluation`。4.1 chunk_recall_grouped -0.10 RCA 確認非 regression（agent 落相鄰 chunk、answer 品質完全沒變、`contextual_precision=0.92` 證 retrieval 健康）— 驗證 task 2.3b ContextualRecall grader 加入正當性。完整 case study: `docs/case-studies/eval-framework-upgrade-2026-05-30.md` |
