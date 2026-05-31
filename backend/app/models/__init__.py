@@ -6,6 +6,7 @@ from app.models.episode import Episode
 from app.models.episode_description_chunk import EpisodeDescriptionChunk
 from app.models.session import Session
 from app.models.show import Show
+from app.models.show_example_prompt import ExamplePromptMode, ShowExamplePrompt
 from app.models.show_schedule import RefreshStatus, ShowSchedule
 from app.models.transcript import Transcript, TranscriptStatus
 from app.models.tokenizer_term import TokenizerCustomTerm
@@ -36,6 +37,8 @@ __all__ = [
     "StepType",
     "AppSettings",
     "Show",
+    "ShowExamplePrompt",
+    "ExamplePromptMode",
     "ShowSchedule",
     "RefreshStatus",
     "Episode",

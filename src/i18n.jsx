@@ -186,6 +186,11 @@ const UI_STRINGS = {
     en: 'e.g. Summarize 2026 Q1 semiconductor trends',
   },
   mode_card_chat_quota: { zh: '使用額度', en: 'Uses quota' },
+  // per-show-mode-example-prompts: per-mode input placeholders + example-chip label
+  mode_placeholder_index: { zh: '輸入關鍵字（多個字會全部命中）', en: 'Enter keywords (all must match)' },
+  mode_placeholder_semantic: { zh: '描述你想找的內容…', en: 'Describe what you’re looking for…' },
+  mode_placeholder_chat: { zh: '針對此節目內容提問...', en: 'Ask anything about this show...' },
+  chip_examples_label: { zh: '範例', en: 'Examples' },
   // Source panel header
   source_panel_header_zh_singular: { zh: '答案參考來源（共 ', en: 'Answer sources (' },
   // built dynamically; see ConversationSourcePanel.

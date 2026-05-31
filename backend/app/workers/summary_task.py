@@ -234,6 +234,21 @@ async def _run(task, episode_id: str) -> dict:
             ep.ai_summary_model = step.model
             ep.ai_summary_error = None
             await db.commit()
+            show_id = ep.show_id
+
+        # per-show-mode-example-prompts: once this show's episode summaries are
+        # all complete, chain-enqueue example-prompt generation exactly once.
+        # Fail-open / non-fatal — must never break the summary pipeline.
+        try:
+            from app.workers.example_prompts_task import maybe_enqueue_for_show
+
+            async with Session() as db:
+                await maybe_enqueue_for_show(db, show_id)
+        except Exception:
+            logger.exception(
+                "summary task: example-prompts chain failed for show %s — non-fatal",
+                show_id,
+            )
 
         logger.info(
             "summary task: %s done (%d chars)", episode_id, len(summary)

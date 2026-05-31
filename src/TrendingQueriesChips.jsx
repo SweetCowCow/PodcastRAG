@@ -1,45 +1,74 @@
-// TrendingQueriesChips — landing-and-mode-orchestration-redesign decision 4.
+// TrendingQueriesChips — landing-and-mode-orchestration-redesign decision 4,
+// extended by `per-show-mode-example-prompts` with a cold-start fallback.
 //
-// Calls `GET /shows/{showId}/trending-queries?days=7`. Renders up to 5
-// chips (count desc) inline. On failure / empty / not-yet-wired-backend,
-// renders NOTHING (silent no-op — design risk-mitigation: tolerate sparse
-// early data + missing endpoint).
+// Chip-source precedence (per mode):
+//   1. `GET /shows/{showId}/trending-queries?days=7` — if it returns ≥3 entries,
+//      render those as「熱搜 / Trending」chips.
+//   2. otherwise `GET /shows/{showId}/example-prompts` — render that mode's
+//      LLM-pre-generated examples as「範例 / Examples」chips.
+//   3. if neither yields entries, render NOTHING (silent no-op).
+// Clicking any chip calls onSelect(text), which the host wires to populate +
+// run the query for the current mode.
 //
-// NOTE: the trending-queries endpoint is delivered by the backend portion
-// of this change (`trending-queries-api`). Per worktree instructions the
-// backend implementation is a carry-over to the main thread — until then
-// this component logs a debug line on 404 and renders nothing. Once the
-// endpoint exists it will start surfacing chips automatically.
+// `mode` is one of 'index' | 'semantic' | 'chat'. Without it, only trending is
+// attempted (back-compat).
 
-const TrendingQueriesChips = ({ showId, lang, onSelect, layout }) => {
+const TrendingQueriesChips = ({ showId, lang, onSelect, layout, mode }) => {
   const t = lang === 'zh';
-  const [queries, setQueries] = React.useState(null);   // null = loading, [] = empty
+  // null = loading; otherwise { kind: 'trending'|'example', items: string[] }
+  const [chips, setChips] = React.useState(null);
+
   React.useEffect(() => {
     if (!showId) return;
     let cancelled = false;
     (async () => {
+      // 1. trending — needs ≥3 to win the slot.
+      let trending = [];
       try {
         const res = await apiFetch(`/shows/${showId}/trending-queries?days=7`);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
-        if (cancelled) return;
-        const list = Array.isArray(data.queries) ? data.queries : [];
-        // Already sorted desc by backend; defensive cap at 5.
-        setQueries(list.slice(0, 5));
-      } catch (_) {
-        // Silent failure — no error UI per design (decision 4 failure mode).
-        if (!cancelled) setQueries([]);
+        if (res.ok) {
+          const data = await res.json();
+          trending = Array.isArray(data.queries) ? data.queries : [];
+        }
+      } catch (_) { /* silent */ }
+      if (cancelled) return;
+      if (trending.length >= 3) {
+        setChips({ kind: 'trending', items: trending.slice(0, 5).map(q => q.query_text).filter(Boolean) });
+        return;
       }
+      // 2. cold-start fallback — this mode's pre-generated examples.
+      let examples = [];
+      if (mode) {
+        try {
+          const res = await apiFetch(`/shows/${showId}/example-prompts`);
+          if (res.ok) {
+            const data = await res.json();
+            examples = Array.isArray(data[mode]) ? data[mode] : [];
+          }
+        } catch (_) { /* silent */ }
+      }
+      if (cancelled) return;
+      if (examples.length) {
+        setChips({ kind: 'example', items: examples.slice(0, 5).filter(Boolean) });
+        return;
+      }
+      // 3. nothing to show.
+      setChips({ kind: 'none', items: [] });
     })();
     return () => { cancelled = true; };
-  }, [showId]);
+  }, [showId, mode]);
 
-  if (!queries || queries.length === 0) return null;
+  if (!chips || chips.items.length === 0) return null;
 
   const horizontal = layout !== 'vertical';
+  const label = chips.kind === 'example'
+    ? uiString('chip_examples_label', lang)
+    : (t ? '熱搜' : 'Trending');
+
   return (
     <div
       data-testid="trending-queries-chips"
+      data-chip-kind={chips.kind}
       style={{
         display: 'flex',
         flexWrap: 'wrap',
@@ -49,14 +78,14 @@ const TrendingQueriesChips = ({ showId, lang, onSelect, layout }) => {
       }}
     >
       <span style={{ color: TOKEN.textMuted, fontSize: 11, marginRight: 4 }}>
-        {t ? '熱搜' : 'Trending'}
+        {label}
       </span>
-      {queries.map((q, i) => (
+      {chips.items.map((text, i) => (
         <button
           key={i}
           type="button"
-          onClick={() => onSelect && onSelect(q.query_text)}
-          data-testid="trending-chip"
+          onClick={() => onSelect && onSelect(text)}
+          data-testid={chips.kind === 'example' ? 'example-chip' : 'trending-chip'}
           style={{
             padding: '3px 10px',
             background: TOKEN.bg,
@@ -71,7 +100,7 @@ const TrendingQueriesChips = ({ showId, lang, onSelect, layout }) => {
           onMouseEnter={e => (e.currentTarget.style.borderColor = TOKEN.accent)}
           onMouseLeave={e => (e.currentTarget.style.borderColor = TOKEN.surfaceBorder)}
         >
-          {q.query_text}
+          {text}
         </button>
       ))}
     </div>

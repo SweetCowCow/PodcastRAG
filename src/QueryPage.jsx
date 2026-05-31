@@ -631,9 +631,15 @@ const QueryPage = ({ lang, show, onBack, onOpenEpisode, queryMode, user, onUserC
   const indexTabContent = (
     <div data-testid="mode-pane-index" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       <div style={{ padding: '16px 24px', borderBottom: `1px solid ${TOKEN.surfaceBorder}`, background: TOKEN.surface, flexShrink: 0 }}>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <TrendingQueriesChips
+          showId={show.id}
+          lang={lang}
+          mode="index"
+          onSelect={(q) => { setQueryText(q); setTimeout(() => handleKeywordSearch(q), 0); }}
+        />
+        <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
           <Input value={queryText} onChange={e => setQueryText(e.target.value)}
-            placeholder={t ? '輸入關鍵字（多個字會全部命中）' : 'Enter keywords (all must match)'}
+            placeholder={uiString('mode_placeholder_index', lang)}
             icon="search"
             onSubmit={() => handleKeywordSearch()}
           />
@@ -688,11 +694,12 @@ const QueryPage = ({ lang, show, onBack, onOpenEpisode, queryMode, user, onUserC
         <TrendingQueriesChips
           showId={show.id}
           lang={lang}
+          mode="semantic"
           onSelect={(q) => { setQueryText(q); setTimeout(() => handleSearch(q), 0); }}
         />
         <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
           <Input value={queryText} onChange={e => setQueryText(e.target.value)}
-            placeholder={t ? '描述你想找的內容…' : 'Describe what you’re looking for…'}
+            placeholder={uiString('mode_placeholder_semantic', lang)}
             icon="search" onSubmit={() => handleSearch()} />
           <Btn onClick={() => handleSearch()} disabled={searching || !queryText.trim()}>{t ? '搜尋' : 'Search'}</Btn>
         </div>
@@ -775,11 +782,12 @@ const QueryPage = ({ lang, show, onBack, onOpenEpisode, queryMode, user, onUserC
             <TrendingQueriesChips
               showId={show.id}
               lang={lang}
+              mode="chat"
               onSelect={(q) => { setQueryText(q); setTimeout(() => handleSend(q), 0); }}
             />
             <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
               <Input value={queryText} onChange={e => setQueryText(e.target.value)}
-                placeholder={t ? '針對此節目內容提問...' : 'Ask anything about this show...'}
+                placeholder={uiString('mode_placeholder_chat', lang)}
                 onSubmit={() => handleSend()} />
               <Btn onClick={() => handleSend()} disabled={sending || !queryText.trim()} icon="send">{t ? '送出' : 'Send'}</Btn>
             </div>

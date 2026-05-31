@@ -47,6 +47,7 @@ _TASK_ROUTES = {
     "app.workers.tasks.transcribe_episode": {"queue": "transcribe"},
     "app.workers.topic_task.classify_episode_topics": {"queue": "topic"},
     "app.workers.summary_task.generate_episode_summary": {"queue": "summary"},
+    "app.workers.example_prompts_task.generate_show_example_prompts": {"queue": "summary"},
     "app.workers.cron_tick.cron_tick": {"queue": "control"},
     "app.workers.quota_digest.send_quota_digest": {"queue": "control"},
     "app.workers.appeal_digest.send_appeal_digest": {"queue": "control"},
