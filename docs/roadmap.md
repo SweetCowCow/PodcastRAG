@@ -128,8 +128,9 @@ R3 拆三段做（每段都跑 eval baseline 對照升幅）：
 **Active**（0 個）：
 - （per-show-mode-example-prompts 已 2026-05-31 archive，無進行中 change）
 
-**Parked**（1 個）：
-1. `voyage-rerank-tune-b22-b23` (0/9) — 對 retrieval-rerank-via-voyage 的 b22/b23 調參。
+**Parked**（2 個）：
+1. ⭐ `semantic-topk-bump-and-show-more` (0/3) — 語意搜尋過撈 k=25（前端帶 k、後端不動）+ `SemanticResultList` 初始顯示 10 group + 「顯示更多」每次 client-side +5。純前端、不動排序（Recall@K 不受影響）。2026-05-31 discuss→propose。**已可 apply**。
+2. `voyage-rerank-tune-b22-b23` (0/9) — 對 retrieval-rerank-via-voyage 的 b22/b23 調參。
 
 **待 propose / 待 discuss**：見下方「衍生待 propose」段。
 
@@ -152,7 +153,7 @@ R3 拆三段做（每段都跑 eval baseline 對照升幅）：
 - ✅ **`per-show-mode-example-prompts`** done 2026-05-31（archive `2026-05-31-per-show-mode-example-prompts`）— 每節目×每模式 LLM 預產引導範例 + 冷啟動 chip fallback。prod 三節目 backfill 3/3/3、前端 placeholder+chip smoke 全綠。
 - **eval golden set 擴張到 曼報 + 壹加壹電台** — 各 ~30+ 題人工 sentinel，等本節目 30+ 題到位再啟動
 - **R3.x 候選未 propose**：topic seg 自動類別建議 / segment_categories admin UI / 業配段降權 multiplier / dict weight_in_lexical_query 通用化
-- 🆕 **`semantic-topk-bump-and-show-more`**（2026-05-31 user 問起）— 語意搜尋現顯示 8 筆＝`PublicSearchRequest.k` default 8（`schemas/query.py:182`，API 已支援 1–50；`rag.py` `RETRIEVAL_TOP_K=8`）；前端 `handleSearch` 沒傳 k。retrieval 是 pgvector 向量搜尋、只有 query embedding 一次固定成本，回 8 vs 30 筆成本幾乎一樣（**非每筆 LLM**）。候選：default 提到 ~15–20，或加「顯示更多」漸進載入（再 query 較大 k）。屬顯示深度調整、不動 ranking，風險低但仍應獨立 change（含 eval 對照）。`SemanticResultList` 目前無顯示 cap（全部渲染），需配合加 cap+show-more 才不會一次傾倒。
+- ✅ **`semantic-topk-bump-and-show-more`** 已 propose+parked 2026-05-31（0/3，已可 apply）— 2026-05-31 discuss 收斂：過撈 k=25（非 50，因 `enrich_hits` 是 O(k) 循序 SQL、延遲隨 k 線性成長；無 per-hit LLM 故 $ 成本不變）+ 前端初始 10 group + 顯示更多 +5 client-slice（不重打 API，因 endpoint 無 offset）。純前端、不動排序。
 - **R2.2 prompt redo** — Faithfulness 拉回（依賴 R3.x + R1.3）
 - **R1.3 judge re-bake-off** — Phase B，等 R3.x 全跑完啟動
 - **Golden set audit q25 expected 對齊** — 4 集多撈 / 6 集漏，人工複查（屬 dataset quality）
