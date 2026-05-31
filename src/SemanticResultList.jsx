@@ -23,10 +23,17 @@ const _relevanceFrac = (rank, total) => {
   return Math.max(min, 1 - (rank / (total - 1)) * (1 - min));
 };
 
+// semantic-topk-bump-and-show-more: with the Semantic tab now over-fetching k=25,
+// cap how many episode-groups render initially and reveal more client-side (no new
+// API call) — semantic-specific display constants.
+const SEM_INITIAL_GROUPS = 10;
+const SEM_GROUP_STEP = 5;
+
 const SemanticResultList = ({ results, lang, onPlaySegment, onJumpToTranscript }) => {
   const t = lang === 'zh';
   const list = Array.isArray(results) ? results : [];
   const [expanded, setExpanded] = React.useState({});  // episode_id → bool
+  const [shownGroups, setShownGroups] = React.useState(SEM_INITIAL_GROUPS);
 
   if (list.length === 0) return null;
 
@@ -58,7 +65,7 @@ const SemanticResultList = ({ results, lang, onPlaySegment, onJumpToTranscript }
       data-testid="semantic-result-list"
       style={{ display: 'flex', flexDirection: 'column', gap: 10 }}
     >
-      {orderEpisode.map(epKey => {
+      {orderEpisode.slice(0, shownGroups).map(epKey => {
         const g = groups[epKey];
         const lead = g.items[0];
         const rest = g.items.slice(1);
@@ -97,6 +104,29 @@ const SemanticResultList = ({ results, lang, onPlaySegment, onJumpToTranscript }
           </div>
         );
       })}
+      {orderEpisode.length > shownGroups && (
+        <button
+          type="button"
+          data-testid="semantic-show-more"
+          onClick={() => setShownGroups(n => n + SEM_GROUP_STEP)}
+          style={{
+            alignSelf: 'center',
+            marginTop: 4,
+            padding: '6px 16px',
+            background: TOKEN.accentDim,
+            border: `1px solid ${TOKEN.accent}55`,
+            borderRadius: 8,
+            color: TOKEN.accent,
+            fontSize: 13,
+            cursor: 'pointer',
+            fontFamily: 'inherit',
+          }}
+        >
+          {t
+            ? `顯示更多（還有 ${orderEpisode.length - shownGroups} 集）`
+            : `Show more (${orderEpisode.length - shownGroups} more)`}
+        </button>
+      )}
     </div>
   );
 };

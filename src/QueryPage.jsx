@@ -347,7 +347,9 @@ const QueryPage = ({ lang, show, onBack, onOpenEpisode, queryMode, user, onUserC
         res = await apiFetch(`/shows/${show.id}/search`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ question }),
+          // semantic-topk-bump-and-show-more: over-fetch k=25 (endpoint default is
+          // 8). Single over-fetch; SemanticResultList reveals groups incrementally.
+          body: JSON.stringify({ question, k: 25 }),
         });
       } catch (netErr) {
         throw new Error(networkErrorMessage(lang));
