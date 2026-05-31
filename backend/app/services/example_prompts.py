@@ -33,7 +33,15 @@ _MAX_SUMMARIES = 12
 _SUMMARY_CHAR_CAP = 6000
 _MAX_GUESTS = 30
 _MAX_QUESTIONS_PER_MODE = 3
-_MAX_QUESTION_LEN = 60
+# Per-mode max question length. Chat is cross-episode synthesis and is naturally
+# the longest; a single global 60-char cap silently dropped every chat question
+# for shows whose synthesis questions ran long. Index is keyword/entity (short).
+_MODE_MAX_LEN = {
+    ExamplePromptMode.index: 30,
+    ExamplePromptMode.semantic: 70,
+    ExamplePromptMode.chat: 120,
+}
+_DEFAULT_MAX_QUESTION_LEN = 120
 
 # Per-mode generation instruction (design D6). Each asks for 2–3 questions in
 # the style that mode is good at, in Traditional Chinese, one per line.
@@ -134,11 +142,11 @@ def _build_prompt(mode: ExamplePromptMode, materials: dict) -> str:
     return "\n\n".join(parts)
 
 
-def _parse_questions(text: str) -> list[str]:
+def _parse_questions(text: str, max_len: int = _DEFAULT_MAX_QUESTION_LEN) -> list[str]:
     """Parse LLM output into a clean question list.
 
     Strips markdown code fences, leading list markers / numbering / quotes, and
-    drops empty or over-long lines. Robust to AI Hub wrapping output in ```.
+    drops empty or over-`max_len` lines. Robust to AI Hub wrapping output in ```.
     """
     if not text:
         return []
@@ -149,7 +157,7 @@ def _parse_questions(text: str) -> list[str]:
         # strip leading bullets / numbering: "1.", "1)", "-", "*", "・", "•"
         line = re.sub(r"^\s*(?:\d+[.)、]|[-*・•])\s*", "", line)
         line = line.strip().strip("「」\"'`").strip()
-        if not line or len(line) > _MAX_QUESTION_LEN:
+        if not line or len(line) > max_len:
             continue
         out.append(line)
     # de-dupe preserving order
@@ -203,7 +211,9 @@ async def generate_for_show(db: AsyncSession, show_id) -> dict:
             text = await _call_chat(
                 client, model=cfg.model, prompt=_build_prompt(mode, materials)
             )
-            questions = _parse_questions(text)[:_MAX_QUESTIONS_PER_MODE]
+            questions = _parse_questions(
+                text, max_len=_MODE_MAX_LEN.get(mode, _DEFAULT_MAX_QUESTION_LEN)
+            )[:_MAX_QUESTIONS_PER_MODE]
         except Exception:
             logger.warning(
                 "example_prompts: LLM failed for show %s mode %s — leave existing",
