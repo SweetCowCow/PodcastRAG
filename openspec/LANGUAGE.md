@@ -72,9 +72,30 @@
 - **avoid**：「error result」「error dict」（太通用，沒明示 envelope 是 ok/kind/message/hint 的固定結構）、「tool exception」（exception 是 raise 那刻；envelope 是 catch 後的 dict）
 - **why**：把「LLM 看得懂的錯誤分類」「user 看得懂的提示」「engineer 看得懂的內部訊息」三層分開；跟 Tool call failure 一同使用：tool call failure 講「發生什麼事」，envelope 講「怎麼結構化回給 LLM」
 
+### 引用片段卡（SegmentCitationCard）
+- **definition**：索引／語意／對話三模式共用的單一引用葉子元件，渲染「一個逐字稿片段」的卡：片段文字 + 高亮（多詞兩色 or server 單色）+ 集標題 + 時間戳 +「播放此段」/「跳到逐字稿」兩顆獨立動作鈕（語意模式另含相關度條）。檔案 `src/SegmentCitationCard.jsx`；`SourceCard` 現為轉呼叫它的 thin wrapper。
+- **avoid**：「SourceCard」（legacy 名，現只是 wrapper，新 artifact 用「引用片段卡」）、「來源卡 / 片段卡 / citation chip」三名混用
+- **why**：三模式葉子收斂成一個元件，名字也要收斂；配合下方 citation / source / segment 三層語意
+
+### citation（引用）
+- **definition**：被 LLM 答案**實際引用**到的片段（對話模式的 `cited_hits`）。顯示張數等於實際引用數，與 retrieval `top_k` 解耦。
+- **avoid**：「source」（source 是檢索命中、不一定被引用）、「reference」（太通用）
+- **why**：是 source 的子集——「答案真的用到的那些」
+
+### source（來源 / 檢索命中）
+- **definition**：檢索（語意／索引）回傳的命中片段，不保證被任何答案引用。語意／索引模式顯示的是 source（到顯示 cap）。
+- **avoid**：「citation」（citation 特指被答案引用）、「result」（太通用）
+- **why**：跟 citation 區分——是「檢索撈到的全集」，citation 是其中被引用的子集
+
+### segment（逐字稿片段）
+- **definition**：逐字稿切成的時間片段（transcript chunk），是 citation / source 指向的底層資料單位。`SegmentCitationCard` 的 `segment` prop 即此。
+- **avoid**：「chunk / 片段」未指明層級時混用（內部 retrieval 講 chunk、UI 層講 segment）、「clip」（口語）
+- **why**：明確「資料單位」這一層，跟「被引用（citation）／被檢索（source）」的語意層分開
+
 ---
 
 ## 變更紀錄
 
 - 2026-05-21：建檔。初始 entry 來自 `agent-trace-telemetry` change discuss + propose 過程
 - 2026-05-21 晚：`chat-tool-error-isolation` discuss 加入 `YAGNI` + `Tool error envelope`
+- 2026-05-31：`unified-segment-citation-card` apply 加入 `引用片段卡（SegmentCitationCard）` + `citation` / `source` / `segment` 三層語意界定

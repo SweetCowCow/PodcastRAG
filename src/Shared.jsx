@@ -585,116 +585,23 @@ const _formatTs = (sec) => {
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 };
 
+// SourceCard — thin compatibility wrapper that delegates to the unified
+// SegmentCitationCard (change `unified-segment-citation-card`, design D1). Legacy
+// callers passed a single combined `onJump(source, position)` (play + navigate); we
+// map it to the jump-to-transcript action so prior callers keep working without a
+// separate play button. New callers should use SegmentCitationCard directly with the
+// split onPlay / onJumpToTranscript callbacks. (`sanitiseMarkOnly` is retained above —
+// SegmentCitationCard reuses it for the single-color server-highlight path.)
 const SourceCard = ({ source, lang, onJump, position }) => {
-  const t = lang === 'zh';
-  const [expanded, setExpanded] = React.useState(false);
   if (!source) return null;
-  const before = source.before_text || '';
-  const after = source.after_text || '';
-  const highlights = source.highlights || '';
-  const aiSummary = source.ai_summary_excerpt || '';
-  const mainText = source.text || '';
-  const epTitle = source.episode_title || (t ? '片段' : 'Clip');
-  const ts = source.start_time;
-  const handleJump = () => {
-    if (typeof onJump !== 'function') return;
-    onJump(source, position);
-  };
+  const handleJump = typeof onJump === 'function' ? () => onJump(source, position) : undefined;
   return (
-    <div className="source-card" style={{
-      background: TOKEN.surface,
-      border: `1px solid ${TOKEN.surfaceBorder}`,
-      borderRadius: 10,
-      padding: '14px 16px',
-      display: 'flex',
-      flexDirection: 'column',
-      gap: 8,
-    }}>
-      {/* App.jsx sets `mark { background: transparent }` globally; restore the
-          highlight inside SourceCard so server-rendered <mark> wrappers visibly
-          mark matched terms. */}
-      <style>{`.source-card mark { background: ${TOKEN.accent}33; color: ${TOKEN.accentHover || TOKEN.accent}; border-radius: 2px; padding: 0 2px; font-weight: 600; border-bottom: 1px solid ${TOKEN.accent}; }`}</style>
-      {/* Header: episode title + timestamp */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-        {typeof position === 'number' && (
-          <span style={{
-            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-            minWidth: 22, height: 22, padding: '0 6px',
-            background: TOKEN.accentDim, color: TOKEN.accent,
-            border: `1px solid ${TOKEN.accent}55`, borderRadius: 6,
-            fontSize: 11, fontWeight: 700,
-          }}>{position + 1}</span>
-        )}
-        <span style={{ color: TOKEN.textSecondary, fontSize: 12, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{epTitle}</span>
-        {typeof ts === 'number' && (
-          <span style={{ color: TOKEN.textMuted, fontSize: 12, display: 'flex', alignItems: 'center', gap: 3, flexShrink: 0 }}>
-            <Icon name="clock" size={11} /> {_formatTs(ts)}
-          </span>
-        )}
-      </div>
-
-      {/* Main excerpt with optional before/after context */}
-      <p style={{ margin: 0, color: TOKEN.text, fontSize: 13, lineHeight: 1.65 }}>
-        {before && (
-          <span style={{ color: TOKEN.textMuted }}>{before.endsWith(' ') || /[　-鿿]/.test(before.slice(-1)) ? before : before + ' '}</span>
-        )}
-        {highlights ? (
-          <span dangerouslySetInnerHTML={{ __html: sanitiseMarkOnly(highlights) }} />
-        ) : (
-          <span>{mainText}</span>
-        )}
-        {after && (
-          <span style={{ color: TOKEN.textMuted }}>{after.startsWith(' ') || /[　-鿿]/.test(after.slice(0, 1)) ? after : ' ' + after}</span>
-        )}
-      </p>
-
-      {/* AI summary excerpt with show-more toggle */}
-      {aiSummary && (() => {
-        const aiFull = source.ai_summary_full || '';
-        const hasMore = aiFull && aiFull.length > aiSummary.replace(/…$/, '').length;
-        const display = expanded && hasMore ? aiFull : aiSummary;
-        return (
-          <div style={{ fontSize: 12, color: TOKEN.textSecondary, lineHeight: 1.55 }}>
-            <span style={{ color: TOKEN.textMuted, marginRight: 6, fontWeight: 600 }}>{t ? '本集摘要' : 'Summary'}:</span>
-            <span>{display}</span>
-            {hasMore && (
-              <button type="button" onClick={() => setExpanded(v => !v)} style={{
-                background: 'none', border: 'none', padding: 0, marginLeft: 6,
-                color: TOKEN.accent, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit',
-              }}>
-                {expanded ? (t ? '收合' : 'Show less') : (t ? '展開' : 'Show more')}
-              </button>
-            )}
-          </div>
-        );
-      })()}
-
-      {/* Jump button — label depends on source kind. Description hits don't
-          have a meaningful timestamp (start_time=0), so we say "open episode"
-          instead of "jump to segment" to set the right expectation. */}
-      {typeof onJump === 'function' && typeof ts === 'number' && (() => {
-        const isDescription = source.source === 'description';
-        const label = isDescription
-          ? (t ? '打開該集' : 'Open episode')
-          : (t ? '跳到這段內容' : 'Jump to transcript');
-        return (
-          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-            <button type="button" onClick={handleJump} style={{
-              display: 'inline-flex', alignItems: 'center', gap: 4,
-              padding: '4px 10px', background: TOKEN.bg,
-              border: `1px solid ${TOKEN.surfaceBorder}`, borderRadius: 6,
-              color: TOKEN.accent, fontSize: 12, cursor: 'pointer',
-              fontFamily: 'inherit',
-            }}
-              onMouseEnter={e => (e.currentTarget.style.borderColor = TOKEN.accent)}
-              onMouseLeave={e => (e.currentTarget.style.borderColor = TOKEN.surfaceBorder)}>
-              <Icon name={isDescription ? 'fileText' : 'play'} size={11} color={TOKEN.accent} />
-              {label}
-            </button>
-          </div>
-        );
-      })()}
-    </div>
+    <SegmentCitationCard
+      segment={source}
+      position={position}
+      lang={lang}
+      onJumpToTranscript={handleJump}
+    />
   );
 };
 

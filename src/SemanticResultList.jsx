@@ -1,26 +1,29 @@
-// SemanticResultList — landing-and-mode-orchestration-redesign decision 8.
+// SemanticResultList — landing-and-mode-orchestration-redesign decision 8,
+// updated by `unified-segment-citation-card` (leaf is now SegmentCitationCard).
 //
 // Hybrid C rendering for the Semantic tab:
 //   (a) Flat list ranked by backend RRF score order.
 //   (b) When an episode has K>1 chunks in the result set, show ONLY the
 //       highest-ranked one with a「+{K-1} 同集」chip; clicking the chip
 //       expands the rest in original-RRF order immediately below the lead card.
-//   (c) Each card shows a relevance bar on the right, linearly mapped from
-//       its rank (rank 0 → 100%, last → 10%). NO raw RRF score text is shown.
+//   (c) Relevance is now rendered INSIDE the shared SegmentCitationCard via its
+//       `relevance` prop (0..1), linearly mapped from rank (rank 0 → 1.0, last →
+//       0.1). NO raw RRF score text is shown.
 //
 // Props:
-//   results : RRF-ordered chunk hits (same shape SourceCard consumes)
+//   results            : RRF-ordered chunk hits (ChunkHit shape; audio_url enriched
+//                        by the QueryPage call site so the play button can render)
 //   lang
-//   onJump  : (citation, position) → opens TranscriptPage
+//   onPlaySegment      : (segment) → play in place (sticky player), no navigation
+//   onJumpToTranscript : (segment) → navigate to TranscriptPage at start_time
 
-const _relevancePct = (rank, total) => {
-  if (total <= 1) return 100;
-  const minPct = 10;
-  const span = 100 - minPct;
-  return Math.round(100 - (rank / (total - 1)) * span);
+const _relevanceFrac = (rank, total) => {
+  if (total <= 1) return 1;
+  const min = 0.1;
+  return Math.max(min, 1 - (rank / (total - 1)) * (1 - min));
 };
 
-const SemanticResultList = ({ results, lang, onJump }) => {
+const SemanticResultList = ({ results, lang, onPlaySegment, onJumpToTranscript }) => {
   const t = lang === 'zh';
   const list = Array.isArray(results) ? results : [];
   const [expanded, setExpanded] = React.useState({});  // episode_id → bool
@@ -39,6 +42,17 @@ const SemanticResultList = ({ results, lang, onJump }) => {
     groups[epKey].items.push({ ...r, _rank: rank });
   });
 
+  const renderCard = (item) => (
+    <SegmentCitationCard
+      segment={item}
+      lang={lang}
+      position={item._rank}
+      relevance={_relevanceFrac(item._rank, list.length)}
+      onPlay={onPlaySegment}
+      onJumpToTranscript={(seg) => onJumpToTranscript && onJumpToTranscript(seg)}
+    />
+  );
+
   return (
     <div
       data-testid="semantic-result-list"
@@ -49,38 +63,9 @@ const SemanticResultList = ({ results, lang, onJump }) => {
         const lead = g.items[0];
         const rest = g.items.slice(1);
         const isExpanded = !!expanded[epKey];
-        const leadPct = _relevancePct(lead._rank, list.length);
         return (
           <div key={epKey} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <div style={{ display: 'flex', gap: 10, alignItems: 'stretch' }}>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <SourceCard
-                  source={lead}
-                  lang={lang}
-                  position={lead._rank}
-                  onJump={(src) => onJump && onJump(src, lead._rank)}
-                />
-              </div>
-              <div
-                data-testid="semantic-relevance-bar"
-                aria-label={`relevance ${leadPct}%`}
-                style={{
-                  width: 6,
-                  borderRadius: 3,
-                  background: TOKEN.surfaceBorder,
-                  position: 'relative',
-                  overflow: 'hidden',
-                }}
-              >
-                <div style={{
-                  position: 'absolute',
-                  left: 0, right: 0, bottom: 0,
-                  height: `${leadPct}%`,
-                  background: TOKEN.accent,
-                  borderRadius: 3,
-                }} />
-              </div>
-            </div>
+            {renderCard(lead)}
             {rest.length > 0 && (
               <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
                 <button
@@ -104,39 +89,11 @@ const SemanticResultList = ({ results, lang, onJump }) => {
                 </button>
               </div>
             )}
-            {isExpanded && rest.map(item => {
-              const pct = _relevancePct(item._rank, list.length);
-              return (
-                <div key={item._rank} style={{ display: 'flex', gap: 10, alignItems: 'stretch', marginLeft: 16 }}>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <SourceCard
-                      source={item}
-                      lang={lang}
-                      position={item._rank}
-                      onJump={(src) => onJump && onJump(src, item._rank)}
-                    />
-                  </div>
-                  <div
-                    aria-label={`relevance ${pct}%`}
-                    style={{
-                      width: 6,
-                      borderRadius: 3,
-                      background: TOKEN.surfaceBorder,
-                      position: 'relative',
-                      overflow: 'hidden',
-                    }}
-                  >
-                    <div style={{
-                      position: 'absolute',
-                      left: 0, right: 0, bottom: 0,
-                      height: `${pct}%`,
-                      background: TOKEN.accent,
-                      borderRadius: 3,
-                    }} />
-                  </div>
-                </div>
-              );
-            })}
+            {isExpanded && rest.map(item => (
+              <div key={item._rank} style={{ marginLeft: 16 }}>
+                {renderCard(item)}
+              </div>
+            ))}
           </div>
         );
       })}

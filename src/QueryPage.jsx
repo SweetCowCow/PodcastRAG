@@ -469,20 +469,24 @@ const QueryPage = ({ lang, show, onBack, onOpenEpisode, queryMode, user, onUserC
     }
   };
 
-  // Jump from a T1/T3 hit: the keyword-search response carries no audio_url, so
-  // look it up from the loaded episodes list before delegating to onSourceJump.
-  const onKeywordJump = (hit) => {
-    const ep = (episodes || []).find(e => e.id === hit.episode_id);
-    onSourceJump(
-      {
-        episode_id: hit.episode_id,
-        episode_title: hit.episode_title,
-        start_time: hit.start_time,
-        audio_url: ep ? ep.audio_url : null,
-      },
-      0,
-      null,
-    );
+  // unified-segment-citation-card task 9: enumeration episode inline expand.
+  // Reuses GET /episodes/{id}/transcript and filters by the enumeration's terms
+  // (guest names for guest enumerations). With no terms, cap to the first few
+  // segments so a topic enumeration doesn't dump the whole transcript.
+  const onEnumExpandEpisode = async (episodeId, terms) => {
+    try {
+      const res = await apiFetch(`/episodes/${episodeId}/transcript`);
+      if (!res.ok) return [];
+      const data = await res.json();
+      const segs = data.segments || [];
+      const tl = (terms || []).filter(Boolean);
+      if (!tl.length) return segs.slice(0, 8);
+      return segs.filter(s =>
+        tl.some(tm => (s.text || '').toLowerCase().includes(tm.toLowerCase())),
+      );
+    } catch (_) {
+      return [];
+    }
   };
 
   // landing-and-mode-orchestration-redesign decision 2: 固定三 tab 順序，
@@ -581,6 +585,35 @@ const QueryPage = ({ lang, show, onBack, onOpenEpisode, queryMode, user, onUserC
     onOpenEpisode({ id: src.episode_id, title: src.episode_title }, src.start_time);
   };
 
+  // unified-segment-citation-card D3: split the combined onSourceJump into two
+  // independent actions consumed by SegmentCitationCard's two buttons.
+  //  - onPlaySegment: start the sticky player at the segment, WITHOUT navigating.
+  //  - onJumpToTranscript: fire the citation_click beacon + navigate to the
+  //    transcript at start_time (no playback).
+  const onPlaySegment = (segment) => {
+    if (audio && audio.playFromTime && segment && segment.audio_url) {
+      audio.playFromTime(segment.episode_id, segment.start_time || 0, {
+        title: segment.episode_title,
+        audio_url: segment.audio_url,
+      });
+    }
+  };
+  const onJumpToTranscript = (segment, position, queryId) => {
+    if (!segment) return;
+    if (queryId && segment.episode_id != null && segment.start_time != null) {
+      const chunk_id = `ep:${segment.episode_id}@${Number(segment.start_time).toFixed(2)}`;
+      sendCitationBeacon(queryId, chunk_id, position);
+    }
+    onOpenEpisode({ id: segment.episode_id, title: segment.episode_title }, segment.start_time);
+  };
+
+  // /search + /query ChunkHits carry no audio_url; resolve it from the loaded
+  // episodes list so SegmentCitationCard's play button can render in chat / enum.
+  const epAudioUrl = (episodeId) => {
+    const e = (episodes || []).find(x => x.id === episodeId);
+    return e ? (e.audio_url || null) : null;
+  };
+
   const tabStrip = (
     <div data-testid="mode-tabs" style={{ display: 'flex', gap: 0, borderBottom: `1px solid ${TOKEN.surfaceBorder}`, background: TOKEN.surface, flexShrink: 0 }}>
       {TABS.map(tab => (
@@ -628,7 +661,9 @@ const QueryPage = ({ lang, show, onBack, onOpenEpisode, queryMode, user, onUserC
             lang={lang}
             onMoreT1={() => handleKeywordMore('t1')}
             onMoreT2={() => handleKeywordMore('t2')}
-            onJumpTo={onKeywordJump}
+            onPlaySegment={onPlaySegment}
+            onJumpToTranscript={(seg) => onJumpToTranscript(seg)}
+            audioUrlFor={epAudioUrl}
             onExpandEpisode={onKeywordExpandEpisode}
             onSwitchMode={(mode) => setActiveTab(mode)}
             onExample={(q) => { setQueryText(q); setTimeout(() => handleKeywordSearch(q), 0); }}
@@ -675,9 +710,15 @@ const QueryPage = ({ lang, show, onBack, onOpenEpisode, queryMode, user, onUserC
               {t ? `找到 ${searchResults.length} 個相關片段` : `Found ${searchResults.length} segments`}
             </p>
             <SemanticResultList
-              results={searchResults}
+              results={searchResults.map(r => ({
+                ...r,
+                // /search ChunkHit carries no audio_url; enrich from the loaded
+                // episodes list so SegmentCitationCard's play button can render.
+                audio_url: r.audio_url || ((episodes || []).find(e => e.id === r.episode_id) || {}).audio_url || null,
+              }))}
               lang={lang}
-              onJump={(src, pos) => onSourceJump(src, pos)}
+              onPlaySegment={onPlaySegment}
+              onJumpToTranscript={(seg) => onJumpToTranscript(seg)}
             />
           </div>
         )}
@@ -721,6 +762,10 @@ const QueryPage = ({ lang, show, onBack, onOpenEpisode, queryMode, user, onUserC
                 onCitationClick={onCitationClick}
                 onOpenEpisode={onOpenEpisode}
                 onSourceJump={onSourceJump}
+                onPlaySegment={onPlaySegment}
+                onJumpToTranscript={onJumpToTranscript}
+                audioUrlFor={epAudioUrl}
+                onExpandSegments={onEnumExpandEpisode}
                 voted={msg.query_id ? votes[msg.query_id] : undefined}
                 onVote={submitVote} />
             ))}
@@ -816,7 +861,70 @@ const QueryPage = ({ lang, show, onBack, onOpenEpisode, queryMode, user, onUserC
 const DEFAULT_DISPLAY_COUNT = 10;
 const DISPLAY_INCREMENT = 10;
 
-const EnumerationSection = ({ episodes, lang, onOpenEpisode }) => {
+// unified-segment-citation-card task 9: per-episode inline "展開查看各段" expander
+// for the enumeration list. Fetches the episode's term-matching segments on first
+// open (reusing GET /episodes/{id}/transcript via onExpandSegments) and renders
+// them as SegmentCitationCard items in place — no navigation. Terms = the episode's
+// guest names (the enumeration's keywords); used for both filter and two-color
+// highlight. 0 matching segments → friendly placeholder.
+const EnumSegmentsExpander = ({ ep, lang, onExpandSegments, onPlaySegment, onJumpToTranscript, audioUrlFor }) => {
+  const t = lang === 'zh';
+  const [open, setOpen] = React.useState(false);
+  const [segs, setSegs] = React.useState(null); // null = not fetched
+  const [loading, setLoading] = React.useState(false);
+  const terms = Array.isArray(ep.guests) ? ep.guests.filter(Boolean) : [];
+
+  const toggle = async () => {
+    if (open) { setOpen(false); return; }
+    setOpen(true);
+    if (segs === null && onExpandSegments) {
+      setLoading(true);
+      try {
+        const fetched = await onExpandSegments(ep.episode_id, terms);
+        setSegs(fetched || []);
+      } catch (_) {
+        setSegs([]);
+      } finally {
+        setLoading(false);
+      }
+    }
+  };
+
+  return (
+    <div style={{ marginTop: 8 }}>
+      <Btn variant="ghost" size="sm" onClick={toggle}>
+        {open ? (t ? '收合' : 'Collapse') : (t ? '展開查看各段' : 'View segments')}
+      </Btn>
+      {open && (
+        <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {loading && <div style={{ color: TOKEN.textMuted, fontSize: 12 }}>{t ? '載入中…' : 'Loading…'}</div>}
+          {!loading && segs && segs.length === 0 && (
+            <div style={{ color: TOKEN.textMuted, fontSize: 12 }}>
+              {t ? '（此集無可顯示的命中段落）' : '(no matching segments to show)'}
+            </div>
+          )}
+          {!loading && (segs || []).map((s, i) => (
+            <SegmentCitationCard
+              key={i}
+              segment={{
+                ...s,
+                episode_id: ep.episode_id,
+                episode_title: ep.title,
+                audio_url: s.audio_url || (audioUrlFor ? audioUrlFor(ep.episode_id) : null),
+              }}
+              terms={terms}
+              lang={lang}
+              onPlay={onPlaySegment}
+              onJumpToTranscript={(seg) => onJumpToTranscript && onJumpToTranscript(seg)}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const EnumerationSection = ({ episodes, lang, onOpenEpisode, onExpandSegments, onPlaySegment, onJumpToTranscript, audioUrlFor }) => {
   const t = lang === 'zh';
   const [expanded, setExpanded] = React.useState({});
   const [displayCount, setDisplayCount] = React.useState(DEFAULT_DISPLAY_COUNT);
@@ -902,6 +1010,14 @@ const EnumerationSection = ({ episodes, lang, onOpenEpisode }) => {
                   )}
                 </div>
               )}
+              <EnumSegmentsExpander
+                ep={ep}
+                lang={lang}
+                onExpandSegments={onExpandSegments}
+                onPlaySegment={onPlaySegment}
+                onJumpToTranscript={onJumpToTranscript}
+                audioUrlFor={audioUrlFor}
+              />
             </div>
           );
         })}
@@ -924,7 +1040,7 @@ const EnumerationSection = ({ episodes, lang, onOpenEpisode }) => {
   );
 };
 
-const ChatBubble = ({ msg, lang, user, onCitationClick, onOpenEpisode, onSourceJump, voted, onVote }) => {
+const ChatBubble = ({ msg, lang, user, onCitationClick, onOpenEpisode, onSourceJump, onPlaySegment, onJumpToTranscript, audioUrlFor, onExpandSegments, voted, onVote }) => {
   const t = lang === 'zh';
   const isUser = msg.role === 'user';
   const citations = msg.citations || [];
@@ -990,11 +1106,9 @@ const ChatBubble = ({ msg, lang, user, onCitationClick, onOpenEpisode, onSourceJ
               citations={citations}
               lang={lang}
               queryId={queryId}
-              onCitationClickBeacon={onCitationClick}
-              onJump={(c, posInGroup) => {
-                if (onSourceJump) onSourceJump(c, posInGroup, queryId);
-                else if (onOpenEpisode) onOpenEpisode({ id: c.episode_id, title: c.episode_title }, c.start_time);
-              }}
+              audioUrlFor={audioUrlFor}
+              onPlaySegment={onPlaySegment}
+              onJumpToTranscript={onJumpToTranscript}
             />
           ) : null;
           if (isEnumLayout) {
@@ -1004,6 +1118,10 @@ const ChatBubble = ({ msg, lang, user, onCitationClick, onOpenEpisode, onSourceJ
                   episodes={enumerationEpisodes}
                   lang={lang}
                   onOpenEpisode={onOpenEpisode}
+                  onExpandSegments={onExpandSegments}
+                  onPlaySegment={onPlaySegment}
+                  onJumpToTranscript={onJumpToTranscript}
+                  audioUrlFor={audioUrlFor}
                 />
                 {sourcePanel && (
                   <CitationEvidenceCollapse count={citations.length} lang={lang}>
