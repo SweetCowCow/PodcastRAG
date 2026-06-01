@@ -1,6 +1,6 @@
 # PodcastRAG 路線圖
 
-> 最後更新：2026-06-01（Jacky 重排執行順序，建立**執行佇列（Execution Queue）**為新的權威排序。下方 Phase A–F 表保留作為各項目的細節參考，但「下一動做什麼」一律以執行佇列為準。）
+> 最後更新：2026-06-01（EQ1 favicon ✅ 上線 commit `02c1acf` + prod 驗證；下一動＝EQ2a ASR 校正字典。執行佇列為權威排序，下方 Phase A–F 表為細節參考。）
 
 本文件記錄 PodcastRAG 後續開發的優先順序與規劃。**排序真相 = 下方「🎯 執行佇列」**；Phase A–F 表是細節背景（多數 Phase A 已完成）。
 
@@ -15,7 +15,7 @@
 
 | # | 項目 | change 名（暫名） | 狀態 | 依賴 / 前置 | 驗收標準 |
 |---|------|------------------|------|------------|---------|
-| **EQ1** | 補 favicon | `favicon-fix`（小修，免開 Spectra） | ⬜ | 無 | prod 重載 console 無 favicon 404；分頁顯示 icon |
+| **EQ1** | 補 favicon | `favicon-fix`（小修，免開 Spectra） | ✅ | 無 | ✅ 2026-06-01 上線（commit `02c1acf`）：head inline SVG data-URI（indigo 方塊+zap 閃電，呼應站內 logo）；prod 已驗無 /favicon.ico 404、分頁 icon 載入 OK |
 | **EQ2a** | ASR 校正字典詞庫 | `asr-correction-dictionary` | ⬜ | 無 | DB 表 + admin 管理 UI + 套用到 transcript + 批次回填已知錯字（世運/滅火器/寰宇龍虎豹…）；deterministic 可控 |
 | **EQ2b** | ASR LLM 同音異義字後處理 | `asr-llm-homophone-postprocess` | ⬜ | EQ2a（字典當安全網＋評估基準） | transcribe 完成鏈式 LLM step 修未知同音字；fail-open；單節目 pilot 先驗 |
 | **EQ3a** | rerank 調參救 b22/b23 | `voyage-rerank-tune-b22-b23` | ⏸ (0/9) | 無（現成 parked，unpark 即可） | b22/b23 chunk_recall 不退步、cross_episode mean 不降 |
