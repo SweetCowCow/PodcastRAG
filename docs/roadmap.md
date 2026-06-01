@@ -1,8 +1,49 @@
 # PodcastRAG 路線圖
 
-> 最後更新：2026-05-31 晚（`semantic-topk-bump-and-show-more` ✅ archive + prod 驗證上線 — 語意過撈 k=25 + 初始 10 group + 顯示更多 +5（純前端、不動排序）。本 session 共完成 3 條 change：`unified-segment-citation-card`（三模式共用片段卡）+ `per-show-mode-example-prompts`（冷啟動引導範例）+ 本條。剩 parked 1 條 `voyage-rerank-tune-b22-b23`。下動候選：Tier 1 `chunk-level-retrieval-rca-b20-style` RCA／unpark voyage。release log：v2.0 兩條已上線、本條待補一條）
+> 最後更新：2026-06-01（Jacky 重排執行順序，建立**執行佇列（Execution Queue）**為新的權威排序。下方 Phase A–F 表保留作為各項目的細節參考，但「下一動做什麼」一律以執行佇列為準。）
 
-本文件記錄 PodcastRAG 後續開發的優先順序與規劃。依 Phase 排序，**Phase A 阻擋公開最先**，再做評測基線，再優化 RAG，最後商業化。
+本文件記錄 PodcastRAG 後續開發的優先順序與規劃。**排序真相 = 下方「🎯 執行佇列」**；Phase A–F 表是細節背景（多數 Phase A 已完成）。
+
+---
+
+## 🎯 執行佇列（2026-06-01 Jacky 拍板，權威排序）
+
+> **這是「下一動做什麼」的唯一真相來源。** 由上往下做，完成一條才動下一條（除非標註可並行）。
+> 與 memory `project_pending_changes.md` 的同名段**互為鏡像**，更新時兩邊同步（feedback_roadmap_dual_write）。
+
+**狀態圖例**：⬜ 待開　🔵 進行中（active change）　✅ 完成並 archive　⏸ parked
+
+| # | 項目 | change 名（暫名） | 狀態 | 依賴 / 前置 | 驗收標準 |
+|---|------|------------------|------|------------|---------|
+| **EQ1** | 補 favicon | `favicon-fix`（小修，免開 Spectra） | ⬜ | 無 | prod 重載 console 無 favicon 404；分頁顯示 icon |
+| **EQ2a** | ASR 校正字典詞庫 | `asr-correction-dictionary` | ⬜ | 無 | DB 表 + admin 管理 UI + 套用到 transcript + 批次回填已知錯字（世運/滅火器/寰宇龍虎豹…）；deterministic 可控 |
+| **EQ2b** | ASR LLM 同音異義字後處理 | `asr-llm-homophone-postprocess` | ⬜ | EQ2a（字典當安全網＋評估基準） | transcribe 完成鏈式 LLM step 修未知同音字；fail-open；單節目 pilot 先驗 |
+| **EQ3a** | rerank 調參救 b22/b23 | `voyage-rerank-tune-b22-b23` | ⏸ (0/9) | 無（現成 parked，unpark 即可） | b22/b23 chunk_recall 不退步、cross_episode mean 不降 |
+| **EQ3b** | b20 召回 RCA spike | `chunk-level-retrieval-rca-b20-style` | ⬜ | 無 | 查清 EP134 @1790/@1808 為何 top-500 全 miss（用 `sql_rca_demo` + `prompt_fingerprint_diff --source=sql`）；產 RCA 結論 |
+| **EQ3c** | BM25 取代 ts_rank + EP-scoped IDF | `lexical-bm25-replace-ts_rank` | ⬜ | **propose 前必跑 `retrieve_probe` 對 calibration_8 dry-run**（2026-05-28 失敗教訓） | calibration_8 dry-run 不退步才進 apply；prod chunk_recall ≥ baseline 0.482 |
+| **EQ3d** | R2.2 prompt 優化 | `r2-2-prompt-redo` | ⬜ | EQ3a–c + R1.3 judge re-bake-off | Faithfulness ≥ 0.71；inline `[N]` 渲染 + hover↔source |
+| **EQ4** | 對話 Agent（一組） | `chat-agentic-tool-routing`（主，含拆 `rag.py`）→ `multi-turn-ordinal-carry-fix` → `agent-pronoun-grounding` → `agentic-citation-check-postgen`(v3b) | ⬜ | 主 change 先拆 `rag.py` 1330 行 | 主 change 過 eval gate；ordinal mt01 t2 不再 fail；pronoun 0 hallucinated 維持 |
+| **EQ5** | 評測 / golden set | `golden-set-expand-manbao-yijiayi`（**首要**）→ 後續 R1.3 judge re-bake-off / `eval-runner-dynamic-top-k` / q25 audit | ⬜ | 無（首要可立即動） | 曼報 + 壹加壹各 ≥30 題人工 sentinel；一題一題共草（feedback_golden_set_co_draft_flow） |
+| **EQ6** | RAG 回答 cache | `r4-rag-result-cache` | ⬜ | 無 | Redis hash key(問題+show+top_k+model)；回應附 `cache_hit` flag |
+| **EQ7** | Pre-built base image | `o2-prebuilt-base-image` | ⬜ | 無 | build 從 ~10 分降到 ~30 秒；prod deploy 驗證 |
+
+### Parking Lot（未進佇列，剩下往後排）
+
+依 Jacky 指示「剩下沒列到的往後排」。需要時再插入執行佇列：
+
+- **產品功能**：U3 用量 Dashboard + 熱搜 chip／A5 整集對話入口／C1 對話紀錄 → C2 推薦 → C3 權限分級／U2 點數計價 + 自動補回
+- **RAG 進階**：R3.x（topic seg 自動類別建議／`segment_categories` admin UI／業配段降權／dict 通用化）／R5 地端 embedding
+- **Ops / 體驗**：A4 淺色主題／cookie SameSite=Lax（需先廢 `*.zeabur.app` 子域）
+- **評測雜項**：q25 audit expected 對齊／rule pattern 涵蓋率月度回顧
+- **內容生態**：T2 轉錄人工回報機制（與 EQ2 ASR 校正互補但獨立）
+
+### 追蹤規則（backlog 管理方式，2026-06-01 定）
+
+1. **唯一排序真相 = 上方執行佇列表**；`docs/roadmap.md` 與 memory `project_pending_changes.md` 互為鏡像，動一邊就同步另一邊。
+2. **開工**：從佇列最上方未完成項取一條 → `/spectra-propose`（或小修直接做）→ 狀態改 🔵 + 開 `TaskCreate` 做 session 內細項追蹤。
+3. **完成**：`/spectra-archive` → 狀態改 ✅ + 記 archive 路徑/commit → 問是否補 release log（feedback_release_log_maintenance）。
+4. **插隊 / 重排**：只有 Jacky 能改佇列順序；新議題預設進 Parking Lot，除非他指定插入位置。
+5. **依賴鎖**：標了「前置」的項目（EQ2b/EQ3c/EQ3d/EQ4）前置未完成不得開工，避免歸因混亂。
 
 ---
 
