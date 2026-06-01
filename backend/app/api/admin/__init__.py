@@ -23,6 +23,7 @@ router = APIRouter(
 # Sub-routers (each carries its own /admin/... prefix).
 from app.api.admin.ai_steps import router as ai_steps_router  # noqa: E402
 from app.api.admin.api_keys import router as api_keys_router  # noqa: E402
+from app.api.admin.asr_corrections import router as asr_corrections_router  # noqa: E402
 from app.api.admin.chunking_status import router as chunking_status_router  # noqa: E402
 from app.api.admin.diagnose_prefilter import router as diagnose_prefilter_router  # noqa: E402
 from app.api.admin.episode_guests import router as episode_guests_router  # noqa: E402
@@ -40,6 +41,7 @@ router.include_router(quota_requests_router)
 router.include_router(eval_runs_router)
 router.include_router(rrf_sweep_router)
 router.include_router(tokenizer_router)
+router.include_router(asr_corrections_router)
 router.include_router(topic_seg_router)
 router.include_router(chunking_status_router)
 router.include_router(diagnose_prefilter_router)

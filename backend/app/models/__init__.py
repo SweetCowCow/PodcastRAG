@@ -10,6 +10,7 @@ from app.models.show_example_prompt import ExamplePromptMode, ShowExamplePrompt
 from app.models.show_schedule import RefreshStatus, ShowSchedule
 from app.models.transcript import Transcript, TranscriptStatus
 from app.models.tokenizer_term import TokenizerCustomTerm
+from app.models.asr_correction_term import AsrCorrectionTerm
 from app.models.transcript_chunk import TranscriptChunk
 from app.models.transcript_segment import TranscriptSegment
 from app.models.event import Event
@@ -44,6 +45,7 @@ __all__ = [
     "Episode",
     "EpisodeDescriptionChunk",
     "TokenizerCustomTerm",
+    "AsrCorrectionTerm",
     "Transcript",
     "TranscriptStatus",
     "TranscriptSegment",

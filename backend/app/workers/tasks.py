@@ -20,6 +20,7 @@ from app.models.transcript_segment import TranscriptSegment
 from app.models.transcription_queue import QueueStatus, TranscriptionQueue
 from app.services import storage
 from app.services import tokenizer
+from app.services import asr_correction
 from app.services.chunking import build_chunks
 from app.services.ai_step_resolver import get_step_config
 from app.services.embedding import embed_texts, embed_texts_dual
@@ -372,6 +373,7 @@ async def _run(episode_id: str) -> dict:
             audio_storage_key = episode.audio_storage_key
             audio_url = episode.audio_url
             show_language = episode.show.language if episode.show else None
+            correction_show_id = episode.show_id
 
         try:
             if not audio_storage_key:
@@ -408,13 +410,33 @@ async def _run(episode_id: str) -> dict:
                         TranscriptSegment.transcript_id == transcript_id
                     )
                 )
+                # asr-correction-dictionary (EQ2a): correct known ASR typos at
+                # the source — before writing segments and building chunks — so
+                # the displayed transcript AND the search index carry the fix.
+                # fail-open: a correction-load failure must not block the
+                # transcription itself; it can be backfilled later.
+                try:
+                    correction_rules = await asr_correction.load_rules(
+                        session, correction_show_id
+                    )
+                except Exception:
+                    logger.warning(
+                        "asr_correction: load_rules failed for %s; "
+                        "transcribing without correction",
+                        episode_id,
+                        exc_info=True,
+                    )
+                    correction_rules = []
+
                 segment_rows: list[TranscriptSegment] = []
                 for seg in result.segments:
                     row = TranscriptSegment(
                         transcript_id=transcript_id,
                         start_time=seg.start,
                         end_time=seg.end,
-                        text=seg.text,
+                        text=asr_correction.apply_corrections(
+                            seg.text, correction_rules
+                        ),
                     )
                     session.add(row)
                     segment_rows.append(row)
@@ -461,7 +483,9 @@ async def _run(episode_id: str) -> dict:
                 if t is not None:
                     t.status = TranscriptStatus.completed
                     t.language = result.language or show_language
-                    t.content = result.text
+                    t.content = asr_correction.apply_corrections(
+                        result.text, correction_rules
+                    )
                     t.error_message = None
                     t.transcribed_at = datetime.now(timezone.utc)
                 await session.commit()
@@ -520,5 +544,44 @@ async def _run(episode_id: str) -> dict:
                 except OSError:
                     pass
 
+    finally:
+        await engine.dispose()
+
+
+@celery_app.task(name="app.workers.tasks.backfill_asr_corrections")
+def backfill_asr_corrections(
+    show_id: str | None = None, term_id: str | None = None
+) -> dict:
+    """Apply ASR correction rules to existing transcripts and recompute the
+    affected chunks (text + dual embeddings + tsvector).
+
+    Scope: a single show (`show_id`), a single rule (`term_id`), or all shows
+    (neither). Enqueued by the admin backfill endpoint's non-dry-run path. The
+    heavy lifting (resumable per-transcript commit, per-chunk fail isolation,
+    idempotency) lives in `asr_correction.backfill_corrections`.
+    """
+    return asyncio.run(_run_asr_backfill(show_id, term_id))
+
+
+async def _run_asr_backfill(show_id: str | None, term_id: str | None) -> dict:
+    engine = create_async_engine(settings.database_url, poolclass=NullPool)
+    Session = async_sessionmaker(engine, expire_on_commit=False)
+    try:
+        async with Session() as session:
+            embedding_cfg = await get_step_config(session, "embedding")
+            report = await asr_correction.backfill_corrections(
+                session,
+                show_id=uuid.UUID(show_id) if show_id else None,
+                term_id=uuid.UUID(term_id) if term_id else None,
+                dry_run=False,
+                embedding_cfg=embedding_cfg,
+            )
+        return {
+            "status": "completed",
+            "affected_transcripts": report.affected_transcripts,
+            "affected_segments": report.affected_segments,
+            "affected_chunks": report.affected_chunks,
+            "failed_chunk_ids": report.failed_chunk_ids,
+        }
     finally:
         await engine.dispose()
