@@ -49,10 +49,39 @@ const MILESTONE_LABELS = {
   'v1.8': { zh: 'v1.8 — 對話模式 agent 化',         en: 'v1.8 — Chat Mode, Now Agentic' },
   'v1.9': { zh: 'v1.9 — 索引模式：多關鍵字精準搜尋', en: 'v1.9 — Index Mode: Precise Multi-Keyword Search' },
   'v2.0': { zh: 'v2.0 — 查詢體驗統一：一致引用卡 + 引導範例', en: 'v2.0 — Unified Query Experience: Consistent Citations + Guided Examples' },
+  'v2.1': { zh: 'v2.1 — 修正聽錯的名字，搜尋找得回來', en: 'v2.1 — Fixing Misheard Names So Search Can Find Them' },
 };
 
 // Entries — newest milestone first; within each milestone newest date first.
 const RELEASE_LOG = [
+  // ─── v2.1 — ASR Correction Dictionary (6/1) ───
+  {
+    date: '2026-06-01', slug: 'asr-correction-dictionary', milestone: 'v2.1', tag: 'feature',
+    title: {
+      zh: '修正聽錯的名字 — 後台建「錯字→正字」對照表，新轉錄自動修、舊逐字稿一鍵回填，搜尋從此找得回來',
+      en: 'Fixing Misheard Names — Build a Typo→Correct Dictionary in Admin; New Transcripts Auto-Fix, Old Ones Backfill in One Click, and Search Finds Them Again',
+    },
+    summary: {
+      zh: '語音轉錄（Whisper）偶爾會把專有名詞聽成同音錯字——例如把樂團「滅火器」聽成「咪有企」、把來賓「杜宗祐」打成「杜忠祐」。問題是：當逐字稿裡存的是錯字，你用正確名字去搜就什麼都找不到。這版在後台新增「ASR 校正」分頁，讓你建立一份「錯字→正字」對照表（每條可綁定特定節目、也可設成全站通用）。建好之後，之後每一集新轉錄都會在存檔前自動套用修正；至於已經存在的舊逐字稿，你可以按「回填」一次重算修好。為了讓你心裡有底，回填前系統會先估「這條規則會動到幾段逐字稿、大約花多少錢」，你確認後才真的執行。另外為了避免誤傷，儲存規則前會顯示這個錯字目前在範圍內命中幾段，而且比對採「整詞精確比對」——只換完全一樣的詞，不會把字拆開亂改。首發就替「這又沒有很屌」這個節目修好了 6 組最常見的錯字、共 1507 段逐字稿（總成本約 $0.05）：杜忠祐→杜宗祐、阿鳴/阿明→阿名、方品龍→方品融、龍虎報→龍虎豹、咪有企→滅火器。現在用這些正確名字搜尋，都能命中既有內容了。',
+      en: 'Speech-to-text (Whisper) occasionally mishears proper nouns into homophone typos — e.g. the band "滅火器" heard as "咪有企", or the guest "杜宗祐" written as "杜忠祐". The problem: when a transcript stores the wrong spelling, searching the correct name finds nothing. This release adds an "ASR Correction" tab in admin where you build a typo→correct dictionary (each rule can target a specific show or apply site-wide). Once set, every new transcription auto-applies the fixes before saving; for transcripts that already exist, a "Backfill" button recomputes and repairs them in one pass. So you know what you\'re committing to, the system first estimates "how many segments this rule will touch and roughly how much it costs" before any backfill, and only runs once you confirm. To avoid collateral damage, saving a rule shows how many segments the typo currently matches in scope, and matching is whole-term exact — it only replaces the identical term, never splitting words apart. The launch already fixed the 6 most common typos for the show "這又沒有很屌" across 1,507 transcript segments (total cost ~$0.05): 杜忠祐→杜宗祐, 阿鳴/阿明→阿名, 方品龍→方品融, 龍虎報→龍虎豹, 咪有企→滅火器. Searching those correct names now hits existing content.',
+    },
+    summaryBullets: {
+      zh: [
+        '後台新增「ASR 校正」分頁：建立「錯字→正字」對照，每條可綁節目或設全站通用',
+        '新轉錄存檔前自動套用修正；舊逐字稿按「回填」一次重算修好',
+        '回填前先估「會動到幾段 + 大約花多少錢」，確認後才執行',
+        '儲存規則前顯示命中段數，採「整詞精確比對」只換完全相同的詞、不誤傷',
+        '首發修好「這又沒有很屌」6 組錯字、共 1507 段（約 $0.05），正確名字現在搜得到',
+      ],
+      en: [
+        'New "ASR Correction" admin tab: build a typo→correct dictionary, each rule show-scoped or site-wide',
+        'New transcriptions auto-apply fixes before saving; old transcripts repaired via one-click "Backfill"',
+        'Backfill first estimates "how many segments + roughly how much it costs", runs only on confirm',
+        'Saving a rule shows match count; whole-term exact matching replaces only identical terms, no collateral damage',
+        'Launch fixed 6 typos for "這又沒有很屌" across 1,507 segments (~$0.05) — correct names now searchable',
+      ],
+    },
+  },
   // ─── v2.0 — Unified Query Experience (5/31) ───
   {
     date: '2026-05-31', slug: 'semantic-topk-bump-and-show-more', milestone: 'v2.0', tag: 'enhancement',
