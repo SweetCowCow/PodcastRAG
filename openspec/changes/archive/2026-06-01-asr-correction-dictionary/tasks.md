@@ -22,11 +22,11 @@
 
 ## 6. Admin 前端 tab
 
-- [ ] 6.1 實作 `src/AdminAsrCorrectionTab.jsx` 達成 **Admin tab manages correction rules**（列表 / 新增 / 編輯 / 啟用停用 / 刪除、雙語、TOKEN 設計系統），並掛載至 `index.html`、`AdminPage.jsx` pages 物件與 `Shared.jsx` 後台 nav 入口。驗證：browser smoke 列表載入 + 新增一條 + toggle 生效。
-- [ ] 6.2 加入 **Match-count preview before save**（儲存前顯示 `wrong` 在 scope 內命中的 segment 數），呼應設計決策「整詞精確 literal 比對與誤傷防護」的誤傷防線。驗證：browser 輸入 `wrong` 與 scope 後顯示命中數。
-- [ ] 6.3 加入 **Trigger backfill with progress feedback**（觸發回填前先呼叫 `dry_run` 顯示「將重算 N 個 chunk + 預估成本」確認框、確認後才執行；再顯示進度與完成計數 + 標示「新增規則需手動回填既有逐字稿」）。驗證：browser 觸發回填先跳預估確認框、確認後顯示最終計數，提示文字存在。
+- [x] 6.1 實作 `src/AdminAsrCorrectionTab.jsx` 達成 **Admin tab manages correction rules**（列表 / 新增 / 編輯 / 啟用停用 / 刪除、雙語、TOKEN 設計系統），並掛載至 `index.html`、`AdminPage.jsx` pages 物件與 `Shared.jsx` 後台 nav 入口。驗證：browser smoke 列表載入 + 新增一條 + toggle 生效。
+- [x] 6.2 加入 **Match-count preview before save**（儲存前顯示 `wrong` 在 scope 內命中的 segment 數），呼應設計決策「整詞精確 literal 比對與誤傷防護」的誤傷防線。驗證：browser 輸入 `wrong` 與 scope 後顯示命中數。
+- [x] 6.3 加入 **Trigger backfill with progress feedback**（觸發回填前先呼叫 `dry_run` 顯示「將重算 N 個 chunk + 預估成本」確認框、確認後才執行；再顯示進度與完成計數 + 標示「新增規則需手動回填既有逐字稿」）。驗證：browser 觸發回填先跳預估確認框、確認後顯示最終計數，提示文字存在。
 
 ## 7. 驗證與部署
 
 - [x] 7.1 後端測試全綠（unit + integration，真實 Postgres 跑 service / 回填 / API 三層）。驗證：對應 pytest 全數通過。
-- [ ] 7.2 依設計 Migration Plan 部署 migration + backend/worker/dispatcher/beat 四服務 + 前端，並跑 prod smoke：新增一條已知錯字規則（例 咪有企→滅火器）→ 批次回填該 show → 搜尋正字命中既有內容。驗證：prod 搜尋正字命中、UI/console 無異常。
+- [x] 7.2 依設計 Migration Plan 部署 migration + backend/worker/dispatcher/beat 四服務 + 前端，並跑 prod smoke：新增一條已知錯字規則（例 咪有企→滅火器）→ 批次回填該 show → 搜尋正字命中既有內容。驗證：prod 搜尋正字命中、UI/console 無異常。

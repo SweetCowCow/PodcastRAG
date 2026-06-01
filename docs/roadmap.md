@@ -16,7 +16,7 @@
 | # | 項目 | change 名（暫名） | 狀態 | 依賴 / 前置 | 驗收標準 |
 |---|------|------------------|------|------------|---------|
 | **EQ1** | 補 favicon | `favicon-fix`（小修，免開 Spectra） | ✅ | 無 | ✅ 2026-06-01 上線（commit `02c1acf`）：head inline SVG data-URI（indigo 方塊+zap 閃電，呼應站內 logo）；prod 已驗無 /favicon.ico 404、分頁 icon 載入 OK |
-| **EQ2a** | ASR 校正字典詞庫 | `asr-correction-dictionary` | 🔵 | 無 | proposal 完成並 parked（2026-06-01）；待 /spectra-apply。決策：修到底（chunking 前套校正 + 批次回填只重算受影響 chunk）、整詞精確 literal 比對、預設綁節目可升 global、獨立 asr_correction_terms 表 |
+| **EQ2a** | ASR 校正字典詞庫 | `asr-correction-dictionary` | ✅ | 無 | ✅ 2026-06-01 完成並 archive（`archive/2026-06-01-asr-correction-dictionary`，commit `bde733a`）：後端+前端+migration 全上 prod；prod 驗證 UI 列表/新增/命中預覽/dry_run 全綠；實機回填「這又沒有很屌」6 條規則共 1507 段（杜忠祐→杜宗祐 362、阿鳴+阿明→阿名 1017、方品龍→方品融 124、龍虎報→龍虎豹、咪有企→滅火器），成本 $0.046；搜尋正字命中驗證通過 |
 | **EQ2b** | ASR LLM 同音異義字後處理 | `asr-llm-homophone-postprocess` | ⬜ | EQ2a（字典當安全網＋評估基準） | transcribe 完成鏈式 LLM step 修未知同音字；fail-open；單節目 pilot 先驗 |
 | **EQ3a** | rerank 調參救 b22/b23 | `voyage-rerank-tune-b22-b23` | ⏸ (0/9) | 無（現成 parked，unpark 即可） | b22/b23 chunk_recall 不退步、cross_episode mean 不降 |
 | **EQ3b** | b20 召回 RCA spike | `chunk-level-retrieval-rca-b20-style` | ⬜ | 無 | 查清 EP134 @1790/@1808 為何 top-500 全 miss（用 `sql_rca_demo` + `prompt_fingerprint_diff --source=sql`）；產 RCA 結論 |
@@ -36,6 +36,7 @@
 - **Ops / 體驗**：A4 淺色主題／cookie SameSite=Lax（需先廢 `*.zeabur.app` 子域）
 - **評測雜項**：q25 audit expected 對齊／rule pattern 涵蓋率月度回顧
 - **內容生態**：T2 轉錄人工回報機制（與 EQ2 ASR 校正互補但獨立）
+- **詞典系統整合 / 重設計**（2026-06-01 EQ2a 收尾發現）：現有兩套詞典職責與流程未理清 —— (1)「ASR 校正字典」改 transcript 原文（錯字→正字 literal replace + 重算 index）；(2)「分詞詞典」（tokenizer/terms）改 jieba 斷詞讓專名當整詞、影響 lexical search。兩者都管專名、user 易混淆。具體痛點：分詞詞典已收「杜宗祐/阿名/方品融」但索引搜尋仍把「杜宗祐」切成「杜宗+祐」落 T3（runtime 未 reload 或既有 chunk tsvector 用舊詞典建）；且 `POST /admin/tokenizer/reload` 卡 CSRF 403。待辦：釐清兩者用途/差異/交互（含 ASR 新正字是否自動進分詞詞典、reload 後既有 index 重建時序），重新設計後台使用流程與 UI（可能合併為單一「詞彙管理」或明確分區）。
 
 ### 追蹤規則（backlog 管理方式，2026-06-01 定）
 
