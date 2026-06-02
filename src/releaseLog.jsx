@@ -55,6 +55,30 @@ const MILESTONE_LABELS = {
 
 // Entries — newest milestone first; within each milestone newest date first.
 const RELEASE_LOG = [
+  // ─── v2.2 — ASR Correction: reversibility + transcript consistency (6/2) ───
+  {
+    date: '2026-06-02', slug: 'asr-correction-reversibility-and-content-sync', milestone: 'v2.2', tag: 'enhancement',
+    title: {
+      zh: '校正可還原 + 逐字稿全文跟上 — 改錯了能一鍵還原原始 ASR，逐字稿頁不再顯示舊錯字',
+      en: 'Corrections Are Now Reversible + Transcript Stays Consistent — One-click Restore to Original ASR; the Transcript Page No Longer Shows Stale Typos',
+    },
+    summary: {
+      zh: '把 ASR 校正補上兩個安全性/一致性的洞：(1) 可還原——校正套用前會先保存原始的 ASR 文字，後台逐字稿頁新增「還原原始逐字稿」（管理者限定），萬一規則改錯了可以一鍵把整集還原回原始、並重算搜尋索引；(2) 一致性——以前批次回填只改了片段與搜尋索引、沒同步「整集逐字稿全文」，導致逐字稿頁仍顯示舊錯字。現在校正會一起更新全文，且補了一條「強制重算」把先前已回填但全文沒跟上的集數也修正。對一般使用者來說，逐字稿頁看到的字會跟搜尋結果一致；對管理者來說，校正不再是不可逆的單行道。',
+      en: 'Closes two safety/consistency gaps in ASR correction: (1) reversibility — the original ASR text is now snapshotted before a correction is applied, and the admin transcript page gains a "Restore original" action (admin-only) to revert an entire episode to its original text (and recompute the search index) if a rule was wrong; (2) consistency — backfill previously updated segments + the search index but not the full-episode transcript text, so the transcript page still showed old typos. Corrections now update the full text too, plus a "force resync" path repairs episodes that were backfilled before this fix. For readers, the transcript page now matches search results; for admins, corrections are no longer a one-way street.',
+    },
+    summaryBullets: {
+      zh: [
+        '校正前保存原始 ASR 文字；後台逐字稿頁「還原原始逐字稿」一鍵還原整集（管理者限定）',
+        '校正同步更新「整集逐字稿全文」，逐字稿頁不再顯示舊錯字',
+        '補強制重算，修好先前已回填但全文沒跟上的集數',
+      ],
+      en: [
+        'Original ASR text snapshotted before correction; admin "Restore original" reverts a whole episode',
+        'Corrections now also update the full transcript text — the transcript page no longer shows old typos',
+        'Force-resync path repairs episodes backfilled before this fix',
+      ],
+    },
+  },
   // ─── v2.2 — AI Homophone Detection: review polish (6/2) ───
   {
     date: '2026-06-02', slug: 'asr-correction-ux-and-aihub-json', milestone: 'v2.2', tag: 'enhancement',
