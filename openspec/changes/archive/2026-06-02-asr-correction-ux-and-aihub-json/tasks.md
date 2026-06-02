@@ -14,4 +14,4 @@
 ## 4. 測試與部署
 
 - [x] 4.1 後端測試全綠：approve-with-correct（含不帶/帶/非 admin 三案）+ `_parse_pairs` 5 變體 + 既有 EQ2b 測試不退步。驗證：對應 pytest 全數通過。
-- [ ] 4.2 部署 backend + 前端（同 EQ2a/EQ2b 模式），prod browser smoke：核准可編輯一筆生效；並用一個 AI Hub 非 OpenAI 模型（如 qwen-3-235b）對 pilot 集跑 `homophone_pilot --run` 驗證解析容錯後不再回 0。驗證：prod 核准編輯生效 + 該模型能解析出 pair。
+- [x] 4.2 部署 backend + 前端（同 EQ2a/EQ2b 模式），prod browser smoke：核准可編輯一筆生效；並用一個 AI Hub 非 OpenAI 模型（如 qwen-3-235b）對 pilot 集跑 `homophone_pilot --run` 驗證解析容錯後不再回 0。驗證：prod 核准編輯生效 + 該模型能解析出 pair。

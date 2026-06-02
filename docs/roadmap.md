@@ -1,6 +1,6 @@
 # PodcastRAG 路線圖
 
-> 最後更新：2026-06-02（EQ2b ✅ archive；F1–F7 follow-up 已排進佇列＝EQ2c(F3+F5)→EQ2d(F1+F2)→EQ2e(F6)→EQ3a–d→EQ4–7→EQ8(F4)/EQ9(F7)，2026-06-02 Jacky 拍板。**下一動＝propose EQ2c `asr-correction-ux-and-aihub-json`**。執行佇列為權威排序，下方 Phase A–F 表為細節參考。）
+> 最後更新：2026-06-02（EQ2b ✅、EQ2c ✅ 皆 archive。佇列＝EQ2d(F1+F2)→EQ2e(F6)→EQ3a–d→EQ4–7→EQ8(F4)/EQ9(F7)。**下一動＝propose EQ2d `asr-correction-reversibility-and-content-sync`（F6 前置鎖）**。執行佇列為權威排序，下方 Phase A–F 表為細節參考。）
 
 本文件記錄 PodcastRAG 後續開發的優先順序與規劃。**排序真相 = 下方「🎯 執行佇列」**；Phase A–F 表是細節背景（多數 Phase A 已完成）。
 
@@ -18,7 +18,7 @@
 | **EQ1** | 補 favicon | `favicon-fix`（小修，免開 Spectra） | ✅ | 無 | ✅ 2026-06-01 上線（commit `02c1acf`）：head inline SVG data-URI（indigo 方塊+zap 閃電，呼應站內 logo）；prod 已驗無 /favicon.ico 404、分頁 icon 載入 OK |
 | **EQ2a** | ASR 校正字典詞庫 | `asr-correction-dictionary` | ✅ | 無 | ✅ 2026-06-01 完成並 archive（`archive/2026-06-01-asr-correction-dictionary`，commit `bde733a`）：後端+前端+migration 全上 prod；prod 驗證 UI 列表/新增/命中預覽/dry_run 全綠；實機回填「這又沒有很屌」6 條規則共 1507 段（杜忠祐→杜宗祐 362、阿鳴+阿明→阿名 1017、方品龍→方品融 124、龍虎報→龍虎豹、咪有企→滅火器），成本 $0.046；搜尋正字命中驗證通過 |
 | **EQ2b** | ASR LLM 同音異義字後處理 | `asr-llm-homophone-postprocess` | ✅ | EQ2a ✅ | ✅ 2026-06-02 完成上 prod（12/12，commit `977d1db`）。**中途大改設計**：開放式 prompt pilot 兩端皆失（gpt-4o-mini 過度激進幻覺、gpt-4o 全 0、recall≈0）→ 改 **RAGEC 候選清單接地**（來賓∪字典正字∪主持人 → LLM 只做「ASR 聽錯→對應回清單」+ post-filter correct∈清單、wrong∈逐字稿）。模型 **gemini-3.5-flash via AI Hub**。核准制+fail-open 不變；pilot 這又沒有很屌 5 集（dry-run $0.014）→ 27 候選人工核准。詳見 design D7 + `docs/case-studies/eq2b-asr-homophone-pilot.md`。**回填 timeout 順手修**（dry-run 改 SQL 計數 98s→3.5s）。follow-up 見下方 F1–F7 |
-| **EQ2c** | ASR 校正小修（F3+F5） | `asr-correction-ux-and-aihub-json` | ⬜ | 無（趁手小修，可立即動） | F3 核准對話框可編輯 correct；F5 偵測解析容錯（strip code block / 寬鬆 JSON）讓 qwen/deepseek/claude 等 AI Hub 模型不再回 0 |
+| **EQ2c** | ASR 校正小修（F3+F5） | `asr-correction-ux-and-aihub-json` | ✅ | 無 | ✅ 2026-06-02 完成+archive（`2026-06-02-asr-correction-ux-and-aihub-json`，commit `1578a49`）。F3 核准可編輯 correct（後端 approve 接 optional correct + 前端可編輯欄位）；F5 `_parse_pairs` 容錯（全形引號/夾雜 prose 擷取/單筆物件/鍵名變體/items 鍵）。prod smoke：qwen-3-235b 解析從 0→有 pair ✓、UI 編輯核准「高明碧→Gummy B-EDIT驗證」寫入驗證 ✓。46 test passed |
 | **EQ2d** | ASR 可逆性 + content 同步（F1+F2） | `asr-correction-reversibility-and-content-sync` | ⬜ | 無（**F6 前置鎖**） | F1 校正前存原始 segment 文字（`original_text` 或快照）可還原；F2 回填/即時套用同步 `transcript.content`。兩者同改 backfill 寫入路徑 |
 | **EQ2e** | ASR 全面回填（F6） | `asr-homophone-full-backfill` | ⬜ | **EQ2d 完**（要先有還原能力）+ 成本 dry-run 估 | RAGEC 偵測套到全站既有逐字稿（現只跑 pilot 5 集）；分節目批次 + 成本確認 + 候選人工審 |
 | **EQ3a** | rerank 調參救 b22/b23 | `voyage-rerank-tune-b22-b23` | ⏸ (0/9) | 無（現成 parked，unpark 即可） | b22/b23 chunk_recall 不退步、cross_episode mean 不降 |
