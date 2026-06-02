@@ -32,7 +32,7 @@ from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 from openai import OpenAI
-from sqlalchemy import select
+from sqlalchemy import and_, func, or_, select
 
 from app.models.asr_correction_term import AsrCorrectionTerm
 from app.services.ai_step_resolver import get_step_config
@@ -45,22 +45,105 @@ logger = logging.getLogger(__name__)
 
 ASR_HOMOPHONE_STEP_KEY = "asr_homophone"
 
-# Default prompt. Stored here as the single source of truth for the wording;
-# the migration seeds the same text into the step's extra_config['prompt'] so an
-# admin can edit it without a deploy. Detection reads the config override first
-# and falls back to this constant.
-DEFAULT_HOMOPHONE_PROMPT = (
-    "你是中文 podcast 逐字稿的同音字校對員。輸入是一整集的逐字稿。"
-    "語音辨識（ASR）常把專有名詞（人名、樂團名、節目術語、地名）聽成同音或近音的錯字。"
-    "你的任務：找出這些『同音誤聽』的詞，輸出『錯字 → 正字』的詞級替換清單。\n\n"
+# Detection instruction (the rules half of the prompt). The other half — the
+# per-show candidate-entity list — is appended at call time by
+# build_detection_prompt. This is the RAGEC (Retrieval-Augmented Generative
+# Error Correction) framing: instead of asking the model to FREELY hunt for
+# typos (which over-corrects on weak models and hallucinates on strong ones —
+# see the EQ2b pilot), we GROUND it with the show's known correct names and ask
+# it to map ASR mis-hearings back onto that closed list. This is the dominant
+# 2024-2026 best practice for ASR named-entity correction.
+#
+# Stored here as the single source of truth; an admin may override just this
+# instruction via the step's extra_config['prompt'] (the candidate list is still
+# appended in code).
+DEFAULT_HOMOPHONE_INSTRUCTION = (
+    "你是中文 podcast 逐字稿的專有名詞校對員。語音辨識（ASR）常把人名 / 樂團名 / "
+    "藝名聽成同音或近音的錯字。下面會給你「本節目已知的正確專有名詞清單」。\n\n"
+    "你的任務：在逐字稿中找出「原意應該是清單裡某個名字、卻被聽成別的同音 / 近音字」"
+    "的地方，輸出『錯字 → 正字』的詞級替換。\n\n"
     "嚴格規則：\n"
-    "1. 只回同音 / 近音誤聽造成的詞級錯字，不要修文法、語氣、標點或句子結構。\n"
-    "2. wrong 與 correct 都必須是可以直接做字串取代的詞，且 wrong 必須原樣出現在逐字稿中。\n"
-    "3. 保留原本的專名拼寫意圖；不確定是不是錯字就不要回（寧缺勿濫，避免誤改正確專名）。\n"
-    "4. 不要回已經正確的詞、一般常用詞、或只是斷詞不同的情況。\n"
-    "5. 嚴格只輸出 JSON 陣列，格式為 "
-    '[{"wrong": "錯字", "correct": "正字"}]；沒有任何同音錯字時回 []。'
+    "1. correct 必須是清單裡的某個名字；不在清單上的詞一律不回。\n"
+    "2. wrong 必須原樣出現在逐字稿中，且與 correct 同音或極近音；只是字不同但讀音差很多的不回。\n"
+    "3. 清單裡的名字若在逐字稿中已經拼寫正確，不要回（不是錯字）。\n"
+    "4. 不確定就不回（寧缺勿濫，避免誤改）。\n"
+    "5. 嚴格只輸出 JSON 陣列：[{\"wrong\": \"錯字\", \"correct\": \"正字\"}]；沒有則回 []。\n"
+    "範例：清單含「方品融」，逐字稿出現「方品龍」 → [{\"wrong\": \"方品龍\", \"correct\": \"方品融\"}]"
 )
+
+# Kept as an alias so the seeded migration value / any importer does not break.
+DEFAULT_HOMOPHONE_PROMPT = DEFAULT_HOMOPHONE_INSTRUCTION
+
+
+def build_detection_prompt(
+    candidate_entities: list[str], instruction: str | None = None
+) -> str:
+    """Compose the full system prompt: the instruction + the candidate list.
+
+    `instruction` overrides DEFAULT_HOMOPHONE_INSTRUCTION (e.g. from the step's
+    extra_config['prompt']). The candidate list is always appended in code so
+    the grounding cannot be accidentally dropped by an admin edit.
+    """
+    base = instruction or DEFAULT_HOMOPHONE_INSTRUCTION
+    names = "、".join(candidate_entities)
+    return f"{base}\n\n[本節目已知正確專有名詞清單]\n{names}"
+
+
+async def load_candidate_entities(
+    session: "AsyncSession", show_id: UUID, *, extra: list[str] | None = None
+) -> list[str]:
+    """Build the RAGEC candidate-entity list for a show: the union of
+
+    - every distinct guest name across the show's episodes (`episodes.guests`),
+    - the correct-forms of approved correction rules applicable to the show
+      (global + this show), and
+    - any `extra` names the caller supplies (e.g. hosts, which have no
+      structured source yet).
+
+    Deduplicated, blank-stripped, stable-ordered (longest first so a longer name
+    is offered before a substring of it).
+    """
+    from app.models.episode import Episode
+
+    names: set[str] = set()
+
+    # Distinct guests across the show's episodes.
+    guest_rows = (
+        await session.execute(
+            select(func.jsonb_array_elements_text(Episode.guests)).where(
+                Episode.show_id == show_id,
+                Episode.guests.isnot(None),
+            )
+        )
+    ).scalars().all()
+    for g in guest_rows:
+        if g and g.strip():
+            names.add(g.strip())
+
+    # Approved correction-rule correct-forms (global ∪ this show).
+    dict_rows = (
+        await session.execute(
+            select(AsrCorrectionTerm.correct).where(
+                AsrCorrectionTerm.status == "approved",
+                or_(
+                    AsrCorrectionTerm.scope == "global",
+                    and_(
+                        AsrCorrectionTerm.scope == "show",
+                        AsrCorrectionTerm.show_id == show_id,
+                    ),
+                ),
+            )
+        )
+    ).scalars().all()
+    for c in dict_rows:
+        if c and c.strip():
+            names.add(c.strip())
+
+    for x in extra or []:
+        if x and x.strip():
+            names.add(x.strip())
+
+    return sorted(names, key=lambda s: (-len(s), s))
 
 # Rough dry-run cost heuristic (label it an estimate to the operator; the
 # provider bill is the source of truth). Chinese: ~1 char ≈ 1 token. The system
@@ -207,32 +290,48 @@ async def detect_homophones(
     session: "AsyncSession",
     transcript_text: str,
     *,
+    show_id: UUID | None = None,
+    candidate_entities: list[str] | None = None,
     client: OpenAI | None = None,
     model: str | None = None,
-    prompt: str | None = None,
+    instruction: str | None = None,
 ) -> list[CorrectionRule]:
-    """Detect homophone mis-transcriptions across a full episode transcript.
+    """Detect ASR mis-hearings of the show's known proper nouns (RAGEC).
+
+    Grounds the LLM with a candidate-entity list (built from `show_id` unless
+    `candidate_entities` is passed) and asks it to map mis-heard tokens back onto
+    that list — far more reliable than open-ended typo hunting (EQ2b pilot).
 
     Returns word-level `{wrong, correct}` pairs (as `CorrectionRule`s) suitable
     for `apply_corrections`. NEVER raises — fail-open per D6: any failure (step
-    not configured, LLM error, malformed JSON) logs a warning and returns ``[]``
-    so transcription falls back to dictionary-only correction.
+    not configured, no candidates, LLM error, malformed JSON) logs a warning and
+    returns ``[]`` so transcription falls back to dictionary-only correction.
 
-    `client`/`model`/`prompt` injectable for tests; when omitted they resolve
-    from the `asr_homophone` AI step (model + extra_config['prompt'] override,
-    falling back to DEFAULT_HOMOPHONE_PROMPT).
+    `client`/`model`/`instruction` are injectable for tests and model A/B runs;
+    when omitted they resolve from the `asr_homophone` AI step.
     """
     if not transcript_text or not transcript_text.strip():
         return []
     try:
-        if client is None or model is None or prompt is None:
+        if candidate_entities is None:
+            if show_id is None:
+                raise ValueError("detect_homophones needs show_id or candidate_entities")
+            candidate_entities = await load_candidate_entities(session, show_id)
+        if not candidate_entities:
+            # No known entities to ground on → nothing to map; skip the LLM call.
+            logger.info("asr_homophone: no candidate entities for show; skipping")
+            return []
+
+        if client is None or model is None:
             cfg = await get_step_config(session, ASR_HOMOPHONE_STEP_KEY)
             if client is None:
                 client = OpenAI(base_url=cfg.base_url, api_key=cfg.api_key)
             if model is None:
                 model = cfg.model
-            if prompt is None:
-                prompt = cfg.extra_config.get("prompt") or DEFAULT_HOMOPHONE_PROMPT
+            if instruction is None:
+                instruction = cfg.extra_config.get("prompt") or None
+
+        prompt = build_detection_prompt(candidate_entities, instruction)
         # Run the blocking sync OpenAI call in a thread so it doesn't stall the
         # worker's event loop (consistent with topic_segmentation).
         raw = await asyncio.to_thread(
@@ -243,8 +342,22 @@ async def detect_homophones(
             transcript_text=transcript_text,
         )
         pairs = _parse_pairs(raw)
-        logger.info("asr_homophone: detected %d candidate pair(s)", len(pairs))
-        return pairs
+        # Safety net: keep only pairs whose correct-form is actually in the
+        # candidate list and that genuinely appear in the transcript. This caps
+        # any residual model over-reach to the grounded vocabulary.
+        allowed = set(candidate_entities)
+        filtered = [
+            p
+            for p in pairs
+            if p.correct in allowed and p.wrong in transcript_text
+        ]
+        dropped = len(pairs) - len(filtered)
+        logger.info(
+            "asr_homophone: detected %d pair(s) (%d dropped: off-list or absent)",
+            len(filtered),
+            dropped,
+        )
+        return filtered
     except Exception:
         logger.warning(
             "asr_homophone: detection failed; falling back to dictionary-only "

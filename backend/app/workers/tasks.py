@@ -420,7 +420,7 @@ async def _run(episode_id: str) -> dict:
                 # must never block transcription — it falls back to dictionary-
                 # only correction.
                 llm_pairs = await asr_homophone.detect_homophones(
-                    session, result.text
+                    session, result.text, show_id=correction_show_id
                 )
                 if llm_pairs:
                     # Persist candidates in a SEPARATE session so its commit

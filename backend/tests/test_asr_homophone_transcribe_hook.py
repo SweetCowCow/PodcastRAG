@@ -69,6 +69,9 @@ async def seeded_episode(db_session):
         title=f"pytest-hphook-{suffix} EP1",
         audio_url=f"https://e.com/{suffix}.mp3",
         audio_storage_key=f"fake/{suffix}.mp3",
+        # RAGEC candidate: 世運 is a known entity so the LLM's 世韻→世運 survives
+        # the grounding filter.
+        guests=["世運"],
     )
     # approved dictionary rule (second layer)
     rule = AsrCorrectionTerm(

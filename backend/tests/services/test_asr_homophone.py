@@ -59,23 +59,59 @@ def test_parse_pairs_empty_and_noop_filtered():
 
 
 async def test_detect_returns_word_level_pairs():
+    # RAGEC: correct-form must be in the candidate list and wrong must appear in
+    # the transcript for the pair to survive the grounding filter.
     client = _fake_client('```json\n[{"wrong": "世韻", "correct": "世運"}]\n```')
     pairs = await asr_homophone.detect_homophones(
-        AsyncMock(),  # session unused when client/model/prompt injected
+        AsyncMock(),  # session unused when client/model/candidates injected
         "今天聊世韻會",
+        candidate_entities=["世運"],
         client=client,
         model="fake-model",
-        prompt="p",
     )
     assert pairs == [CorrectionRule("世韻", "世運")]
+
+
+async def test_detect_drops_off_list_correction():
+    # LLM proposes a correct-form not in the candidate list → dropped (grounding).
+    client = _fake_client('[{"wrong": "羅志祥", "correct": "羅小"}]')
+    pairs = await asr_homophone.detect_homophones(
+        AsyncMock(), "今天聊羅志祥", candidate_entities=["世運"], client=client, model="m"
+    )
+    assert pairs == [], "off-list correction must be dropped"
+
+
+async def test_detect_drops_wrong_absent_from_transcript():
+    # wrong token not present in transcript → dropped.
+    client = _fake_client('[{"wrong": "世韻", "correct": "世運"}]')
+    pairs = await asr_homophone.detect_homophones(
+        AsyncMock(), "完全無關的內容", candidate_entities=["世運"], client=client, model="m"
+    )
+    assert pairs == []
 
 
 async def test_detect_no_homophone_returns_empty():
     client = _fake_client("[]")
     pairs = await asr_homophone.detect_homophones(
-        AsyncMock(), "一切正常的句子", client=client, model="m", prompt="p"
+        AsyncMock(), "一切正常的句子", candidate_entities=["世運"], client=client, model="m"
     )
     assert pairs == []
+
+
+async def test_detect_empty_candidate_list_skips_llm():
+    called = {"n": 0}
+
+    def _spy(**kw):
+        called["n"] += 1
+        raise AssertionError("LLM must not be called with empty candidates")
+
+    client = SimpleNamespace(
+        chat=SimpleNamespace(completions=SimpleNamespace(create=_spy))
+    )
+    pairs = await asr_homophone.detect_homophones(
+        AsyncMock(), "今天聊世韻會", candidate_entities=[], client=client, model="m"
+    )
+    assert pairs == [] and called["n"] == 0
 
 
 async def test_detect_fail_open_on_llm_error():
@@ -86,7 +122,7 @@ async def test_detect_fail_open_on_llm_error():
         chat=SimpleNamespace(completions=SimpleNamespace(create=_boom))
     )
     pairs = await asr_homophone.detect_homophones(
-        AsyncMock(), "今天聊世韻會", client=client, model="m", prompt="p"
+        AsyncMock(), "今天聊世韻會", candidate_entities=["世運"], client=client, model="m"
     )
     assert pairs == [], "fail-open: LLM error must yield empty list, not raise"
 
@@ -94,9 +130,74 @@ async def test_detect_fail_open_on_llm_error():
 async def test_detect_fail_open_on_bad_json():
     client = _fake_client("not json at all {{{")
     pairs = await asr_homophone.detect_homophones(
-        AsyncMock(), "今天聊世韻會", client=client, model="m", prompt="p"
+        AsyncMock(), "今天聊世韻會", candidate_entities=["世運"], client=client, model="m"
     )
     assert pairs == [], "fail-open: malformed JSON must yield empty list"
+
+
+# ─── build_detection_prompt / load_candidate_entities ─────────────────
+
+
+def test_build_detection_prompt_includes_candidates():
+    p = asr_homophone.build_detection_prompt(["方品融", "杜宗祐"])
+    assert "方品融" in p and "杜宗祐" in p
+    assert "已知正確專有名詞清單" in p
+
+
+def test_build_detection_prompt_custom_instruction():
+    p = asr_homophone.build_detection_prompt(["阿名"], instruction="自訂指令")
+    assert p.startswith("自訂指令")
+    assert "阿名" in p
+
+
+@pytest.mark.skipif(not _postgres_reachable(), reason="no local Postgres")
+async def test_load_candidate_entities_unions_guests_dict_extra(db_session):
+    from sqlalchemy import delete
+
+    from app.models.asr_correction_term import AsrCorrectionTerm
+    from app.models.episode import Episode
+    from app.models.show import Show
+
+    suffix = uuid.uuid4().hex[:6]
+    show = Show(title=f"pytest-cand-{suffix}", rss_url=f"https://e.com/{suffix}.rss")
+    db_session.add(show)
+    await db_session.commit()
+    await db_session.refresh(show)
+
+    ep = Episode(
+        show_id=show.id,
+        guid=f"cand-{suffix}",
+        title=f"cand-{suffix}",
+        audio_url=f"https://e.com/{suffix}.mp3",
+        guests=[f"來賓A{suffix}", f"來賓B{suffix}"],
+    )
+    rule_appr = AsrCorrectionTerm(
+        wrong=f"錯{suffix}", correct=f"正字{suffix}", scope="show", show_id=show.id,
+        enabled=True, source="manual", status="approved",
+    )
+    # a pending candidate's correct-form must NOT enter the list (only approved)
+    rule_pend = AsrCorrectionTerm(
+        wrong=f"待{suffix}", correct=f"待正{suffix}", scope="show", show_id=show.id,
+        enabled=False, source="llm", status="pending",
+    )
+    db_session.add_all([ep, rule_appr, rule_pend])
+    await db_session.commit()
+
+    try:
+        names = await asr_homophone.load_candidate_entities(
+            db_session, show.id, extra=[f"主持人{suffix}"]
+        )
+        assert f"來賓A{suffix}" in names and f"來賓B{suffix}" in names
+        assert f"正字{suffix}" in names, "approved dict correct-form must be included"
+        assert f"主持人{suffix}" in names, "extra (host) must be included"
+        assert f"待正{suffix}" not in names, "pending candidate correct must be excluded"
+    finally:
+        await db_session.execute(
+            delete(AsrCorrectionTerm).where(AsrCorrectionTerm.show_id == show.id)
+        )
+        await db_session.execute(delete(Episode).where(Episode.id == ep.id))
+        await db_session.execute(delete(Show).where(Show.id == show.id))
+        await db_session.commit()
 
 
 # ─── persist_candidates: pending candidates + dedup (real Postgres) ────
