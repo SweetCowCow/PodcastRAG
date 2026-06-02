@@ -55,6 +55,30 @@ const MILESTONE_LABELS = {
 
 // Entries — newest milestone first; within each milestone newest date first.
 const RELEASE_LOG = [
+  // ─── v2.2 — AI Homophone Detection: review polish (6/2) ───
+  {
+    date: '2026-06-02', slug: 'asr-correction-ux-and-aihub-json', milestone: 'v2.2', tag: 'enhancement',
+    title: {
+      zh: '候選審核小升級 — 核准時可直接改正字，偵測更換模型也不會卡住',
+      en: 'Candidate Review Polish — Edit the Correction at Approval Time; Model Swaps No Longer Break Parsing',
+    },
+    summary: {
+      zh: '接續上一版的「AI 自動找聽錯的名字」，這版補兩個小地方：(1) 後台審核候選時，「正字」欄位可以直接編輯——AI 偶爾對應到相近但不完全對的名字，現在你不用先駁回再重建，核准當下改好就生效；(2) 偵測背後換不同 AI 模型時，回應格式略有差異（多包一層、夾雜說明文字、全形引號等）以前會讓系統解析失敗、整批抓不到，現在解析更耐受，換模型不會再「靜默回 0」。對一般使用者沒有直接變化，主要讓後台校正流程更順、未來可用的模型更多。',
+      en: 'A follow-up to last release\'s "AI auto-finds misheard names", with two small touches: (1) in admin candidate review, the "correct" field is now editable — the AI occasionally maps to a near-but-not-exact name, and you can now fix it at approval time instead of rejecting and rebuilding; (2) when swapping the AI model behind detection, providers format responses slightly differently (extra wrapping, surrounding prose, full-width quotes) which used to break parsing and silently return nothing — parsing is now more tolerant, so model swaps no longer "silently return 0". No direct change for end users; mainly a smoother admin workflow and more usable model options.',
+    },
+    summaryBullets: {
+      zh: [
+        '後台候選審核：「正字」可編輯，核准當下微調再生效',
+        '偵測解析更耐受不同模型的回應格式（包裹/夾雜文字/全形引號/鍵名變體）',
+        '換偵測模型不再因解析失敗而靜默回 0',
+      ],
+      en: [
+        'Admin candidate review: "correct" is editable — tweak before approving',
+        'Detection parsing tolerates provider formatting variation (wrapping / prose / full-width quotes / key variants)',
+        'Swapping the detection model no longer silently returns 0 due to parse failure',
+      ],
+    },
+  },
   // ─── v2.2 — AI Homophone Detection (6/2) ───
   {
     date: '2026-06-02', slug: 'asr-llm-homophone-postprocess', milestone: 'v2.2', tag: 'feature',
