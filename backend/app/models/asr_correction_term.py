@@ -49,6 +49,18 @@ class AsrCorrectionTerm(Base):
     enabled: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default="true", default=True
     )
+    # asr-llm-homophone-postprocess (EQ2b): provenance + approval lifecycle.
+    # `source`: 'manual' (admin-authored, EQ2a) vs 'llm' (homophone detector).
+    # `status`: 'approved' rules participate in resolution; 'pending' LLM
+    # candidates wait for admin review; 'rejected' are kept (not deleted) so the
+    # detector's dedup skips re-proposing them. Existing EQ2a rows default to
+    # manual/approved so behaviour is unchanged.
+    source: Mapped[str] = mapped_column(
+        String(10), nullable=False, server_default="manual", default="manual"
+    )
+    status: Mapped[str] = mapped_column(
+        String(10), nullable=False, server_default="approved", default="approved"
+    )
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),

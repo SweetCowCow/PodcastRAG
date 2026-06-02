@@ -27,22 +27,60 @@ router = APIRouter(prefix="/asr-corrections", tags=["admin", "asr-corrections"])
 
 @router.get("", response_model=list[AsrCorrectionResponse])
 async def list_corrections(
+    source: str | None = None,
+    status: str | None = None,
     db: AsyncSession = Depends(get_db),
 ) -> list[AsrCorrectionResponse]:
-    rows = (
-        (
-            await db.execute(
-                select(AsrCorrectionTerm).order_by(
-                    AsrCorrectionTerm.created_at.desc()
-                )
-            )
-        )
-        .scalars()
-        .all()
+    """List correction rules, newest first. Optional `source`
+    (manual/llm) and `status` (pending/approved/rejected) filters power the
+    admin UI's pending-candidate review section (source=llm&status=pending)."""
+    stmt = select(AsrCorrectionTerm).order_by(
+        AsrCorrectionTerm.created_at.desc()
     )
+    if source is not None:
+        stmt = stmt.where(AsrCorrectionTerm.source == source)
+    if status is not None:
+        stmt = stmt.where(AsrCorrectionTerm.status == status)
+    rows = (await db.execute(stmt)).scalars().all()
     return [
         AsrCorrectionResponse.model_validate(r, from_attributes=True) for r in rows
     ]
+
+
+@router.post("/{term_id}/approve", response_model=AsrCorrectionResponse)
+async def approve_candidate(
+    term_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_admin),
+) -> AsrCorrectionResponse:
+    """Approve a candidate: status='approved', enabled=true. Thereafter it is
+    included in rule resolution (load_rules) and the second correction layer."""
+    row = await db.get(AsrCorrectionTerm, term_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="rule not found")
+    row.status = "approved"
+    row.enabled = True
+    await db.commit()
+    await db.refresh(row)
+    return AsrCorrectionResponse.model_validate(row, from_attributes=True)
+
+
+@router.post("/{term_id}/reject", response_model=AsrCorrectionResponse)
+async def reject_candidate(
+    term_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_admin),
+) -> AsrCorrectionResponse:
+    """Reject a candidate: status='rejected', enabled=false. Kept (not deleted)
+    so the detector's dedup skips re-proposing it."""
+    row = await db.get(AsrCorrectionTerm, term_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="rule not found")
+    row.status = "rejected"
+    row.enabled = False
+    await db.commit()
+    await db.refresh(row)
+    return AsrCorrectionResponse.model_validate(row, from_attributes=True)
 
 
 @router.get("/match-count", response_model=MatchCountResponse)

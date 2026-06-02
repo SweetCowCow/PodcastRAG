@@ -22,6 +22,7 @@ class StepKey(str, enum.Enum):
     embedding = "embedding"
     transcription = "transcription"
     entity_extraction = "entity_extraction"
+    asr_homophone = "asr_homophone"
 
 
 class StepType(str, enum.Enum):
@@ -39,6 +40,7 @@ STEP_KEY_TO_TYPE: dict[StepKey, StepType] = {
     StepKey.embedding: StepType.embedding,
     StepKey.transcription: StepType.whisper,
     StepKey.entity_extraction: StepType.chat,
+    StepKey.asr_homophone: StepType.chat,
 }
 
 
@@ -46,7 +48,7 @@ class AiStep(Base):
     __tablename__ = "ai_steps"
     __table_args__ = (
         CheckConstraint(
-            "step_key IN ('answer', 'rewrite', 'summary', 'embedding', 'transcription', 'entity_extraction')",
+            "step_key IN ('answer', 'rewrite', 'summary', 'embedding', 'transcription', 'entity_extraction', 'asr_homophone')",
             name="ck_ai_steps_step_key",
         ),
         CheckConstraint(

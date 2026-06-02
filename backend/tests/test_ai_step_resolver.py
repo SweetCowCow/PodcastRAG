@@ -151,3 +151,31 @@ async def test_whisper_openai_requires_api_key(db_session, fresh_steps):
 
     with pytest.raises(AiStepNotConfiguredError):
         await get_step_config(db_session, "transcription")
+
+
+@db_required
+@pytest.mark.asyncio
+async def test_asr_homophone_step_resolves_model_and_prompt(db_session, fresh_steps):
+    """asr-llm-homophone-postprocess (EQ2b): the asr_homophone chat step
+    resolves a valid model + a prompt from extra_config."""
+    key = ApiKey(provider="openai", label="pytest-hpstep", api_key="sk-hp")
+    db_session.add(key)
+    await db_session.commit()
+    await db_session.refresh(key)
+
+    await db_session.execute(
+        update(AiStep)
+        .where(AiStep.step_key == "asr_homophone")
+        .values(
+            base_url="https://api.openai.com/v1",
+            model="gpt-4o-mini",
+            api_key_id=key.id,
+            extra_config={"prompt": "偵測同音錯字"},
+        )
+    )
+    await db_session.commit()
+
+    cfg = await get_step_config(db_session, "asr_homophone")
+    assert cfg.step_type == "chat"
+    assert cfg.model == "gpt-4o-mini"
+    assert cfg.extra_config.get("prompt") == "偵測同音錯字"

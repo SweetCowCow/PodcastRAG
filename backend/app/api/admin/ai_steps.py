@@ -35,6 +35,7 @@ async def list_ai_steps(db: AsyncSession = Depends(get_db)) -> list[AiStepRespon
         StepKey.embedding.value,
         StepKey.transcription.value,
         StepKey.entity_extraction.value,
+        StepKey.asr_homophone.value,
     ]
     rows = (await db.execute(select(AiStep))).scalars().all()
     by_key = {r.step_key: r for r in rows}

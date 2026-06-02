@@ -60,14 +60,19 @@ class BackfillReport:
 async def load_rules(
     session: "AsyncSession", show_id: UUID | None
 ) -> list[CorrectionRule]:
-    """Return the enabled correction rules applicable to an episode of ``show_id``.
+    """Return the approved, enabled correction rules applicable to an episode
+    of ``show_id``.
 
-    The applicable set is the union of every enabled ``global`` rule and every
-    enabled ``show``-scoped rule bound to ``show_id``. Disabled rules are
-    excluded.
+    The applicable set is the union of every ``global`` rule and every
+    ``show``-scoped rule bound to ``show_id`` that is BOTH ``status='approved'``
+    AND ``enabled=true``. Pending LLM candidates (``status='pending'``,
+    ``enabled=false``), rejected rules, and disabled rules are all excluded —
+    asr-llm-homophone-postprocess (EQ2b) relies on this so that unreviewed
+    candidates never reach the second correction layer or future episodes.
     """
     stmt = select(AsrCorrectionTerm.wrong, AsrCorrectionTerm.correct).where(
         AsrCorrectionTerm.enabled.is_(True),
+        AsrCorrectionTerm.status == "approved",
         or_(
             AsrCorrectionTerm.scope == "global",
             and_(

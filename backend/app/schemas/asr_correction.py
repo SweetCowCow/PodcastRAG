@@ -38,6 +38,8 @@ class AsrCorrectionResponse(BaseModel):
     scope: str
     show_id: uuid.UUID | None = None
     enabled: bool
+    source: str
+    status: str
     note: str | None = None
     created_at: datetime
     updated_at: datetime

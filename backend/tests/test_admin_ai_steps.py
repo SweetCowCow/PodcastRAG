@@ -78,19 +78,22 @@ async def seeded_keys(db_session):
 
 @db_required
 @pytest.mark.asyncio
-async def test_list_returns_five_rows_in_canonical_order(auth_admin):
+async def test_list_returns_rows_in_canonical_order(auth_admin):
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
     ) as c:
         r = await c.get("/admin/ai-steps", cookies=auth_admin["cookies"])
         assert r.status_code == 200
         body = r.json()
+        # R3.3 added entity_extraction (6th); EQ2b added asr_homophone (7th).
         assert [row["step_key"] for row in body] == [
             "answer",
             "rewrite",
             "summary",
             "embedding",
             "transcription",
+            "entity_extraction",
+            "asr_homophone",
         ]
         # step_type assignment
         types = {row["step_key"]: row["step_type"] for row in body}
@@ -100,6 +103,8 @@ async def test_list_returns_five_rows_in_canonical_order(auth_admin):
             "summary": "chat",
             "embedding": "embedding",
             "transcription": "whisper",
+            "entity_extraction": "chat",
+            "asr_homophone": "chat",
         }
 
 

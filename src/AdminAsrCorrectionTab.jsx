@@ -142,6 +142,30 @@ const AdminAsrCorrectionTab = ({ lang }) => {
     }
   };
 
+  // ── EQ2b: LLM candidate review (approve / reject) ──
+  const [reviewingId, setReviewingId] = React.useState(null);
+
+  const handleReview = async (c, action) => {
+    if (reviewingId) return;
+    setReviewingId(c.id);
+    try {
+      const res = await apiFetch(`/admin/asr-corrections/${c.id}/${action}`, {
+        method: 'POST',
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      showToast(
+        action === 'approve'
+          ? (t ? '已核准，已跨集生效' : 'Approved — now active across episodes')
+          : (t ? '已駁回' : 'Rejected'),
+      );
+      await reload();
+    } catch (err) {
+      showToast(err.message || String(err), 'error');
+    } finally {
+      setReviewingId(null);
+    }
+  };
+
   const handlePreview = async () => {
     if (previewing) return;
     setPreviewing(true);
@@ -188,7 +212,15 @@ const AdminAsrCorrectionTab = ({ lang }) => {
     }
   };
 
-  const totalCount = rows?.length ?? 0;
+  // EQ2b: pending LLM candidates are derived from the full list and shown in a
+  // dedicated review section; the main rules table excludes them.
+  const candidates = (rows || []).filter(
+    (r) => r.source === 'llm' && r.status === 'pending',
+  );
+  const ruleRows = (rows || []).filter(
+    (r) => !(r.source === 'llm' && r.status === 'pending'),
+  );
+  const totalCount = ruleRows.length;
 
   return (
     <div style={{ maxWidth: 920 }}>
@@ -234,10 +266,53 @@ const AdminAsrCorrectionTab = ({ lang }) => {
 
       {error && <div style={{ color: '#f87171', fontSize: 13, marginBottom: 12 }}>{error}</div>}
 
+      {/* ── EQ2b: pending LLM candidate review ── */}
+      {candidates.length > 0 && (
+        <div style={{ marginBottom: 24, padding: 16, background: TOKEN.surfaceRaised, border: `1px solid ${TOKEN.accent}`, borderRadius: 8 }}>
+          <div style={{ fontWeight: 600, color: TOKEN.text, marginBottom: 4 }}>
+            {t ? `待審核候選（${candidates.length}）` : `Pending candidates (${candidates.length})`}
+          </div>
+          <p style={{ color: TOKEN.textSecondary, fontSize: 12, marginTop: 0, lineHeight: 1.6 }}>
+            {t
+              ? 'LLM 在轉錄時偵測到的疑似同音錯字。核准後會跨集生效並進入校正字典；駁回則不再提醒。（候選不影響既有資料，需核准才生效。）'
+              : 'Suspected homophone typos the LLM detected during transcription. Approve to activate across episodes and add to the dictionary; reject to dismiss. (Candidates do not affect existing data until approved.)'}
+          </p>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
+            <thead>
+              <tr style={{ borderBottom: `1px solid ${TOKEN.surfaceBorder}`, color: TOKEN.textSecondary, textAlign: 'left' }}>
+                <th style={{ padding: '8px', fontWeight: 600 }}>{t ? '錯字 → 正字' : 'Wrong → Correct'}</th>
+                <th style={{ padding: '8px', fontWeight: 600 }}>{t ? '節目' : 'Show'}</th>
+                <th style={{ padding: '8px', fontWeight: 600 }}></th>
+              </tr>
+            </thead>
+            <tbody>
+              {candidates.map((c) => (
+                <tr key={c.id} style={{ borderBottom: `1px solid ${TOKEN.surfaceBorder}`, color: TOKEN.text }}>
+                  <td style={{ padding: '8px', fontFamily: 'ui-monospace, monospace' }}>
+                    {c.wrong} <span style={{ color: TOKEN.textMuted }}>→</span> {c.correct}
+                  </td>
+                  <td style={{ padding: '8px' }}>
+                    <Badge variant="default">{showTitle(c.show_id)}</Badge>
+                  </td>
+                  <td style={{ padding: '8px', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                    <Btn variant="primary" size="sm" disabled={reviewingId === c.id} onClick={() => handleReview(c, 'approve')}>
+                      {t ? '核准' : 'Approve'}
+                    </Btn>
+                    <Btn variant="ghost" size="sm" disabled={reviewingId === c.id} onClick={() => handleReview(c, 'reject')}>
+                      {t ? '駁回' : 'Reject'}
+                    </Btn>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
       {/* ── rules table ── */}
       {rows === null ? (
         <div style={{ color: TOKEN.textMuted, fontSize: 13 }}>{t ? '載入中…' : 'Loading…'}</div>
-      ) : rows.length === 0 ? (
+      ) : ruleRows.length === 0 ? (
         <div style={{ color: TOKEN.textMuted, fontSize: 13 }}>{t ? '尚無規則' : 'No rules yet'}</div>
       ) : (
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
@@ -250,7 +325,7 @@ const AdminAsrCorrectionTab = ({ lang }) => {
             </tr>
           </thead>
           <tbody>
-            {rows.map((r) => (
+            {ruleRows.map((r) => (
               <tr key={r.id} style={{ borderBottom: `1px solid ${TOKEN.surfaceBorder}`, color: TOKEN.text }}>
                 <td style={{ padding: '10px 8px', fontFamily: 'ui-monospace, monospace' }}>
                   {r.wrong} <span style={{ color: TOKEN.textMuted }}>→</span> {r.correct}

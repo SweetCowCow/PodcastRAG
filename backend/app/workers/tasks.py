@@ -21,6 +21,7 @@ from app.models.transcription_queue import QueueStatus, TranscriptionQueue
 from app.services import storage
 from app.services import tokenizer
 from app.services import asr_correction
+from app.services import asr_homophone
 from app.services.chunking import build_chunks
 from app.services.ai_step_resolver import get_step_config
 from app.services.embedding import embed_texts, embed_texts_dual
@@ -410,9 +411,42 @@ async def _run(episode_id: str) -> dict:
                         TranscriptSegment.transcript_id == transcript_id
                     )
                 )
-                # asr-correction-dictionary (EQ2a): correct known ASR typos at
-                # the source — before writing segments and building chunks — so
-                # the displayed transcript AND the search index carry the fix.
+                # asr-llm-homophone-postprocess (EQ2b) — FIRST LAYER: LLM
+                # homophone detection over the whole episode. Returns word-level
+                # {wrong, correct} pairs that are (a) applied to THIS episode
+                # immediately (D2, no approval needed) and (b) persisted as
+                # pending candidates for cross-episode use after admin review.
+                # Both detection and persistence are fail-open: a failure here
+                # must never block transcription — it falls back to dictionary-
+                # only correction.
+                llm_pairs = await asr_homophone.detect_homophones(
+                    session, result.text
+                )
+                if llm_pairs:
+                    # Persist candidates in a SEPARATE session so its commit
+                    # cannot entangle (or prematurely flush) this transaction's
+                    # in-flight segment/chunk deletes — the two paths are
+                    # independent (D2). Fail-open: persistence failure must not
+                    # block the current episode's correction.
+                    try:
+                        async with Session() as cand_session:
+                            await asr_homophone.persist_candidates(
+                                cand_session,
+                                llm_pairs,
+                                show_id=correction_show_id,
+                            )
+                    except Exception:
+                        logger.warning(
+                            "asr_homophone: persist_candidates failed for %s; "
+                            "current episode still corrected, candidates skipped",
+                            episode_id,
+                            exc_info=True,
+                        )
+
+                # asr-correction-dictionary (EQ2a) — SECOND LAYER: correct known
+                # ASR typos from the approved dictionary at the source — before
+                # writing segments and building chunks — so the displayed
+                # transcript AND the search index carry the fix.
                 # fail-open: a correction-load failure must not block the
                 # transcription itself; it can be backfilled later.
                 try:
@@ -430,13 +464,18 @@ async def _run(episode_id: str) -> dict:
 
                 segment_rows: list[TranscriptSegment] = []
                 for seg in result.segments:
+                    # First layer (LLM pairs) then second layer (dictionary).
+                    corrected = asr_correction.apply_corrections(
+                        seg.text, llm_pairs
+                    )
+                    corrected = asr_correction.apply_corrections(
+                        corrected, correction_rules
+                    )
                     row = TranscriptSegment(
                         transcript_id=transcript_id,
                         start_time=seg.start,
                         end_time=seg.end,
-                        text=asr_correction.apply_corrections(
-                            seg.text, correction_rules
-                        ),
+                        text=corrected,
                     )
                     session.add(row)
                     segment_rows.append(row)
@@ -484,7 +523,8 @@ async def _run(episode_id: str) -> dict:
                     t.status = TranscriptStatus.completed
                     t.language = result.language or show_language
                     t.content = asr_correction.apply_corrections(
-                        result.text, correction_rules
+                        asr_correction.apply_corrections(result.text, llm_pairs),
+                        correction_rules,
                     )
                     t.error_message = None
                     t.transcribed_at = datetime.now(timezone.utc)

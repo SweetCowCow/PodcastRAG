@@ -136,3 +136,96 @@ async def test_load_rules_unions_global_and_show_excludes_others_and_disabled(
     assert f["h"] in wrongs, "enabled show-S rule must be included"
     assert f["k"] not in wrongs, "other show's rule must be excluded"
     assert f["disabled"] not in wrongs, "disabled rule must be excluded"
+
+
+# ─── asr-llm-homophone-postprocess (EQ2b): approval-gated resolution ───
+
+
+@pytest_asyncio.fixture
+async def approval_rules_fixture(db_session):
+    """Seed one show with an approved show rule, a pending LLM candidate, and a
+    rejected rule — all show-scoped to the same show — to exercise the
+    status gate in load_rules. Cleans up by `wrong` suffix."""
+    from sqlalchemy import delete
+
+    from app.models.asr_correction_term import AsrCorrectionTerm
+    from app.models.show import Show
+
+    suffix = uuid.uuid4().hex[:6]
+    show_s = Show(
+        title=f"pytest-asrappr-{suffix}-S", rss_url=f"https://e.com/{suffix}a.rss"
+    )
+    db_session.add(show_s)
+    await db_session.commit()
+    await db_session.refresh(show_s)
+
+    rows = [
+        AsrCorrectionTerm(
+            wrong=f"APPR{suffix}",
+            correct="approved",
+            scope="show",
+            show_id=show_s.id,
+            enabled=True,
+            source="manual",
+            status="approved",
+        ),
+        # pending LLM candidate — disabled + pending: must be excluded.
+        AsrCorrectionTerm(
+            wrong=f"PEND{suffix}",
+            correct="pending",
+            scope="show",
+            show_id=show_s.id,
+            enabled=False,
+            source="llm",
+            status="pending",
+        ),
+        # rejected rule: must be excluded even though it could be re-enabled.
+        AsrCorrectionTerm(
+            wrong=f"REJ{suffix}",
+            correct="rejected",
+            scope="show",
+            show_id=show_s.id,
+            enabled=False,
+            source="llm",
+            status="rejected",
+        ),
+        # approved enabled global rule: must be included.
+        AsrCorrectionTerm(
+            wrong=f"GAPPR{suffix}",
+            correct="g",
+            scope="global",
+            enabled=True,
+            source="manual",
+            status="approved",
+        ),
+    ]
+    db_session.add_all(rows)
+    await db_session.commit()
+
+    yield {
+        "show_s": show_s.id,
+        "approved": f"APPR{suffix}",
+        "pending": f"PEND{suffix}",
+        "rejected": f"REJ{suffix}",
+        "global_approved": f"GAPPR{suffix}",
+        "suffix": suffix,
+    }
+
+    await db_session.execute(
+        delete(AsrCorrectionTerm).where(AsrCorrectionTerm.wrong.like(f"%{suffix}"))
+    )
+    await db_session.execute(delete(Show).where(Show.id == show_s.id))
+    await db_session.commit()
+
+
+@pytest.mark.skipif(not _postgres_reachable(), reason="no local Postgres")
+async def test_load_rules_excludes_pending_and_rejected_unions_approved(
+    db_session, approval_rules_fixture
+):
+    f = approval_rules_fixture
+    rules = await load_rules(db_session, f["show_s"])
+    wrongs = {r.wrong for r in rules}
+    assert f["approved"] in wrongs, "approved enabled show rule must be included"
+    assert f["global_approved"] in wrongs, "approved enabled global rule must be unioned"
+    assert f["pending"] not in wrongs, "pending LLM candidate must be excluded"
+    assert f["rejected"] not in wrongs, "rejected rule must be excluded"
