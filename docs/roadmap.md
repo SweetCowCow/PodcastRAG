@@ -1,6 +1,6 @@
 # PodcastRAG 路線圖
 
-> 最後更新：2026-06-02（EQ2a asr-correction-dictionary ✅ 完成並 archive＋release log v2.1；EQ2b asr-llm-homophone-postprocess proposal 完成並 parked（🔵），下一動＝`/spectra-apply asr-llm-homophone-postprocess`。執行佇列為權威排序，下方 Phase A–F 表為細節參考。）
+> 最後更新：2026-06-02（EQ2b asr-llm-homophone-postprocess ✅ 完成上 prod（RAGEC redesign + gemini-3.5-flash，commit `977d1db`），待 archive；衍生 F1–F7 follow-up 見「衍生待 propose」。下一動＝archive EQ2b → EQ3a。執行佇列為權威排序，下方 Phase A–F 表為細節參考。）
 
 本文件記錄 PodcastRAG 後續開發的優先順序與規劃。**排序真相 = 下方「🎯 執行佇列」**；Phase A–F 表是細節背景（多數 Phase A 已完成）。
 
@@ -17,7 +17,7 @@
 |---|------|------------------|------|------------|---------|
 | **EQ1** | 補 favicon | `favicon-fix`（小修，免開 Spectra） | ✅ | 無 | ✅ 2026-06-01 上線（commit `02c1acf`）：head inline SVG data-URI（indigo 方塊+zap 閃電，呼應站內 logo）；prod 已驗無 /favicon.ico 404、分頁 icon 載入 OK |
 | **EQ2a** | ASR 校正字典詞庫 | `asr-correction-dictionary` | ✅ | 無 | ✅ 2026-06-01 完成並 archive（`archive/2026-06-01-asr-correction-dictionary`，commit `bde733a`）：後端+前端+migration 全上 prod；prod 驗證 UI 列表/新增/命中預覽/dry_run 全綠；實機回填「這又沒有很屌」6 條規則共 1507 段（杜忠祐→杜宗祐 362、阿鳴+阿明→阿名 1017、方品龍→方品融 124、龍虎報→龍虎豹、咪有企→滅火器），成本 $0.046；搜尋正字命中驗證通過 |
-| **EQ2b** | ASR LLM 同音異義字後處理 | `asr-llm-homophone-postprocess` | 🔵 | EQ2a ✅（字典當安全網＋評估基準） | proposal 完成並 parked（2026-06-02）；待 `/spectra-apply`。決策：第一層 LLM 整集偵測吐詞級 pair（不重寫結構語氣）→ 本集即時 literal 套用＋沉澱待審候選；第二層 EQ2a 已核准字典套用；兩層合流才 embedding。核准制（候選 `enabled=false` 天然隔離、零擴散）；fail-open；走 `asr_homophone` ai_step；pilot＝這又沒有很屌 3–5 集；評估 precision/recall vs EQ2a 已知 6 條；成本先 dry-run 估 |
+| **EQ2b** | ASR LLM 同音異義字後處理 | `asr-llm-homophone-postprocess` | ✅ | EQ2a ✅ | ✅ 2026-06-02 完成上 prod（12/12，commit `977d1db`）。**中途大改設計**：開放式 prompt pilot 兩端皆失（gpt-4o-mini 過度激進幻覺、gpt-4o 全 0、recall≈0）→ 改 **RAGEC 候選清單接地**（來賓∪字典正字∪主持人 → LLM 只做「ASR 聽錯→對應回清單」+ post-filter correct∈清單、wrong∈逐字稿）。模型 **gemini-3.5-flash via AI Hub**。核准制+fail-open 不變；pilot 這又沒有很屌 5 集（dry-run $0.014）→ 27 候選人工核准。詳見 design D7 + `docs/case-studies/eq2b-asr-homophone-pilot.md`。**回填 timeout 順手修**（dry-run 改 SQL 計數 98s→3.5s）。follow-up 見下方 F1–F7 |
 | **EQ3a** | rerank 調參救 b22/b23 | `voyage-rerank-tune-b22-b23` | ⏸ (0/9) | 無（現成 parked，unpark 即可） | b22/b23 chunk_recall 不退步、cross_episode mean 不降 |
 | **EQ3b** | b20 召回 RCA spike | `chunk-level-retrieval-rca-b20-style` | ⬜ | 無 | 查清 EP134 @1790/@1808 為何 top-500 全 miss（用 `sql_rca_demo` + `prompt_fingerprint_diff --source=sql`）；產 RCA 結論 |
 | **EQ3c** | BM25 取代 ts_rank + EP-scoped IDF | `lexical-bm25-replace-ts_rank` | ⬜ | **propose 前必跑 `retrieve_probe` 對 calibration_8 dry-run**（2026-05-28 失敗教訓） | calibration_8 dry-run 不退步才進 apply；prod chunk_recall ≥ baseline 0.482 |
@@ -178,6 +178,16 @@ R3 拆三段做（每段都跑 eval baseline 對照升幅）：
 > 早期擱置的 `agentic-framework-bakeoff` / `chat-agentic-tool-routing` / `landing-and-mode-orchestration-redesign` / `rag-vs-longcontext-benchmark` 等：landing-redesign 已 2026-05-23 archive；其餘 agentic 路線仍在「衍生待 propose」追蹤，未進現役 parked queue。
 
 ## 衍生待 propose（未開 change 但有共識）
+
+### EQ2b ASR 同音字 follow-up（2026-06-02，pilot/上線後衍生）
+- **F1 可逆性 / 原始備份**：校正是 literal 取代、不可逆；`transcript.content` 非可靠原始來源（只是 EQ2a 沒回填 content 的巧合、新轉錄會覆蓋、且無 segment 時間軸對應）。要可還原須**明確存原始 segment 文字**（segment 加 `original_text` / 校正前快照），或讓「本集即時套用」也改成只套已核准。Jacky 接受目前風險（核准制把關），但列為待辦。
+- **F2 EQ2a content-sync 缺口**：EQ2a 回填只改 segment/chunk，**沒同步 `transcript.content`**（逐字稿頁全文仍留錯字：杜忠祐 89、阿鳴 72、阿明 116）。獨立 bug。
+- **F3 核准時可編輯 correct**：核准對話框讓人工微調正字（gemini 偶爾差一點）。
+- **F4 jieba 詞典 × ASR 校正整合**：核准校正時自動把正字加進分詞詞典 → 搜尋斷詞更準。**與 Parking Lot「詞典系統整合 / 重設計」合併考慮**，先 /spectra-discuss。
+- **F5 AI Hub 非 OpenAI 模型 JSON 相容**：qwen/deepseek/claude 在 `response_format=json_object` 回 0（fail-open）；加寬鬆解析（strip code block / 容錯）救回、擴大模型選擇。
+- **F6 全面回填評估**：pilot 已過，原 Non-Goal 的全節目 LLM 偵測回填可評估開新 change。
+- **F7 一般同音異義字修正（非專名）**：RAGEC 只認候選清單內的專名，抓不到一般常用詞同音（在來一碗→再來一碗、在/再、的/得）。要做須另設計通用文法/同音校正，**過度修正風險高**，先 /spectra-discuss 評估方法與風險，不塞進 EQ2b。
+
 
 - ❌ **`retrieve-quality-step1-idf-and-prefilter`** done 2026-05-28 **FAILED, both layers reverted** (archive `2026-05-28-retrieve-quality-step1-idf-and-prefilter`)：Layer A (IDF-bucketed `ts_rank`) chunk_recall 0.482 → 0.382 ❌；Layer B (chat agent EP-ref dispatch prompt) chunk_recall 0.482 → 0.340 ❌。Root causes：(1) show-wide IDF 對 podcast transcript 不適用（entity token 在 show 維度罕見、在 answer-ep 內部極常見、IDF rare=signal 假設破滅）(2) prompt change 從來不 orthogonal 於 retrieval — 新 prompt 改 agent 措辭 `search_*(query: str)` 的 query → ts_rank 跟著飄 (3) show-wide DB probe 是 episode-scoped retrieval false positive validator。完整 RCA + 三條教訓 memory：`feedback_idf_show_wide_failed_2026_05_28.md` + `feedback_prompt_change_retrieval_side_effect.md` + `feedback_show_wide_probe_false_positive.md`。下動 pivot 評估框架升級（不再動 retrieval / prompt 直到有 span-level tracing + per-question tool trace）
 - ✅ **`eval-framework-upgrade`** done 2026-05-30（archive `2026-05-30-eval-framework-upgrade`）— Langfuse Cloud Free + PG eval_traces 雙 sink + 6 個新 grader (4 DeepEval 內建 + 2 GEval 自寫) + `_calibration_8.json` + `retrieve_probe.py` + `prompt_fingerprint_diff.py` + PR template Retrieval/Prompt checklist + runbook + 全 34 baseline。**未達 4.4 acceptance**：prod 灰度 P95 +3375ms FAIL (<100ms gate)、tracing 預設 OFF、open follow-up `langfuse-self-host-evaluation`。完整 case study + RCA: `docs/case-studies/eval-framework-upgrade-2026-05-30.md`
