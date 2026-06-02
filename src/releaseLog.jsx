@@ -50,10 +50,39 @@ const MILESTONE_LABELS = {
   'v1.9': { zh: 'v1.9 — 索引模式：多關鍵字精準搜尋', en: 'v1.9 — Index Mode: Precise Multi-Keyword Search' },
   'v2.0': { zh: 'v2.0 — 查詢體驗統一：一致引用卡 + 引導範例', en: 'v2.0 — Unified Query Experience: Consistent Citations + Guided Examples' },
   'v2.1': { zh: 'v2.1 — 修正聽錯的名字，搜尋找得回來', en: 'v2.1 — Fixing Misheard Names So Search Can Find Them' },
+  'v2.2': { zh: 'v2.2 — AI 自動找出聽錯的名字，你只要點核准', en: 'v2.2 — AI Auto-Finds Misheard Names; You Just Approve' },
 };
 
 // Entries — newest milestone first; within each milestone newest date first.
 const RELEASE_LOG = [
+  // ─── v2.2 — AI Homophone Detection (6/2) ───
+  {
+    date: '2026-06-02', slug: 'asr-llm-homophone-postprocess', milestone: 'v2.2', tag: 'feature',
+    title: {
+      zh: 'AI 自動找出聽錯的名字 — 不用你一個個發現，AI 掃描整集、列出疑似聽錯的人名給你核准',
+      en: 'AI Auto-Finds Misheard Names — Instead of Spotting Them One by One, AI Scans Each Episode and Queues Suspected Mishearings for Your Approval',
+    },
+    summary: {
+      zh: '上一版（v2.1）你可以手動建「錯字→正字」對照表，但前提是你得先「發現」哪些名字被聽錯——這很難規模化。這一版讓 AI 幫你找。每當一集轉錄完成，系統會請 AI 比對「這個節目已知的人」（主持人、出現過的來賓，加上你已建的字典），掃描整集逐字稿、揪出疑似被聽成同音字的名字，整理成一份「待審核候選」放進後台，你只要按「核准」或「駁回」。核准後它就變成正式校正規則、跨集生效；駁回後就不再提醒。關鍵設計是「只認名單內的人」——AI 只會把錯字對應回節目真實出現過的名字，不會自己亂猜、亂改正常字詞，所以你看到的候選幾乎都是真的聽錯。我們在「這又沒有很屌」實測 5 集，AI 撈出了一批真實聽錯，例如 杜忠祐/杜仲佑→杜宗祐、阿鳴/阿明→阿名、力友→Leo王、嘎咪比→Gummy B、不來美→布萊梅、趙亦凡→趙翊帆 等，整批掃描成本不到 $0.02。（順帶把後台「批次回填」太慢會卡住的問題也修了，現在秒回。）',
+      en: 'Last release (v2.1) let you hand-build a typo→correct dictionary — but only if you first "spotted" which names were misheard, which doesn\'t scale. This release lets AI find them for you. Whenever an episode finishes transcribing, the system asks an AI to scan the full transcript against "the people this show knows" (hosts, past guests, plus your existing dictionary), flags names that were likely heard as homophones, and queues them as "pending candidates" in admin — you just click Approve or Reject. Approve turns it into a real correction rule that works across episodes; Reject dismisses it. The key design is "only names on the list": the AI only maps a misheard word back to a name the show has actually used — it won\'t guess wildly or rewrite normal words, so almost everything you see is a genuine mishearing. We tested 5 episodes of "這又沒有很屌" and the AI surfaced a batch of real mistakes — e.g. 杜忠祐/杜仲佑→杜宗祐, 阿鳴/阿明→阿名, 力友→Leo王, 嘎咪比→Gummy B, 不來美→布萊梅, 趙亦凡→趙翊帆 — for under $0.02 total. (We also fixed the admin "Backfill" preview that was timing out; it\'s instant now.)',
+    },
+    summaryBullets: {
+      zh: [
+        '轉錄完成後 AI 自動掃整集，揪出疑似被聽成同音字的人名',
+        '只對應「節目已知的人」（主持人 + 來賓 + 你建的字典）→ 不亂猜、不誤改正常字',
+        '後台「待審核候選」區：一鍵核准（跨集生效）或駁回（不再提醒）',
+        '實測「這又沒有很屌」5 集撈出一批真實聽錯，整批成本 < $0.02',
+        '順手修好後台批次回填預覽 timeout（98 秒 → 3 秒）',
+      ],
+      en: [
+        'After transcription, AI scans the whole episode and flags names likely heard as homophones',
+        'Only maps to "people the show knows" (hosts + guests + your dictionary) → no wild guesses, no collateral edits',
+        'Admin "Pending Candidates" section: one-click Approve (works across episodes) or Reject (dismiss)',
+        'Tested 5 episodes of "這又沒有很屌": surfaced a batch of real mishearings for under $0.02 total',
+        'Also fixed the admin backfill-preview timeout (98s → 3s)',
+      ],
+    },
+  },
   // ─── v2.1 — ASR Correction Dictionary (6/1) ───
   {
     date: '2026-06-01', slug: 'asr-correction-dictionary', milestone: 'v2.1', tag: 'feature',
