@@ -30,9 +30,9 @@
 
 ## 8. 後台候選審核 UI
 
-- [ ] 8.1 在 `src/AdminAsrCorrectionTab.jsx` 新增「待審核候選」區，達成 **Pending candidate review section**：列出 `source='llm'`+`status='pending'` 候選（wrong/correct/所屬 show）+ 核准/駁回按鈕，雙語、用 TOKEN 設計系統，操作後列表更新。驗證：browser smoke 候選列表載入 + 核准一筆後該筆離開待審區並成為生效規則。
+- [x] 8.1 在 `src/AdminAsrCorrectionTab.jsx` 新增「待審核候選」區，達成 **Pending candidate review section**：列出 `source='llm'`+`status='pending'` 候選（wrong/correct/所屬 show）+ 核准/駁回按鈕，雙語、用 TOKEN 設計系統，操作後列表更新。驗證：browser smoke 候選列表載入 + 核准一筆後該筆離開待審區並成為生效規則。
 
 ## 9. 測試與 pilot 驗證
 
 - [x] 9.1 後端測試全綠（unit + integration，真實 Postgres 跑 detection service / load_rules / 候選持久化 / 審核 API）。驗證：對應 pytest 全數通過。
-- [ ] 9.2 部署 migration + backend/worker/dispatcher/beat + 前端（同 EQ2a 模式），於後台設定 `asr_homophone` step model/prompt，並跑 pilot：先對「這又沒有很屌」3–5 集 dry-run 估成本 → 確認後對該批跑偵測 → 後台檢視 LLM 候選 → 對 EQ2a 已知 6 條錯字算 precision/recall（LLM 有無抓到已知、有無亂報）→ 核准正確候選。驗證：prod 偵測產出候選、precision/recall 數據記錄於對應 case study、核准後搜尋正字命中。
+- [x] 9.2 部署 migration + backend/worker/dispatcher/beat + 前端（同 EQ2a 模式），於後台設定 `asr_homophone` step model/prompt，並跑 pilot：先對「這又沒有很屌」3–5 集 dry-run 估成本 → 確認後對該批跑偵測 → 後台檢視 LLM 候選 → 對 EQ2a 已知 6 條錯字算 precision/recall（LLM 有無抓到已知、有無亂報）→ 核准正確候選。驗證：prod 偵測產出候選、precision/recall 數據記錄於對應 case study、核准後搜尋正字命中。
