@@ -8,31 +8,29 @@ TBD - created by archiving change 'asr-correction-dictionary'. Update Purpose af
 
 ### Requirement: ASR correction rule data model
 
-The backend SHALL persist ASR correction rules in an `asr_correction_terms` table. Each rule SHALL have: `id` (uuid primary key), `wrong` (text, the ASR mis-transcription), `correct` (text, the intended text), `scope` (text, either `global` or `show`), `show_id` (uuid, nullable, required when scope is `show`), `enabled` (boolean, default true), `note` (text, nullable), `created_by_user_id` (uuid, nullable), `created_at`, and `updated_at`. The table SHALL enforce a unique constraint on `(wrong, scope, show_id)`.
+The backend SHALL persist ASR correction rules in an `asr_correction_terms` table. Each rule SHALL have: `id` (uuid primary key), `wrong` (text, the ASR mis-transcription), `correct` (text, the intended text), `scope` (text, either `global` or `show`), `show_id` (uuid, nullable, required when scope is `show`), `enabled` (boolean, default true), `source` (text, either `manual` or `llm`, default `manual`), `status` (text, one of `pending`, `approved`, `rejected`, default `approved`), `note` (text, nullable), `created_by_user_id` (uuid, nullable), `created_at`, and `updated_at`. The table SHALL enforce a unique constraint on `(wrong, scope, show_id)`. Existing rows created before this change SHALL be treated as `source='manual'`, `status='approved'`.
+
+#### Scenario: Manual rule defaults to approved
+
+- **WHEN** a rule is created through the manual CRUD API without specifying source or status
+- **THEN** it SHALL be stored with `source='manual'` and `status='approved'`
+
+#### Scenario: LLM candidate stored pending and disabled
+
+- **WHEN** an LLM-detected candidate is persisted
+- **THEN** it SHALL be stored with `source='llm'`, `status='pending'`, and `enabled=false`
 
 #### Scenario: Show-scoped rule requires show_id
 
 - **WHEN** a rule is persisted with `scope='show'` and a null `show_id`
 - **THEN** the system SHALL reject it with a validation error
 
-#### Scenario: Global rule has null show_id
-
-- **WHEN** a rule is persisted with `scope='global'`
-- **THEN** `show_id` SHALL be null
-
-#### Scenario: Duplicate rule rejected
-
-- **GIVEN** a rule `wrong='咪有企', scope='show', show_id=S` exists
-- **WHEN** another rule with the same `(wrong, scope, show_id)` is inserted
-- **THEN** the unique constraint SHALL reject it
-
 
 <!-- @trace
-source: asr-correction-dictionary
-updated: 2026-06-01
+source: asr-llm-homophone-postprocess
+updated: 2026-06-02
 code:
   - skills-lock.json
-  - docs/roadmap.md
 -->
 
 ---
@@ -71,27 +69,26 @@ code:
 ---
 ### Requirement: Rule scope resolution by show
 
-When resolving the rule set applicable to an episode of a given show, the correction service SHALL include all `enabled` rules with `scope='global'` together with all `enabled` rules where `scope='show'` and `show_id` equals that show. Disabled rules SHALL NOT be included.
+When resolving the rule set applicable to an episode of a given show, the correction service SHALL include only rules with `status='approved'` and `enabled=true`, comprising all such rules with `scope='global'` together with all such rules where `scope='show'` and `show_id` equals that show. Pending, rejected, or disabled rules SHALL NOT be included.
 
-#### Scenario: Global and show rules unioned
+#### Scenario: Pending candidate excluded from resolution
 
-- **GIVEN** an enabled global rule G, an enabled show rule H bound to show S, and an enabled show rule K bound to a different show
+- **GIVEN** an LLM candidate with `status='pending'`, `enabled=false` bound to show S
 - **WHEN** the rule set for an episode of show S is resolved
-- **THEN** the set SHALL contain G and H and SHALL NOT contain K
+- **THEN** the candidate SHALL NOT be included
 
-#### Scenario: Disabled rule excluded
+#### Scenario: Approved enabled rules unioned
 
-- **GIVEN** a disabled global rule
-- **WHEN** any rule set is resolved
-- **THEN** the disabled rule SHALL NOT be included
+- **GIVEN** an approved enabled global rule G and an approved enabled show rule H bound to show S
+- **WHEN** the rule set for an episode of show S is resolved
+- **THEN** the set SHALL contain G and H
 
 
 <!-- @trace
-source: asr-correction-dictionary
-updated: 2026-06-01
+source: asr-llm-homophone-postprocess
+updated: 2026-06-02
 code:
   - skills-lock.json
-  - docs/roadmap.md
 -->
 
 ---
@@ -171,4 +168,33 @@ updated: 2026-06-01
 code:
   - skills-lock.json
   - docs/roadmap.md
+-->
+
+---
+### Requirement: Candidate review API
+
+The backend SHALL expose admin-only endpoints to list pending candidates and to review a candidate by approving or rejecting it. Approving a candidate SHALL set `status='approved'` and `enabled=true`. Rejecting a candidate SHALL set `status='rejected'` and leave `enabled=false`. Listing SHALL support filtering by `source` and `status`.
+
+#### Scenario: Approve candidate activates rule
+
+- **GIVEN** a candidate with `status='pending'`, `enabled=false`
+- **WHEN** an admin approves it
+- **THEN** it SHALL have `status='approved'` and `enabled=true` and SHALL thereafter be included in rule resolution
+
+#### Scenario: Reject candidate keeps it inactive
+
+- **GIVEN** a candidate with `status='pending'`
+- **WHEN** an admin rejects it
+- **THEN** it SHALL have `status='rejected'` and `enabled=false` and SHALL NOT be included in rule resolution
+
+#### Scenario: Review endpoints require admin
+
+- **WHEN** a non-admin calls a candidate review endpoint
+- **THEN** the API SHALL reject the request
+
+<!-- @trace
+source: asr-llm-homophone-postprocess
+updated: 2026-06-02
+code:
+  - skills-lock.json
 -->

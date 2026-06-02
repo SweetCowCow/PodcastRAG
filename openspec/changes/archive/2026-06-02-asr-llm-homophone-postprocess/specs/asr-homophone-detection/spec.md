@@ -1,5 +1,19 @@
 ## ADDED Requirements
 
+### Requirement: Detection is grounded on a per-show candidate-entity list (RAGEC)
+
+The detection SHALL be grounded on a per-show candidate-entity list — the union of the show's distinct guest names, the correct-forms of its approved correction rules, and any supplied host names — and SHALL ask the LLM to map ASR mis-hearings onto that list rather than freely hunting for arbitrary typos. The system SHALL discard any returned pair whose `correct` is not in the candidate list or whose `wrong` does not appear in the transcript. When the candidate list is empty, detection SHALL skip the LLM call and return an empty list.
+
+#### Scenario: Off-list correction is dropped
+
+- **WHEN** the LLM returns a pair whose `correct` is not in the candidate-entity list
+- **THEN** that pair SHALL be dropped from the result
+
+#### Scenario: Empty candidate list skips detection
+
+- **WHEN** a show has no candidate entities (no guests, no approved rules, no hosts)
+- **THEN** detection SHALL return an empty list without invoking the LLM
+
 ### Requirement: LLM homophone detection produces word-level pairs
 
 After transcription produces segment text and before segments are persisted, the system SHALL invoke an LLM to detect homophone mis-transcriptions across the full episode transcript and SHALL return a list of word-level correction pairs `{wrong, correct}`. The detection SHALL NOT return rewritten full text, sentence restructuring, or tone edits; each pair's `wrong` and `correct` SHALL be terms suitable for literal substring replacement.
