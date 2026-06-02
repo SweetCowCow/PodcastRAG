@@ -21,6 +21,10 @@ class TranscriptSegment(Base):
     start_time: Mapped[float] = mapped_column(Float, nullable=False)
     end_time: Mapped[float] = mapped_column(Float, nullable=False)
     text: Mapped[str] = mapped_column(Text, nullable=False)
+    # asr-correction-reversibility-and-content-sync (EQ2d F1): the pre-correction
+    # ASR text, captured once when a correction first changes `text` (never
+    # overwritten). NULL = never corrected, or restored. Powers transcript restore.
+    original_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     speaker: Mapped[str | None] = mapped_column(String(200), nullable=True)
     topic_label: Mapped[str | None] = mapped_column(String(50), nullable=True)
 

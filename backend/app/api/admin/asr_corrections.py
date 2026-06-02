@@ -91,6 +91,28 @@ async def reject_candidate(
     return AsrCorrectionResponse.model_validate(row, from_attributes=True)
 
 
+@router.post("/restore/{episode_id}", response_model=BackfillResponse)
+async def restore_episode_transcript(
+    episode_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_admin),
+) -> BackfillResponse:
+    """EQ2d F1: restore an episode's transcript to its original ASR text —
+    revert corrected segments + content from their snapshots, recompute affected
+    chunks, and clear the snapshots. No-op (affected=0) if nothing was corrected.
+    """
+    # embedding_cfg resolved lazily inside restore_episode (only when chunks
+    # actually need recompute), so a no-op restore never requires it.
+    report = await asr_correction.restore_episode(db, episode_id)
+    return BackfillResponse(
+        dry_run=False,
+        affected_transcripts=report.affected_transcripts,
+        affected_segments=report.affected_segments,
+        affected_chunks=report.affected_chunks,
+        failed_chunk_ids=report.failed_chunk_ids,
+    )
+
+
 @router.get("/match-count", response_model=MatchCountResponse)
 async def match_count(
     wrong: str,

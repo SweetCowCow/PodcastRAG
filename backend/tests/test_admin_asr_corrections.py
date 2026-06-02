@@ -250,3 +250,31 @@ async def test_reject_excludes_rule_from_resolution(client, auth_admin, asr_show
     assert not any(rule.wrong == f"候選{asr_show['suffix']}" for rule in rules), (
         "rejected candidate must NOT be in load_rules resolution"
     )
+
+
+# ─── EQ2d: episode transcript restore API ─────────────────────────────
+
+
+async def test_restore_requires_admin(client, auth_member):
+    import uuid as _uuid
+
+    r = await client.post(
+        f"/admin/asr-corrections/restore/{_uuid.uuid4()}",
+        cookies=auth_member["cookies"],
+        headers=auth_member["csrf_headers"],
+    )
+    assert r.status_code == 403, r.text
+
+
+async def test_restore_noop_episode_returns_zero(client, auth_admin):
+    import uuid as _uuid
+
+    # An episode with no transcript / no snapshot → success, affected=0.
+    r = await client.post(
+        f"/admin/asr-corrections/restore/{_uuid.uuid4()}",
+        cookies=auth_admin["cookies"],
+        headers=auth_admin["csrf_headers"],
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["affected_segments"] == 0 and body["affected_chunks"] == 0

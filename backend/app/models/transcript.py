@@ -36,6 +36,10 @@ class Transcript(Base):
         DateTime(timezone=True), nullable=True
     )
     content: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # asr-correction-reversibility-and-content-sync (EQ2d F1): the pre-correction
+    # full-episode text, captured once when the transcript is first corrected
+    # (never overwritten). NULL = never corrected, or restored.
+    original_content: Mapped[str | None] = mapped_column(Text, nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

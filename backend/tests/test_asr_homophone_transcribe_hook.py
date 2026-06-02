@@ -204,6 +204,14 @@ async def test_both_layers_applied_and_candidate_persisted(
         assert "世運" in blob and "世韻" not in blob, blob
         assert "滅火器" in blob and "咪有企" not in blob, blob
 
+    # EQ2d F1: _run snapshots the raw ASR text so the episode is reversible.
+    assert any(s.original_text == "今天聊世韻會也聊咪有企" for s in segs), (
+        "corrected segment must snapshot its raw ASR original_text"
+    )
+    assert tr.original_content == "今天聊世韻會也聊咪有企", (
+        "transcript must snapshot its raw ASR original_content"
+    )
+
     # LLM pair persisted as a pending, disabled, show-scoped llm candidate
     from app.models.asr_correction_term import AsrCorrectionTerm
 

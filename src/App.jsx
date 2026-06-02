@@ -244,6 +244,7 @@ const App = () => {
         )}
         {page === 'transcript' && selectedEpisode && selectedShow && (
           <TranscriptPage lang={lang} show={selectedShow} episode={selectedEpisode}
+            isAdmin={isAdmin}
             initSearch={initSearch} highlightTime={highlightTime}
             onBack={() => {
               // Clear all deep-link params so a subsequent unrelated navigation

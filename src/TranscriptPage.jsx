@@ -19,8 +19,9 @@ const _readDeepLinkSeconds = () => {
   }
 };
 
-const TranscriptPage = ({ lang, show, episode, onBack, initSearch, highlightTime }) => {
+const TranscriptPage = ({ lang, show, episode, onBack, initSearch, highlightTime, isAdmin }) => {
   const t = lang === 'zh';
+  const [restoring, setRestoring] = React.useState(false);
   const { isMobile } = useViewport();
   // landing-and-mode-orchestration-redesign decision 6: use the cross-page
   // AudioPlayerContext so playback survives QueryPage ↔ TranscriptPage.
@@ -37,7 +38,7 @@ const TranscriptPage = ({ lang, show, episode, onBack, initSearch, highlightTime
     deepLinkSecondsRef.current = fromUrl != null ? fromUrl : (typeof highlightTime === 'number' ? highlightTime : null);
   }
 
-  React.useEffect(() => {
+  const loadTranscript = React.useCallback(() => {
     if (!episode?.id) return;
     setSegments(null);
     setSegError(null);
@@ -47,6 +48,30 @@ const TranscriptPage = ({ lang, show, episode, onBack, initSearch, highlightTime
       .then(data => setSegments(data.segments || []))
       .catch(err => setSegError(err.message));
   }, [episode?.id]);
+
+  React.useEffect(() => { loadTranscript(); }, [loadTranscript]);
+
+  // EQ2d F1: admin-only restore of this episode's transcript to original ASR.
+  const handleRestore = async () => {
+    if (restoring || !episode?.id) return;
+    if (!confirm(t
+      ? '確定要把這集逐字稿還原成原始（未校正）的 ASR 文字嗎？此動作會清除校正並重算搜尋索引。'
+      : 'Restore this episode\'s transcript to the original (uncorrected) ASR text? This clears corrections and recomputes the search index.')) return;
+    setRestoring(true);
+    try {
+      const res = await apiFetch(`/admin/asr-corrections/restore/${episode.id}`, { method: 'POST' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      alert(t
+        ? `已還原：${data.affected_segments} 段、重算 ${data.affected_chunks} 個片段索引。`
+        : `Restored: ${data.affected_segments} segment(s), recomputed ${data.affected_chunks} chunk index(es).`);
+      loadTranscript();
+    } catch (err) {
+      alert((t ? '還原失敗：' : 'Restore failed: ') + (err.message || String(err)));
+    } finally {
+      setRestoring(false);
+    }
+  };
 
   // landing-and-mode-orchestration-redesign decision 7: derive paragraphs from
   // segments using the shared aggregateParagraphs util (gap ≥ 1.5s OR speaker
@@ -145,6 +170,11 @@ const TranscriptPage = ({ lang, show, episode, onBack, initSearch, highlightTime
               });
             }}>
             {t ? '從此處播放' : 'Play here'}
+          </Btn>
+        )}
+        {isAdmin && (
+          <Btn variant="ghost" size="sm" disabled={restoring} onClick={handleRestore}>
+            {restoring ? (t ? '還原中…' : 'Restoring…') : (t ? '還原原始逐字稿' : 'Restore original')}
           </Btn>
         )}
       </div>

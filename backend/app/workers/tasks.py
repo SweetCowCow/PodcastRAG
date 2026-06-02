@@ -476,6 +476,11 @@ async def _run(episode_id: str) -> dict:
                         start_time=seg.start,
                         end_time=seg.end,
                         text=corrected,
+                        # EQ2d F1: snapshot the raw ASR text when a correction
+                        # changes it, so the episode stays reversible.
+                        original_text=(
+                            seg.text if corrected != seg.text else None
+                        ),
                     )
                     session.add(row)
                     segment_rows.append(row)
@@ -522,10 +527,18 @@ async def _run(episode_id: str) -> dict:
                 if t is not None:
                     t.status = TranscriptStatus.completed
                     t.language = result.language or show_language
-                    t.content = asr_correction.apply_corrections(
+                    corrected_content = asr_correction.apply_corrections(
                         asr_correction.apply_corrections(result.text, llm_pairs),
                         correction_rules,
                     )
+                    # EQ2d F1: snapshot the raw ASR full text when correction
+                    # changes it, so the episode stays reversible.
+                    if (
+                        corrected_content != result.text
+                        and t.original_content is None
+                    ):
+                        t.original_content = result.text
+                    t.content = corrected_content
                     t.error_message = None
                     t.transcribed_at = datetime.now(timezone.utc)
                 await session.commit()

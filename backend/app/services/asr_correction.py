@@ -288,7 +288,14 @@ async def backfill_corrections(
                 for cs, s in zip(corrected, segs)
                 if cs.text != (s.text or "")
             }
-            if not changed_ids:
+            # EQ2d F2 / task 2.3: content sync is independent of whether any
+            # segment changed. Episodes corrected before EQ2d have corrected
+            # segments but stale content; re-running backfill is a no-op on
+            # segments yet content must still be brought into line. Compute the
+            # corrected content and treat a content change as work on its own.
+            corrected_content = apply_corrections(tr.content or "", rules)
+            content_changed = corrected_content != (tr.content or "")
+            if not changed_ids and not content_changed:
                 continue
 
             new_drafts = build_chunks(corrected)
@@ -310,19 +317,26 @@ async def backfill_corrections(
                 if chunk is not None and chunk.text != draft.text:
                     affected.append((chunk, draft.text))
 
-            report.affected_transcripts += 1
+            if changed_ids:
+                report.affected_transcripts += 1
             report.affected_segments += len(changed_ids)
             report.affected_chunks += len(affected)
 
-            if dry_run:
-                total_affected_chars += sum(len(t) for _, t in affected)
-                continue
-
-            # Write path: commit corrected segment text.
+            # EQ2d F1: snapshot original segment text once (only for segments
+            # whose text actually changes and whose original_text is still NULL),
+            # then write the corrected text.
             corrected_text_by_id = {cs.id: cs.text for cs in corrected}
             for s in segs:
                 if s.id in changed_ids:
+                    if s.original_text is None:
+                        s.original_text = s.text or ""
                     s.text = corrected_text_by_id[s.id]
+
+            # EQ2d F1/F2: snapshot original content once + sync corrected content.
+            if content_changed:
+                if tr.original_content is None:
+                    tr.original_content = tr.content or ""
+                tr.content = corrected_content
 
             if affected:
                 texts = [t for _, t in affected]
@@ -355,4 +369,132 @@ async def backfill_corrections(
         report.estimated_cost_usd = round(
             est_tokens / 1_000_000 * _EST_USD_PER_1M_EMBED_TOKENS, 6
         )
+    return report
+
+
+async def restore_episode(
+    session: "AsyncSession",
+    episode_id: UUID,
+    *,
+    embedding_cfg: "StepConfig | None" = None,
+) -> BackfillReport:
+    """Restore one episode's transcript to its original ASR text (EQ2d F1).
+
+    Reverts each segment whose `original_text` is set back to that text, reverts
+    `content` from `original_content`, recomputes the chunks affected by the
+    reverted segments (text + dual embeddings + tsvector), then clears
+    `original_text`/`original_content` so the episode returns to an uncorrected,
+    no-snapshot state. An episode with no preserved original is a no-op
+    (affected=0), never an error.
+    """
+    from app.models.episode import Episode
+    from app.models.transcript import Transcript
+    from app.models.transcript_chunk import TranscriptChunk
+    from app.models.transcript_segment import TranscriptSegment
+    from app.services import tokenizer
+    from app.services.chunking import build_chunks
+    from app.services.embedding import embed_texts_dual
+
+    report = BackfillReport()
+
+    tr = (
+        await session.execute(
+            select(Transcript)
+            .join(Episode, Transcript.episode_id == Episode.id)
+            .where(Episode.id == episode_id)
+        )
+    ).scalar_one_or_none()
+    if tr is None:
+        return report
+
+    segs = (
+        (
+            await session.execute(
+                select(TranscriptSegment)
+                .where(TranscriptSegment.transcript_id == tr.id)
+                .order_by(TranscriptSegment.start_time, TranscriptSegment.id)
+            )
+        )
+        .scalars()
+        .all()
+    )
+
+    restored_ids = {s.id for s in segs if s.original_text is not None}
+    if not restored_ids and tr.original_content is None:
+        return report  # nothing was ever corrected — no-op
+
+    # Build restored-segment shims (revert to original_text where present) and
+    # find chunks whose text changes back.
+    restored = [
+        SimpleNamespace(
+            id=s.id,
+            start_time=s.start_time,
+            end_time=s.end_time,
+            text=(s.original_text if s.original_text is not None else (s.text or "")),
+        )
+        for s in segs
+    ]
+    new_drafts = build_chunks(restored)
+    existing = (
+        (
+            await session.execute(
+                select(TranscriptChunk)
+                .where(TranscriptChunk.transcript_id == tr.id)
+                .order_by(TranscriptChunk.chunk_index)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    by_idx = {c.chunk_index: c for c in existing}
+    affected: list[tuple[TranscriptChunk, str]] = []
+    for idx, draft in enumerate(new_drafts):
+        chunk = by_idx.get(idx)
+        if chunk is not None and chunk.text != draft.text:
+            affected.append((chunk, draft.text))
+
+    report.affected_transcripts = 1 if (restored_ids or tr.original_content) else 0
+    report.affected_segments = len(restored_ids)
+    report.affected_chunks = len(affected)
+
+    # Revert segment text + clear the snapshot.
+    for s in segs:
+        if s.id in restored_ids:
+            s.text = s.original_text or ""
+            s.original_text = None
+
+    # Revert content + clear the snapshot.
+    if tr.original_content is not None:
+        tr.content = tr.original_content
+        tr.original_content = None
+
+    # Recompute affected chunks (text + dual embeddings + tsvector).
+    if affected:
+        if embedding_cfg is None:
+            # Resolve lazily so a no-op restore (no chunks) never requires the
+            # embedding step to be configured.
+            from app.services.ai_step_resolver import get_step_config
+
+            embedding_cfg = await get_step_config(session, "embedding")
+        texts = [t for _, t in affected]
+        legacy_vecs, v2_vecs = await asyncio.to_thread(
+            embed_texts_dual, texts, embedding_cfg
+        )
+        await tokenizer.load_dictionary(session)
+        for i, (chunk, new_text) in enumerate(affected):
+            try:
+                chunk.text = new_text
+                chunk.embedding = legacy_vecs[i] if legacy_vecs else None
+                chunk.embedding_v2 = v2_vecs[i] if v2_vecs else None
+                tokens = tokenizer.tokenize(new_text)
+                chunk.text_tsvector = func.to_tsvector("simple", " ".join(tokens))
+            except Exception:
+                logger.warning(
+                    "asr restore: chunk %s recompute failed; skipping",
+                    chunk.id,
+                    exc_info=True,
+                )
+                report.failed_chunk_ids.append(str(chunk.id))
+
+    await session.commit()
     return report

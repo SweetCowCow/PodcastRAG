@@ -245,3 +245,132 @@ async def test_chunk_failure_is_isolated(
         embedding_cfg=_fake_embedding_cfg(),
     )
     assert len(report.failed_chunk_ids) >= 1
+
+
+# ─── EQ2d: original snapshot + content sync + restore ──────────────────
+
+
+def _patch_embed(monkeypatch):
+    def fake_embed(texts, cfg):
+        return ([[0.1] * 1536 for _ in texts], [[0.2] * 3072 for _ in texts])
+
+    monkeypatch.setattr("app.services.embedding.embed_texts_dual", fake_embed)
+    monkeypatch.setattr(
+        "app.services.tokenizer.load_dictionary", AsyncMock(return_value=0)
+    )
+
+
+async def _get_tr(db_session, tid):
+    from app.models.transcript import Transcript
+
+    return await db_session.get(Transcript, tid)
+
+
+async def _seg0(db_session, tid):
+    from app.models.transcript_segment import TranscriptSegment
+
+    return (
+        await db_session.execute(
+            select(TranscriptSegment)
+            .where(TranscriptSegment.transcript_id == tid)
+            .order_by(TranscriptSegment.start_time)
+        )
+    ).scalars().first()
+
+
+async def test_backfill_snapshots_original_and_syncs_content(
+    db_session, seeded_transcript, monkeypatch
+):
+    _patch_embed(monkeypatch)
+    tid = seeded_transcript["transcript_id"]
+    tr = await _get_tr(db_session, tid)
+    tr.content = "開頭 咪有企 結尾"
+    await db_session.commit()
+
+    await asr_correction.backfill_corrections(
+        db_session, show_id=seeded_transcript["show_id"], dry_run=False,
+        embedding_cfg=_fake_embedding_cfg(),
+    )
+
+    seg0 = await _seg0(db_session, tid)
+    tr = await _get_tr(db_session, tid)
+    assert seg0.original_text == "今天聊咪有企的歌", "pre-correction segment text snapshotted"
+    assert "滅火器" in seg0.text and "咪有企" not in seg0.text
+    assert tr.original_content == "開頭 咪有企 結尾", "pre-correction content snapshotted"
+    assert tr.content == "開頭 滅火器 結尾", "content synced to corrected"
+
+    # Re-run must NOT overwrite the original snapshot.
+    await asr_correction.backfill_corrections(
+        db_session, show_id=seeded_transcript["show_id"], dry_run=False,
+        embedding_cfg=_fake_embedding_cfg(),
+    )
+    seg0 = await _seg0(db_session, tid)
+    assert seg0.original_text == "今天聊咪有企的歌", "snapshot not overwritten on re-run"
+
+
+async def test_backfill_force_content_resync_when_segments_already_corrected(
+    db_session, seeded_transcript, monkeypatch
+):
+    """task 2.3: segments already corrected (no-op) but content stale → content
+    must still be synced."""
+    _patch_embed(monkeypatch)
+    tid = seeded_transcript["transcript_id"]
+    # Simulate the pre-EQ2d state: segment already corrected, content still wrong.
+    seg0 = await _seg0(db_session, tid)
+    seg0.text = "今天聊滅火器的歌"
+    tr = await _get_tr(db_session, tid)
+    tr.content = "開頭 咪有企 結尾"
+    await db_session.commit()
+
+    report = await asr_correction.backfill_corrections(
+        db_session, show_id=seeded_transcript["show_id"], dry_run=False,
+        embedding_cfg=_fake_embedding_cfg(),
+    )
+    tr = await _get_tr(db_session, tid)
+    assert report.affected_segments == 0, "segments already correct → no segment work"
+    assert tr.content == "開頭 滅火器 結尾", "content force-synced despite no segment change"
+    assert tr.original_content == "開頭 咪有企 結尾", "content snapshot captured"
+
+
+async def test_restore_reverts_and_clears_snapshot(
+    db_session, seeded_transcript, monkeypatch
+):
+    _patch_embed(monkeypatch)
+    tid = seeded_transcript["transcript_id"]
+    tr = await _get_tr(db_session, tid)
+    tr.content = "開頭 咪有企 結尾"
+    await db_session.commit()
+    episode_id = tr.episode_id
+
+    # correct, then restore
+    await asr_correction.backfill_corrections(
+        db_session, show_id=seeded_transcript["show_id"], dry_run=False,
+        embedding_cfg=_fake_embedding_cfg(),
+    )
+    report = await asr_correction.restore_episode(
+        db_session, episode_id, embedding_cfg=_fake_embedding_cfg()
+    )
+
+    assert report.affected_segments >= 1
+    seg0 = await _seg0(db_session, tid)
+    tr = await _get_tr(db_session, tid)
+    assert seg0.text == "今天聊咪有企的歌", "segment reverted to original"
+    assert seg0.original_text is None, "snapshot cleared after restore"
+    assert tr.content == "開頭 咪有企 結尾", "content reverted to original"
+    assert tr.original_content is None, "content snapshot cleared after restore"
+    chunks = await _chunks(db_session, tid)
+    assert any("咪有企" in c.text for c in chunks), "chunks recomputed to original"
+
+
+async def test_restore_noop_when_no_snapshot(
+    db_session, seeded_transcript, monkeypatch
+):
+    _patch_embed(monkeypatch)
+    tid = seeded_transcript["transcript_id"]
+    tr = await _get_tr(db_session, tid)
+    episode_id = tr.episode_id  # never corrected → no original_text anywhere
+
+    report = await asr_correction.restore_episode(
+        db_session, episode_id, embedding_cfg=_fake_embedding_cfg()
+    )
+    assert report.affected_segments == 0
