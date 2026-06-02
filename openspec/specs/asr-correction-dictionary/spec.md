@@ -204,3 +204,32 @@ updated: 2026-06-02
 code:
   - skills-lock.json
 -->
+
+---
+### Requirement: Episode transcript restore to original
+
+The backend SHALL expose an admin-only endpoint to restore an episode's transcript to its original ASR text. Restore SHALL set each segment's `text` back to its `original_text` where `original_text` is non-null, set `content` back to `original_content` where non-null, recompute the chunks affected by the reverted segments (text + embeddings + tsvector), and then clear `original_text` on those segments and `original_content` on the transcript (returning the episode to an uncorrected, no-snapshot state). An episode with no preserved original SHALL return a success result reporting zero affected segments rather than an error.
+
+#### Scenario: Restore reverts corrections and clears snapshot
+
+- **GIVEN** an episode whose segments were corrected and have `original_text` set
+- **WHEN** an admin restores the episode
+- **THEN** the segments' `text` and the transcript's `content` SHALL match the original ASR text, the affected chunks SHALL be recomputed, and `original_text`/`original_content` SHALL be cleared
+
+#### Scenario: Restore with no snapshot is a no-op
+
+- **GIVEN** an episode with no segment having `original_text`
+- **WHEN** an admin restores the episode
+- **THEN** the endpoint SHALL return success with zero affected segments
+
+#### Scenario: Restore requires admin
+
+- **WHEN** a non-admin calls the restore endpoint
+- **THEN** the API SHALL reject the request
+
+<!-- @trace
+source: asr-correction-reversibility-and-content-sync
+updated: 2026-06-02
+code:
+  - skills-lock.json
+-->

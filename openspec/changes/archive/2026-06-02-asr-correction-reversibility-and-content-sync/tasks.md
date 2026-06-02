@@ -20,4 +20,4 @@
 ## 5. 測試與部署
 
 - [x] 5.1 後端測試全綠（unit + integration，真實 Postgres 跑 backfill snapshot/content sync、_run snapshot、restore）。驗證：對應 pytest 全數通過；既有 EQ2a/b/c 測試不退步。
-- [ ] 5.2 部署 migration + backend/worker/dispatcher/beat + 前端（同前模式）。prod smoke：對一個測試集做「校正→還原」全循環（可用 pilot 集），驗證還原後逐字稿頁全文、segment、搜尋皆回原始且一致。驗證：prod 還原端點回正確受影響數、逐字稿頁顯示原始字。
+- [x] 5.2 部署 migration + backend/worker/dispatcher/beat + 前端（同前模式）。prod smoke：對一個測試集做「校正→還原」全循環（可用 pilot 集），驗證還原後逐字稿頁全文、segment、搜尋皆回原始且一致。驗證：prod 還原端點回正確受影響數、逐字稿頁顯示原始字。
