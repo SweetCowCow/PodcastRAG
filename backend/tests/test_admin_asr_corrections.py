@@ -204,6 +204,34 @@ async def test_approve_activates_rule_for_resolution(client, auth_admin, asr_sho
     )
 
 
+async def test_approve_with_corrected_text_overrides(client, auth_admin, asr_show):
+    """EQ2c F3: approving with a `correct` body overwrites the rule's correct."""
+    cid = await _seed_candidate(asr_show["show_id"], asr_show["suffix"])
+    r = await client.post(
+        f"/admin/asr-corrections/{cid}/approve",
+        json={"correct": "改過的正字"},
+        cookies=auth_admin["cookies"],
+        headers=auth_admin["csrf_headers"],
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["status"] == "approved" and body["enabled"] is True
+    assert body["correct"] == "改過的正字", "override correct must be applied"
+    assert body["wrong"] == f"候選{asr_show['suffix']}", "wrong must be unchanged"
+
+
+async def test_approve_without_body_keeps_correct(client, auth_admin, asr_show):
+    """Approving with no body keeps the original correct (backward compatible)."""
+    cid = await _seed_candidate(asr_show["show_id"], asr_show["suffix"])
+    r = await client.post(
+        f"/admin/asr-corrections/{cid}/approve",
+        cookies=auth_admin["cookies"],
+        headers=auth_admin["csrf_headers"],
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["correct"] == "正字", "original correct must be preserved"
+
+
 async def test_reject_excludes_rule_from_resolution(client, auth_admin, asr_show):
     from app.services.asr_correction import load_rules
 

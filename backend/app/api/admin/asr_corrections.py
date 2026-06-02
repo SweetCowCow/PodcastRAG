@@ -13,6 +13,7 @@ from app.models.transcript import Transcript
 from app.models.transcript_segment import TranscriptSegment
 from app.models.user import User
 from app.schemas.asr_correction import (
+    AsrCandidateApprove,
     AsrCorrectionCreate,
     AsrCorrectionPatch,
     AsrCorrectionResponse,
@@ -50,14 +51,21 @@ async def list_corrections(
 @router.post("/{term_id}/approve", response_model=AsrCorrectionResponse)
 async def approve_candidate(
     term_id: uuid.UUID,
+    payload: AsrCandidateApprove | None = None,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_admin),
 ) -> AsrCorrectionResponse:
     """Approve a candidate: status='approved', enabled=true. Thereafter it is
-    included in rule resolution (load_rules) and the second correction layer."""
+    included in rule resolution (load_rules) and the second correction layer.
+
+    EQ2c F3: an optional `correct` in the body overwrites the rule's correct-form
+    before approving (fix a near-miss at approval time); omitted keeps the
+    existing value. `wrong`/`scope`/`show_id` are never changed here."""
     row = await db.get(AsrCorrectionTerm, term_id)
     if row is None:
         raise HTTPException(status_code=404, detail="rule not found")
+    if payload is not None and payload.correct is not None:
+        row.correct = payload.correct
     row.status = "approved"
     row.enabled = True
     await db.commit()

@@ -31,6 +31,14 @@ class AsrCorrectionPatch(BaseModel):
     enabled: bool | None = None
 
 
+class AsrCandidateApprove(BaseModel):
+    """Optional approve payload (EQ2c F3). When `correct` is given, the rule's
+    correct-form is overwritten before approving so an admin can fix a
+    near-miss at approval time. Omitted → keep the existing value."""
+
+    correct: str | None = Field(default=None, max_length=200)
+
+
 class AsrCorrectionResponse(BaseModel):
     id: uuid.UUID
     wrong: str

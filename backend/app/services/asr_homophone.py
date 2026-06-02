@@ -229,42 +229,88 @@ def _strip_code_block(content: str) -> str:
     return text.strip()
 
 
-def _parse_pairs(content: str) -> list[CorrectionRule]:
-    """Parse an LLM response into word-level CorrectionRule pairs.
+_FULLWIDTH_QUOTES = {
+    "“": '"', "”": '"', "‘": "'", "’": "'", "＂": '"',
+}
 
-    Accepts either a bare JSON array ``[{"wrong","correct"}]`` (the requested
-    shape) or an object wrapping it under a ``pairs``/``corrections`` key (some
-    models / json_object mode return an object). Invalid entries are skipped;
-    a no-op pair (``wrong == correct`` or empty ``wrong``) is dropped so it can
-    never become a meaningless rule.
+
+def _normalize_quotes(text: str) -> str:
+    for fw, hw in _FULLWIDTH_QUOTES.items():
+        text = text.replace(fw, hw)
+    return text
+
+
+def _coerce_json(raw: str) -> Any:
+    """Best-effort JSON parse tolerant of provider formatting variation (EQ2c
+    F5). Tries a direct parse; on failure, extracts the first JSON array (or
+    object) embedded in surrounding prose and parses that. Returns ``None`` when
+    nothing parseable is found (caller treats as no pairs)."""
+    try:
+        return json.loads(raw)
+    except (ValueError, TypeError):
+        pass
+    # Extract the first balanced-looking [...] then {...} blob and retry.
+    for open_ch, close_ch in (("[", "]"), ("{", "}")):
+        start = raw.find(open_ch)
+        end = raw.rfind(close_ch)
+        if start != -1 and end > start:
+            try:
+                return json.loads(raw[start : end + 1])
+            except (ValueError, TypeError):
+                continue
+    return None
+
+
+def _pair_from_item(item: Any) -> CorrectionRule | None:
+    """Extract a {wrong, correct} pair from a dict with case/whitespace-variant
+    keys. Returns None for non-dicts, non-string values, or no-op pairs."""
+    if not isinstance(item, dict):
+        return None
+    norm = {str(k).strip().lower(): v for k, v in item.items()}
+    wrong = norm.get("wrong")
+    correct = norm.get("correct")
+    if not isinstance(wrong, str) or not isinstance(correct, str):
+        return None
+    wrong = wrong.strip()
+    correct = correct.strip()
+    if not wrong or wrong == correct:
+        return None
+    return CorrectionRule(wrong=wrong, correct=correct)
+
+
+def _parse_pairs(content: str) -> list[CorrectionRule]:
+    """Parse an LLM response into word-level CorrectionRule pairs (EQ2c F5:
+    tolerant of provider formatting so a model swap doesn't silently yield 0).
+
+    Accepts: a bare JSON array; an object wrapping the array under
+    ``pairs``/``corrections``/``result``/``data``; a single ``{wrong, correct}``
+    object; a payload with surrounding prose (first JSON blob extracted); a
+    markdown code fence; full-width quotes; and case/whitespace-variant keys.
+    Invalid entries and no-op pairs (``wrong == correct`` / empty) are dropped.
     """
-    raw = _strip_code_block(content)
+    raw = _normalize_quotes(_strip_code_block(content or ""))
     if not raw:
         return []
-    data: Any = json.loads(raw)
+    data = _coerce_json(raw)
+    if data is None:
+        return []
     if isinstance(data, dict):
-        for key in ("pairs", "corrections", "result", "data"):
+        for key in ("pairs", "corrections", "result", "data", "items"):
             if isinstance(data.get(key), list):
                 data = data[key]
                 break
         else:
-            return []
+            # A bare single-pair object, e.g. {"wrong": ..., "correct": ...}.
+            single = _pair_from_item(data)
+            return [single] if single else []
     if not isinstance(data, list):
         return []
 
     pairs: list[CorrectionRule] = []
     for item in data:
-        if not isinstance(item, dict):
-            continue
-        wrong = item.get("wrong")
-        correct = item.get("correct")
-        if not isinstance(wrong, str) or not isinstance(correct, str):
-            continue
-        wrong = wrong.strip()
-        correct = correct.strip()
-        if not wrong or wrong == correct:
-            continue
-        pairs.append(CorrectionRule(wrong=wrong, correct=correct))
+        pair = _pair_from_item(item)
+        if pair is not None:
+            pairs.append(pair)
     return pairs
 
 

@@ -55,6 +55,38 @@ def test_parse_pairs_empty_and_noop_filtered():
     assert asr_homophone._parse_pairs(raw) == []
 
 
+# ─── EQ2c F5: parser tolerance across provider formatting variants ─────
+
+
+def test_parse_pairs_single_object():
+    raw = '{"wrong": "杜忠祐", "correct": "杜宗祐"}'
+    assert asr_homophone._parse_pairs(raw) == [CorrectionRule("杜忠祐", "杜宗祐")]
+
+
+def test_parse_pairs_surrounding_prose():
+    raw = '這是我找到的結果：[{"wrong": "阿鳴", "correct": "阿名"}] 以上。'
+    assert asr_homophone._parse_pairs(raw) == [CorrectionRule("阿鳴", "阿名")]
+
+
+def test_parse_pairs_fullwidth_quotes():
+    raw = "[{“wrong”: “力友”, “correct”: “Leo王”}]"
+    assert asr_homophone._parse_pairs(raw) == [CorrectionRule("力友", "Leo王")]
+
+
+def test_parse_pairs_case_and_space_variant_keys():
+    raw = '[{" Wrong ": "嘎咪比", "CORRECT": "Gummy B"}]'
+    assert asr_homophone._parse_pairs(raw) == [CorrectionRule("嘎咪比", "Gummy B")]
+
+
+def test_parse_pairs_object_under_items_key():
+    raw = '{"items": [{"wrong": "不來美", "correct": "布萊梅"}]}'
+    assert asr_homophone._parse_pairs(raw) == [CorrectionRule("不來美", "布萊梅")]
+
+
+def test_parse_pairs_unparseable_returns_empty():
+    assert asr_homophone._parse_pairs("總之沒有錯字喔") == []
+
+
 # ─── detect_homophones: word-level pairs + empty + fail-open ───────────
 
 

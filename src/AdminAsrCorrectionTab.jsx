@@ -143,15 +143,24 @@ const AdminAsrCorrectionTab = ({ lang }) => {
   };
 
   // ── EQ2b: LLM candidate review (approve / reject) ──
+  // EQ2c F3: per-candidate edited `correct` value (keyed by candidate id),
+  // pre-filled lazily from the candidate's detected value.
   const [reviewingId, setReviewingId] = React.useState(null);
+  const [editedCorrect, setEditedCorrect] = React.useState({});
 
   const handleReview = async (c, action) => {
     if (reviewingId) return;
     setReviewingId(c.id);
     try {
-      const res = await apiFetch(`/admin/asr-corrections/${c.id}/${action}`, {
-        method: 'POST',
-      });
+      const opts = { method: 'POST' };
+      if (action === 'approve') {
+        // Send the (possibly edited) correct value so admin fixes apply.
+        const edited = editedCorrect[c.id];
+        const finalCorrect = (edited === undefined ? c.correct : edited).trim();
+        opts.headers = { 'Content-Type': 'application/json' };
+        opts.body = JSON.stringify({ correct: finalCorrect });
+      }
+      const res = await apiFetch(`/admin/asr-corrections/${c.id}/${action}`, opts);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       showToast(
         action === 'approve'
@@ -289,7 +298,18 @@ const AdminAsrCorrectionTab = ({ lang }) => {
               {candidates.map((c) => (
                 <tr key={c.id} style={{ borderBottom: `1px solid ${TOKEN.surfaceBorder}`, color: TOKEN.text }}>
                   <td style={{ padding: '8px', fontFamily: 'ui-monospace, monospace' }}>
-                    {c.wrong} <span style={{ color: TOKEN.textMuted }}>→</span> {c.correct}
+                    <span>{c.wrong}</span> <span style={{ color: TOKEN.textMuted }}>→</span>{' '}
+                    {/* EQ2c F3: correct is editable; admin can fix a near-miss before approving */}
+                    <input
+                      value={editedCorrect[c.id] === undefined ? c.correct : editedCorrect[c.id]}
+                      onChange={(e) => setEditedCorrect((m) => ({ ...m, [c.id]: e.target.value }))}
+                      disabled={reviewingId === c.id}
+                      style={{
+                        width: 130, fontFamily: 'ui-monospace, monospace', fontSize: 14,
+                        background: TOKEN.surfaceRaised, color: TOKEN.text,
+                        border: `1px solid ${TOKEN.surfaceBorder}`, borderRadius: 6, padding: '4px 8px',
+                      }}
+                    />
                   </td>
                   <td style={{ padding: '8px' }}>
                     <Badge variant="default">{showTitle(c.show_id)}</Badge>
