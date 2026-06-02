@@ -131,6 +131,69 @@ async def _resolve_work_units(
     return [(sid, await load_rules(session, sid)) for sid in sids]
 
 
+async def _fast_dry_run_preview(
+    session: "AsyncSession",
+    work_units: list[tuple[UUID, list[CorrectionRule]]],
+) -> BackfillReport:
+    """Cheap, write-free preview for ``backfill_corrections(dry_run=True)``.
+
+    Counts affected segments / transcripts / chunks with SQL substring matches
+    rather than rebuilding every transcript's chunks. A chunk needs recompute
+    exactly when its text contains a rule's ``wrong`` (literal replacement), and
+    chunk text already spans overlap-neighbour segments, so the count is exact.
+    The cost estimate is derived from the matched chunks' current text length.
+    """
+    from app.models.episode import Episode
+    from app.models.transcript import Transcript
+    from app.models.transcript_chunk import TranscriptChunk
+    from app.models.transcript_segment import TranscriptSegment
+
+    report = BackfillReport(dry_run=True)
+    affected_transcripts: set[UUID] = set()
+    total_affected_chars = 0
+
+    for sid, rules in work_units:
+        wrongs = [r.wrong for r in rules if r.wrong]
+        if not wrongs:
+            continue
+        seg_cond = or_(
+            *[TranscriptSegment.text.contains(w, autoescape=True) for w in wrongs]
+        )
+        seg_tids = (
+            await session.execute(
+                select(TranscriptSegment.transcript_id)
+                .select_from(TranscriptSegment)
+                .join(Transcript, TranscriptSegment.transcript_id == Transcript.id)
+                .join(Episode, Transcript.episode_id == Episode.id)
+                .where(Episode.show_id == sid, seg_cond)
+            )
+        ).scalars().all()
+        report.affected_segments += len(seg_tids)
+        affected_transcripts.update(seg_tids)
+
+        chunk_cond = or_(
+            *[TranscriptChunk.text.contains(w, autoescape=True) for w in wrongs]
+        )
+        chunk_texts = (
+            await session.execute(
+                select(TranscriptChunk.text)
+                .select_from(TranscriptChunk)
+                .join(Transcript, TranscriptChunk.transcript_id == Transcript.id)
+                .join(Episode, Transcript.episode_id == Episode.id)
+                .where(Episode.show_id == sid, chunk_cond)
+            )
+        ).scalars().all()
+        report.affected_chunks += len(chunk_texts)
+        total_affected_chars += sum(len(t or "") for t in chunk_texts)
+
+    report.affected_transcripts = len(affected_transcripts)
+    est_tokens = total_affected_chars * _EST_TOKENS_PER_CHAR * 2  # dual embed
+    report.estimated_cost_usd = round(
+        est_tokens / 1_000_000 * _EST_USD_PER_1M_EMBED_TOKENS, 6
+    )
+    return report
+
+
 async def backfill_corrections(
     session: "AsyncSession",
     *,
@@ -168,6 +231,15 @@ async def backfill_corrections(
     work_units = await _resolve_work_units(
         session, show_id=show_id, term_id=term_id
     )
+
+    # Fast preview path: counting affected rows via SQL is O(matches) instead of
+    # rebuilding every transcript's chunks (which took ~95s for a 167-episode
+    # show and blew the gateway timeout). A chunk's text changes iff it contains
+    # a rule's ``wrong`` substring (apply_corrections is literal replace), and
+    # chunk.text already includes overlap-neighbour segments — so a
+    # ``chunk.text LIKE %wrong%`` count is both exact and cheap. No writes.
+    if dry_run:
+        return await _fast_dry_run_preview(session, work_units)
 
     for sid, rules in work_units:
         if not rules:
