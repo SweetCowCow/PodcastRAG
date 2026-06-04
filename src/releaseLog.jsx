@@ -55,6 +55,30 @@ const MILESTONE_LABELS = {
 
 // Entries — newest milestone first; within each milestone newest date first.
 const RELEASE_LOG = [
+  // ─── v2.2 — ASR Detection over existing episodes + observable jobs (6/4) ───
+  {
+    date: '2026-06-04', slug: 'asr-homophone-full-backfill', milestone: 'v2.2', tag: 'feature',
+    title: {
+      zh: '對「舊集」也能一鍵跑 AI 偵測聽錯的名字 — 大批校正看得到進度、可中途取消',
+      en: 'AI Detection Now Covers Older Episodes Too — Long Correction Jobs Show Progress and Can Be Cancelled',
+    },
+    summary: {
+      zh: '接續「AI 自動找出聽錯的名字」：以前只有「新轉錄」的集會自動偵測，偵測功能上線前的舊集（全站數百集）一直沒被掃過。這版讓管理者可以對任一節目的舊集一鍵跑偵測，找出聽錯的名字產生待審候選——會先估算成本、你確認後才跑，且只產候選、不會動到逐字稿。同時把「大批校正/偵測」這種長時間作業變透明：跑的時候看得到進度（第幾集/共幾集）、失敗的片段會列出來、可以中途取消（已跑完的部分保留、不回滾）。另外，核准一條候選時可以勾「順便套用到舊集」，一個動作同時讓規則生效＋回頭修舊集；也新增「批次還原」一鍵把曾被校正的集還原回原始 ASR。',
+      en: 'A follow-up to "AI auto-finds misheard names": detection previously ran only on newly-transcribed episodes, so the hundreds of episodes that predate the feature were never scanned. Admins can now run detection over any show\'s older episodes with one click — it estimates cost first, runs only after you confirm, and only produces pending candidates (it never touches the transcript). It also makes long detect/apply jobs transparent: live progress (episode N of M), a list of failed chunks, and a cancel control (completed work is kept, not rolled back). Approving a candidate can now also apply it to existing episodes in one action, and a new "batch restore" reverts previously-corrected episodes back to their original ASR.',
+    },
+    summaryBullets: {
+      zh: [
+        '對任一節目的「舊集」一鍵跑 AI 偵測；先估成本、確認後才跑、只產候選不改文字',
+        '大批偵測/校正作業看得到進度（第幾集/共幾集）+ 失敗片段清單 + 可中途取消（已完成保留）',
+        '核准候選可勾「順便套用到舊集」；新增「批次還原」一鍵還原回原始 ASR',
+      ],
+      en: [
+        'One-click AI detection over a show\'s older episodes; estimates cost, runs on confirm, candidates only',
+        'Long jobs show live progress + failed-chunk list + a cancel control (completed work kept)',
+        'Approve-and-apply to existing episodes; new "batch restore" to original ASR',
+      ],
+    },
+  },
   // ─── v2.2 — ASR Correction: reversibility + transcript consistency (6/2) ───
   {
     date: '2026-06-02', slug: 'asr-correction-reversibility-and-content-sync', milestone: 'v2.2', tag: 'enhancement',
