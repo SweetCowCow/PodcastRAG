@@ -17,14 +17,14 @@
 
 - [x] 2.1 user 拍板 Stage B 範圍後，更新本 change 的 design.md「Implementation Contract」+ spec delta（如有）+ 新增 task 2.2+ 細項到 tasks.md。**這個 task 是 meta — 更新 artifact 本身**。驗證 = design.md「Implementation Contract」段 Stage B 範圍從 placeholder 變成具體 contract；tasks.md 有 ≥ 1 個具體 Stage B 子 task
 - [x] 2.2 在 `backend/app/services/episode_finders.py` 的 `_TOPIC_SQL` 加 `ts_rank` 相關度欄位（`GREATEST(ts_rank(title_tsvector, to_tsquery('simple', :tsquery_text)), COALESCE((SELECT max(ts_rank(d.text_tsvector, to_tsquery('simple', :tsquery_text))) FROM episode_description_chunks d WHERE d.episode_id = e.id AND d.text_tsvector @@ to_tsquery('simple', :tsquery_text)), 0))`），改 `ORDER BY relevance DESC, published_at DESC NULLS LAST LIMIT :max_eps`。新增 setting `topic_prefilter_max_episodes`（config.py，default 10，env 可覆寫；≤0 = 不限制 = rollback 舊語意）。`find_episodes_by_topic_with_source` 把 `max_eps` 傳入 params；merged 路徑只 cap topic_eps、guest_eps 全帶。**驗證 = 既有 episode_finders 單元測試綠 + 新增一條測試證明 `topic_prefilter_max_episodes=N` 時 topic_eps ≤ N 且按 relevance 排序**
-- [ ] 2.3 local 驗證：對 b23 topic「迪拉 Leo王」跑 `find_episodes_by_topic_with_source`（或既有 diagnose endpoint）確認 candidate 從 64 降到 ≤ N 且 EP107（`8b3d4c1d`）仍在候選內。**驗證 = local 印出 candidate 集數 + 確認 GT 集 `8b3d4c1d` 在列**
-- [ ] 2.4 deploy 到 prod（Zeabur，env 確認 `topic_prefilter_max_episodes` 真值）→ re-run `audit_voyage_pipeline --item-ids b20,b21,b23`。**驗證 = b23 stage 3 candidate count ≪ 64 + b23 stage 8 gt_matched ≥ 1（GT 回 citations）+ b20/b21 stage 8 不退步**；若 EP107 GT 沒回來 → 調 N 或記為 prefilter-cap 不足以解、進 negative finding
-- [ ] 2.5 b22 拆出：在 `docs/case-studies/` 記 b22 root cause 指針，propose 獨立 follow-up change（routing + distributed-evidence retrieval；與 voyage 無關）。**驗證 = 本 change proposal/design 的 Open Questions 或 follow-up 段含 b22 拆出指針；不在本 change 動 b22 code**
+- [x] 2.3 local 驗證：對 b23 topic「迪拉 Leo王」跑 `find_episodes_by_topic_with_source`（或既有 diagnose endpoint）確認 candidate 從 64 降到 ≤ N 且 EP107（`8b3d4c1d`）仍在候選內。**驗證 = local 印出 candidate 集數 + 確認 GT 集 `8b3d4c1d` 在列**
+- [x] 2.4 deploy 到 prod（Zeabur，env 確認 `topic_prefilter_max_episodes` 真值）→ re-run `audit_voyage_pipeline --item-ids b20,b21,b23`。**驗證 = b23 stage 3 candidate count ≪ 64 + b23 stage 8 gt_matched ≥ 1（GT 回 citations）+ b20/b21 stage 8 不退步**；若 EP107 GT 沒回來 → 調 N 或記為 prefilter-cap 不足以解、進 negative finding
+- [x] 2.5 b22 拆出：在 `docs/case-studies/` 記 b22 root cause 指針，propose 獨立 follow-up change（routing + distributed-evidence retrieval；與 voyage 無關）。**驗證 = 本 change proposal/design 的 Open Questions 或 follow-up 段含 b22 拆出指針；不在本 change 動 b22 code**
 
 ## 3. 最終驗收
 
-- [ ] 3.1 重跑 8 題 subset eval（b20/b21/b22/b23/b29/mt02-04）對比 PARTIAL 後的數據（cross_episode chunk_recall 0.283 / factual 0.700）。**Gate**：cross_episode chunk_recall mean ≥ 0.40 且 factual mean ≥ 0.80 → success；否則 negative finding。驗證 = case study 結論段含 gate 明確 PASS/FAIL + per-item before/after table
-- [ ] 3.2 結論判讀三選一：
+- [x] 3.1 重跑 8 題 subset eval（b20/b21/b22/b23/b29/mt02-04）對比 PARTIAL 後的數據（cross_episode chunk_recall 0.283 / factual 0.700）。**Gate**：cross_episode chunk_recall mean ≥ 0.40 且 factual mean ≥ 0.80 → success；否則 negative finding。驗證 = case study 結論段含 gate 明確 PASS/FAIL + per-item before/after table
+- [x] 3.2 結論判讀三選一：
   - **PASS**：archive；release log 加 entry
   - **PARTIAL**（某 metric 上某 metric 沒）：archive + propose 下一條 follow-up
   - **REGRESS**（chunk_recall < 0.283 或 factual < 0.700）：revert Stage B commit + 寫 negative finding + 評估下個 lever
