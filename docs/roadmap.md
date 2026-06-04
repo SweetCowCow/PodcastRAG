@@ -1,6 +1,6 @@
 # PodcastRAG 路線圖
 
-> 最後更新：2026-06-02（EQ2b/EQ2c/EQ2d ✅ 皆 archive。佇列＝EQ2e(F6+F8)→EQ3a–d→EQ4–7→EQ8(F4)/EQ9(F7)。**下一動＝propose EQ2e `asr-homophone-full-backfill`（F6 前置鎖已解）**。執行佇列為權威排序，下方 Phase A–F 表為細節參考。）
+> 最後更新：2026-06-04（EQ2b/EQ2c/EQ2d/**EQ2e** ✅ 皆 archive。佇列＝EQ3a–d→EQ4–7→EQ8(F4)/EQ9(F7)。**下一動＝EQ3a `voyage-rerank-tune-b22-b23` unpark（仍 parked，0/9）**。執行佇列為權威排序，下方 Phase A–F 表為細節參考。）
 
 本文件記錄 PodcastRAG 後續開發的優先順序與規劃。**排序真相 = 下方「🎯 執行佇列」**；Phase A–F 表是細節背景（多數 Phase A 已完成）。
 
@@ -20,7 +20,7 @@
 | **EQ2b** | ASR LLM 同音異義字後處理 | `asr-llm-homophone-postprocess` | ✅ | EQ2a ✅ | ✅ 2026-06-02 完成上 prod（12/12，commit `977d1db`）。**中途大改設計**：開放式 prompt pilot 兩端皆失（gpt-4o-mini 過度激進幻覺、gpt-4o 全 0、recall≈0）→ 改 **RAGEC 候選清單接地**（來賓∪字典正字∪主持人 → LLM 只做「ASR 聽錯→對應回清單」+ post-filter correct∈清單、wrong∈逐字稿）。模型 **gemini-3.5-flash via AI Hub**。核准制+fail-open 不變；pilot 這又沒有很屌 5 集（dry-run $0.014）→ 27 候選人工核准。詳見 design D7 + `docs/case-studies/eq2b-asr-homophone-pilot.md`。**回填 timeout 順手修**（dry-run 改 SQL 計數 98s→3.5s）。follow-up 見下方 F1–F7 |
 | **EQ2c** | ASR 校正小修（F3+F5） | `asr-correction-ux-and-aihub-json` | ✅ | 無 | ✅ 2026-06-02 完成+archive（`2026-06-02-asr-correction-ux-and-aihub-json`，commit `1578a49`）。F3 核准可編輯 correct（後端 approve 接 optional correct + 前端可編輯欄位）；F5 `_parse_pairs` 容錯（全形引號/夾雜 prose 擷取/單筆物件/鍵名變體/items 鍵）。prod smoke：qwen-3-235b 解析從 0→有 pair ✓、UI 編輯核准「高明碧→Gummy B-EDIT驗證」寫入驗證 ✓。46 test passed |
 | **EQ2d** | ASR 可逆性 + content 同步（F1+F2） | `asr-correction-reversibility-and-content-sync` | ✅ | 無（**F6 前置鎖**，已解） | ✅ 2026-06-02 完成+archive（`2026-06-02-asr-correction-reversibility-and-content-sync`，commit `3326fe9`，9/9，58 test）。`segment.original_text`+`transcript.original_content` snapshot-once + per-episode 還原 API/UI + content 同步（task 2.3 強制重算獨立於 segment 變動）。prod smoke：migration ✓、重跑「這又沒有很屌」回填修好歷史 content（卡拉基 15→0、杜忠祐 89→0、156 集存 original_content）✓、restore 全循環 ✓、admin 還原按鈕渲染 ✓。**F6 前置鎖已解，EQ2e 可開** |
-| **EQ2e** | ASR 全面回填（F6）＋回填可觀測/可取消（F8） | `asr-homophone-full-backfill` | ⬜ | **EQ2d 完**（要先有還原能力）+ 成本 dry-run 估 | RAGEC 偵測套到全站既有逐字稿（現只跑 pilot 5 集）；分節目批次 + 成本確認 + 候選人工審。**併 F8**：回填現在純背景 Celery（前端只彈 task_id toast、無狀態/進度/取消、`failed_chunk_ids` 也沒 UI 讀）→ 加回填狀態/進度查詢 + 取消（task revoke）+ 失敗 chunk 呈現，再放心跑大 job |
+| **EQ2e** | ASR 全面回填（F6）＋回填可觀測/可取消（F8） | `asr-homophone-full-backfill` | ✅ | **EQ2d 完** + 成本 dry-run 估 | ✅ 2026-06-04 完成+archive（`2026-06-04-asr-homophone-full-backfill`，commit `3328cc9`，14/14，64 ASR test，release log v2.2 feature）。F6 偵測原有集數（per-show 序列 driver、只產候選不改文字、不碰 transcription_queue）+ F8 兩 task bind=True 報進度 + `/backfill-status` 五態映射 + `/backfill-cancel` revoke + `/batch-restore` + F-approve（approve 勾 apply_to_existing）。LANGUAGE.md 新增「偵測原有集數/套用原有集數」。prod smoke（曼報）三大驗收全綠（dry-run→真跑→取消 REVOKED 保留 / approve apply 文字被改 / 批次還原）。下一動 = EQ3a unpark |
 | **EQ3a** | rerank 調參救 b22/b23 | `voyage-rerank-tune-b22-b23` | ⏸ (0/9) | 無（現成 parked，unpark 即可） | b22/b23 chunk_recall 不退步、cross_episode mean 不降 |
 | **EQ3b** | b20 召回 RCA spike | `chunk-level-retrieval-rca-b20-style` | ⬜ | 無 | 查清 EP134 @1790/@1808 為何 top-500 全 miss（用 `sql_rca_demo` + `prompt_fingerprint_diff --source=sql`）；產 RCA 結論 |
 | **EQ3c** | BM25 取代 ts_rank + EP-scoped IDF | `lexical-bm25-replace-ts_rank` | ⬜ | **propose 前必跑 `retrieve_probe` 對 calibration_8 dry-run**（2026-05-28 失敗教訓） | calibration_8 dry-run 不退步才進 apply；prod chunk_recall ≥ baseline 0.482 |
