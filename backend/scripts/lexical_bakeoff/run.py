@@ -43,6 +43,27 @@ DEFAULT_CALIBRATION = ("b01", "b06", "b08", "b11", "b18", "b20", "b27", "mt03")
 _TPE = timezone(timedelta(hours=8))
 
 
+def _prepare_prod_session(backend: str, state_path: Path) -> tuple[str, str]:
+    """Build (cookie_header, csrf) from playwright-state.json's session_id, taking
+    the CSRF token LIVE from GET /me (the cookie's csrf_token can be stale → 403).
+    Also verifies admin role. Aborts loudly on a bad/expired session — no partial
+    report (reference_prod_eval_session; double-submit CSRF confirmed via smoke)."""
+    data = json.loads(state_path.read_text(encoding="utf-8"))
+    cookies = {c["name"]: c["value"] for c in data.get("cookies", [])}
+    sid = cookies.get("session_id")
+    if not sid:
+        raise SystemExit(f"FATAL: no session_id cookie in {state_path}")
+    try:
+        me = av._request("GET", f"{backend}/me", f"session_id={sid}", "", timeout=30.0)
+    except (urllib.error.HTTPError, urllib.error.URLError) as exc:
+        raise SystemExit(f"FATAL: GET /me failed ({exc}). Session likely expired — "
+                         f"refresh playwright-state.json before rerunning.")
+    if me.get("role") != "admin":
+        raise SystemExit(f"FATAL: /me role={me.get('role')!r}, not admin.")
+    csrf = me.get("csrf_token", "")
+    return f"session_id={sid}; csrf_token={csrf}", csrf
+
+
 def _must_recall(gt_ranks: list[dict], top_n: int) -> float | None:
     must = [g for g in gt_ranks if g.get("kind") == "must"]
     if not must:
@@ -240,6 +261,8 @@ def main() -> int:
     ap.add_argument("--calibration", default=",".join(DEFAULT_CALIBRATION))
     ap.add_argument("--backend", default="https://podcastrag-api.zeabur.app")
     ap.add_argument("--top-n", type=int, default=200)
+    ap.add_argument("--playwright-state",
+                    default=str(Path.home() / ".config" / "podcastrag" / "playwright-state.json"))
     ap.add_argument("--session-cookie-file", default="/tmp/podcastrag_session.txt")
     ap.add_argument("--me-json", default="/tmp/me_resp.json")
     ap.add_argument("--out-json", default=None)
@@ -257,8 +280,14 @@ def main() -> int:
         return 2
 
     # Prod session preflight — fail loud, no partial report (reference_prod_eval_session).
-    cookie, csrf = av._read_session_and_csrf(Path(args.session_cookie_file), Path(args.me_json))
-    av._preflight_me(args.backend, cookie, csrf)
+    # Prefer playwright-state.json (prod eval flow); fall back to the audit script's
+    # Netscape cookie jar template.
+    ps = Path(args.playwright_state)
+    if ps.exists():
+        cookie, csrf = _prepare_prod_session(args.backend, ps)
+    else:
+        cookie, csrf = av._read_session_and_csrf(Path(args.session_cookie_file), Path(args.me_json))
+        av._preflight_me(args.backend, cookie, csrf)
 
     matrix: dict[str, dict[str, dict]] = {}
     for arm in arms:
