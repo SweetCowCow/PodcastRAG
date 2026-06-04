@@ -92,6 +92,16 @@
 - **avoid**：「chunk / 片段」未指明層級時混用（內部 retrieval 講 chunk、UI 層講 segment）、「clip」（口語）
 - **why**：明確「資料單位」這一層，跟「被引用（citation）／被檢索（source）」的語意層分開
 
+### 偵測原有集數（detection backfill over existing episodes）
+- **definition**：對一個節目「偵測功能上線前就存在的舊集」逐集跑 LLM 同音字偵測（RAGEC：`detect_homophones` + `persist_candidates`），產生 pending 候選供人工審核。**只產候選、不改任何逐字稿文字**；走獨立背景 task，不碰 `transcription_queue`。對應 admin endpoint `POST /detect-existing`、Celery task `detect_existing_episodes`。
+- **avoid**：「回填」（黑話，方向不明——聽起來像「補資料進去」，但這裡只產候選不寫文字）、「掃舊集」（太口語、沒講清楚做的是偵測不是套用）、「backfill detection」（中文 artifact 用中文 canonical）
+- **why**：跟「套用原有集數」嚴格區分——偵測**只讀逐字稿、只產候選**，套用才會**改文字**。兩者都曾被叫「回填」，造成「到底改了沒」的混淆，故各自正名。
+
+### 套用原有集數（apply rules to existing episodes）
+- **definition**：把一條**已 approve** 的校正規則，字面套用到既有逐字稿（`backfill_corrections`，per-transcript commit + per-chunk fail isolation），**會改逐字稿文字 + 重算 chunk**。觸發點：approve 候選時勾「順便套用原有集數」（帶 `term_id`），或 admin 直接觸發 backfill。對應 Celery task `backfill_asr_corrections`。
+- **avoid**：「回填」（黑話，跟偵測混淆）、「套字典 / 跑校正」（沒指明對象是「既有集」而非新轉錄的集）、「apply backfill」（中文 artifact 用中文 canonical）
+- **why**：跟「偵測原有集數」嚴格區分——這一步**改文字**，是須經人工 approve 後才做的動作；偵測只產候選不改文字。
+
 ---
 
 ## 變更紀錄
@@ -99,3 +109,4 @@
 - 2026-05-21：建檔。初始 entry 來自 `agent-trace-telemetry` change discuss + propose 過程
 - 2026-05-21 晚：`chat-tool-error-isolation` discuss 加入 `YAGNI` + `Tool error envelope`
 - 2026-05-31：`unified-segment-citation-card` apply 加入 `引用片段卡（SegmentCitationCard）` + `citation` / `source` / `segment` 三層語意界定
+- 2026-06-04：`asr-homophone-full-backfill`（EQ2e）apply 加入 `偵測原有集數` + `套用原有集數`，取代黑話「回填」

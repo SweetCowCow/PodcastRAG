@@ -21,6 +21,7 @@ from app.models.transcription_queue import QueueStatus, TranscriptionQueue
 from app.services import storage
 from app.services import tokenizer
 from app.services import asr_correction
+from app.services import asr_detection_backfill
 from app.services import asr_homophone
 from app.services.chunking import build_chunks
 from app.services.ai_step_resolver import get_step_config
@@ -601,9 +602,9 @@ async def _run(episode_id: str) -> dict:
         await engine.dispose()
 
 
-@celery_app.task(name="app.workers.tasks.backfill_asr_corrections")
+@celery_app.task(name="app.workers.tasks.backfill_asr_corrections", bind=True)
 def backfill_asr_corrections(
-    show_id: str | None = None, term_id: str | None = None
+    self, show_id: str | None = None, term_id: str | None = None
 ) -> dict:
     """Apply ASR correction rules to existing transcripts and recompute the
     affected chunks (text + dual embeddings + tsvector).
@@ -612,11 +613,32 @@ def backfill_asr_corrections(
     (neither). Enqueued by the admin backfill endpoint's non-dry-run path. The
     heavy lifting (resumable per-transcript commit, per-chunk fail isolation,
     idempotency) lives in `asr_correction.backfill_corrections`.
+
+    EQ2e F8: `bind=True` so the apply job reports `update_state(PROGRESS, ...)`
+    per processed transcript with the unified `{current,total,phase,
+    failed_chunk_ids}` meta shape, queryable via the backfill-status endpoint
+    and cancellable via revoke.
     """
-    return asyncio.run(_run_asr_backfill(show_id, term_id))
+
+    def _progress(current: int, total: int, failed_chunk_ids: list[str]) -> None:
+        self.update_state(
+            state="PROGRESS",
+            meta={
+                "current": current,
+                "total": total,
+                "phase": "apply",
+                "failed_chunk_ids": failed_chunk_ids,
+            },
+        )
+
+    return asyncio.run(_run_asr_backfill(show_id, term_id, _progress))
 
 
-async def _run_asr_backfill(show_id: str | None, term_id: str | None) -> dict:
+async def _run_asr_backfill(
+    show_id: str | None,
+    term_id: str | None,
+    progress_cb: "asr_correction.ApplyProgressCb | None" = None,
+) -> dict:
     engine = create_async_engine(settings.database_url, poolclass=NullPool)
     Session = async_sessionmaker(engine, expire_on_commit=False)
     try:
@@ -628,6 +650,7 @@ async def _run_asr_backfill(show_id: str | None, term_id: str | None) -> dict:
                 term_id=uuid.UUID(term_id) if term_id else None,
                 dry_run=False,
                 embedding_cfg=embedding_cfg,
+                progress_cb=progress_cb,
             )
         return {
             "status": "completed",
@@ -635,6 +658,52 @@ async def _run_asr_backfill(show_id: str | None, term_id: str | None) -> dict:
             "affected_segments": report.affected_segments,
             "affected_chunks": report.affected_chunks,
             "failed_chunk_ids": report.failed_chunk_ids,
+        }
+    finally:
+        await engine.dispose()
+
+
+@celery_app.task(name="app.workers.tasks.detect_existing_episodes", bind=True)
+def detect_existing_episodes(self, show_id: str) -> dict:
+    """EQ2e F6: run homophone DETECTION over every existing transcript of a
+    show, producing pending candidates only — it NEVER changes transcript text.
+
+    `bind=True` so it reports `update_state(PROGRESS, ...)` per processed episode
+    with the unified `{current,total,phase,failed_chunk_ids}` shape (here
+    `failed_chunk_ids` carries failed EPISODE ids — the accumulated-failures
+    slot), queryable via the backfill-status endpoint and cancellable via
+    revoke. The batch driver (sequential, per-episode fail-open) lives in
+    `asr_detection_backfill.run_detection_backfill`.
+    """
+
+    def _progress(current: int, total: int, failed_episode_ids: list[str]) -> None:
+        self.update_state(
+            state="PROGRESS",
+            meta={
+                "current": current,
+                "total": total,
+                "phase": "detect",
+                "failed_chunk_ids": failed_episode_ids,
+            },
+        )
+
+    return asyncio.run(_run_detect_existing(show_id, _progress))
+
+
+async def _run_detect_existing(show_id: str, progress_cb) -> dict:
+    engine = create_async_engine(settings.database_url, poolclass=NullPool)
+    Session = async_sessionmaker(engine, expire_on_commit=False)
+    try:
+        async with Session() as session:
+            report = await asr_detection_backfill.run_detection_backfill(
+                session, uuid.UUID(show_id), progress_cb=progress_cb
+            )
+        return {
+            "status": "completed",
+            "processed": report["processed"],
+            "total": report["total"],
+            "persisted": report["persisted"],
+            "failed_episode_ids": report["failed_episode_ids"],
         }
     finally:
         await engine.dispose()

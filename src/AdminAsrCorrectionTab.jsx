@@ -23,6 +23,23 @@ const AdminAsrCorrectionTab = ({ lang }) => {
   const [previewing, setPreviewing] = React.useState(false);
   const [backfilling, setBackfilling] = React.useState(false);
 
+  // EQ2e F6: detect over a show's existing episodes (dry-run estimate → confirm)
+  const [detectScope, setDetectScope] = React.useState(''); // show_id (required)
+  const [detectEstimate, setDetectEstimate] = React.useState(null);
+  const [detectEstimating, setDetectEstimating] = React.useState(false);
+  const [detectStarting, setDetectStarting] = React.useState(false);
+
+  // EQ2e F8: a single active background job (detect or apply) we poll + can cancel
+  const [activeJob, setActiveJob] = React.useState(null); // { taskId, label, status }
+  const [cancelling, setCancelling] = React.useState(false);
+
+  // EQ2e F8: batch restore existing episodes back to original ASR text
+  const [restoreScope, setRestoreScope] = React.useState(''); // '' = all shows
+  const [restoring, setRestoring] = React.useState(false);
+
+  // EQ2e F-approve: per-candidate "also apply to existing episodes" checkbox
+  const [applyToExisting, setApplyToExisting] = React.useState({});
+
   const showToast = (msg, kind = 'success') => {
     setToast({ msg, kind });
     setTimeout(() => setToast(null), 3500);
@@ -153,18 +170,27 @@ const AdminAsrCorrectionTab = ({ lang }) => {
     setReviewingId(c.id);
     try {
       const opts = { method: 'POST' };
+      const wantApply = action === 'approve' && !!applyToExisting[c.id];
       if (action === 'approve') {
         // Send the (possibly edited) correct value so admin fixes apply.
+        // EQ2e F-approve: apply_to_existing also re-runs the rule over old episodes.
         const edited = editedCorrect[c.id];
         const finalCorrect = (edited === undefined ? c.correct : edited).trim();
         opts.headers = { 'Content-Type': 'application/json' };
-        opts.body = JSON.stringify({ correct: finalCorrect });
+        opts.body = JSON.stringify({ correct: finalCorrect, apply_to_existing: wantApply });
       }
       const res = await apiFetch(`/admin/asr-corrections/${c.id}/${action}`, opts);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = action === 'approve' ? await res.json().catch(() => ({})) : {};
+      // EQ2e: if approval kicked off a rule-application job, track it.
+      if (wantApply && data.task_id) {
+        setActiveJob({ taskId: data.task_id, label: t ? `套用「${c.wrong}→${c.correct}」` : `Apply "${c.wrong}→${c.correct}"`, status: null });
+      }
       showToast(
         action === 'approve'
-          ? (t ? '已核准，已跨集生效' : 'Approved — now active across episodes')
+          ? (wantApply
+              ? (t ? '已核准，套用既有集作業已啟動' : 'Approved — applying to existing episodes')
+              : (t ? '已核准，已跨集生效' : 'Approved — now active across episodes'))
           : (t ? '已駁回' : 'Rejected'),
       );
       await reload();
@@ -209,15 +235,131 @@ const AdminAsrCorrectionTab = ({ lang }) => {
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
+      // EQ2e F8: track the apply job so the operator sees progress + can cancel.
+      if (data.task_id) {
+        setActiveJob({ taskId: data.task_id, label: t ? '套用原有集數' : 'Apply to existing episodes', status: null });
+      }
       showToast(
-        t ? `回填已在背景啟動（任務 ${data.task_id?.slice(0, 8) || ''}）`
-          : `Backfill started in background (task ${data.task_id?.slice(0, 8) || ''})`,
+        t ? `套用已在背景啟動（任務 ${data.task_id?.slice(0, 8) || ''}）`
+          : `Apply started in background (task ${data.task_id?.slice(0, 8) || ''})`,
       );
       setPreview(null);
     } catch (err) {
       showToast(err.message || String(err), 'error');
     } finally {
       setBackfilling(false);
+    }
+  };
+
+  // ── EQ2e F6: detect over a show's existing episodes ──
+  const handleDetectEstimate = async () => {
+    if (detectEstimating || !detectScope) return;
+    setDetectEstimating(true);
+    setDetectEstimate(null);
+    try {
+      const res = await apiFetch('/admin/asr-corrections/detect-existing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ show_id: detectScope, dry_run: true }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      setDetectEstimate(await res.json());
+    } catch (err) {
+      showToast(err.message || String(err), 'error');
+    } finally {
+      setDetectEstimating(false);
+    }
+  };
+
+  const handleConfirmDetect = async () => {
+    if (detectStarting || !detectScope) return;
+    setDetectStarting(true);
+    try {
+      const res = await apiFetch('/admin/asr-corrections/detect-existing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ show_id: detectScope, dry_run: false }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      if (data.task_id) {
+        setActiveJob({ taskId: data.task_id, label: t ? '偵測原有集數' : 'Detect existing episodes', status: null });
+      }
+      showToast(t ? '偵測作業已在背景啟動' : 'Detection started in background');
+      setDetectEstimate(null);
+    } catch (err) {
+      showToast(err.message || String(err), 'error');
+    } finally {
+      setDetectStarting(false);
+    }
+  };
+
+  // ── EQ2e F8: poll the active job's status (current/total + failures) ──
+  React.useEffect(() => {
+    const taskId = activeJob?.taskId;
+    if (!taskId) return;
+    let cancelled = false;
+    const poll = async () => {
+      try {
+        const res = await apiFetch(`/admin/asr-corrections/backfill-status/${taskId}`);
+        if (!res.ok || cancelled) return;
+        const s = await res.json();
+        if (cancelled) return;
+        setActiveJob((j) => (j && j.taskId === taskId ? { ...j, status: s } : j));
+        if (['SUCCESS', 'FAILURE', 'REVOKED'].includes(s.state)) {
+          clearInterval(iv);
+          reload(); // a finished detect job may have produced new pending candidates
+        }
+      } catch { /* keep polling through transient errors */ }
+    };
+    poll();
+    const iv = setInterval(poll, 2000);
+    return () => { cancelled = true; clearInterval(iv); };
+  }, [activeJob?.taskId, reload]);
+
+  const handleCancelJob = async () => {
+    const taskId = activeJob?.taskId;
+    if (!taskId || cancelling) return;
+    setCancelling(true);
+    try {
+      const res = await apiFetch(`/admin/asr-corrections/backfill-cancel/${taskId}`, { method: 'POST' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      showToast(t ? '已送出取消（已完成部分會保留）' : 'Cancel requested (completed work is kept)');
+    } catch (err) {
+      showToast(err.message || String(err), 'error');
+    } finally {
+      setCancelling(false);
+    }
+  };
+
+  // ── EQ2e F8: batch restore existing episodes to original ASR text ──
+  const handleBatchRestore = async () => {
+    if (restoring) return;
+    const scopeLabel = restoreScope ? showTitle(restoreScope) : (t ? '全部節目' : 'all shows');
+    if (!confirm(
+      t ? `將「${scopeLabel}」所有曾被校正的既有集還原回原始 ASR 文字，確定？`
+        : `Restore every previously-corrected episode in "${scopeLabel}" back to original ASR text. Continue?`,
+    )) return;
+    setRestoring(true);
+    try {
+      const body = {};
+      if (restoreScope) body.show_id = restoreScope;
+      const res = await apiFetch('/admin/asr-corrections/batch-restore', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      showToast(
+        t ? `已還原 ${data.affected_transcripts} 集（${data.affected_chunks} 個片段索引）`
+          : `Restored ${data.affected_transcripts} episode(s) (${data.affected_chunks} chunk index(es))`,
+      );
+      await reload();
+    } catch (err) {
+      showToast(err.message || String(err), 'error');
+    } finally {
+      setRestoring(false);
     }
   };
 
@@ -315,6 +457,16 @@ const AdminAsrCorrectionTab = ({ lang }) => {
                     <Badge variant="default">{showTitle(c.show_id)}</Badge>
                   </td>
                   <td style={{ padding: '8px', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                    {/* EQ2e F-approve: also apply the rule to existing episodes on approve */}
+                    <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, color: TOKEN.textSecondary, marginRight: 8, cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={!!applyToExisting[c.id]}
+                        disabled={reviewingId === c.id}
+                        onChange={(e) => setApplyToExisting((m) => ({ ...m, [c.id]: e.target.checked }))}
+                      />
+                      {t ? '同時套用既有集' : 'Apply to existing'}
+                    </label>
                     <Btn variant="primary" size="sm" disabled={reviewingId === c.id} onClick={() => handleReview(c, 'approve')}>
                       {t ? '核准' : 'Approve'}
                     </Btn>
@@ -326,6 +478,103 @@ const AdminAsrCorrectionTab = ({ lang }) => {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* ── EQ2e F6: detect over a show's existing episodes ── */}
+      <div style={{ marginBottom: 20, padding: 16, background: TOKEN.surface, border: `1px solid ${TOKEN.surfaceBorder}`, borderRadius: 8 }}>
+        <div style={{ fontWeight: 600, color: TOKEN.text, marginBottom: 6 }}>
+          {t ? '偵測原有集數' : 'Detect over existing episodes'}
+        </div>
+        <p style={{ color: TOKEN.textSecondary, fontSize: 12, marginTop: 0, lineHeight: 1.6 }}>
+          {t
+            ? '對一個節目「偵測功能上線前的舊集」逐集跑 LLM 同音字偵測，產生待審核候選。只產候選、不改任何逐字稿；會先估成本，你確認後才執行。'
+            : 'Run LLM homophone detection over a show\'s older episodes to produce pending candidates. It only creates candidates (never changes transcripts); it estimates cost first and runs only after you confirm.'}
+        </p>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <select value={detectScope} onChange={(e) => { setDetectScope(e.target.value); setDetectEstimate(null); }}
+            style={{ background: TOKEN.surfaceRaised, color: TOKEN.text, border: `1px solid ${TOKEN.surfaceBorder}`, borderRadius: 6, padding: '8px 10px', fontSize: 14, maxWidth: 220 }}>
+            <option value="">{t ? '選節目…' : 'Choose show…'}</option>
+            {shows.map((s) => <option key={s.id} value={s.id}>{s.title}</option>)}
+          </select>
+          <Btn variant="secondary" onClick={handleDetectEstimate} disabled={detectEstimating || !detectScope}>
+            {detectEstimating ? (t ? '估算中…' : 'Estimating…') : (t ? '估算成本' : 'Estimate cost')}
+          </Btn>
+        </div>
+
+        {detectEstimate && (
+          <div style={{ marginTop: 12, padding: 14, background: TOKEN.surfaceRaised, border: `1px solid ${TOKEN.surfaceBorder}`, borderRadius: 8 }}>
+            <div style={{ color: TOKEN.text, fontSize: 13, lineHeight: 1.7 }}>
+              {t
+                ? `將偵測 ${detectEstimate.episode_count} 集、估 ${detectEstimate.estimated_input_tokens.toLocaleString()} input tokens，預估成本約 $${detectEstimate.estimated_cost_usd}。`
+                : `Will detect ${detectEstimate.episode_count} episode(s), est. ${detectEstimate.estimated_input_tokens.toLocaleString()} input tokens, ~$${detectEstimate.estimated_cost_usd}.`}
+            </div>
+            <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+              <Btn variant="primary" onClick={handleConfirmDetect} disabled={detectStarting || detectEstimate.episode_count === 0}>
+                {detectStarting ? (t ? '啟動中…' : 'Starting…') : (t ? '確認偵測' : 'Confirm & detect')}
+              </Btn>
+              <Btn variant="ghost" onClick={() => setDetectEstimate(null)}>{t ? '取消' : 'Cancel'}</Btn>
+            </div>
+            {detectEstimate.episode_count === 0 && (
+              <div style={{ color: TOKEN.textMuted, fontSize: 12, marginTop: 6 }}>
+                {t ? '這個節目沒有可偵測的逐字稿。' : 'This show has no transcripts to detect.'}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* ── EQ2e F8: active background job (progress / failures / cancel) ── */}
+      {activeJob && (
+        <div style={{ marginBottom: 20, padding: 16, background: TOKEN.surfaceRaised, border: `1px solid ${TOKEN.accent}`, borderRadius: 8 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+            <div style={{ fontWeight: 600, color: TOKEN.text }}>
+              {activeJob.label}
+              {activeJob.status?.state && (
+                <span style={{ marginLeft: 8 }}>
+                  <Badge variant={
+                    activeJob.status.state === 'SUCCESS' ? 'success'
+                      : activeJob.status.state === 'FAILURE' ? 'danger'
+                      : activeJob.status.state === 'REVOKED' ? 'warning' : 'default'
+                  }>{activeJob.status.state}</Badge>
+                </span>
+              )}
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {!['SUCCESS', 'FAILURE', 'REVOKED', 'UNKNOWN'].includes(activeJob.status?.state) && (
+                <Btn variant="danger" size="sm" onClick={handleCancelJob} disabled={cancelling}>
+                  {cancelling ? (t ? '取消中…' : 'Cancelling…') : (t ? '取消作業' : 'Cancel')}
+                </Btn>
+              )}
+              <Btn variant="ghost" size="sm" onClick={() => setActiveJob(null)}>
+                {t ? '關閉' : 'Dismiss'}
+              </Btn>
+            </div>
+          </div>
+          {(() => {
+            const st = activeJob.status;
+            const total = st?.total || 0;
+            const current = st?.current || 0;
+            const pct = total > 0 ? Math.round((current / total) * 100) : 0;
+            return (
+              <div>
+                <div style={{ height: 8, background: TOKEN.bg, borderRadius: 4, overflow: 'hidden' }}>
+                  <div style={{ height: '100%', width: `${pct}%`, background: TOKEN.accent, transition: 'width 0.4s' }} />
+                </div>
+                <div style={{ color: TOKEN.textSecondary, fontSize: 12, marginTop: 6 }}>
+                  {st?.message || (t ? '查詢中…' : 'Polling…')}
+                  {total > 0 ? `（${current}/${total}）` : ''}
+                </div>
+                {st?.failed_chunk_ids?.length > 0 && (
+                  <div style={{ color: '#fbbf24', fontSize: 12, marginTop: 6, wordBreak: 'break-all' }}>
+                    {t ? `失敗 ${st.failed_chunk_ids.length} 筆：` : `${st.failed_chunk_ids.length} failed: `}
+                    {st.failed_chunk_ids.slice(0, 10).join(', ')}
+                    {st.failed_chunk_ids.length > 10 ? '…' : ''}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
         </div>
       )}
 
@@ -416,6 +665,28 @@ const AdminAsrCorrectionTab = ({ lang }) => {
             )}
           </div>
         )}
+      </div>
+
+      {/* ── EQ2e F8: batch restore existing episodes ── */}
+      <div style={{ marginTop: 24, paddingTop: 20, borderTop: `1px solid ${TOKEN.surfaceBorder}` }}>
+        <div style={{ fontWeight: 600, color: TOKEN.text, marginBottom: 6 }}>
+          {t ? '批次還原既有集' : 'Batch restore existing episodes'}
+        </div>
+        <p style={{ color: TOKEN.textSecondary, fontSize: 12, marginTop: 0, lineHeight: 1.6 }}>
+          {t
+            ? '把曾被校正的既有集還原回原始 ASR 文字（含搜尋索引）。注意：會還原該範圍內「所有曾被校正的集」，不限定某一次套用作業。'
+            : 'Revert previously-corrected episodes back to original ASR text (and search index). Note: this reverts ALL corrected episodes in scope, not just one apply run.'}
+        </p>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <select value={restoreScope} onChange={(e) => setRestoreScope(e.target.value)}
+            style={{ background: TOKEN.surfaceRaised, color: TOKEN.text, border: `1px solid ${TOKEN.surfaceBorder}`, borderRadius: 6, padding: '8px 10px', fontSize: 14, maxWidth: 220 }}>
+            <option value="">{t ? '全部節目' : 'All shows'}</option>
+            {shows.map((s) => <option key={s.id} value={s.id}>{s.title}</option>)}
+          </select>
+          <Btn variant="danger" onClick={handleBatchRestore} disabled={restoring}>
+            {restoring ? (t ? '還原中…' : 'Restoring…') : (t ? '批次還原' : 'Batch restore')}
+          </Btn>
+        </div>
       </div>
 
       <div style={{ marginTop: 18, color: TOKEN.textMuted, fontSize: 12 }}>

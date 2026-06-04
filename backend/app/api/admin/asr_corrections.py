@@ -17,13 +17,66 @@ from app.schemas.asr_correction import (
     AsrCorrectionCreate,
     AsrCorrectionPatch,
     AsrCorrectionResponse,
+    BackfillCancelResponse,
     BackfillRequest,
     BackfillResponse,
+    BackfillStatusResponse,
+    BatchRestoreRequest,
+    DetectExistingRequest,
+    DetectExistingResponse,
     MatchCountResponse,
 )
-from app.services import asr_correction
+from app.services import asr_correction, asr_homophone
 
 router = APIRouter(prefix="/asr-corrections", tags=["admin", "asr-corrections"])
+
+
+def _map_backfill_status(result) -> BackfillStatusResponse:
+    """EQ2e F8 / design D3: collapse a Celery AsyncResult onto the fixed status
+    shape. Every state maps to `{state,current,total,phase,failed_chunk_ids,
+    message}`; an unrecognised / expired task becomes UNKNOWN, never a 500. The
+    SUCCESS branch reads either task's terminal dict (apply → failed_chunk_ids /
+    affected_transcripts; detect → failed_episode_ids / total)."""
+    state = getattr(result, "state", None)
+    info = getattr(result, "info", None)
+    if state == "PROGRESS":
+        meta = info if isinstance(info, dict) else {}
+        cur, tot = meta.get("current", 0), meta.get("total", 0)
+        return BackfillStatusResponse(
+            state="PROGRESS",
+            current=cur,
+            total=tot,
+            phase=meta.get("phase"),
+            failed_chunk_ids=meta.get("failed_chunk_ids", []),
+            message=f"處理中 {cur}/{tot}",
+        )
+    if state == "PENDING":
+        return BackfillStatusResponse(
+            state="PENDING", message="作業排隊中或尚未開始"
+        )
+    if state == "SUCCESS":
+        res = info if isinstance(info, dict) else {}
+        total = res.get("total") or res.get("affected_transcripts") or 0
+        failed = res.get("failed_chunk_ids") or res.get("failed_episode_ids") or []
+        return BackfillStatusResponse(
+            state="SUCCESS",
+            current=total,
+            total=total,
+            phase=res.get("phase"),
+            failed_chunk_ids=failed,
+            message="完成",
+        )
+    if state == "FAILURE":
+        return BackfillStatusResponse(
+            state="FAILURE", message=f"作業失敗：{info}"
+        )
+    if state == "REVOKED":
+        return BackfillStatusResponse(
+            state="REVOKED", message="已取消，已完成部分保留"
+        )
+    return BackfillStatusResponse(
+        state="UNKNOWN", message="查無此作業或結果已過期"
+    )
 
 
 @router.get("", response_model=list[AsrCorrectionResponse])
@@ -70,7 +123,17 @@ async def approve_candidate(
     row.enabled = True
     await db.commit()
     await db.refresh(row)
-    return AsrCorrectionResponse.model_validate(row, from_attributes=True)
+    resp = AsrCorrectionResponse.model_validate(row, from_attributes=True)
+
+    # EQ2e F-approve: optionally apply the just-approved rule to existing
+    # episodes via a background job, closing the "rule enabled but old episodes
+    # untouched" gap. Reuses the single-rule backfill path (term_id scope).
+    if payload is not None and payload.apply_to_existing:
+        from app.workers.tasks import backfill_asr_corrections
+
+        task = backfill_asr_corrections.delay(term_id=str(row.id))
+        resp.task_id = task.id
+    return resp
 
 
 @router.post("/{term_id}/reject", response_model=AsrCorrectionResponse)
@@ -232,3 +295,98 @@ async def trigger_backfill(
         term_id=str(payload.term_id) if payload.term_id else None,
     )
     return BackfillResponse(dry_run=False, task_id=task.id)
+
+
+@router.post("/detect-existing", response_model=DetectExistingResponse)
+async def detect_existing(
+    payload: DetectExistingRequest,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_admin),
+) -> DetectExistingResponse:
+    """EQ2e F6: run homophone detection over a show's existing episodes.
+
+    `dry_run=true` (default) returns a cost estimate (episode count / tokens /
+    USD) WITHOUT calling the LLM, writing candidates, or touching transcripts.
+    `dry_run=false` enqueues the detection background job and returns its
+    task id. Detection only ever produces pending candidates — never changes
+    transcript text.
+    """
+    if payload.dry_run:
+        ep_ids = (
+            await db.execute(
+                select(Episode.id)
+                .join(Transcript, Transcript.episode_id == Episode.id)
+                .where(Episode.show_id == payload.show_id)
+            )
+        ).scalars().all()
+        est = await asr_homophone.estimate_detection_cost(db, ep_ids)
+        return DetectExistingResponse(
+            dry_run=True,
+            episode_count=est.episode_count,
+            estimated_input_tokens=est.estimated_input_tokens,
+            estimated_cost_usd=est.estimated_cost_usd,
+            missing_transcript_ids=est.missing_transcript_ids,
+        )
+
+    from app.workers.tasks import detect_existing_episodes
+
+    task = detect_existing_episodes.delay(str(payload.show_id))
+    return DetectExistingResponse(dry_run=False, task_id=task.id)
+
+
+@router.get("/backfill-status/{task_id}", response_model=BackfillStatusResponse)
+async def backfill_status(
+    task_id: str,
+    user: User = Depends(require_admin),
+) -> BackfillStatusResponse:
+    """EQ2e F8 (design D3): the fixed status shape for any detection / apply job.
+    Maps the Celery AsyncResult state onto `{state,current,total,phase,
+    failed_chunk_ids,message}`; an unknown / expired task id returns UNKNOWN
+    rather than a server error."""
+    from types import SimpleNamespace
+
+    from app.workers.celery_app import celery_app
+
+    # Reading .state/.info hits the result backend; a backend error (down /
+    # expired) must surface as UNKNOWN, never a 500 (design D3).
+    try:
+        result = celery_app.AsyncResult(task_id)
+        snapshot = SimpleNamespace(state=result.state, info=result.info)
+    except Exception:
+        return BackfillStatusResponse(
+            state="UNKNOWN", message="查無此作業或結果已過期"
+        )
+    return _map_backfill_status(snapshot)
+
+
+@router.post("/backfill-cancel/{task_id}", response_model=BackfillCancelResponse)
+async def backfill_cancel(
+    task_id: str,
+    user: User = Depends(require_admin),
+) -> BackfillCancelResponse:
+    """EQ2e F8 (design D4): cancel a running job. `revoke(terminate=True)` stops
+    further processing; already-committed episodes / transcripts are NOT rolled
+    back (recover via restore). Idempotent — revoking an unknown id is a no-op."""
+    from app.workers.celery_app import celery_app
+
+    celery_app.control.revoke(task_id, terminate=True, signal="SIGTERM")
+    return BackfillCancelResponse(task_id=task_id, revoked=True)
+
+
+@router.post("/batch-restore", response_model=BackfillResponse)
+async def batch_restore(
+    payload: BatchRestoreRequest,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_admin),
+) -> BackfillResponse:
+    """EQ2e F8: revert every snapshotted episode back to its original ASR text
+    (D-B coarse scope). `show_id` narrows to one show; omitted covers all. Reuses
+    the per-episode restore + chunk recompute."""
+    report = await asr_correction.batch_restore(db, show_id=payload.show_id)
+    return BackfillResponse(
+        dry_run=False,
+        affected_transcripts=report.affected_transcripts,
+        affected_segments=report.affected_segments,
+        affected_chunks=report.affected_chunks,
+        failed_chunk_ids=report.failed_chunk_ids,
+    )

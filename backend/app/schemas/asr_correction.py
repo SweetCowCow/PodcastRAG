@@ -32,11 +32,17 @@ class AsrCorrectionPatch(BaseModel):
 
 
 class AsrCandidateApprove(BaseModel):
-    """Optional approve payload (EQ2c F3). When `correct` is given, the rule's
-    correct-form is overwritten before approving so an admin can fix a
-    near-miss at approval time. Omitted → keep the existing value."""
+    """Optional approve payload (EQ2c F3, EQ2e F-approve). When `correct` is
+    given, the rule's correct-form is overwritten before approving so an admin
+    can fix a near-miss at approval time. Omitted → keep the existing value.
+
+    `apply_to_existing` (EQ2e): when true, after approval the rule is also
+    applied to existing episodes via a background job whose `task_id` is
+    returned; when false (default) approval only sets the rule approved+enabled.
+    """
 
     correct: str | None = Field(default=None, max_length=200)
+    apply_to_existing: bool = False
 
 
 class AsrCorrectionResponse(BaseModel):
@@ -52,6 +58,54 @@ class AsrCorrectionResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     created_by_user_id: uuid.UUID | None = None
+    # EQ2e F-approve: set only when approve was called with apply_to_existing=true
+    # (the enqueued rule-application Celery task id). None on every other path.
+    task_id: str | None = None
+
+
+class DetectExistingRequest(BaseModel):
+    """EQ2e F6: trigger homophone detection over a show's existing episodes.
+    The UI calls dry_run=true first (cost estimate), then confirms with false."""
+
+    show_id: uuid.UUID
+    dry_run: bool = True
+
+
+class DetectExistingResponse(BaseModel):
+    """dry_run=true → cost estimate (no LLM call, no writes);
+    dry_run=false → the enqueued detection task id."""
+
+    dry_run: bool
+    episode_count: int = 0
+    estimated_input_tokens: int = 0
+    estimated_cost_usd: float = 0.0
+    missing_transcript_ids: list[str] = []
+    task_id: str | None = None
+
+
+class BackfillStatusResponse(BaseModel):
+    """EQ2e F8 (design D3): the FIXED status shape every job state maps onto —
+    never the raw Celery state. Covers detection and apply jobs alike."""
+
+    state: str  # PENDING | PROGRESS | SUCCESS | FAILURE | REVOKED | UNKNOWN
+    current: int = 0
+    total: int = 0
+    phase: str | None = None
+    failed_chunk_ids: list[str] = []
+    message: str = ""
+
+
+class BackfillCancelResponse(BaseModel):
+    task_id: str
+    revoked: bool = True
+
+
+class BatchRestoreRequest(BaseModel):
+    """EQ2e F8 batch restore. D-B coarse scope (no task→episodes ledger exists):
+    revert every episode that still carries a snapshot. `show_id` narrows to one
+    show; omitted reverts all snapshotted episodes across every show."""
+
+    show_id: uuid.UUID | None = None
 
 
 class BackfillRequest(BaseModel):

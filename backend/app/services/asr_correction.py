@@ -15,7 +15,7 @@ import asyncio
 import logging
 from dataclasses import dataclass, field
 from types import SimpleNamespace
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable
 from uuid import UUID
 
 from sqlalchemy import and_, func, or_, select
@@ -28,6 +28,11 @@ if TYPE_CHECKING:
     from app.services.ai_step_resolver import StepConfig
 
 logger = logging.getLogger(__name__)
+
+# EQ2e F8 apply-progress callback: (current, total, failed_chunk_ids) → None.
+# `current` is processed-transcript count, `total` the transcripts in scope.
+# The Celery task wraps this to emit update_state; tests capture the calls.
+ApplyProgressCb = Callable[[int, int, list], None]
 
 # Embedding cost estimate for the dry-run preview. Rough by design (label it an
 # estimate to the operator; the provider bill is the source of truth): dual
@@ -201,6 +206,7 @@ async def backfill_corrections(
     term_id: UUID | None = None,
     dry_run: bool = False,
     embedding_cfg: "StepConfig | None" = None,
+    progress_cb: "ApplyProgressCb | None" = None,
 ) -> BackfillReport:
     """Apply correction rules to existing transcripts and recompute the
     affected chunks (text + dual embeddings + tsvector).
@@ -241,6 +247,24 @@ async def backfill_corrections(
     if dry_run:
         return await _fast_dry_run_preview(session, work_units)
 
+    # EQ2e F8: total transcripts in scope, for the progress denominator. Counted
+    # once up front (cheap COUNT) so the first PROGRESS report has a real total.
+    total_transcripts = 0
+    if progress_cb is not None:
+        for sid, rules in work_units:
+            if not rules:
+                continue
+            total_transcripts += int(
+                await session.scalar(
+                    select(func.count(Transcript.id))
+                    .select_from(Transcript)
+                    .join(Episode, Transcript.episode_id == Episode.id)
+                    .where(Episode.show_id == sid)
+                )
+                or 0
+            )
+    processed_transcripts = 0
+
     for sid, rules in work_units:
         if not rules:
             continue
@@ -256,6 +280,15 @@ async def backfill_corrections(
             .all()
         )
         for tr in transcripts:
+            # Report progress per transcript examined (before work) so the
+            # current count reaches total even for no-op transcripts.
+            processed_transcripts += 1
+            if progress_cb is not None:
+                progress_cb(
+                    processed_transcripts,
+                    total_transcripts,
+                    list(report.failed_chunk_ids),
+                )
             segs = (
                 (
                     await session.execute(
@@ -369,6 +402,59 @@ async def backfill_corrections(
         report.estimated_cost_usd = round(
             est_tokens / 1_000_000 * _EST_USD_PER_1M_EMBED_TOKENS, 6
         )
+    return report
+
+
+async def batch_restore(
+    session: "AsyncSession",
+    *,
+    show_id: UUID | None = None,
+    embedding_cfg: "StepConfig | None" = None,
+) -> BackfillReport:
+    """Restore every episode that still carries an original-ASR snapshot
+    (EQ2e F8). D-B coarse scope: with no task→episodes ledger, the restorable
+    set is every episode whose transcript has `original_content` set OR any
+    segment with `original_text` set. `show_id` narrows to one show; omitted
+    covers all shows.
+
+    Reuses the per-episode `restore_episode` (snapshot-and-revert + chunk
+    recompute) and aggregates its reports. A single episode's failure is
+    isolated into `failed_chunk_ids` via `restore_episode` itself; the batch
+    continues.
+    """
+    from app.models.episode import Episode
+    from app.models.transcript import Transcript
+    from app.models.transcript_segment import TranscriptSegment
+
+    # Episodes with a content snapshot.
+    content_q = (
+        select(Transcript.episode_id)
+        .join(Episode, Transcript.episode_id == Episode.id)
+        .where(Transcript.original_content.isnot(None))
+    )
+    # Episodes with at least one segment snapshot (corrected pre-content-sync).
+    seg_q = (
+        select(Transcript.episode_id)
+        .select_from(TranscriptSegment)
+        .join(Transcript, TranscriptSegment.transcript_id == Transcript.id)
+        .join(Episode, Transcript.episode_id == Episode.id)
+        .where(TranscriptSegment.original_text.isnot(None))
+    )
+    if show_id is not None:
+        content_q = content_q.where(Episode.show_id == show_id)
+        seg_q = seg_q.where(Episode.show_id == show_id)
+
+    episode_ids: set[UUID] = set(
+        (await session.execute(content_q)).scalars().all()
+    ) | set((await session.execute(seg_q)).scalars().all())
+
+    report = BackfillReport()
+    for ep_id in episode_ids:
+        one = await restore_episode(session, ep_id, embedding_cfg=embedding_cfg)
+        report.affected_transcripts += one.affected_transcripts
+        report.affected_segments += one.affected_segments
+        report.affected_chunks += one.affected_chunks
+        report.failed_chunk_ids.extend(one.failed_chunk_ids)
     return report
 
 
