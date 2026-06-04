@@ -1,6 +1,6 @@
 # PodcastRAG 路線圖
 
-> 最後更新：2026-06-04（EQ2b/EQ2c/EQ2d/**EQ2e** ✅ 皆 archive。佇列＝EQ3a–d→EQ4–7→EQ8(F4)/EQ9(F7)。**下一動＝EQ3a `voyage-rerank-tune-b22-b23` unpark（仍 parked，0/9）**。執行佇列為權威排序，下方 Phase A–F 表為細節參考。）
+> 最後更新：2026-06-04（EQ2b/EQ2c/EQ2d/**EQ2e** ✅ 皆 archive；**EQ3a** ✅ archive（NEGATIVE，prefilter-cap 已 revert）。佇列＝EQ3b–d→EQ4–7→EQ8(F4)/EQ9(F7)。**下一動＝EQ3b `chunk-level-retrieval-rca-b20-style`（b20 召回 RCA spike）**。執行佇列為權威排序，下方 Phase A–F 表為細節參考。）
 
 本文件記錄 PodcastRAG 後續開發的優先順序與規劃。**排序真相 = 下方「🎯 執行佇列」**；Phase A–F 表是細節背景（多數 Phase A 已完成）。
 
@@ -21,7 +21,7 @@
 | **EQ2c** | ASR 校正小修（F3+F5） | `asr-correction-ux-and-aihub-json` | ✅ | 無 | ✅ 2026-06-02 完成+archive（`2026-06-02-asr-correction-ux-and-aihub-json`，commit `1578a49`）。F3 核准可編輯 correct（後端 approve 接 optional correct + 前端可編輯欄位）；F5 `_parse_pairs` 容錯（全形引號/夾雜 prose 擷取/單筆物件/鍵名變體/items 鍵）。prod smoke：qwen-3-235b 解析從 0→有 pair ✓、UI 編輯核准「高明碧→Gummy B-EDIT驗證」寫入驗證 ✓。46 test passed |
 | **EQ2d** | ASR 可逆性 + content 同步（F1+F2） | `asr-correction-reversibility-and-content-sync` | ✅ | 無（**F6 前置鎖**，已解） | ✅ 2026-06-02 完成+archive（`2026-06-02-asr-correction-reversibility-and-content-sync`，commit `3326fe9`，9/9，58 test）。`segment.original_text`+`transcript.original_content` snapshot-once + per-episode 還原 API/UI + content 同步（task 2.3 強制重算獨立於 segment 變動）。prod smoke：migration ✓、重跑「這又沒有很屌」回填修好歷史 content（卡拉基 15→0、杜忠祐 89→0、156 集存 original_content）✓、restore 全循環 ✓、admin 還原按鈕渲染 ✓。**F6 前置鎖已解，EQ2e 可開** |
 | **EQ2e** | ASR 全面回填（F6）＋回填可觀測/可取消（F8） | `asr-homophone-full-backfill` | ✅ | **EQ2d 完** + 成本 dry-run 估 | ✅ 2026-06-04 完成+archive（`2026-06-04-asr-homophone-full-backfill`，commit `3328cc9`，14/14，64 ASR test，release log v2.2 feature）。F6 偵測原有集數（per-show 序列 driver、只產候選不改文字、不碰 transcription_queue）+ F8 兩 task bind=True 報進度 + `/backfill-status` 五態映射 + `/backfill-cancel` revoke + `/batch-restore` + F-approve（approve 勾 apply_to_existing）。LANGUAGE.md 新增「偵測原有集數/套用原有集數」。prod smoke（曼報）三大驗收全綠（dry-run→真跑→取消 REVOKED 保留 / approve apply 文字被改 / 批次還原）。下一動 = EQ3a unpark |
-| **EQ3a** | rerank 調參救 b22/b23 | `voyage-rerank-tune-b22-b23` | ⏸ (0/9) | 無（現成 parked，unpark 即可） | b22/b23 chunk_recall 不退步、cross_episode mean 不降 |
+| **EQ3a** | rerank 調參救 b22/b23 | `voyage-rerank-tune-b22-b23` | ✅ NEGATIVE | — | ✅ 2026-06-04 archive（`2026-06-04-voyage-rerank-tune-b22-b23`）。Stage A 診斷成功＋證偽「voyage 對中文弱」；三題真因：b21 control 正常、b22 沒進 voyage path（routing+distributed-evidence）、b23 topic-prefilter 找不到 transcript-buried 答案（EP107 ts_rank 排不進前 20）。Stage B prefilter-cap NEGATIVE→revert（commit `873f1e3`）。診斷工具 `audit_voyage_pipeline.py` 留存。**衍生 2 follow-up**：b23 transcript-aware retrieval、b22 routing |
 | **EQ3b** | b20 召回 RCA spike | `chunk-level-retrieval-rca-b20-style` | ⬜ | 無 | 查清 EP134 @1790/@1808 為何 top-500 全 miss（用 `sql_rca_demo` + `prompt_fingerprint_diff --source=sql`）；產 RCA 結論 |
 | **EQ3c** | BM25 取代 ts_rank + EP-scoped IDF | `lexical-bm25-replace-ts_rank` | ⬜ | **propose 前必跑 `retrieve_probe` 對 calibration_8 dry-run**（2026-05-28 失敗教訓） | calibration_8 dry-run 不退步才進 apply；prod chunk_recall ≥ baseline 0.482 |
 | **EQ3d** | R2.2 prompt 優化 | `r2-2-prompt-redo` | ⬜ | EQ3a–c + R1.3 judge re-bake-off | Faithfulness ≥ 0.71；inline `[N]` 渲染 + hover↔source |
@@ -175,8 +175,8 @@ R3 拆三段做（每段都跑 eval baseline 對照升幅）：
 **Active**（0 個）：
 - （per-show-mode-example-prompts 已 2026-05-31 archive，無進行中 change）
 
-**Parked**（1 個）：
-1. `voyage-rerank-tune-b22-b23` (0/9) — 對 retrieval-rerank-via-voyage 的 b22/b23 調參。
+**Parked**（0 個）：
+- （voyage-rerank-tune-b22-b23 已 2026-06-04 archive，NEGATIVE）
 
 **待 propose / 待 discuss**：見下方「衍生待 propose」段。
 
