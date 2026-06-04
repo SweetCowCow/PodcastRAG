@@ -101,15 +101,6 @@ class Settings(BaseSettings):
     # find_episodes_by_topic (triggers when ≥2 tokens match known guest
     # names). Set ENABLE_GUEST_DISPATCH=false to bypass without redeploy.
     enable_guest_dispatch: bool = True
-    # voyage-rerank-tune-b22-b23 Stage B: cap how many episodes the topic
-    # prefilter (find_episodes_by_topic) returns, ranked by ts_rank relevance.
-    # A host-name token like "迪拉" matches nearly every episode, so an
-    # unbounded OR-tsquery pool (64 eps for b23) dilutes cross-episode GT out
-    # of retrieve_hybrid's top-30 before voyage even runs. Cap to the most
-    # topically-relevant N episodes. Set <=0 (TOPIC_PREFILTER_MAX_EPISODES=0)
-    # to disable the cap — restores the prior unbounded recency-ordered
-    # behaviour as an env rollback with no redeploy.
-    topic_prefilter_max_episodes: int = 10
     agentic_chat_max_iterations: int = 10
     agentic_chat_l0_k_turns: int = 3
     agentic_chat_l1_ttl_seconds: int = 7200
