@@ -114,8 +114,28 @@ async def find_episodes_by_guest(
     return [_row_to_episode_ref(row) for row in result.mappings()]
 
 
-_TOPIC_SQL = """
-SELECT e.id, e.title, e.published_at, e.guests, e.ai_summary
+# voyage-rerank-tune-b22-b23 Stage B: rank candidates by ts_rank relevance and
+# (optionally) cap to the top-N episodes. `topic_relevance` = best of the
+# title-tsvector rank and the strongest matching description-chunk rank, so an
+# episode that only matches via description still gets a real score. The
+# `{limit_clause}` is filled with `LIMIT :max_eps` only when capping is enabled
+# (settings.topic_prefilter_max_episodes > 0); otherwise it is empty, which
+# preserves the prior unbounded behaviour (now relevance-ordered instead of
+# recency-ordered).
+_TOPIC_SQL_TEMPLATE = """
+SELECT e.id, e.title, e.published_at, e.guests, e.ai_summary,
+  GREATEST(
+    CASE WHEN e.title_tsvector IS NOT NULL
+         THEN ts_rank(e.title_tsvector, to_tsquery('simple', :tsquery_text))
+         ELSE 0 END,
+    COALESCE((
+      SELECT max(ts_rank(d.text_tsvector, to_tsquery('simple', :tsquery_text)))
+      FROM episode_description_chunks d
+      WHERE d.episode_id = e.id
+        AND d.text_tsvector IS NOT NULL
+        AND d.text_tsvector @@ to_tsquery('simple', :tsquery_text)
+    ), 0)
+  ) AS topic_relevance
 FROM episodes e
 WHERE e.show_id = :show_id
   AND (
@@ -128,7 +148,8 @@ WHERE e.show_id = :show_id
         AND d.text_tsvector @@ to_tsquery('simple', :tsquery_text)
     )
   )
-ORDER BY e.published_at DESC NULLS LAST
+ORDER BY topic_relevance DESC, e.published_at DESC NULLS LAST
+{limit_clause}
 """
 
 
@@ -294,7 +315,16 @@ async def find_episodes_by_topic_with_source(
         "show_id": show_id,
         "tsquery_text": tsquery_text,
     }
-    result = await db.execute(text(_TOPIC_SQL), params)
+    # Cap the topic pool to the top-N most relevant episodes (Stage B). A
+    # non-positive setting disables the cap (env rollback).
+    max_eps = getattr(settings, "topic_prefilter_max_episodes", 10)
+    if max_eps and max_eps > 0:
+        limit_clause = "LIMIT :max_eps"
+        params["max_eps"] = max_eps
+    else:
+        limit_clause = ""
+    topic_sql = _TOPIC_SQL_TEMPLATE.format(limit_clause=limit_clause)
+    result = await db.execute(text(topic_sql), params)
     topic_eps = [_row_to_episode_ref(row) for row in result.mappings()]
 
     if not guest_eps:
