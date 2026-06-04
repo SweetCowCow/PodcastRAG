@@ -20,9 +20,9 @@
 
 ## 5. 前端：後台 UI（F8 UI + F-approve UI）
 
-- [ ] 5.1 `src/AdminPage.jsx` ASR tab 加「偵測既有集」：選節目 → 先打 dry_run 顯示成本估（集數 / 估 token / 估 USD）→ 確認 modal → 打 dry_run=false 取得 task_id。完成標準：瀏覽器驗證點擊後出現成本估、確認後作業啟動。（覆蓋 spec requirement: "Admin UI triggers detection over a show's existing episodes"）
-- [ ] 5.2 `src/AdminPage.jsx` 加背景作業狀態區：輪詢 `/backfill-status/{task_id}` 顯示 current/total 進度條 + failed_chunk_ids 清單 + 取消按鈕（打 `/backfill-cancel`）。完成標準：瀏覽器驗證進度條隨輪詢更新、取消按鈕觸發後狀態轉「已取消，已處理 X/N」。（覆蓋 spec requirement: "Admin UI shows backfill progress, failures, and cancellation"）
-- [ ] 5.3 `src/AdminPage.jsx` 加批次 restore 按鈕（打 `/batch-restore`）與 approve 候選時的「同時套用到既有集」勾選（帶 apply_to_existing）。所有新文案提供 zh/en 雙語、用 TOKEN design system。完成標準：瀏覽器驗證勾選 approve 後既有集文字被改 + 批次 restore 可還原。（覆蓋 spec requirement: "Admin UI offers batch restore and approve-and-apply"）
+- [x] 5.1 `src/AdminPage.jsx` ASR tab 加「偵測既有集」：選節目 → 先打 dry_run 顯示成本估（集數 / 估 token / 估 USD）→ 確認 modal → 打 dry_run=false 取得 task_id。完成標準：瀏覽器驗證點擊後出現成本估、確認後作業啟動。（覆蓋 spec requirement: "Admin UI triggers detection over a show's existing episodes"）
+- [x] 5.2 `src/AdminPage.jsx` 加背景作業狀態區：輪詢 `/backfill-status/{task_id}` 顯示 current/total 進度條 + failed_chunk_ids 清單 + 取消按鈕（打 `/backfill-cancel`）。完成標準：瀏覽器驗證進度條隨輪詢更新、取消按鈕觸發後狀態轉「已取消，已處理 X/N」。（覆蓋 spec requirement: "Admin UI shows backfill progress, failures, and cancellation"）
+- [x] 5.3 `src/AdminPage.jsx` 加批次 restore 按鈕（打 `/batch-restore`）與 approve 候選時的「同時套用到既有集」勾選（帶 apply_to_existing）。所有新文案提供 zh/en 雙語、用 TOKEN design system。完成標準：瀏覽器驗證勾選 approve 後既有集文字被改 + 批次 restore 可還原。（覆蓋 spec requirement: "Admin UI offers batch restore and approve-and-apply"）
 
 ## 6. 詞彙
 
@@ -31,4 +31,4 @@
 ## 7. 驗證
 
 - [x] 7.1 後端 pytest 全綠：涵蓋 1.1 偵測 fail-open、1.2/2.1 進度遞增、2.2 status 六態映射、2.3 cancel、3.1 批次 restore、4.1 approve apply_to_existing 兩分支。
-- [ ] 7.2 Prod smoke（推 Zeabur 後）：對一個節目 dry-run 看成本 → 實跑 → 候選出現 + 進度條走完；approve 一條勾「順便套用」→ 既有集文字確實被改且可 restore；中途取消一個作業 → 狀態 REVOKED、已完成部分保留。結果記入對應 case study。
+- [x] 7.2 Prod smoke（推 Zeabur 後）：對一個節目 dry-run 看成本 → 實跑 → 候選出現 + 進度條走完；approve 一條勾「順便套用」→ 既有集文字確實被改且可 restore；中途取消一個作業 → 狀態 REVOKED、已完成部分保留。結果記入對應 case study。
