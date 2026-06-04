@@ -639,11 +639,11 @@
       "design_type": "cross_episode",
       "source": "existing:q04-mid-age-opening-view",
       "is_multi_turn": false,
-      "audit_status": "pending",
-      "audit_notes": "Auto-migrated from v1; needs human audit per docs/eval-strategy.md",
+      "audit_status": "human-verified-2026-06-04",
+      "audit_notes": "Human co-review 2026-06-04（answerability rubric）。must 從 4 收斂為 2：@1993（過四十幾歲不需振奮＝差異核心）、@1719（安身之處＝中年開工想法內容）。@1790/@1808（盛泰郎 YOHO 歌曲推薦+歌曲內容）降 acceptable＝佐證舉例；@1740（安身之處輕鬆活一年）新增 acceptable＝@1719 延續。RCA：query 與 GT 表面詞幾乎零重疊（@1719 prefilter-rank 78），屬 chunk-level 詞彙/語意失配，非 voyage。",
       "question": "節目裡迪拉怎麼描述中老年人的開工想法跟年輕時的差異？",
       "expected_behavior": "answer",
-      "expected_answer_summary": "PENDING AUDIT",
+      "expected_answer_summary": "迪拉描述自己過了四十幾歲後的開工心態：不再需要一種「振奮」的感覺，而是要找到「安身之處」——一個精神上的 support，讓你能很輕鬆地面對接下來一整年；這與年輕時需要靠振奮、衝勁來開工的心態形成對比。",
       "expected_answer_aliases": null,
       "expected_tool_calls_required": [
         "search_across_episodes"
@@ -661,12 +661,14 @@
       "expected_must_contradict_check": null,
       "ground_truth_chunk_ids_must": [
         "ep:c1d87278-7dba-4fb1-930d-c2bd3a3461d2@1719.78",
-        "ep:c1d87278-7dba-4fb1-930d-c2bd3a3461d2@1993.76",
-        "ep:c1d87278-7dba-4fb1-930d-c2bd3a3461d2@1790.18",
-        "ep:c1d87278-7dba-4fb1-930d-c2bd3a3461d2@1808.78"
+        "ep:c1d87278-7dba-4fb1-930d-c2bd3a3461d2@1993.76"
       ],
       "ground_truth_chunk_ids_either": null,
-      "ground_truth_chunk_ids_acceptable": null
+      "ground_truth_chunk_ids_acceptable": [
+        "ep:c1d87278-7dba-4fb1-930d-c2bd3a3461d2@1790.18",
+        "ep:c1d87278-7dba-4fb1-930d-c2bd3a3461d2@1808.78",
+        "ep:c1d87278-7dba-4fb1-930d-c2bd3a3461d2@1740.78"
+      ]
     },
     {
       "id": "b21",
@@ -748,19 +750,19 @@
       ],
       "ground_truth_chunk_ids_acceptable": null,
       "expected_must_contradict_check": null,
-      "audit_status": "human-verified-2026-05-25",
-      "audit_notes": "2026-05-27 audit (post-EP129 case study；distributed-evidence 補 either):\nexpected answer 列 3 個 recurring participants（非來賓）: 杜宗祐 / 方品融 / 阿名\neither 結構分組邏輯（grader 用 flat list，但 auditor 確保每個 entity 至少 1 chunk）:\n- 杜宗祐 (ASR 儲存為「杜忠祐」, 3 chunks): EP119 @919.56「Ghetto 有個朋友叫杜忠祐」/ EP52 @377.50「杜忠祐說他很有信心」/ EP122 @4324.90「留守的杜忠祐」\n- 方品融 (2 chunks): EP94 @1052.94 / @1073.30 迪拉介紹「方品融是 24 歲女饒舌歌手」+ EP141 description 多筆（未挑進 either 因 description chunks 排序行為與 transcript 不同）\n- 阿名 (ASR 也作「阿明」, 2 chunks): 15CM 一萬粉絲 Q&A @1360.86「阿明你剪接」/ @1536.58「阿明這集剪得很辛苦」\nASR 錯字未在本 change 修（per design non-goal「不修 ASR」）；grader chunk_id match by start_time ±10s 不受名字 ASR 影響。\n原 must=0 root cause: dataset auditor 過去把 distributed-evidence 題型誤當「無 chunk-level evidence」，但實際 transcript 證據充足。"
+      "audit_status": "human-verified-2026-06-04",
+      "audit_notes": "Human co-review 2026-06-04（answerability rubric）：either 結構（杜宗祐3 / 方品融2 / 阿名2）在 rubric 下正確——列舉題 either＝每實體 OR，多 chunk 是命中機會不互相懲罰，不降 acceptable。GT chunk 全部維持不動。\n修正：被引 chunk 實際文字為「杜宗祐」「阿名」（拼字正確），非舊 note 所述「杜忠祐/阿明」；alias map 保留作防禦。\n方品融＝固定班底經 Jacky 2026-06-04 確認（EP94 @1052/@1073「介紹一下方品融」是節目橋段非訪談來賓）。\n杜宗祐：@4324.90「留守的…特出席」最強 recurring 證據；@377.50 比賽橋段；@919.56 偏弱（講他）。阿名：@1360.86「阿名你剪接」直接點明剪接身份；@1536.58 佐證。\nRCA（retrieval，非 voyage、非 GT）：7 個 either 連 ideal 池全 miss＝distributed-evidence + routing（agent 走 get_show_overview/search_across_episodes 未進 voyage rerank path）。留待 b22 獨立 change。\n--- 原 2026-05-27 note ---\n2026-05-27 audit (post-EP129 case study；distributed-evidence 補 either):\nexpected answer 列 3 個 recurring participants（非來賓）: 杜宗祐 / 方品融 / 阿名\neither 結構分組邏輯（grader 用 flat list，但 auditor 確保每個 entity 至少 1 chunk）:\n- 杜宗祐 (ASR 儲存為「杜忠祐」, 3 chunks): EP119 @919.56「Ghetto 有個朋友叫杜忠祐」/ EP52 @377.50「杜忠祐說他很有信心」/ EP122 @4324.90「留守的杜忠祐」\n- 方品融 (2 chunks): EP94 @1052.94 / @1073.30 迪拉介紹「方品融是 24 歲女饒舌歌手」+ EP141 description 多筆（未挑進 either 因 description chunks 排序行為與 transcript 不同）\n- 阿名 (ASR 也作「阿明」, 2 chunks): 15CM 一萬粉絲 Q&A @1360.86「阿明你剪接」/ @1536.58「阿明這集剪得很辛苦」\nASR 錯字未在本 change 修（per design non-goal「不修 ASR」）；grader chunk_id match by start_time ±10s 不受名字 ASR 影響。\n原 must=0 root cause: dataset auditor 過去把 distributed-evidence 題型誤當「無 chunk-level evidence」，但實際 transcript 證據充足。"
     },
     {
       "id": "b23",
       "design_type": "cross_episode",
       "source": "existing:q24-leo-wang-encounter-arc",
       "is_multi_turn": false,
-      "audit_status": "pending",
-      "audit_notes": "2026-05-27 audit (post-EP129 hallucination case study; user 親自聽逐字稿驗證):\nmust chunks 主體驗證:\n- EP107 @1766.87: 迪拉自述「我記得我是在一個Live house / 然後我看表演看完一半 / 後面突然有人點我 / 他說我是Leo王」— 主體 = 迪拉↔Leo 王 ✓\n- EP107 @1819.35: 同段延續「就在那 Live house 的時候 他點我 / 我是Leo王 / 喔那是你們第一次見面 / 對 第一次見面」— 主體 = 迪拉↔Leo 王 ✓\nacceptable chunks（移自原 must，主體不符但屬 bystander context）:\n- EP116 @187.48: 小老虎自述「迪拉給我安排演出在 Revolver / 那次就在給我來當一個暖場嘉賓 / 我更早是他的樂迷的意思」— 主體 = 小老虎↔Leo 王（迪拉只是 venue arranger），不應作 must；保留 acceptable 給 retrieval 寬鬆評分用。\n原 must 三 chunks 標錯 root cause: dataset auditor 看到「迪拉給我安排演出」就誤判成「迪拉 vs Leo 王」第一次見面。",
+      "audit_status": "human-verified-2026-06-04",
+      "audit_notes": "Human co-review 2026-06-04（answerability rubric）：問題兩半＝(a) 從不認識變成合作夥伴 + (b) 第一次見面。原 must 兩 chunk（@1766.87/@1819.35）只覆蓋 (b) Live house 初遇；補 (a) 缺口：\n新增 must @1847.55（種瓜得瓜三人合作起點）+ @1866.79（雞腿飯/So What 退出、最後剩迪拉和Leo＝變成雙人夥伴）。\n新增 acceptable @1747.59（從不認識背景：網路聊過、Leo神祕FB不放照片）+ @1882.87（夜貓初代卡帶→專輯，夥伴之後作品史）。\nEP116 @187.48（小老虎↔Leo王 bystander）維持 acceptable。\nRCA（retrieval，非 voyage、非 GT）：GT 在 EP107 逐字稿、title/desc 未提 Leo王 → topic-prefilter（title/desc tsvector）排不進候選；EP144「Ft. Leo王」反壓過。prefilter-cap lever 已證 NEGATIVE+revert（見 reference_topic_prefilter_transcript_buried_limit）。留待 b23 獨立 change（narrative 題跳 topic-prefilter 走 full-show hybrid+voyage）。\n--- 原 2026-05-27 note（user 親耳聽逐字稿驗證 must 主體）---\n2026-05-27 audit (post-EP129 hallucination case study; user 親自聽逐字稿驗證):\nmust chunks 主體驗證:\n- EP107 @1766.87: 迪拉自述「我記得我是在一個Live house / 然後我看表演看完一半 / 後面突然有人點我 / 他說我是Leo王」— 主體 = 迪拉↔Leo 王 ✓\n- EP107 @1819.35: 同段延續「就在那 Live house 的時候 他點我 / 我是Leo王 / 喔那是你們第一次見面 / 對 第一次見面」— 主體 = 迪拉↔Leo 王 ✓\nacceptable chunks（移自原 must，主體不符但屬 bystander context）:\n- EP116 @187.48: 小老虎自述「迪拉給我安排演出在 Revolver / 那次就在給我來當一個暖場嘉賓 / 我更早是他的樂迷的意思」— 主體 = 小老虎↔Leo 王（迪拉只是 venue arranger），不應作 must；保留 acceptable 給 retrieval 寬鬆評分用。\n原 must 三 chunks 標錯 root cause: dataset auditor 看到「迪拉給我安排演出」就誤判成「迪拉 vs Leo 王」第一次見面。",
       "question": "迪拉跟 Leo王 是怎麼從不認識變成合作夥伴的？他們第一次見面的故事是什麼？",
       "expected_behavior": "answer",
-      "expected_answer_summary": "PENDING AUDIT",
+      "expected_answer_summary": "迪拉與 Leo 王從不認識：兩人先在網路上聊過，但 Leo 很神秘（FB 不放照片），迪拉一直不知道他長相。第一次見面是在一個 Live house——迪拉看表演看到一半，後面有人點他，對方說「我是 Leo 王」。之後兩人從合作起步：最早是迪拉、Leo、小湯因〈種瓜得瓜〉一曲三人湊成組合先發歌，後來陸續找了雞腿飯、So What，但他們因個人因素退出，最後剩迪拉和 Leo 留下來，做了「夜貓初代」卡帶、再醞釀成專輯，成為固定合作夥伴。",
       "expected_answer_aliases": null,
       "expected_tool_calls_required": [
         "search_across_episodes"
@@ -778,11 +780,15 @@
       "expected_must_contradict_check": null,
       "ground_truth_chunk_ids_must": [
         "ep:8b3d4c1d-be8d-4dde-b12c-4cbe9b60ef21@1766.87",
-        "ep:8b3d4c1d-be8d-4dde-b12c-4cbe9b60ef21@1819.35"
+        "ep:8b3d4c1d-be8d-4dde-b12c-4cbe9b60ef21@1819.35",
+        "ep:8b3d4c1d-be8d-4dde-b12c-4cbe9b60ef21@1847.55",
+        "ep:8b3d4c1d-be8d-4dde-b12c-4cbe9b60ef21@1866.79"
       ],
       "ground_truth_chunk_ids_either": null,
       "ground_truth_chunk_ids_acceptable": [
-        "ep:cb96f6f8-58fb-43fd-bbd6-da1b585d9f60@187.48"
+        "ep:cb96f6f8-58fb-43fd-bbd6-da1b585d9f60@187.48",
+        "ep:8b3d4c1d-be8d-4dde-b12c-4cbe9b60ef21@1747.59",
+        "ep:8b3d4c1d-be8d-4dde-b12c-4cbe9b60ef21@1882.87"
       ]
     },
     {
