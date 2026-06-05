@@ -34,6 +34,7 @@ from app.core.database import get_db
 from app.services import rag
 from app.services.ai_step_resolver import get_step_config
 from app.services.embedding import embed_texts
+from app.services.hyde_retrieval import resolve_semantic_embedding
 
 # Reuse the chunk_id parser used by chunk_recall grader / rrf_sweep.
 _CHUNK_RE = re.compile(r"^ep:([0-9a-f-]+)@(\d+\.\d+)$")
@@ -166,11 +167,15 @@ async def diagnose_prefilter_rank(
             out.append({"item_id": iid, "error": "could not derive prefilter episodes"})
             continue
 
-        vec = embed_texts([question], embed_step)[0]
+        # hyde-retrieval-landing: embed via the flag-gated helper so an A/B run
+        # (enable_hyde_retrieval off vs on) measures the LANDED path. Flag off →
+        # resolve returns base_vec, bit-identical to the prior plain-embed path.
+        base_vec = embed_texts([question], embed_step)[0]
+        hyde = await resolve_semantic_embedding(db, question, base_vec, embed_step)
         hits = await rag.retrieve_hybrid(
             db,
             show_id=show_id,
-            query_embedding=vec,
+            query_embedding=hyde.semantic_vec,
             question=question,
             k=req.top_n,
             episode_id_filter=prefilter_eps,
@@ -262,6 +267,12 @@ async def diagnose_prefilter_rank(
             "gt_total": len(gt_ranks),
             "gt_ranks": gt_ranks,
             "bucket_counts": bucket_counts,
+            # hyde-retrieval-landing A/B: lets the harness verify the env flag
+            # actually took effect (used_hyde must be True on the "on" run) and
+            # record the generated HyDE text sample per item.
+            "used_hyde": hyde.used_hyde,
+            "hyde_text": hyde.hyde_text,
+            "extra_llm_calls": hyde.extra_llm_calls,
         }
         if chunking_context is not None:
             item_out["chunking_context"] = chunking_context

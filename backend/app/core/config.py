@@ -97,6 +97,11 @@ class Settings(BaseSettings):
     # Flag 共存 roll-out：default true 走 chat_agent.agent.run_agent；顯式
     # `ENABLE_AGENTIC_CHAT=false` 仍可退回 rule-based pipeline（30 天 kill-switch）。
     enable_agentic_chat: bool = True
+    # hyde-retrieval-landing: flag-gated HyDE query rewrite on the chunk
+    # retrieve layer (semantic vector only; routing + BM25 lexical unchanged).
+    # Default off — flipping to True is a separate decision gated on expanded
+    # A/B evidence. `ENABLE_HYDE_RETRIEVAL=true` opts in without code change.
+    enable_hyde_retrieval: bool = False
     # b23-dataset-and-retrieval-rca-fix: guest-index dispatch for
     # find_episodes_by_topic (triggers when ≥2 tokens match known guest
     # names). Set ENABLE_GUEST_DISPATCH=false to bypass without redeploy.

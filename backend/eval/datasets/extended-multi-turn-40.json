@@ -1331,6 +1331,275 @@
           "ordinal_resolution_check": true
         }
       ]
+    },
+    {
+      "id": "b32",
+      "design_type": "cross_episode",
+      "source": "hyde-target:ep140-indie-band-arena-pride",
+      "is_multi_turn": false,
+      "audit_status": "human-verified-2026-06-05",
+      "audit_notes": "HyDE co-draft 2026-06-05（lexical-mismatch 標靶集）。Jacky 確認+修正。詞彙失配：問句『最大的表演殿堂/自己當老闆』vs chunk『小巨蛋/公司自己開/獨立樂團/高雄團』。講者釐清：@3440 楊大正本人講滅火器站小巨蛋驕傲；@3552 共同驕傲感『你們要完成這件事』是另一位高雄樂團來賓（景仰滅火器者）所述，非楊大正。已依 Jacky 移除『去支持/相挺』（非楊大正本人語）。must=@3440.95+@3552.67；acceptable=@3491.27。show-wide、不綁集數。",
+      "question": "楊大正聊到一個沒什麼資源、公司自己開的樂團，一路打拚到登上台灣最大的表演殿堂——這件事對他們代表什麼意義？",
+      "expected_behavior": "answer",
+      "expected_answer_summary": "滅火器是沒什麼資源、公司自己開的獨立樂團，能站上小巨蛋是很值得驕傲的一刻。對楊大正和這些高雄樂團來說，這是一種共同的驕傲與感動——看到消息會感動到快哭，覺得『我們要完成這件事』這樣的大事。",
+      "expected_answer_aliases": null,
+      "expected_tool_calls_required": [
+        "search_across_episodes"
+      ],
+      "expected_tool_calls_acceptable": [
+        "find_episodes_by_topic"
+      ],
+      "expected_tool_args": null,
+      "expected_episode_uuids_must": null,
+      "expected_episode_uuids_acceptable": null,
+      "expected_episode_numbers_must": null,
+      "expected_episode_numbers_acceptable": null,
+      "expected_count": null,
+      "expected_top_n_episode_numbers": null,
+      "expected_must_contradict_check": null,
+      "ground_truth_chunk_ids_must": [
+        "ep:d15bddde-153f-484f-bff6-0bb74415b718@3440.95",
+        "ep:d15bddde-153f-484f-bff6-0bb74415b718@3552.67"
+      ],
+      "ground_truth_chunk_ids_either": null,
+      "ground_truth_chunk_ids_acceptable": [
+        "ep:d15bddde-153f-484f-bff6-0bb74415b718@3491.27"
+      ]
+    },
+    {
+      "id": "b33",
+      "design_type": "deep_dive",
+      "source": "hyde-target:ep18-huangjie-witch-house-stage",
+      "is_multi_turn": false,
+      "audit_status": "human-verified-2026-06-05",
+      "audit_notes": "HyDE co-draft 2026-06-05（lexical-mismatch 標靶集）。Jacky 確認。詞彙失配：問句『控場/帶氣氛/磨出來/難應付』vs chunk『掌控整個節奏/Talking/練出來/最難演』。答案核心『女巫店』只在 chunk。must=@892.70（女巫店練出來、最難演）+@911.90（為何難演：觀眾太近、音響不能開大、安全感低）。show-wide、不綁集數。",
+      "question": "黃玠在台上很會帶氣氛、控場的功力，是在哪個表演場地磨出來的？為什麼他覺得那地方特別難應付？",
+      "expected_behavior": "answer",
+      "expected_answer_summary": "黃玠的控場／Talking 功力是在『女巫店』練出來的；他覺得女巫店是他演過所有場地裡最難演的——因為觀眾離舞台很近（大概兩公尺甚至不到）、音響沒辦法開很大聲，台上安全感很低，反而逼他磨出掌控整場節奏的能力。",
+      "expected_answer_aliases": null,
+      "expected_tool_calls_required": [
+        "search_across_episodes"
+      ],
+      "expected_tool_calls_acceptable": [
+        "find_episode_by_ref",
+        "find_episodes_by_topic"
+      ],
+      "expected_tool_args": null,
+      "expected_episode_uuids_must": null,
+      "expected_episode_uuids_acceptable": null,
+      "expected_episode_numbers_must": null,
+      "expected_episode_numbers_acceptable": null,
+      "expected_count": null,
+      "expected_top_n_episode_numbers": null,
+      "expected_must_contradict_check": null,
+      "ground_truth_chunk_ids_must": [
+        "ep:f72cc0d1-17df-4712-9a83-e0216a243233@892.70",
+        "ep:f72cc0d1-17df-4712-9a83-e0216a243233@911.90"
+      ],
+      "ground_truth_chunk_ids_either": null,
+      "ground_truth_chunk_ids_acceptable": null
+    },
+    {
+      "id": "b37",
+      "design_type": "deep_dive",
+      "source": "hyde-target:ep125-pay-to-win-vs-pay-to-skin",
+      "is_multi_turn": false,
+      "audit_status": "human-verified-2026-06-05",
+      "audit_notes": "HyDE co-draft 2026-06-05（lexical-mismatch 標靶集）。Jacky 確認。show=45fc2462（這又沒有很屌）已驗證。詞彙失配：答案核心是英文術語 Pay to Win/Pay to Skin，中文問句『變更強/外觀更好看』完全不含 → 極乾淨失配。must=@3038.55（兩派定義）；acceptable=@3055.55。show-wide。",
+      "question": "他們聊到手遊課金有兩派玩家：一種付錢是為了讓角色變更強，另一種付錢只是為了讓外觀更好看——這兩種分別叫什麼？",
+      "expected_behavior": "answer",
+      "expected_answer_summary": "一種叫 Pay to Win（課金就能變得更強），另一種叫 Pay to Skin（課金只能買外觀、服裝、坐騎等跟能力值無關的東西，純粹讓你更好看）。",
+      "expected_answer_aliases": null,
+      "expected_tool_calls_required": [
+        "search_across_episodes"
+      ],
+      "expected_tool_calls_acceptable": [
+        "find_episodes_by_topic"
+      ],
+      "expected_tool_args": null,
+      "expected_episode_uuids_must": null,
+      "expected_episode_uuids_acceptable": null,
+      "expected_episode_numbers_must": null,
+      "expected_episode_numbers_acceptable": null,
+      "expected_count": null,
+      "expected_top_n_episode_numbers": null,
+      "expected_must_contradict_check": null,
+      "ground_truth_chunk_ids_must": [
+        "ep:85215a08-9087-4d48-ba47-40aca81c08d5@3038.55"
+      ],
+      "ground_truth_chunk_ids_either": null,
+      "ground_truth_chunk_ids_acceptable": [
+        "ep:85215a08-9087-4d48-ba47-40aca81c08d5@3055.55"
+      ]
+    },
+    {
+      "id": "b38",
+      "design_type": "deep_dive",
+      "source": "hyde-target:ep89-early-album-grooving",
+      "is_multi_turn": false,
+      "audit_status": "human-verified-2026-06-05",
+      "audit_notes": "HyDE co-draft 2026-06-05（lexical-mismatch 標靶集）。Jacky 確認，問句採其口語化版本。show=45fc2462 已驗證。詞彙失配：問句『迷人/味道/關鍵/演奏技巧』vs chunk『凝結在一起/爭先恐後進入音樂/Grooving/技術』；答案核心 Grooving 不在問句。must=@4225.55；acceptable=@4199.15。show-wide。",
+      "question": "很多樂團早期的專輯比較迷人，紅了就少了點味道，主持人們認為這跟演奏技巧無關，那關鍵是什麼？",
+      "expected_behavior": "answer",
+      "expected_answer_summary": "不是技術問題（不是拍子合不合）。關鍵是樂手在早期會「爭先恐後地想投入音樂裡」、大家凝結在一起的那種 Grooving 與感染力；紅了之後就容易失去那一點點凝結感。",
+      "expected_answer_aliases": null,
+      "expected_tool_calls_required": [
+        "search_across_episodes"
+      ],
+      "expected_tool_calls_acceptable": [
+        "find_episodes_by_topic"
+      ],
+      "expected_tool_args": null,
+      "expected_episode_uuids_must": null,
+      "expected_episode_uuids_acceptable": null,
+      "expected_episode_numbers_must": null,
+      "expected_episode_numbers_acceptable": null,
+      "expected_count": null,
+      "expected_top_n_episode_numbers": null,
+      "expected_must_contradict_check": null,
+      "ground_truth_chunk_ids_must": [
+        "ep:52b1c9b2-6a78-4bd3-bea3-c711efd1d6b7@4225.55"
+      ],
+      "ground_truth_chunk_ids_either": null,
+      "ground_truth_chunk_ids_acceptable": [
+        "ep:52b1c9b2-6a78-4bd3-bea3-c711efd1d6b7@4199.15"
+      ]
+    },
+    {
+      "id": "b39",
+      "design_type": "deep_dive",
+      "source": "hyde-target:ep100-show-mutual-companionship",
+      "is_multi_turn": false,
+      "audit_status": "human-verified-2026-06-05",
+      "audit_notes": "HyDE co-draft 2026-06-05（lexical-mismatch 標靶集）。Jacky 確認。show=45fc2462 已驗證。詞彙失配：問句『單方面做給聽眾/關係轉變』vs chunk『我做節目給你/互相陪伴/角色轉換』；答案核心『互相陪伴』不在問句。must=@2828.31；acceptable=@2809.91。show-wide。",
+      "question": "嘉賓聊到一個節目做久了，創作者跟聽眾的關係會出現一種轉變——本來是單方面做給聽眾聽，後來變成什麼？有那種感覺又代表什麼？",
+      "expected_behavior": "answer",
+      "expected_answer_summary": "本來是「我做一個節目給你（聽眾）聽」的單向關係，做久了會變成「互相陪伴」——你以為是你在陪聽眾，其實是聽眾在陪你；有這種感覺會很安心，也代表這個作品已經很成功、很成熟了。",
+      "expected_answer_aliases": null,
+      "expected_tool_calls_required": [
+        "search_across_episodes"
+      ],
+      "expected_tool_calls_acceptable": [
+        "find_episodes_by_topic"
+      ],
+      "expected_tool_args": null,
+      "expected_episode_uuids_must": null,
+      "expected_episode_uuids_acceptable": null,
+      "expected_episode_numbers_must": null,
+      "expected_episode_numbers_acceptable": null,
+      "expected_count": null,
+      "expected_top_n_episode_numbers": null,
+      "expected_must_contradict_check": null,
+      "ground_truth_chunk_ids_must": [
+        "ep:d8f5d0b2-e69d-401d-be91-bed5f8dbbcf9@2828.31"
+      ],
+      "ground_truth_chunk_ids_either": null,
+      "ground_truth_chunk_ids_acceptable": [
+        "ep:d8f5d0b2-e69d-401d-be91-bed5f8dbbcf9@2809.91"
+      ]
+    },
+    {
+      "id": "b40",
+      "design_type": "deep_dive",
+      "source": "hyde-target:ep74-keep-it-real-meaning",
+      "is_multi_turn": false,
+      "audit_status": "human-verified-2026-06-05",
+      "audit_notes": "HyDE co-draft 2026-06-05（lexical-mismatch 標靶集）。Jacky 確認。show=45fc2462 已驗證。ASR 註：chunk『西亞圈』為『嘻哈圈』誤字。詞彙失配：召回目標『Keep it real』與正解『遵從自己的原廠設定』皆不在問句，只留誤解線索『追求獨特/跟別人不一樣』。must=@2313.11；acceptable=@2333.75。show-wide。",
+      "question": "嘻哈圈有一句常掛在嘴邊的話，很多人以為它的意思是『要跟別人不一樣、追求獨特』，但主持人覺得大家都誤會了——他認為這句話真正的意思是什麼？",
+      "expected_behavior": "answer",
+      "expected_answer_summary": "那句話是「Keep it real」。主持人覺得它常被誤解成「要很獨特、跟別人不一樣」，但他認為真正的意思是「遵從你自己的原廠設定」——做自己、活得舒服自在，而不是刻意標新立異。",
+      "expected_answer_aliases": null,
+      "expected_tool_calls_required": [
+        "search_across_episodes"
+      ],
+      "expected_tool_calls_acceptable": [
+        "find_episodes_by_topic"
+      ],
+      "expected_tool_args": null,
+      "expected_episode_uuids_must": null,
+      "expected_episode_uuids_acceptable": null,
+      "expected_episode_numbers_must": null,
+      "expected_episode_numbers_acceptable": null,
+      "expected_count": null,
+      "expected_top_n_episode_numbers": null,
+      "expected_must_contradict_check": null,
+      "ground_truth_chunk_ids_must": [
+        "ep:30b673c6-ac9b-4b71-b78c-3642315c7812@2313.11"
+      ],
+      "ground_truth_chunk_ids_either": null,
+      "ground_truth_chunk_ids_acceptable": [
+        "ep:30b673c6-ac9b-4b71-b78c-3642315c7812@2333.75"
+      ]
+    },
+    {
+      "id": "b41",
+      "design_type": "deep_dive",
+      "source": "hyde-target:ep117-neo-soul-against-commercialization",
+      "is_multi_turn": false,
+      "audit_status": "human-verified-2026-06-05",
+      "audit_notes": "HyDE co-draft 2026-06-05（lexical-mismatch 標靶集）。Jacky 確認。show=45fc2462 已驗證。詞彙失配：曲風名 Neo Soul 是召回目標、不在問句；『想反抗↔反對』『某年代轉變↔90年代商業化太資本』失配。must=@2516.95；acceptable=@2533.95。show-wide。",
+      "question": "迪拉聊到一個源自靈魂樂（Soul）的曲風，他說這個風格真正想反抗的並不是靈魂樂本身，而是某個年代的某種轉變，反而回頭致敬更早期、更草根的味道——這是什麼曲風？它反對什麼、致敬什麼？",
+      "expected_behavior": "answer",
+      "expected_answer_summary": "那個曲風是 Neo Soul。它反對的不是靈魂樂（Soul）本身，而是90年代那種突然的商業化、太資本的傾向；它回頭致敬的是6、70年代更草根的 Soul。",
+      "expected_answer_aliases": null,
+      "expected_tool_calls_required": [
+        "search_across_episodes"
+      ],
+      "expected_tool_calls_acceptable": [
+        "find_episodes_by_topic"
+      ],
+      "expected_tool_args": null,
+      "expected_episode_uuids_must": null,
+      "expected_episode_uuids_acceptable": null,
+      "expected_episode_numbers_must": null,
+      "expected_episode_numbers_acceptable": null,
+      "expected_count": null,
+      "expected_top_n_episode_numbers": null,
+      "expected_must_contradict_check": null,
+      "ground_truth_chunk_ids_must": [
+        "ep:88fa0a6e-0eaa-402f-aa62-0fac522fc86b@2516.95"
+      ],
+      "ground_truth_chunk_ids_either": null,
+      "ground_truth_chunk_ids_acceptable": [
+        "ep:88fa0a6e-0eaa-402f-aa62-0fac522fc86b@2533.95"
+      ]
+    },
+    {
+      "id": "b42",
+      "design_type": "deep_dive",
+      "source": "hyde-target:ep33-mv-reminds-this-is-america",
+      "is_multi_turn": false,
+      "audit_status": "human-verified-2026-06-05",
+      "audit_notes": "HyDE co-draft 2026-06-05（lexical-mismatch 標靶集，第10題湊滿）。Jacky 確認。show=45fc2462 已驗證。詞彙失配：答案作品名〈This is America〉不在問句（召回目標）；畫面描述屬可接受重疊。ASR 註：chunk『Charlie's Gambino』應為 Childish Gambino。must=@3000.11+@3031.79。show-wide。",
+      "question": "迪拉看到一支 MV，畫面就是一個人舉著像在抗議的牌子、穿件 T 恤站在那邊，意象很強烈——他說這讓他聯想到哪一支調性類似、但預算大概多上百倍的經典作品？",
+      "expected_behavior": "answer",
+      "expected_answer_summary": "Childish Gambino 的〈This is America〉。他覺得那支 MV 那種有點黑暗的 Beat、深沈唱腔、強烈意象的調性很像 This is America，只是 This is America 的預算大概多了上百倍。",
+      "expected_answer_aliases": {
+        "This is America": [
+          "This is America (Childish Gambino)",
+          "蹈火美國"
+        ]
+      },
+      "expected_tool_calls_required": [
+        "search_across_episodes"
+      ],
+      "expected_tool_calls_acceptable": [
+        "find_episodes_by_topic"
+      ],
+      "expected_tool_args": null,
+      "expected_episode_uuids_must": null,
+      "expected_episode_uuids_acceptable": null,
+      "expected_episode_numbers_must": null,
+      "expected_episode_numbers_acceptable": null,
+      "expected_count": null,
+      "expected_top_n_episode_numbers": null,
+      "expected_must_contradict_check": null,
+      "ground_truth_chunk_ids_must": [
+        "ep:dcce2640-6ab8-4865-affd-41ace6c9ee6e@3000.11",
+        "ep:dcce2640-6ab8-4865-affd-41ace6c9ee6e@3031.79"
+      ],
+      "ground_truth_chunk_ids_either": null,
+      "ground_truth_chunk_ids_acceptable": null
     }
   ]
 }

@@ -43,6 +43,7 @@ from app.services.ai_step_resolver import (
     infer_provider_label,
 )
 from app.services.embedding import embed_texts
+from app.services.hyde_retrieval import resolve_semantic_embedding
 from app.services.rag import ChunkHit as RagHit, MetadataFilters
 
 logger = logging.getLogger(__name__)
@@ -187,10 +188,13 @@ async def public_search_show(
     ) as exc:
         _raise_openai_http_error(exc, "OpenAI")
 
+    # hyde-retrieval-landing: routing always uses the original-question
+    # embedding (base_vec); only the chunk-recall semantic vector is HyDE-gated.
+    base_vec = query_embedding[0]
     routed_eps = (
         None
         if rag._should_skip_routing(payload.question)
-        else await rag.route_episodes(db, show_id, query_embedding[0])
+        else await rag.route_episodes(db, show_id, base_vec)
     )
     # retrieval-episode-reference-handling: when the query mentions `EP<N>`,
     # resolve those references to episode UUIDs and use them as the filter
@@ -204,10 +208,13 @@ async def public_search_show(
             "episode_ref: filtered to %d episode(s) from query", len(ep_ref_ids)
         )
         routed_eps = ep_ref_ids
+    hyde = await resolve_semantic_embedding(
+        db, payload.question, base_vec, embedding_cfg
+    )
     hits = await rag.retrieve_hybrid(
         db,
         show_id,
-        query_embedding[0],
+        hyde.semantic_vec,
         payload.question,
         k=payload.k,
         episode_id_filter=routed_eps,
@@ -435,15 +442,21 @@ async def query_show(
             openai.APITimeoutError,
         ) as exc:
             _raise_openai_http_error(exc, "OpenAI")
+        base_vec = query_embedding[0]
         routed_eps = (
             None
             if rag._should_skip_routing(payload.question)
-            else await rag.route_episodes(db, show_id, query_embedding[0])
+            else await rag.route_episodes(db, show_id, base_vec)
+        )
+        # hyde-retrieval-landing: HyDE only swaps the chunk-recall semantic
+        # vector; routing keeps base_vec, lexical keeps the original question.
+        hyde = await resolve_semantic_embedding(
+            db, payload.question, base_vec, embedding_cfg
         )
         hits = await rag.retrieve_hybrid(
             db,
             show_id,
-            query_embedding[0],
+            hyde.semantic_vec,
             payload.question,
             episode_id_filter=routed_eps,
         )
@@ -516,15 +529,19 @@ async def query_show(
     entities = await _extract_entities_fail_open(db, rewritten)
     metadata_filters = _entities_to_metadata_filters(entities)
 
+    base_vec = query_embedding[0]
     routed_eps = (
         None
         if rag._should_skip_routing(rewritten)
-        else await rag.route_episodes(db, show_id, query_embedding[0])
+        else await rag.route_episodes(db, show_id, base_vec)
     )
+    # hyde-retrieval-landing: chat path uses the history-rewritten question as
+    # the HyDE source + routing/lexical anchor; only chunk-recall vector swaps.
+    hyde = await resolve_semantic_embedding(db, rewritten, base_vec, embedding_cfg)
     hits = await rag.retrieve_hybrid(
         db,
         show_id,
-        query_embedding[0],
+        hyde.semantic_vec,
         rewritten,
         episode_id_filter=routed_eps,
         metadata_filters=metadata_filters,
