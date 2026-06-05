@@ -1,0 +1,993 @@
+{
+  "meta": {
+    "ts": "2026-06-04 23:37:35 (UTC+8)",
+    "backend": "https://podcastrag-api.zeabur.app",
+    "top_n": 200,
+    "arms": [
+      "control",
+      "query-expansion",
+      "hyde",
+      "multi-vector"
+    ],
+    "targets": [
+      "b20",
+      "b23"
+    ],
+    "calibration": [
+      "b01",
+      "b06",
+      "b08",
+      "b11",
+      "b18",
+      "b20",
+      "b27",
+      "mt03"
+    ]
+  },
+  "matrix": {
+    "control": {
+      "b20": {
+        "item_id": "b20",
+        "arm": "control",
+        "question": "節目裡迪拉怎麼描述中老年人的開工想法跟年輕時的差異？",
+        "top_n": 200,
+        "retrieved_count": 83,
+        "gt_total": 2,
+        "gt_ranks": [
+          {
+            "gt_chunk_id": "ep:c1d87278-7dba-4fb1-930d-c2bd3a3461d2@1719.78",
+            "kind": "must",
+            "rank": 76,
+            "cutoff_in": "top-100"
+          },
+          {
+            "gt_chunk_id": "ep:c1d87278-7dba-4fb1-930d-c2bd3a3461d2@1993.76",
+            "kind": "must",
+            "rank": 5,
+            "cutoff_in": "top-5"
+          }
+        ],
+        "bucket_counts": {
+          "top-5": 1,
+          "top-20": 0,
+          "top-50": 0,
+          "top-100": 1,
+          "top-200": 0,
+          "top-500": 0,
+          "miss": 0
+        },
+        "cost": {
+          "extra_llm_calls": 0,
+          "latency_ms": 0.0
+        },
+        "rewrite_debug": {
+          "arm": "control"
+        }
+      },
+      "b23": {
+        "item_id": "b23",
+        "arm": "control",
+        "question": "迪拉跟 Leo王 是怎麼從不認識變成合作夥伴的？他們第一次見面的故事是什麼？",
+        "top_n": 200,
+        "retrieved_count": 77,
+        "gt_total": 4,
+        "gt_ranks": [
+          {
+            "gt_chunk_id": "ep:8b3d4c1d-be8d-4dde-b12c-4cbe9b60ef21@1766.87",
+            "kind": "must",
+            "rank": 28,
+            "cutoff_in": "top-50"
+          },
+          {
+            "gt_chunk_id": "ep:8b3d4c1d-be8d-4dde-b12c-4cbe9b60ef21@1819.35",
+            "kind": "must",
+            "rank": 3,
+            "cutoff_in": "top-5"
+          },
+          {
+            "gt_chunk_id": "ep:8b3d4c1d-be8d-4dde-b12c-4cbe9b60ef21@1847.55",
+            "kind": "must",
+            "rank": 33,
+            "cutoff_in": "top-50"
+          },
+          {
+            "gt_chunk_id": "ep:8b3d4c1d-be8d-4dde-b12c-4cbe9b60ef21@1866.79",
+            "kind": "must",
+            "rank": 16,
+            "cutoff_in": "top-20"
+          }
+        ],
+        "bucket_counts": {
+          "top-5": 1,
+          "top-20": 1,
+          "top-50": 2,
+          "top-100": 0,
+          "top-200": 0,
+          "top-500": 0,
+          "miss": 0
+        },
+        "cost": {
+          "extra_llm_calls": 0,
+          "latency_ms": 0.0
+        },
+        "rewrite_debug": {
+          "arm": "control"
+        }
+      },
+      "b01": {
+        "item_id": "b01",
+        "arm": "control",
+        "question": "節目名「這又沒有很屌」是怎麼來的？",
+        "top_n": 200,
+        "retrieved_count": 87,
+        "gt_total": 5,
+        "gt_ranks": [
+          {
+            "gt_chunk_id": "ep:9359c207-1970-4ab4-acce-bf8d44967b68@252.60",
+            "kind": "must",
+            "rank": 19,
+            "cutoff_in": "top-20"
+          },
+          {
+            "gt_chunk_id": "ep:9359c207-1970-4ab4-acce-bf8d44967b68@257.00",
+            "kind": "must",
+            "rank": 19,
+            "cutoff_in": "top-20"
+          },
+          {
+            "gt_chunk_id": "ep:9359c207-1970-4ab4-acce-bf8d44967b68@258.40",
+            "kind": "must",
+            "rank": 19,
+            "cutoff_in": "top-20"
+          },
+          {
+            "gt_chunk_id": "ep:9359c207-1970-4ab4-acce-bf8d44967b68@262.20",
+            "kind": "must",
+            "rank": 34,
+            "cutoff_in": "top-50"
+          },
+          {
+            "gt_chunk_id": "ep:9359c207-1970-4ab4-acce-bf8d44967b68@265.00",
+            "kind": "must",
+            "rank": 34,
+            "cutoff_in": "top-50"
+          }
+        ],
+        "bucket_counts": {
+          "top-5": 0,
+          "top-20": 3,
+          "top-50": 2,
+          "top-100": 0,
+          "top-200": 0,
+          "top-500": 0,
+          "miss": 0
+        },
+        "cost": {
+          "extra_llm_calls": 0,
+          "latency_ms": 0.0
+        },
+        "rewrite_debug": {
+          "arm": "control"
+        }
+      },
+      "b06": {
+        "item_id": "b06",
+        "error": "no chunk GT"
+      },
+      "b08": {
+        "item_id": "b08",
+        "error": "no chunk GT"
+      },
+      "b11": {
+        "item_id": "b11",
+        "error": "no chunk GT"
+      },
+      "b18": {
+        "item_id": "b18",
+        "arm": "control",
+        "question": "EP44《伴手禮是社交潤滑劑》來賓用什麼食物當作例子來講送禮糾結？為什麼『現吃好吃』的食物反而不適合當伴手禮？",
+        "top_n": 200,
+        "retrieved_count": 82,
+        "gt_total": 1,
+        "gt_ranks": [
+          {
+            "gt_chunk_id": "ep:65030207-726d-43ba-80d4-d4c0efb97ac8@1607.39",
+            "kind": "must",
+            "rank": 18,
+            "cutoff_in": "top-20"
+          }
+        ],
+        "bucket_counts": {
+          "top-5": 0,
+          "top-20": 1,
+          "top-50": 0,
+          "top-100": 0,
+          "top-200": 0,
+          "top-500": 0,
+          "miss": 0
+        },
+        "cost": {
+          "extra_llm_calls": 0,
+          "latency_ms": 0.0
+        },
+        "rewrite_debug": {
+          "arm": "control"
+        }
+      },
+      "b27": {
+        "item_id": "b27",
+        "error": "no chunk GT"
+      },
+      "mt03": {
+        "item_id": "mt03",
+        "arm": "control",
+        "question": "EP140 第二彈是哪兩位來賓？",
+        "top_n": 200,
+        "retrieved_count": 58,
+        "gt_total": 1,
+        "gt_ranks": [
+          {
+            "gt_chunk_id": "ep:d15bddde-153f-484f-bff6-0bb74415b718@0.00",
+            "kind": "must",
+            "rank": 4,
+            "cutoff_in": "top-5"
+          }
+        ],
+        "bucket_counts": {
+          "top-5": 1,
+          "top-20": 0,
+          "top-50": 0,
+          "top-100": 0,
+          "top-200": 0,
+          "top-500": 0,
+          "miss": 0
+        },
+        "cost": {
+          "extra_llm_calls": 0,
+          "latency_ms": 0.0
+        },
+        "rewrite_debug": {
+          "arm": "control"
+        }
+      }
+    },
+    "query-expansion": {
+      "b20": {
+        "item_id": "b20",
+        "arm": "query-expansion",
+        "question": "節目裡迪拉怎麼描述中老年人的開工想法跟年輕時的差異？",
+        "top_n": 200,
+        "retrieved_count": 85,
+        "gt_total": 2,
+        "gt_ranks": [
+          {
+            "gt_chunk_id": "ep:c1d87278-7dba-4fb1-930d-c2bd3a3461d2@1719.78",
+            "kind": "must",
+            "rank": 79,
+            "cutoff_in": "top-100"
+          },
+          {
+            "gt_chunk_id": "ep:c1d87278-7dba-4fb1-930d-c2bd3a3461d2@1993.76",
+            "kind": "must",
+            "rank": 5,
+            "cutoff_in": "top-5"
+          }
+        ],
+        "bucket_counts": {
+          "top-5": 1,
+          "top-20": 0,
+          "top-50": 0,
+          "top-100": 1,
+          "top-200": 0,
+          "top-500": 0,
+          "miss": 0
+        },
+        "cost": {
+          "extra_llm_calls": 1,
+          "latency_ms": 2952.1
+        },
+        "rewrite_debug": {
+          "arm": "query-expansion",
+          "model": "gpt-4o",
+          "expansion_terms": "中年人 工作態度 老年人 職場心態 年輕人 工作觀念 職業價值觀 職場轉變",
+          "lexical_question": "節目裡迪拉怎麼描述中老年人的開工想法跟年輕時的差異？ 中年人 工作態度 老年人 職場心態 年輕人 工作觀念 職業價值觀 職場轉變"
+        }
+      },
+      "b23": {
+        "item_id": "b23",
+        "arm": "query-expansion",
+        "question": "迪拉跟 Leo王 是怎麼從不認識變成合作夥伴的？他們第一次見面的故事是什麼？",
+        "top_n": 200,
+        "retrieved_count": 78,
+        "gt_total": 4,
+        "gt_ranks": [
+          {
+            "gt_chunk_id": "ep:8b3d4c1d-be8d-4dde-b12c-4cbe9b60ef21@1766.87",
+            "kind": "must",
+            "rank": 25,
+            "cutoff_in": "top-50"
+          },
+          {
+            "gt_chunk_id": "ep:8b3d4c1d-be8d-4dde-b12c-4cbe9b60ef21@1819.35",
+            "kind": "must",
+            "rank": 5,
+            "cutoff_in": "top-5"
+          },
+          {
+            "gt_chunk_id": "ep:8b3d4c1d-be8d-4dde-b12c-4cbe9b60ef21@1847.55",
+            "kind": "must",
+            "rank": 32,
+            "cutoff_in": "top-50"
+          },
+          {
+            "gt_chunk_id": "ep:8b3d4c1d-be8d-4dde-b12c-4cbe9b60ef21@1866.79",
+            "kind": "must",
+            "rank": 19,
+            "cutoff_in": "top-20"
+          }
+        ],
+        "bucket_counts": {
+          "top-5": 1,
+          "top-20": 1,
+          "top-50": 2,
+          "top-100": 0,
+          "top-200": 0,
+          "top-500": 0,
+          "miss": 0
+        },
+        "cost": {
+          "extra_llm_calls": 1,
+          "latency_ms": 1755.5
+        },
+        "rewrite_debug": {
+          "arm": "query-expansion",
+          "model": "gpt-4o",
+          "expansion_terms": "相識過程 初次見面 合作契機 共同創作 友誼起源 合作夥伴關係 音樂交流 互相欣賞",
+          "lexical_question": "迪拉跟 Leo王 是怎麼從不認識變成合作夥伴的？他們第一次見面的故事是什麼？ 相識過程 初次見面 合作契機 共同創作 友誼起源 合作夥伴關係 音樂交流 互相欣賞"
+        }
+      },
+      "b01": {
+        "item_id": "b01",
+        "arm": "query-expansion",
+        "question": "節目名「這又沒有很屌」是怎麼來的？",
+        "top_n": 200,
+        "retrieved_count": 84,
+        "gt_total": 5,
+        "gt_ranks": [
+          {
+            "gt_chunk_id": "ep:9359c207-1970-4ab4-acce-bf8d44967b68@252.60",
+            "kind": "must",
+            "rank": 20,
+            "cutoff_in": "top-20"
+          },
+          {
+            "gt_chunk_id": "ep:9359c207-1970-4ab4-acce-bf8d44967b68@257.00",
+            "kind": "must",
+            "rank": 20,
+            "cutoff_in": "top-20"
+          },
+          {
+            "gt_chunk_id": "ep:9359c207-1970-4ab4-acce-bf8d44967b68@258.40",
+            "kind": "must",
+            "rank": 20,
+            "cutoff_in": "top-20"
+          },
+          {
+            "gt_chunk_id": "ep:9359c207-1970-4ab4-acce-bf8d44967b68@262.20",
+            "kind": "must",
+            "rank": null,
+            "cutoff_in": "miss"
+          },
+          {
+            "gt_chunk_id": "ep:9359c207-1970-4ab4-acce-bf8d44967b68@265.00",
+            "kind": "must",
+            "rank": null,
+            "cutoff_in": "miss"
+          }
+        ],
+        "bucket_counts": {
+          "top-5": 0,
+          "top-20": 3,
+          "top-50": 0,
+          "top-100": 0,
+          "top-200": 0,
+          "top-500": 0,
+          "miss": 2
+        },
+        "cost": {
+          "extra_llm_calls": 1,
+          "latency_ms": 1076.9
+        },
+        "rewrite_debug": {
+          "arm": "query-expansion",
+          "model": "gpt-4o",
+          "expansion_terms": "節目名稱 由來 起源 背後故事 命名原因 創意來源 概念發想 名字靈感",
+          "lexical_question": "節目名「這又沒有很屌」是怎麼來的？ 節目名稱 由來 起源 背後故事 命名原因 創意來源 概念發想 名字靈感"
+        }
+      },
+      "b06": {
+        "item_id": "b06",
+        "error": "no chunk GT"
+      },
+      "b08": {
+        "item_id": "b08",
+        "error": "no chunk GT"
+      },
+      "b11": {
+        "item_id": "b11",
+        "error": "no chunk GT"
+      },
+      "b18": {
+        "item_id": "b18",
+        "arm": "query-expansion",
+        "question": "EP44《伴手禮是社交潤滑劑》來賓用什麼食物當作例子來講送禮糾結？為什麼『現吃好吃』的食物反而不適合當伴手禮？",
+        "top_n": 200,
+        "retrieved_count": 81,
+        "gt_total": 1,
+        "gt_ranks": [
+          {
+            "gt_chunk_id": "ep:65030207-726d-43ba-80d4-d4c0efb97ac8@1607.39",
+            "kind": "must",
+            "rank": 19,
+            "cutoff_in": "top-20"
+          }
+        ],
+        "bucket_counts": {
+          "top-5": 0,
+          "top-20": 1,
+          "top-50": 0,
+          "top-100": 0,
+          "top-200": 0,
+          "top-500": 0,
+          "miss": 0
+        },
+        "cost": {
+          "extra_llm_calls": 1,
+          "latency_ms": 1238.2
+        },
+        "rewrite_debug": {
+          "arm": "query-expansion",
+          "model": "gpt-4o",
+          "expansion_terms": "禮品 食物選擇 送禮困擾 現吃美味 即時享用 保存期限 不易攜帶",
+          "lexical_question": "EP44《伴手禮是社交潤滑劑》來賓用什麼食物當作例子來講送禮糾結？為什麼『現吃好吃』的食物反而不適合當伴手禮？ 禮品 食物選擇 送禮困擾 現吃美味 即時享用 保存期限 不易攜帶"
+        }
+      },
+      "b27": {
+        "item_id": "b27",
+        "error": "no chunk GT"
+      },
+      "mt03": {
+        "item_id": "mt03",
+        "arm": "query-expansion",
+        "question": "EP140 第二彈是哪兩位來賓？",
+        "top_n": 200,
+        "retrieved_count": 62,
+        "gt_total": 1,
+        "gt_ranks": [
+          {
+            "gt_chunk_id": "ep:d15bddde-153f-484f-bff6-0bb74415b718@0.00",
+            "kind": "must",
+            "rank": 6,
+            "cutoff_in": "top-20"
+          }
+        ],
+        "bucket_counts": {
+          "top-5": 0,
+          "top-20": 1,
+          "top-50": 0,
+          "top-100": 0,
+          "top-200": 0,
+          "top-500": 0,
+          "miss": 0
+        },
+        "cost": {
+          "extra_llm_calls": 1,
+          "latency_ms": 1473.1
+        },
+        "rewrite_debug": {
+          "arm": "query-expansion",
+          "model": "gpt-4o",
+          "expansion_terms": "來賓 嘉賓 特邀嘉賓 特別來賓 受邀者 參與者 出席者",
+          "lexical_question": "EP140 第二彈是哪兩位來賓？ 來賓 嘉賓 特邀嘉賓 特別來賓 受邀者 參與者 出席者"
+        }
+      }
+    },
+    "hyde": {
+      "b20": {
+        "item_id": "b20",
+        "arm": "hyde",
+        "question": "節目裡迪拉怎麼描述中老年人的開工想法跟年輕時的差異？",
+        "top_n": 200,
+        "retrieved_count": 84,
+        "gt_total": 2,
+        "gt_ranks": [
+          {
+            "gt_chunk_id": "ep:c1d87278-7dba-4fb1-930d-c2bd3a3461d2@1719.78",
+            "kind": "must",
+            "rank": 17,
+            "cutoff_in": "top-20"
+          },
+          {
+            "gt_chunk_id": "ep:c1d87278-7dba-4fb1-930d-c2bd3a3461d2@1993.76",
+            "kind": "must",
+            "rank": 5,
+            "cutoff_in": "top-5"
+          }
+        ],
+        "bucket_counts": {
+          "top-5": 1,
+          "top-20": 1,
+          "top-50": 0,
+          "top-100": 0,
+          "top-200": 0,
+          "top-500": 0,
+          "miss": 0
+        },
+        "cost": {
+          "extra_llm_calls": 1,
+          "latency_ms": 1672.8
+        },
+        "rewrite_debug": {
+          "arm": "hyde",
+          "model": "gpt-4o",
+          "hyde_text": "喔，迪拉那時候就說，中老年人開工的時候啊，心態其實跟年輕時差很多，年輕的時候可能會覺得「啊，這是我的夢想，我要衝一波！」但到了中老年，反而會想「穩定最重要，健康最重要，能平平順順就好」，就是那種比較務實的感覺啦。"
+        }
+      },
+      "b23": {
+        "item_id": "b23",
+        "arm": "hyde",
+        "question": "迪拉跟 Leo王 是怎麼從不認識變成合作夥伴的？他們第一次見面的故事是什麼？",
+        "top_n": 200,
+        "retrieved_count": 80,
+        "gt_total": 4,
+        "gt_ranks": [
+          {
+            "gt_chunk_id": "ep:8b3d4c1d-be8d-4dde-b12c-4cbe9b60ef21@1766.87",
+            "kind": "must",
+            "rank": 28,
+            "cutoff_in": "top-50"
+          },
+          {
+            "gt_chunk_id": "ep:8b3d4c1d-be8d-4dde-b12c-4cbe9b60ef21@1819.35",
+            "kind": "must",
+            "rank": 3,
+            "cutoff_in": "top-5"
+          },
+          {
+            "gt_chunk_id": "ep:8b3d4c1d-be8d-4dde-b12c-4cbe9b60ef21@1847.55",
+            "kind": "must",
+            "rank": 34,
+            "cutoff_in": "top-50"
+          },
+          {
+            "gt_chunk_id": "ep:8b3d4c1d-be8d-4dde-b12c-4cbe9b60ef21@1866.79",
+            "kind": "must",
+            "rank": 7,
+            "cutoff_in": "top-20"
+          }
+        ],
+        "bucket_counts": {
+          "top-5": 1,
+          "top-20": 1,
+          "top-50": 2,
+          "top-100": 0,
+          "top-200": 0,
+          "top-500": 0,
+          "miss": 0
+        },
+        "cost": {
+          "extra_llm_calls": 1,
+          "latency_ms": 1973.9
+        },
+        "rewrite_debug": {
+          "arm": "hyde",
+          "model": "gpt-4o",
+          "hyde_text": "喔，這個故事其實滿有趣的！就是那時候我們好像是在一個朋友的派對上碰到的，然後就很隨意地聊起來，發現彼此對音樂的想法還滿合的。後來好像是 Leo 提到他有一首歌的概念，問我要不要一起試試看，然後我們就這樣開始合作了，超自然的那種！"
+        }
+      },
+      "b01": {
+        "item_id": "b01",
+        "arm": "hyde",
+        "question": "節目名「這又沒有很屌」是怎麼來的？",
+        "top_n": 200,
+        "retrieved_count": 89,
+        "gt_total": 5,
+        "gt_ranks": [
+          {
+            "gt_chunk_id": "ep:9359c207-1970-4ab4-acce-bf8d44967b68@252.60",
+            "kind": "must",
+            "rank": 29,
+            "cutoff_in": "top-50"
+          },
+          {
+            "gt_chunk_id": "ep:9359c207-1970-4ab4-acce-bf8d44967b68@257.00",
+            "kind": "must",
+            "rank": 29,
+            "cutoff_in": "top-50"
+          },
+          {
+            "gt_chunk_id": "ep:9359c207-1970-4ab4-acce-bf8d44967b68@258.40",
+            "kind": "must",
+            "rank": 29,
+            "cutoff_in": "top-50"
+          },
+          {
+            "gt_chunk_id": "ep:9359c207-1970-4ab4-acce-bf8d44967b68@262.20",
+            "kind": "must",
+            "rank": 37,
+            "cutoff_in": "top-50"
+          },
+          {
+            "gt_chunk_id": "ep:9359c207-1970-4ab4-acce-bf8d44967b68@265.00",
+            "kind": "must",
+            "rank": 37,
+            "cutoff_in": "top-50"
+          }
+        ],
+        "bucket_counts": {
+          "top-5": 0,
+          "top-20": 0,
+          "top-50": 5,
+          "top-100": 0,
+          "top-200": 0,
+          "top-500": 0,
+          "miss": 0
+        },
+        "cost": {
+          "extra_llm_calls": 1,
+          "latency_ms": 2054.9
+        },
+        "rewrite_debug": {
+          "arm": "hyde",
+          "model": "gpt-4o",
+          "hyde_text": "喔，這個名字其實是我們當初在討論的時候，隨口講出來的啦！就是有點那種，欸，有些事情大家都覺得很厲害，但我們就會想說，啊這又沒有很屌啊，然後就覺得這個態度很符合我們節目的調性，然後就直接用了。"
+        }
+      },
+      "b06": {
+        "item_id": "b06",
+        "error": "no chunk GT"
+      },
+      "b08": {
+        "item_id": "b08",
+        "error": "no chunk GT"
+      },
+      "b11": {
+        "item_id": "b11",
+        "error": "no chunk GT"
+      },
+      "b18": {
+        "item_id": "b18",
+        "arm": "hyde",
+        "question": "EP44《伴手禮是社交潤滑劑》來賓用什麼食物當作例子來講送禮糾結？為什麼『現吃好吃』的食物反而不適合當伴手禮？",
+        "top_n": 200,
+        "retrieved_count": 93,
+        "gt_total": 1,
+        "gt_ranks": [
+          {
+            "gt_chunk_id": "ep:65030207-726d-43ba-80d4-d4c0efb97ac8@1607.39",
+            "kind": "must",
+            "rank": 5,
+            "cutoff_in": "top-5"
+          }
+        ],
+        "bucket_counts": {
+          "top-5": 1,
+          "top-20": 0,
+          "top-50": 0,
+          "top-100": 0,
+          "top-200": 0,
+          "top-500": 0,
+          "miss": 0
+        },
+        "cost": {
+          "extra_llm_calls": 1,
+          "latency_ms": 3035.9
+        },
+        "rewrite_debug": {
+          "arm": "hyde",
+          "model": "gpt-4o",
+          "hyde_text": "嗯，像是那種剛出爐的酥皮蛋塔啊，來賓就有提到這個例子，因為它現吃真的超好吃，但你帶去送人的時候，可能已經冷掉了，酥皮也不酥了，口感就差很多，反而會讓人覺得有點可惜，甚至有壓力要趕快吃掉。"
+        }
+      },
+      "b27": {
+        "item_id": "b27",
+        "error": "no chunk GT"
+      },
+      "mt03": {
+        "item_id": "mt03",
+        "arm": "hyde",
+        "question": "EP140 第二彈是哪兩位來賓？",
+        "top_n": 200,
+        "retrieved_count": 58,
+        "gt_total": 1,
+        "gt_ranks": [
+          {
+            "gt_chunk_id": "ep:d15bddde-153f-484f-bff6-0bb74415b718@0.00",
+            "kind": "must",
+            "rank": 4,
+            "cutoff_in": "top-5"
+          }
+        ],
+        "bucket_counts": {
+          "top-5": 1,
+          "top-20": 0,
+          "top-50": 0,
+          "top-100": 0,
+          "top-200": 0,
+          "top-500": 0,
+          "miss": 0
+        },
+        "cost": {
+          "extra_llm_calls": 1,
+          "latency_ms": 3196.1
+        },
+        "rewrite_debug": {
+          "arm": "hyde",
+          "model": "gpt-4o",
+          "hyde_text": "喔，EP140 第二彈的來賓啊，就是小美跟阿強，他們這次聊了很多關於創業的心路歷程，還有一些很實用的心態調整技巧，真的超精彩！"
+        }
+      }
+    },
+    "multi-vector": {
+      "b20": {
+        "item_id": "b20",
+        "arm": "multi-vector",
+        "question": "節目裡迪拉怎麼描述中老年人的開工想法跟年輕時的差異？",
+        "top_n": 200,
+        "retrieved_count": 97,
+        "gt_total": 2,
+        "gt_ranks": [
+          {
+            "gt_chunk_id": "ep:c1d87278-7dba-4fb1-930d-c2bd3a3461d2@1719.78",
+            "kind": "must",
+            "rank": 86,
+            "cutoff_in": "top-100"
+          },
+          {
+            "gt_chunk_id": "ep:c1d87278-7dba-4fb1-930d-c2bd3a3461d2@1993.76",
+            "kind": "must",
+            "rank": 7,
+            "cutoff_in": "top-20"
+          }
+        ],
+        "bucket_counts": {
+          "top-5": 0,
+          "top-20": 1,
+          "top-50": 0,
+          "top-100": 1,
+          "top-200": 0,
+          "top-500": 0,
+          "miss": 0
+        },
+        "cost": {
+          "extra_llm_calls": 1,
+          "latency_ms": 1927.0
+        },
+        "rewrite_debug": {
+          "arm": "multi-vector",
+          "model": "gpt-4o",
+          "subqueries": [
+            "- 迪拉如何描述中老年人對開工的態度或想法？",
+            "- 迪拉如何比較中老年人與年輕人對開工的看法差異？",
+            "- 迪拉是否提到影響中老年人開工想法的原因或背景？"
+          ],
+          "aggregation": "min-rank-across-plans"
+        }
+      },
+      "b23": {
+        "item_id": "b23",
+        "arm": "multi-vector",
+        "question": "迪拉跟 Leo王 是怎麼從不認識變成合作夥伴的？他們第一次見面的故事是什麼？",
+        "top_n": 200,
+        "retrieved_count": 107,
+        "gt_total": 4,
+        "gt_ranks": [
+          {
+            "gt_chunk_id": "ep:8b3d4c1d-be8d-4dde-b12c-4cbe9b60ef21@1766.87",
+            "kind": "must",
+            "rank": 42,
+            "cutoff_in": "top-50"
+          },
+          {
+            "gt_chunk_id": "ep:8b3d4c1d-be8d-4dde-b12c-4cbe9b60ef21@1819.35",
+            "kind": "must",
+            "rank": 3,
+            "cutoff_in": "top-5"
+          },
+          {
+            "gt_chunk_id": "ep:8b3d4c1d-be8d-4dde-b12c-4cbe9b60ef21@1847.55",
+            "kind": "must",
+            "rank": 50,
+            "cutoff_in": "top-50"
+          },
+          {
+            "gt_chunk_id": "ep:8b3d4c1d-be8d-4dde-b12c-4cbe9b60ef21@1866.79",
+            "kind": "must",
+            "rank": 21,
+            "cutoff_in": "top-50"
+          }
+        ],
+        "bucket_counts": {
+          "top-5": 1,
+          "top-20": 0,
+          "top-50": 3,
+          "top-100": 0,
+          "top-200": 0,
+          "top-500": 0,
+          "miss": 0
+        },
+        "cost": {
+          "extra_llm_calls": 1,
+          "latency_ms": 4432.4
+        },
+        "rewrite_debug": {
+          "arm": "multi-vector",
+          "model": "gpt-4o",
+          "subqueries": [
+            "迪拉和 Leo王 是如何認識的？",
+            "他們第一次見面的情境和經過是什麼？",
+            "他們從認識到成為合作夥伴的過程中發生了哪些重要事件或轉折？"
+          ],
+          "aggregation": "min-rank-across-plans"
+        }
+      },
+      "b01": {
+        "item_id": "b01",
+        "arm": "multi-vector",
+        "question": "節目名「這又沒有很屌」是怎麼來的？",
+        "top_n": 200,
+        "retrieved_count": 106,
+        "gt_total": 5,
+        "gt_ranks": [
+          {
+            "gt_chunk_id": "ep:9359c207-1970-4ab4-acce-bf8d44967b68@252.60",
+            "kind": "must",
+            "rank": 41,
+            "cutoff_in": "top-50"
+          },
+          {
+            "gt_chunk_id": "ep:9359c207-1970-4ab4-acce-bf8d44967b68@257.00",
+            "kind": "must",
+            "rank": 41,
+            "cutoff_in": "top-50"
+          },
+          {
+            "gt_chunk_id": "ep:9359c207-1970-4ab4-acce-bf8d44967b68@258.40",
+            "kind": "must",
+            "rank": 41,
+            "cutoff_in": "top-50"
+          },
+          {
+            "gt_chunk_id": "ep:9359c207-1970-4ab4-acce-bf8d44967b68@262.20",
+            "kind": "must",
+            "rank": 46,
+            "cutoff_in": "top-50"
+          },
+          {
+            "gt_chunk_id": "ep:9359c207-1970-4ab4-acce-bf8d44967b68@265.00",
+            "kind": "must",
+            "rank": 46,
+            "cutoff_in": "top-50"
+          }
+        ],
+        "bucket_counts": {
+          "top-5": 0,
+          "top-20": 0,
+          "top-50": 5,
+          "top-100": 0,
+          "top-200": 0,
+          "top-500": 0,
+          "miss": 0
+        },
+        "cost": {
+          "extra_llm_calls": 1,
+          "latency_ms": 2238.5
+        },
+        "rewrite_debug": {
+          "arm": "multi-vector",
+          "model": "gpt-4o",
+          "subqueries": [
+            "- 節目名「這又沒有很屌」的命名靈感來源是什麼？",
+            "- 節目名稱是否與節目內容或主題有特定的關聯？",
+            "- 節目名稱的創意過程中是否有其他候選名稱或故事背景？"
+          ],
+          "aggregation": "min-rank-across-plans"
+        }
+      },
+      "b06": {
+        "item_id": "b06",
+        "error": "no chunk GT"
+      },
+      "b08": {
+        "item_id": "b08",
+        "error": "no chunk GT"
+      },
+      "b11": {
+        "item_id": "b11",
+        "error": "no chunk GT"
+      },
+      "b18": {
+        "item_id": "b18",
+        "arm": "multi-vector",
+        "question": "EP44《伴手禮是社交潤滑劑》來賓用什麼食物當作例子來講送禮糾結？為什麼『現吃好吃』的食物反而不適合當伴手禮？",
+        "top_n": 200,
+        "retrieved_count": 99,
+        "gt_total": 1,
+        "gt_ranks": [
+          {
+            "gt_chunk_id": "ep:65030207-726d-43ba-80d4-d4c0efb97ac8@1607.39",
+            "kind": "must",
+            "rank": 18,
+            "cutoff_in": "top-20"
+          }
+        ],
+        "bucket_counts": {
+          "top-5": 0,
+          "top-20": 1,
+          "top-50": 0,
+          "top-100": 0,
+          "top-200": 0,
+          "top-500": 0,
+          "miss": 0
+        },
+        "cost": {
+          "extra_llm_calls": 1,
+          "latency_ms": 1636.9
+        },
+        "rewrite_debug": {
+          "arm": "multi-vector",
+          "model": "gpt-4o",
+          "subqueries": [
+            "EP44《伴手禮是社交潤滑劑》中來賓提到的食物例子是什麼？",
+            "為什麼「現吃好吃」的食物不適合作為伴手禮？",
+            "來賓如何解釋送禮時的糾結心理？"
+          ],
+          "aggregation": "min-rank-across-plans"
+        }
+      },
+      "b27": {
+        "item_id": "b27",
+        "error": "no chunk GT"
+      },
+      "mt03": {
+        "item_id": "mt03",
+        "arm": "multi-vector",
+        "question": "EP140 第二彈是哪兩位來賓？",
+        "top_n": 200,
+        "retrieved_count": 88,
+        "gt_total": 1,
+        "gt_ranks": [
+          {
+            "gt_chunk_id": "ep:d15bddde-153f-484f-bff6-0bb74415b718@0.00",
+            "kind": "must",
+            "rank": 6,
+            "cutoff_in": "top-20"
+          }
+        ],
+        "bucket_counts": {
+          "top-5": 0,
+          "top-20": 1,
+          "top-50": 0,
+          "top-100": 0,
+          "top-200": 0,
+          "top-500": 0,
+          "miss": 0
+        },
+        "cost": {
+          "extra_llm_calls": 1,
+          "latency_ms": 1653.7
+        },
+        "rewrite_debug": {
+          "arm": "multi-vector",
+          "model": "gpt-4o",
+          "subqueries": [
+            "- EP140 第二彈的來賓有哪些人物？",
+            "- 這些來賓與節目主題有什麼關聯？",
+            "- EP140 第二彈的錄製時間或背景是什麼？"
+          ],
+          "aggregation": "min-rank-across-plans"
+        }
+      }
+    }
+  }
+}
