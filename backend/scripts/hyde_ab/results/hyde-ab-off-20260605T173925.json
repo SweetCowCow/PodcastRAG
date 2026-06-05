@@ -1,0 +1,644 @@
+{
+  "meta": {
+    "label": "off",
+    "ts": "2026-06-05 17:39:25 (UTC+8)",
+    "backend": "https://podcastrag-api.zeabur.app",
+    "top_n": 200,
+    "targets": [
+      "b20",
+      "b23",
+      "b32",
+      "b33",
+      "b37",
+      "b38",
+      "b39",
+      "b40",
+      "b41",
+      "b42"
+    ],
+    "calibration": [
+      "b05",
+      "b14",
+      "b15",
+      "b16",
+      "b17",
+      "b18",
+      "b19",
+      "b21"
+    ]
+  },
+  "rows": {
+    "b20": {
+      "item_id": "b20",
+      "question": "節目裡迪拉怎麼描述中老年人的開工想法跟年輕時的差異？",
+      "top_n": 200,
+      "retrieved_count": 101,
+      "prefilter_episode_count": 1,
+      "gt_total": 2,
+      "gt_ranks": [
+        {
+          "gt_chunk_id": "ep:c1d87278-7dba-4fb1-930d-c2bd3a3461d2@1719.78",
+          "kind": "must",
+          "rank": 78,
+          "cutoff_in": "top-100"
+        },
+        {
+          "gt_chunk_id": "ep:c1d87278-7dba-4fb1-930d-c2bd3a3461d2@1993.76",
+          "kind": "must",
+          "rank": 7,
+          "cutoff_in": "top-20"
+        }
+      ],
+      "bucket_counts": {
+        "top-5": 0,
+        "top-20": 1,
+        "top-50": 0,
+        "top-100": 1,
+        "top-200": 0,
+        "top-500": 0,
+        "miss": 0
+      },
+      "used_hyde": false,
+      "hyde_text": null,
+      "extra_llm_calls": 0
+    },
+    "b23": {
+      "item_id": "b23",
+      "question": "迪拉跟 Leo王 是怎麼從不認識變成合作夥伴的？他們第一次見面的故事是什麼？",
+      "top_n": 200,
+      "retrieved_count": 89,
+      "prefilter_episode_count": 1,
+      "gt_total": 4,
+      "gt_ranks": [
+        {
+          "gt_chunk_id": "ep:8b3d4c1d-be8d-4dde-b12c-4cbe9b60ef21@1766.87",
+          "kind": "must",
+          "rank": 30,
+          "cutoff_in": "top-50"
+        },
+        {
+          "gt_chunk_id": "ep:8b3d4c1d-be8d-4dde-b12c-4cbe9b60ef21@1819.35",
+          "kind": "must",
+          "rank": 3,
+          "cutoff_in": "top-5"
+        },
+        {
+          "gt_chunk_id": "ep:8b3d4c1d-be8d-4dde-b12c-4cbe9b60ef21@1847.55",
+          "kind": "must",
+          "rank": 36,
+          "cutoff_in": "top-50"
+        },
+        {
+          "gt_chunk_id": "ep:8b3d4c1d-be8d-4dde-b12c-4cbe9b60ef21@1866.79",
+          "kind": "must",
+          "rank": 18,
+          "cutoff_in": "top-20"
+        }
+      ],
+      "bucket_counts": {
+        "top-5": 1,
+        "top-20": 1,
+        "top-50": 2,
+        "top-100": 0,
+        "top-200": 0,
+        "top-500": 0,
+        "miss": 0
+      },
+      "used_hyde": false,
+      "hyde_text": null,
+      "extra_llm_calls": 0
+    },
+    "b32": {
+      "item_id": "b32",
+      "question": "楊大正聊到一個沒什麼資源、公司自己開的樂團，一路打拚到登上台灣最大的表演殿堂——這件事對他們代表什麼意義？",
+      "top_n": 200,
+      "retrieved_count": 131,
+      "prefilter_episode_count": 1,
+      "gt_total": 2,
+      "gt_ranks": [
+        {
+          "gt_chunk_id": "ep:d15bddde-153f-484f-bff6-0bb74415b718@3440.95",
+          "kind": "must",
+          "rank": 1,
+          "cutoff_in": "top-5"
+        },
+        {
+          "gt_chunk_id": "ep:d15bddde-153f-484f-bff6-0bb74415b718@3552.67",
+          "kind": "must",
+          "rank": 5,
+          "cutoff_in": "top-5"
+        }
+      ],
+      "bucket_counts": {
+        "top-5": 2,
+        "top-20": 0,
+        "top-50": 0,
+        "top-100": 0,
+        "top-200": 0,
+        "top-500": 0,
+        "miss": 0
+      },
+      "used_hyde": false,
+      "hyde_text": null,
+      "extra_llm_calls": 0
+    },
+    "b33": {
+      "item_id": "b33",
+      "question": "黃玠在台上很會帶氣氛、控場的功力，是在哪個表演場地磨出來的？為什麼他覺得那地方特別難應付？",
+      "top_n": 200,
+      "retrieved_count": 103,
+      "prefilter_episode_count": 1,
+      "gt_total": 2,
+      "gt_ranks": [
+        {
+          "gt_chunk_id": "ep:f72cc0d1-17df-4712-9a83-e0216a243233@892.70",
+          "kind": "must",
+          "rank": 1,
+          "cutoff_in": "top-5"
+        },
+        {
+          "gt_chunk_id": "ep:f72cc0d1-17df-4712-9a83-e0216a243233@911.90",
+          "kind": "must",
+          "rank": 24,
+          "cutoff_in": "top-50"
+        }
+      ],
+      "bucket_counts": {
+        "top-5": 1,
+        "top-20": 0,
+        "top-50": 1,
+        "top-100": 0,
+        "top-200": 0,
+        "top-500": 0,
+        "miss": 0
+      },
+      "used_hyde": false,
+      "hyde_text": null,
+      "extra_llm_calls": 0
+    },
+    "b37": {
+      "item_id": "b37",
+      "question": "他們聊到手遊課金有兩派玩家：一種付錢是為了讓角色變更強，另一種付錢只是為了讓外觀更好看——這兩種分別叫什麼？",
+      "top_n": 200,
+      "retrieved_count": 97,
+      "prefilter_episode_count": 1,
+      "gt_total": 1,
+      "gt_ranks": [
+        {
+          "gt_chunk_id": "ep:85215a08-9087-4d48-ba47-40aca81c08d5@3038.55",
+          "kind": "must",
+          "rank": 4,
+          "cutoff_in": "top-5"
+        }
+      ],
+      "bucket_counts": {
+        "top-5": 1,
+        "top-20": 0,
+        "top-50": 0,
+        "top-100": 0,
+        "top-200": 0,
+        "top-500": 0,
+        "miss": 0
+      },
+      "used_hyde": false,
+      "hyde_text": null,
+      "extra_llm_calls": 0
+    },
+    "b38": {
+      "item_id": "b38",
+      "question": "很多樂團早期的專輯比較迷人，紅了就少了點味道，主持人們認為這跟演奏技巧無關，那關鍵是什麼？",
+      "top_n": 200,
+      "retrieved_count": 115,
+      "prefilter_episode_count": 1,
+      "gt_total": 1,
+      "gt_ranks": [
+        {
+          "gt_chunk_id": "ep:52b1c9b2-6a78-4bd3-bea3-c711efd1d6b7@4225.55",
+          "kind": "must",
+          "rank": 1,
+          "cutoff_in": "top-5"
+        }
+      ],
+      "bucket_counts": {
+        "top-5": 1,
+        "top-20": 0,
+        "top-50": 0,
+        "top-100": 0,
+        "top-200": 0,
+        "top-500": 0,
+        "miss": 0
+      },
+      "used_hyde": false,
+      "hyde_text": null,
+      "extra_llm_calls": 0
+    },
+    "b39": {
+      "item_id": "b39",
+      "question": "嘉賓聊到一個節目做久了，創作者跟聽眾的關係會出現一種轉變——本來是單方面做給聽眾聽，後來變成什麼？有那種感覺又代表什麼？",
+      "top_n": 200,
+      "retrieved_count": 89,
+      "prefilter_episode_count": 1,
+      "gt_total": 1,
+      "gt_ranks": [
+        {
+          "gt_chunk_id": "ep:d8f5d0b2-e69d-401d-be91-bed5f8dbbcf9@2828.31",
+          "kind": "must",
+          "rank": 1,
+          "cutoff_in": "top-5"
+        }
+      ],
+      "bucket_counts": {
+        "top-5": 1,
+        "top-20": 0,
+        "top-50": 0,
+        "top-100": 0,
+        "top-200": 0,
+        "top-500": 0,
+        "miss": 0
+      },
+      "used_hyde": false,
+      "hyde_text": null,
+      "extra_llm_calls": 0
+    },
+    "b40": {
+      "item_id": "b40",
+      "question": "嘻哈圈有一句常掛在嘴邊的話，很多人以為它的意思是『要跟別人不一樣、追求獨特』，但主持人覺得大家都誤會了——他認為這句話真正的意思是什麼？",
+      "top_n": 200,
+      "retrieved_count": 94,
+      "prefilter_episode_count": 1,
+      "gt_total": 1,
+      "gt_ranks": [
+        {
+          "gt_chunk_id": "ep:30b673c6-ac9b-4b71-b78c-3642315c7812@2313.11",
+          "kind": "must",
+          "rank": 20,
+          "cutoff_in": "top-20"
+        }
+      ],
+      "bucket_counts": {
+        "top-5": 0,
+        "top-20": 1,
+        "top-50": 0,
+        "top-100": 0,
+        "top-200": 0,
+        "top-500": 0,
+        "miss": 0
+      },
+      "used_hyde": false,
+      "hyde_text": null,
+      "extra_llm_calls": 0
+    },
+    "b41": {
+      "item_id": "b41",
+      "question": "迪拉聊到一個源自靈魂樂（Soul）的曲風，他說這個風格真正想反抗的並不是靈魂樂本身，而是某個年代的某種轉變，反而回頭致敬更早期、更草根的味道——這是什麼曲風？它反對什麼、致敬什麼？",
+      "top_n": 200,
+      "retrieved_count": 94,
+      "prefilter_episode_count": 1,
+      "gt_total": 1,
+      "gt_ranks": [
+        {
+          "gt_chunk_id": "ep:88fa0a6e-0eaa-402f-aa62-0fac522fc86b@2516.95",
+          "kind": "must",
+          "rank": 1,
+          "cutoff_in": "top-5"
+        }
+      ],
+      "bucket_counts": {
+        "top-5": 1,
+        "top-20": 0,
+        "top-50": 0,
+        "top-100": 0,
+        "top-200": 0,
+        "top-500": 0,
+        "miss": 0
+      },
+      "used_hyde": false,
+      "hyde_text": null,
+      "extra_llm_calls": 0
+    },
+    "b42": {
+      "item_id": "b42",
+      "question": "迪拉看到一支 MV，畫面就是一個人舉著像在抗議的牌子、穿件 T 恤站在那邊，意象很強烈——他說這讓他聯想到哪一支調性類似、但預算大概多上百倍的經典作品？",
+      "top_n": 200,
+      "retrieved_count": 97,
+      "prefilter_episode_count": 1,
+      "gt_total": 2,
+      "gt_ranks": [
+        {
+          "gt_chunk_id": "ep:dcce2640-6ab8-4865-affd-41ace6c9ee6e@3000.11",
+          "kind": "must",
+          "rank": 1,
+          "cutoff_in": "top-5"
+        },
+        {
+          "gt_chunk_id": "ep:dcce2640-6ab8-4865-affd-41ace6c9ee6e@3031.79",
+          "kind": "must",
+          "rank": 10,
+          "cutoff_in": "top-20"
+        }
+      ],
+      "bucket_counts": {
+        "top-5": 1,
+        "top-20": 1,
+        "top-50": 0,
+        "top-100": 0,
+        "top-200": 0,
+        "top-500": 0,
+        "miss": 0
+      },
+      "used_hyde": false,
+      "hyde_text": null,
+      "extra_llm_calls": 0
+    },
+    "b05": {
+      "item_id": "b05",
+      "question": "迪拉去試音《也好吃》那天遇到誰？對方做了什麼？",
+      "top_n": 200,
+      "retrieved_count": 109,
+      "prefilter_episode_count": 1,
+      "gt_total": 6,
+      "gt_ranks": [
+        {
+          "gt_chunk_id": "ep:6c5ce32f-fb37-4aa0-b72c-7d14a7c1c163@202.08",
+          "kind": "must",
+          "rank": 12,
+          "cutoff_in": "top-20"
+        },
+        {
+          "gt_chunk_id": "ep:6c5ce32f-fb37-4aa0-b72c-7d14a7c1c163@104.04",
+          "kind": "must",
+          "rank": 77,
+          "cutoff_in": "top-100"
+        },
+        {
+          "gt_chunk_id": "ep:6c5ce32f-fb37-4aa0-b72c-7d14a7c1c163@183.92",
+          "kind": "must",
+          "rank": null,
+          "cutoff_in": "miss"
+        },
+        {
+          "gt_chunk_id": "ep:6c5ce32f-fb37-4aa0-b72c-7d14a7c1c163@143.72",
+          "kind": "must",
+          "rank": 60,
+          "cutoff_in": "top-100"
+        },
+        {
+          "gt_chunk_id": "ep:6c5ce32f-fb37-4aa0-b72c-7d14a7c1c163@86.88",
+          "kind": "must",
+          "rank": 84,
+          "cutoff_in": "top-100"
+        },
+        {
+          "gt_chunk_id": "ep:6c5ce32f-fb37-4aa0-b72c-7d14a7c1c163@163.00",
+          "kind": "must",
+          "rank": 38,
+          "cutoff_in": "top-50"
+        }
+      ],
+      "bucket_counts": {
+        "top-5": 0,
+        "top-20": 1,
+        "top-50": 1,
+        "top-100": 3,
+        "top-200": 0,
+        "top-500": 0,
+        "miss": 1
+      },
+      "used_hyde": false,
+      "hyde_text": null,
+      "extra_llm_calls": 0
+    },
+    "b14": {
+      "item_id": "b14",
+      "question": "迪拉胖在 EP134 為什麼不挑一首振奮的開工歌？他選的歌想表達什麼概念？",
+      "top_n": 200,
+      "retrieved_count": 110,
+      "prefilter_episode_count": 1,
+      "gt_total": 3,
+      "gt_ranks": [
+        {
+          "gt_chunk_id": "ep:c1d87278-7dba-4fb1-930d-c2bd3a3461d2@0.00",
+          "kind": "must",
+          "rank": 2,
+          "cutoff_in": "top-5"
+        },
+        {
+          "gt_chunk_id": "ep:c1d87278-7dba-4fb1-930d-c2bd3a3461d2@1790.18",
+          "kind": "either",
+          "rank": null,
+          "cutoff_in": "miss"
+        },
+        {
+          "gt_chunk_id": "ep:c1d87278-7dba-4fb1-930d-c2bd3a3461d2@1808.78",
+          "kind": "either",
+          "rank": null,
+          "cutoff_in": "miss"
+        }
+      ],
+      "bucket_counts": {
+        "top-5": 1,
+        "top-20": 0,
+        "top-50": 0,
+        "top-100": 0,
+        "top-200": 0,
+        "top-500": 0,
+        "miss": 2
+      },
+      "used_hyde": false,
+      "hyde_text": null,
+      "extra_llm_calls": 0
+    },
+    "b15": {
+      "item_id": "b15",
+      "question": "EP19《動漫歌單》來賓提到他爸爸以前在哪裡工作？後來兼差開了什麼店讓他接觸到漫畫？",
+      "top_n": 200,
+      "retrieved_count": 106,
+      "prefilter_episode_count": 1,
+      "gt_total": 1,
+      "gt_ranks": [
+        {
+          "gt_chunk_id": "ep:88f78fbe-d216-4334-bf4f-e3e3caeea48d@1446.34",
+          "kind": "must",
+          "rank": 1,
+          "cutoff_in": "top-5"
+        }
+      ],
+      "bucket_counts": {
+        "top-5": 1,
+        "top-20": 0,
+        "top-50": 0,
+        "top-100": 0,
+        "top-200": 0,
+        "top-500": 0,
+        "miss": 0
+      },
+      "used_hyde": false,
+      "hyde_text": null,
+      "extra_llm_calls": 0
+    },
+    "b16": {
+      "item_id": "b16",
+      "question": "EP140《高雄美食第二彈》提到第一彈的兩位來賓是誰？節目裡指出高雄哪兩個場館是音樂節 / 國際演唱會重鎮？",
+      "top_n": 200,
+      "retrieved_count": 123,
+      "prefilter_episode_count": 1,
+      "gt_total": 1,
+      "gt_ranks": [
+        {
+          "gt_chunk_id": "ep:d15bddde-153f-484f-bff6-0bb74415b718@29.00",
+          "kind": "must",
+          "rank": 1,
+          "cutoff_in": "top-5"
+        }
+      ],
+      "bucket_counts": {
+        "top-5": 1,
+        "top-20": 0,
+        "top-50": 0,
+        "top-100": 0,
+        "top-200": 0,
+        "top-500": 0,
+        "miss": 0
+      },
+      "used_hyde": false,
+      "hyde_text": null,
+      "extra_llm_calls": 0
+    },
+    "b17": {
+      "item_id": "b17",
+      "question": "EP18《黃玠 跑鞋國王》提到剛開始跑步時買的 Nike 鞋款叫什麼？鞋底厚度多少？標榜什麼特色？",
+      "top_n": 200,
+      "retrieved_count": 99,
+      "prefilter_episode_count": 1,
+      "gt_total": 1,
+      "gt_ranks": [
+        {
+          "gt_chunk_id": "ep:f72cc0d1-17df-4712-9a83-e0216a243233@2931.74",
+          "kind": "must",
+          "rank": 1,
+          "cutoff_in": "top-5"
+        }
+      ],
+      "bucket_counts": {
+        "top-5": 1,
+        "top-20": 0,
+        "top-50": 0,
+        "top-100": 0,
+        "top-200": 0,
+        "top-500": 0,
+        "miss": 0
+      },
+      "used_hyde": false,
+      "hyde_text": null,
+      "extra_llm_calls": 0
+    },
+    "b18": {
+      "item_id": "b18",
+      "question": "EP44《伴手禮是社交潤滑劑》來賓用什麼食物當作例子來講送禮糾結？為什麼『現吃好吃』的食物反而不適合當伴手禮？",
+      "top_n": 200,
+      "retrieved_count": 99,
+      "prefilter_episode_count": 1,
+      "gt_total": 1,
+      "gt_ranks": [
+        {
+          "gt_chunk_id": "ep:65030207-726d-43ba-80d4-d4c0efb97ac8@1607.39",
+          "kind": "must",
+          "rank": 20,
+          "cutoff_in": "top-20"
+        }
+      ],
+      "bucket_counts": {
+        "top-5": 0,
+        "top-20": 1,
+        "top-50": 0,
+        "top-100": 0,
+        "top-200": 0,
+        "top-500": 0,
+        "miss": 0
+      },
+      "used_hyde": false,
+      "hyde_text": null,
+      "extra_llm_calls": 0
+    },
+    "b19": {
+      "item_id": "b19",
+      "question": "EP66《浪人祭歌單》主持人忠祐為什麼選某些外國藝人／團入歌單？他在 IG 留言『Please come to Taiwan』反映台灣樂迷的什麼處境？",
+      "top_n": 200,
+      "retrieved_count": 100,
+      "prefilter_episode_count": 1,
+      "gt_total": 1,
+      "gt_ranks": [
+        {
+          "gt_chunk_id": "ep:dbeecd79-f170-476a-b4e9-80e64eb49528@1542.86",
+          "kind": "must",
+          "rank": 1,
+          "cutoff_in": "top-5"
+        }
+      ],
+      "bucket_counts": {
+        "top-5": 1,
+        "top-20": 0,
+        "top-50": 0,
+        "top-100": 0,
+        "top-200": 0,
+        "top-500": 0,
+        "miss": 0
+      },
+      "used_hyde": false,
+      "hyde_text": null,
+      "extra_llm_calls": 0
+    },
+    "b21": {
+      "item_id": "b21",
+      "question": "迪拉跟馬世芳怎麼定義『家常味』？為什麼家常菜可以天天吃，但 Fine dining 不行？",
+      "top_n": 200,
+      "retrieved_count": 104,
+      "prefilter_episode_count": 1,
+      "gt_total": 5,
+      "gt_ranks": [
+        {
+          "gt_chunk_id": "ep:6c5ce32f-fb37-4aa0-b72c-7d14a7c1c163@3030.62",
+          "kind": "must",
+          "rank": 1,
+          "cutoff_in": "top-5"
+        },
+        {
+          "gt_chunk_id": "ep:6c5ce32f-fb37-4aa0-b72c-7d14a7c1c163@3047.50",
+          "kind": "must",
+          "rank": 2,
+          "cutoff_in": "top-5"
+        },
+        {
+          "gt_chunk_id": "ep:6c5ce32f-fb37-4aa0-b72c-7d14a7c1c163@2963.38",
+          "kind": "must",
+          "rank": 12,
+          "cutoff_in": "top-20"
+        },
+        {
+          "gt_chunk_id": "ep:6c5ce32f-fb37-4aa0-b72c-7d14a7c1c163@2847.50",
+          "kind": "must",
+          "rank": 42,
+          "cutoff_in": "top-50"
+        },
+        {
+          "gt_chunk_id": "ep:6c5ce32f-fb37-4aa0-b72c-7d14a7c1c163@3064.30",
+          "kind": "must",
+          "rank": 56,
+          "cutoff_in": "top-100"
+        }
+      ],
+      "bucket_counts": {
+        "top-5": 2,
+        "top-20": 1,
+        "top-50": 1,
+        "top-100": 1,
+        "top-200": 0,
+        "top-500": 0,
+        "miss": 0
+      },
+      "used_hyde": false,
+      "hyde_text": null,
+      "extra_llm_calls": 0
+    }
+  }
+}

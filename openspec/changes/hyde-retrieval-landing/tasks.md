@@ -23,8 +23,8 @@
 ## 5. flag on/off A/B 量測與報告
 
 - [x] 5.1 新增 `backend/scripts/hyde_ab/run.py`：對指定 backend 跑 flag on vs off 兩輪，對 4 的標靶集量每題 must-chunk prefilter-rank 與 calibration 退步集；目標為 prod 時開跑前 curl `/me` 驗 200，失敗 fail loud 中止不產半套報告（依 reference_prod_eval_session、用 playwright-state session + zeabur domain）。驗證：用過期 session 跑 prod 確認中止且無 results 檔。
-- [ ] 5.2 對 prod 跑完整 A/B（flag 由 env toggle→redeploy→驗證 env 真值→eval，依 feedback_env_toggle_order_discipline），產出 `docs/case-studies/hyde-landing-ab-2026-06-05.md`：含標靶集 on vs off must-rank 對照、calibration 退步檢查、b23 另標「選集層是否本來就召得回」、mixed 評分視角（量化召回 vs 延遲成本）、小樣本限制聲明、記錄 model 與 HyDE 文本樣本。驗證：報告含上述各段、矩陣無 placeholder。
+- [x] 5.2 對 prod 跑完整 A/B（flag 由 env toggle→redeploy→驗證 env 真值→eval，依 feedback_env_toggle_order_discipline），產出 `docs/case-studies/hyde-landing-ab-2026-06-05.md`：含標靶集 on vs off must-rank 對照、calibration 退步檢查、b23 另標「選集層是否本來就召得回」、mixed 評分視角（量化召回 vs 延遲成本）、小樣本限制聲明、記錄 model 與 HyDE 文本樣本。驗證：報告含上述各段、矩陣無 placeholder。
 
 ## 6. stop-the-line：預設維持 off，等 Jacky 拍板 flip
 
-- [ ] 6.1 確認本 change 未把 `enable_hyde_retrieval` 預設改成 True（git grep 確認 config.py 仍為 `= False`）；報告明記「是否 flip 預設為待 Jacky 依 A/B 證據核准之決定，由後續 change/設定變更落地」。驗證：config.py 預設為 False、報告含 stop-the-line 段。
+- [x] 6.1 確認本 change 未把 `enable_hyde_retrieval` 預設改成 True（git grep 確認 config.py 仍為 `= False`）；報告明記「是否 flip 預設為待 Jacky 依 A/B 證據核准之決定，由後續 change/設定變更落地」。驗證：config.py 預設為 False、報告含 stop-the-line 段。
