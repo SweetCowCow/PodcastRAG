@@ -3,7 +3,6 @@ import json as _stdlib_json
 import logging
 import re
 import uuid
-from collections.abc import Awaitable, Callable
 
 import openai
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Query, status
@@ -44,11 +43,7 @@ from app.services.ai_step_resolver import (
     infer_provider_label,
 )
 from app.services.embedding import embed_texts
-from app.services.hyde_retrieval import (
-    HydeResult,
-    resolve_chunk_hits_conditional,
-    resolve_semantic_embedding,
-)
+from app.services.hyde_retrieval import resolve_semantic_embedding
 from app.services.rag import ChunkHit as RagHit, MetadataFilters
 
 logger = logging.getLogger(__name__)
@@ -151,32 +146,6 @@ async def _atomic_decrement_quota(db: AsyncSession, user_id: uuid.UUID) -> int:
     return int(new_remaining)
 
 
-async def _resolve_hits(
-    db: AsyncSession,
-    question: str,
-    base_vec: list[float],
-    embedding_cfg,
-    retrieve: Callable[[list[float]], Awaitable[list[RagHit]]],
-) -> tuple[list[RagHit], HydeResult]:
-    """Run chunk recall, choosing conditional two-stage HyDE vs the unconditional
-    landing path based on the two flags.
-
-    `retrieve(semantic_vec)` is a per-call-site closure that runs
-    `rag.retrieve_hybrid` with show_id / k / filters already bound, taking only
-    the chunk-recall semantic vector. When both `enable_hyde_retrieval` and
-    `hyde_conditional_activation` are on, two-stage conditional activation runs;
-    otherwise the landing behaviour (single resolve + single retrieve) is
-    preserved bit-for-bit.
-    """
-    if settings.enable_hyde_retrieval and settings.hyde_conditional_activation:
-        return await resolve_chunk_hits_conditional(
-            db, question, base_vec, embedding_cfg, retrieve=retrieve
-        )
-    hyde = await resolve_semantic_embedding(db, question, base_vec, embedding_cfg)
-    hits = await retrieve(hyde.semantic_vec)
-    return hits, hyde
-
-
 @router.post("/shows/{show_id}/search", response_model=PublicSearchResponse)
 async def public_search_show(
     show_id: uuid.UUID,
@@ -239,18 +208,16 @@ async def public_search_show(
             "episode_ref: filtered to %d episode(s) from query", len(ep_ref_ids)
         )
         routed_eps = ep_ref_ids
-    async def _retrieve(sem_vec):
-        return await rag.retrieve_hybrid(
-            db,
-            show_id,
-            sem_vec,
-            payload.question,
-            k=payload.k,
-            episode_id_filter=routed_eps,
-        )
-
-    hits, hyde = await _resolve_hits(
-        db, payload.question, base_vec, embedding_cfg, _retrieve
+    hyde = await resolve_semantic_embedding(
+        db, payload.question, base_vec, embedding_cfg
+    )
+    hits = await rag.retrieve_hybrid(
+        db,
+        show_id,
+        hyde.semantic_vec,
+        payload.question,
+        k=payload.k,
+        episode_id_filter=routed_eps,
     )
     await rag.enrich_hits(db, hits, payload.question)
     return PublicSearchResponse(results=[_to_schema_hit(h) for h in hits])
@@ -483,18 +450,15 @@ async def query_show(
         )
         # hyde-retrieval-landing: HyDE only swaps the chunk-recall semantic
         # vector; routing keeps base_vec, lexical keeps the original question.
-        # hyde-conditional-activation: two-stage when both flags on.
-        async def _retrieve(sem_vec):
-            return await rag.retrieve_hybrid(
-                db,
-                show_id,
-                sem_vec,
-                payload.question,
-                episode_id_filter=routed_eps,
-            )
-
-        hits, hyde = await _resolve_hits(
-            db, payload.question, base_vec, embedding_cfg, _retrieve
+        hyde = await resolve_semantic_embedding(
+            db, payload.question, base_vec, embedding_cfg
+        )
+        hits = await rag.retrieve_hybrid(
+            db,
+            show_id,
+            hyde.semantic_vec,
+            payload.question,
+            episode_id_filter=routed_eps,
         )
         await rag.enrich_hits(db, hits, payload.question)
         return SearchResponse(
@@ -573,19 +537,14 @@ async def query_show(
     )
     # hyde-retrieval-landing: chat path uses the history-rewritten question as
     # the HyDE source + routing/lexical anchor; only chunk-recall vector swaps.
-    # hyde-conditional-activation: two-stage when both flags on.
-    async def _retrieve(sem_vec):
-        return await rag.retrieve_hybrid(
-            db,
-            show_id,
-            sem_vec,
-            rewritten,
-            episode_id_filter=routed_eps,
-            metadata_filters=metadata_filters,
-        )
-
-    hits, hyde = await _resolve_hits(
-        db, rewritten, base_vec, embedding_cfg, _retrieve
+    hyde = await resolve_semantic_embedding(db, rewritten, base_vec, embedding_cfg)
+    hits = await rag.retrieve_hybrid(
+        db,
+        show_id,
+        hyde.semantic_vec,
+        rewritten,
+        episode_id_filter=routed_eps,
+        metadata_filters=metadata_filters,
     )
     await rag.enrich_hits(db, hits, rewritten)
 

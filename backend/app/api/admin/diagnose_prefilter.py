@@ -30,16 +30,11 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import settings
 from app.core.database import get_db
 from app.services import rag
 from app.services.ai_step_resolver import get_step_config
 from app.services.embedding import embed_texts
-from app.services.hyde_retrieval import (
-    lexical_overlap_ratio,
-    resolve_chunk_hits_conditional,
-    resolve_semantic_embedding,
-)
+from app.services.hyde_retrieval import resolve_semantic_embedding
 
 # Reuse the chunk_id parser used by chunk_recall grader / rrf_sweep.
 _CHUNK_RE = re.compile(r"^ep:([0-9a-f-]+)@(\d+\.\d+)$")
@@ -176,38 +171,15 @@ async def diagnose_prefilter_rank(
         # (enable_hyde_retrieval off vs on) measures the LANDED path. Flag off →
         # resolve returns base_vec, bit-identical to the prior plain-embed path.
         base_vec = embed_texts([question], embed_step)[0]
-
-        async def _retrieve(sem_vec):
-            return await rag.retrieve_hybrid(
-                db,
-                show_id=show_id,
-                query_embedding=sem_vec,
-                question=question,
-                k=req.top_n,
-                episode_id_filter=prefilter_eps,
-            )
-
-        # hyde-conditional-activation: when both flags are on, report the
-        # two-stage path (overlap_ratio + triggered_by_mismatch come straight
-        # from the orchestrator). Otherwise compute overlap_ratio from a base
-        # recall as a *flag-independent* diagnostic — this is what the threshold
-        # calibration run reads while prod still has conditional mode off.
-        if settings.enable_hyde_retrieval and settings.hyde_conditional_activation:
-            hits, hyde = await resolve_chunk_hits_conditional(
-                db, question, base_vec, embed_step, retrieve=_retrieve
-            )
-            overlap_ratio = hyde.overlap_ratio
-            conditional_mode = hyde.conditional_mode
-            triggered_by_mismatch = hyde.triggered_by_mismatch
-        else:
-            base_hits = await _retrieve(base_vec)
-            overlap_ratio = lexical_overlap_ratio(
-                question, base_hits[: settings.hyde_mismatch_topn]
-            )
-            hyde = await resolve_semantic_embedding(db, question, base_vec, embed_step)
-            hits = base_hits if not hyde.used_hyde else await _retrieve(hyde.semantic_vec)
-            conditional_mode = False
-            triggered_by_mismatch = False
+        hyde = await resolve_semantic_embedding(db, question, base_vec, embed_step)
+        hits = await rag.retrieve_hybrid(
+            db,
+            show_id=show_id,
+            query_embedding=hyde.semantic_vec,
+            question=question,
+            k=req.top_n,
+            episode_id_filter=prefilter_eps,
+        )
         retrieved = [(str(h.episode_id), float(h.start_time)) for h in hits]
 
         gt_ranks: list[dict[str, Any]] = []
@@ -301,12 +273,6 @@ async def diagnose_prefilter_rank(
             "used_hyde": hyde.used_hyde,
             "hyde_text": hyde.hyde_text,
             "extra_llm_calls": hyde.extra_llm_calls,
-            # hyde-conditional-activation observability: overlap_ratio is the
-            # query↔top-N base-recall lexical overlap (the mismatch signal);
-            # conditional_mode / triggered_by_mismatch reflect the two-stage path.
-            "conditional_mode": conditional_mode,
-            "overlap_ratio": overlap_ratio,
-            "triggered_by_mismatch": triggered_by_mismatch,
         }
         if chunking_context is not None:
             item_out["chunking_context"] = chunking_context

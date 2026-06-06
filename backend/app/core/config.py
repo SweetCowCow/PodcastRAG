@@ -102,19 +102,6 @@ class Settings(BaseSettings):
     # Default off — flipping to True is a separate decision gated on expanded
     # A/B evidence. `ENABLE_HYDE_RETRIEVAL=true` opts in without code change.
     enable_hyde_retrieval: bool = False
-    # hyde-conditional-activation: two-stage conditional HyDE. Only when BOTH
-    # `enable_hyde_retrieval` AND this flag are True does the retrieve path run
-    # a base recall first, measure query↔top-k lexical overlap, and trigger HyDE
-    # ONLY when overlap is below `hyde_mismatch_overlap_threshold`. Default off
-    # — `enable_hyde_retrieval=True` + this False reproduces the landing
-    # unconditional-HyDE behaviour bit-for-bit.
-    hyde_conditional_activation: bool = False
-    # Mismatch cutoff: overlap ratio strictly below this triggers HyDE. Tentative
-    # 0.3 pending hyde_ab calibration (calibrate_threshold.py) on the 10-target +
-    # 8-calibration question split; backfill the data-chosen value here.
-    hyde_mismatch_overlap_threshold: float = 0.3
-    # Number of top base hits whose text is unioned when computing overlap.
-    hyde_mismatch_topn: int = 5
     # b23-dataset-and-retrieval-rca-fix: guest-index dispatch for
     # find_episodes_by_topic (triggers when ≥2 tokens match known guest
     # names). Set ENABLE_GUEST_DISPATCH=false to bypass without redeploy.
