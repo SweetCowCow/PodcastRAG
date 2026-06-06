@@ -106,6 +106,23 @@ class Settings(BaseSettings):
     # find_episodes_by_topic (triggers when ≥2 tokens match known guest
     # names). Set ENABLE_GUEST_DISPATCH=false to bypass without redeploy.
     enable_guest_dispatch: bool = True
+    # topic-prefilter-transcript-aware: include transcript_chunks tsvector hits as
+    # a candidate source in find_episodes_by_topic / find_episodes_by_recency, so
+    # narrative episodes whose answer is buried in the transcript (title/desc
+    # silent) become candidates. Guarded by a ≥2-discriminating-token gate +
+    # ts_rank cap (see transcript_prefilter_cap). Default on; set
+    # ENABLE_TRANSCRIPT_TOPIC_PREFILTER=false to revert to title+description only.
+    enable_transcript_topic_prefilter: bool = True
+    # Max episodes the transcript-chunk source may contribute, ranked by best
+    # transcript-chunk ts_rank. Caps non-discriminative over-selection (a single
+    # common token like a host name matches ~most transcripts, so this cap — not
+    # the tsquery — is the real shortlist filter). Calibrated to 12 via prod DB
+    # probe 2026-06-06: existing topic "高雄美食" GT (EP85) ranks 4; b23 EP107
+    # ranks 3 on an action-rich topic / 10 on the "Leo"-only token — 12 gives
+    # headroom for the latter. Entity-only topics ("迪拉 Leo王") rank EP107 ~27,
+    # which no sane cap rescues; that case relies on the LLM extracting action
+    # tokens (verified end-to-end by the prod chat smoke).
+    transcript_prefilter_cap: int = 12
     agentic_chat_max_iterations: int = 10
     agentic_chat_l0_k_turns: int = 3
     agentic_chat_l1_ttl_seconds: int = 7200

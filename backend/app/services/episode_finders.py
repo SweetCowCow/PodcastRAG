@@ -200,6 +200,40 @@ ORDER BY published_at DESC NULLS LAST
 """
 
 
+# Transcript-aware candidate source (topic-prefilter-transcript-aware, b23):
+# include episodes whose transcript chunks lexically match the topic tsquery,
+# so narrative episodes whose answer is buried in speech (title/description
+# silent) become candidates. Episodes are ranked by their best chunk's
+# ts_rank and capped to :cap to stop a single common token (e.g. a host name
+# spoken in most episodes) from selecting the whole show.
+_TRANSCRIPT_TOPIC_SQL = """
+SELECT e.id, e.title, e.published_at, e.guests, e.ai_summary
+FROM episodes e
+JOIN transcripts t ON t.episode_id = e.id
+JOIN transcript_chunks tc ON tc.transcript_id = t.id
+WHERE e.show_id = :show_id
+  AND tc.text_tsvector IS NOT NULL
+  AND tc.text_tsvector @@ to_tsquery('simple', :tsquery_text)
+GROUP BY e.id, e.title, e.published_at, e.guests, e.ai_summary
+ORDER BY MAX(ts_rank(tc.text_tsvector, to_tsquery('simple', :tsquery_text))) DESC,
+         e.published_at DESC NULLS LAST
+LIMIT :cap
+"""
+
+
+def _discriminating_tokens(expanded: list[str]) -> list[str]:
+    """Topic tokens that remain after removing show-name terms — the gate
+    for the transcript candidate source (≥2 required).
+
+    No host registry exists and a host name is not necessarily present in
+    the show title, so only `tokenizer.get_show_name_terms()` (derived from
+    `shows.title`) is removed here; host-token noise is absorbed by the
+    ts_rank cap instead (topic-prefilter-transcript-aware design D2).
+    """
+    show_terms = tokenizer.get_show_name_terms()
+    return [t for t in expanded if t not in show_terms]
+
+
 async def find_episodes_by_topic_with_source(
     db: AsyncSession,
     show_id: uuid.UUID,
@@ -263,6 +297,8 @@ async def find_episodes_by_topic_with_source(
                 seen.add(tk)
                 expanded.append(tk)
 
+    tsquery_text = " | ".join(expanded)
+
     # Guest-index dispatch: ≥2 expanded tokens hit the show's known-guest
     # token map → also run guest SQL and union results. The map lets a
     # multi-token guest name like "Leo 王" be matched by its components
@@ -289,7 +325,27 @@ async def find_episodes_by_topic_with_source(
                 _row_to_episode_ref(row) for row in guest_result.mappings()
             ]
 
-    tsquery_text = " | ".join(expanded)
+    # Transcript-index dispatch: when the topic has ≥2 discriminating tokens
+    # (after show-name removal), also pull episodes whose transcript chunks
+    # lexically match, capped by best-chunk ts_rank. Run BEFORE the topic SQL
+    # so the topic SQL stays the last `db.execute` call. flag off or <2
+    # discriminating tokens → query never runs (candidate set is
+    # bit-equivalent to the prior title/description behaviour).
+    transcript_eps: list[EpisodeRef] = []
+    if getattr(settings, "enable_transcript_topic_prefilter", True):
+        if len(_discriminating_tokens(expanded)) >= 2:
+            ts_result = await db.execute(
+                text(_TRANSCRIPT_TOPIC_SQL),
+                {
+                    "show_id": show_id,
+                    "tsquery_text": tsquery_text,
+                    "cap": getattr(settings, "transcript_prefilter_cap", 12),
+                },
+            )
+            transcript_eps = [
+                _row_to_episode_ref(row) for row in ts_result.mappings()
+            ]
+
     params = {
         "show_id": show_id,
         "tsquery_text": tsquery_text,
@@ -297,11 +353,12 @@ async def find_episodes_by_topic_with_source(
     result = await db.execute(text(_TOPIC_SQL), params)
     topic_eps = [_row_to_episode_ref(row) for row in result.mappings()]
 
-    if not guest_eps:
+    if not guest_eps and not transcript_eps:
         return topic_eps, "topic_index"
 
-    # Union dedupe by episode_id while preserving topic_eps order (which is
-    # ORDER BY published_at DESC); append guest_eps entries not already present.
+    # Union dedupe by episode_id, preserving order: topic_eps (published_at
+    # DESC) first, then guest_eps, then transcript_eps (best-chunk ts_rank
+    # DESC). Only entries not already present are appended.
     seen_ids: set[uuid.UUID] = {ep.episode_id for ep in topic_eps}
     merged = list(topic_eps)
     guest_added = 0
@@ -310,13 +367,30 @@ async def find_episodes_by_topic_with_source(
             merged.append(ep)
             seen_ids.add(ep.episode_id)
             guest_added += 1
+    transcript_added = 0
+    for ep in transcript_eps:
+        if ep.episode_id not in seen_ids:
+            merged.append(ep)
+            seen_ids.add(ep.episode_id)
+            transcript_added += 1
 
-    if not topic_eps:
+    # Source label (informational only; nothing branches on it). "merged"
+    # when ≥2 sources contribute distinct episodes; otherwise the single
+    # contributing source's label.
+    contributors = []
+    if topic_eps:
+        contributors.append("topic")
+    if guest_added:
+        contributors.append("guest")
+    if transcript_added:
+        contributors.append("transcript")
+    if len(contributors) >= 2:
+        return merged, "merged"
+    if contributors == ["guest"]:
         return merged, "guest_index"
-    if guest_added == 0:
-        # guest path matched but every guest episode was already in topic_eps
-        return merged, "topic_index"
-    return merged, "merged"
+    if contributors == ["transcript"]:
+        return merged, "transcript_index"
+    return merged, "topic_index"
 
 
 async def find_episodes_by_topic(

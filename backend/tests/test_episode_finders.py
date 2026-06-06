@@ -140,14 +140,20 @@ async def test_find_by_topic_uses_description_chunks_tsvector():
 
 
 @pytest.mark.asyncio
-async def test_find_by_topic_does_not_touch_transcript_chunks():
-    """Title pool is weight 0.5 in retrieval but the enumeration finder
-    deliberately ignores transcript-level matches — only the per-episode
-    description tsvector is consulted to avoid noise."""
+async def test_find_by_topic_single_token_skips_transcript_source():
+    """topic-prefilter-transcript-aware adds a transcript-chunk candidate
+    source, but it is gated behind a ≥2-discriminating-token check. A
+    single-token topic like 歌單 (gate closed) MUST NOT run the transcript
+    query at all — candidate selection stays title/description-only, and the
+    core _TOPIC_SQL itself never references transcript_chunks (the transcript
+    source is a separate query, not an OR into _TOPIC_SQL)."""
     db = _mock_db_with_rows([])
     await episode_finders.find_episodes_by_topic(db, uuid.uuid4(), ["歌單"])
-    sql_str = str(db.execute.call_args[0][0])
-    assert "transcript_chunks" not in sql_str
+    # Topic SQL is the last call and never mentions transcript_chunks.
+    assert "transcript_chunks" not in str(db.execute.call_args[0][0])
+    # No transcript query ran anywhere (gate closed for single token).
+    all_sql = [str(c[0][0]) for c in db.execute.call_args_list]
+    assert not any("transcript_chunks" in s for s in all_sql)
 
 
 @pytest.mark.asyncio
