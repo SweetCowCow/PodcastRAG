@@ -264,3 +264,88 @@ async def test_topic_and_transcript_merge_source(monkeypatch):
     )
     assert {ep.episode_id for ep in eps} == {ep_topic, ep_transcript}
     assert source == "merged"
+
+
+# ---------------------------------------------------------------------------
+# query-fallback token derivation (topic-prefilter-forward-query-tokens D2)
+# ---------------------------------------------------------------------------
+
+def _enable_transcript(monkeypatch):
+    monkeypatch.setattr(tokenizer, "get_show_name_terms", lambda: set())
+    monkeypatch.setattr(
+        episode_finders.settings, "enable_transcript_topic_prefilter", True
+    )
+    monkeypatch.setattr(
+        episode_finders.settings, "enable_guest_dispatch", False
+    )
+    tokenizer.reset_for_tests()
+
+
+@pytest.mark.asyncio
+async def test_query_none_topic_ge2_is_topic_only(monkeypatch):
+    """(a) query=None + topic≥2 → effective tokens == topic expand; transcript
+    query runs with exactly the topic-only tokens (bit-equivalent to before)."""
+    _enable_transcript(monkeypatch)
+    db = _mock_db_by_sql(topic_rows=[], transcript_rows=[])
+    episode_finders._guest_name_cache.clear()
+    await episode_finders.find_episodes_by_topic_with_source(
+        db, uuid.uuid4(), ["迪拉 Leo王"]
+    )
+    ts_calls = _transcript_sql_calls(db)
+    assert len(ts_calls) == 1
+    params = ts_calls[0][0][1]
+    expected = episode_finders._expand_to_tokens(["迪拉 Leo王"])
+    assert params["tokens"] == expected
+    assert " | ".join(params["tokens"]) == params["tsquery_text"]
+
+
+@pytest.mark.asyncio
+async def test_thin_topic_plus_query_triggers_with_combined_tokens(monkeypatch):
+    """(b) topic single token ("Leo王") + a query whose combined discriminating
+    tokens ≥2 → transcript query RUNS using topic ∪ query tokens, same-source
+    as tsquery. The single topic token alone would not open the ≥2 gate."""
+    _enable_transcript(monkeypatch)
+    # Sanity: the topic alone is below the gate (only "Leo" survives "Leo王").
+    assert (
+        len(episode_finders._discriminating_tokens(
+            episode_finders._expand_to_tokens(["Leo王"])
+        ))
+        < 2
+    )
+    db = _mock_db_by_sql(topic_rows=[], transcript_rows=[])
+    episode_finders._guest_name_cache.clear()
+    query = "第一次 見面 合作"
+    await episode_finders.find_episodes_by_topic_with_source(
+        db, uuid.uuid4(), ["Leo王"], query=query
+    )
+    ts_calls = _transcript_sql_calls(db)
+    assert len(ts_calls) == 1, "thin topic + rich query must trigger transcript"
+    params = ts_calls[0][0][1]
+    topic_only = episode_finders._expand_to_tokens(["Leo王"])
+    q_only = episode_finders._expand_to_tokens([query])
+    expected = topic_only + [t for t in q_only if t not in topic_only]
+    assert params["tokens"] == expected
+    # query brought in discriminating tokens the topic lacked.
+    assert any(t in params["tokens"] for t in q_only if t not in topic_only)
+    assert " | ".join(params["tokens"]) == params["tsquery_text"]
+
+
+@pytest.mark.asyncio
+async def test_focused_topic_ge2_ignores_query(monkeypatch):
+    """(c) topic≥2 + a query → query SHALL NOT change selection: effective
+    tokens equal the topic expand, no query-only token leaks into :tokens."""
+    _enable_transcript(monkeypatch)
+    db = _mock_db_by_sql(topic_rows=[], transcript_rows=[])
+    episode_finders._guest_name_cache.clear()
+    query = "星座 占卜 無關"
+    await episode_finders.find_episodes_by_topic_with_source(
+        db, uuid.uuid4(), ["迪拉 Leo王 合作"], query=query
+    )
+    ts_calls = _transcript_sql_calls(db)
+    assert len(ts_calls) == 1
+    params = ts_calls[0][0][1]
+    expected = episode_finders._expand_to_tokens(["迪拉 Leo王 合作"])
+    assert params["tokens"] == expected
+    q_only = episode_finders._expand_to_tokens([query])
+    assert not (set(q_only) - set(expected)) & set(params["tokens"])
+    assert " | ".join(params["tokens"]) == params["tsquery_text"]

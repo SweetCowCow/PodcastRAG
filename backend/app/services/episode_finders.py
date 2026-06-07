@@ -270,10 +270,48 @@ def _discriminating_tokens(expanded: list[str]) -> list[str]:
     return [t for t in expanded if t not in show_terms]
 
 
+def _expand_to_tokens(raw_terms: list[str]) -> list[str]:
+    """jieba-expand topic / query strings into deduped OR-tsquery tokens.
+
+    For each term: strip → escape tsquery operators (`&|!()<:>\\` → space, mirrors
+    `app.services.rag._build_ts_query`) → jieba-tokenise → drop single-char and
+    `TOPIC_STOPWORDS` noise. If a term yields nothing useful (e.g. all-stopword),
+    fall back to the escaped term so the LLM's signal is not silently dropped.
+    Tokens are deduped preserving first-seen order.
+
+    Phrases the Postgres `simple` analyzer keeps whole (e.g. "高雄美食") are split
+    into their component lexemes here ("高雄" + "美食") to match the jieba-tokenised
+    chunk tsvectors (enumeration-rule-pattern-broaden bugfix; prod 2026-05-17 the
+    phrase went 0 → 37 matches). Shared by the topic arg and the query-fallback
+    path (topic-prefilter-forward-query-tokens design D2).
+    """
+    import re as _re
+
+    expanded: list[str] = []
+    seen: set[str] = set()
+    for t in raw_terms:
+        if not t or not t.strip():
+            continue
+        s = _re.sub(r"[&|!()<:>\\]", " ", t).strip()
+        if not s:
+            continue
+        toks = [tk for tk in tokenizer.tokenize(s) if tk and tk.strip()]
+        kept = [tk for tk in toks if len(tk) >= 2 and tk not in TOPIC_STOPWORDS]
+        if not kept:
+            kept = [s]
+        for tk in kept:
+            if tk not in seen:
+                seen.add(tk)
+                expanded.append(tk)
+    return expanded
+
+
 async def find_episodes_by_topic_with_source(
     db: AsyncSession,
     show_id: uuid.UUID,
     topic_terms: list[str],
+    *,
+    query: str | None = None,
 ) -> tuple[list[EpisodeRef], str]:
     """Variant of `find_episodes_by_topic` that also reports which dispatch
     path produced the candidate set: `"topic_index"` (title/description
@@ -291,47 +329,11 @@ async def find_episodes_by_topic_with_source(
     cleaned = [t.strip() for t in topic_terms if t and t.strip()]
     if not cleaned:
         return [], "topic_index"
-    # tsquery operators are escaped lightly: replace `&|!()<:>\\` with
-    # space so a stray operator inside a LLM-extracted topic doesn't
-    # blow up to_tsquery(). Mirrors `app.services.rag._build_ts_query`.
-    import re as _re
-    safe_terms: list[str] = []
-    for t in cleaned:
-        s = _re.sub(r"[&|!()<:>\\]", " ", t).strip()
-        if s:
-            safe_terms.append(s)
-    if not safe_terms:
+    # jieba-expand the topic arg into deduped OR-tsquery tokens (escape, split
+    # phrases, drop noise). topic_index / guest paths use this topic-only list.
+    expanded = _expand_to_tokens(cleaned)
+    if not expanded:
         return [], "topic_index"
-
-    # enumeration-rule-pattern-broaden bugfix: the LLM entity extractor
-    # often returns multi-character phrases like "高雄美食" that Postgres'
-    # `simple` analyzer keeps as a single token. But
-    # `episode_description_chunks.text_tsvector` was built from a
-    # jieba-tokenised stream (per `description_indexer.py` R3.1 design),
-    # so the chunks store the individual lexemes "高雄" + "美食" — the
-    # tsquery for the phrase as one token matches zero rows. We jieba-
-    # tokenise each topic term here (filtering single-char and stopword
-    # noise) so a phrase contributes its component words to the OR query.
-    # Concrete impact (prod 2026-05-17): "高雄美食" went from 0 matches
-    # to 37 matches against the same description corpus.
-    expanded: list[str] = []
-    seen: set[str] = set()
-    for t in safe_terms:
-        toks = [tk for tk in tokenizer.tokenize(t) if tk and tk.strip()]
-        # Drop noise: single-char tokens (particles like 的、了、是) and
-        # stopwords from TOPIC_STOPWORDS. If jieba produces nothing useful
-        # for a term (e.g. all-stopword input), fall back to the original
-        # term so we don't silently drop the LLM's signal.
-        kept = [
-            tk for tk in toks
-            if len(tk) >= 2 and tk not in TOPIC_STOPWORDS
-        ]
-        if not kept:
-            kept = [t]
-        for tk in kept:
-            if tk not in seen:
-                seen.add(tk)
-                expanded.append(tk)
 
     tsquery_text = " | ".join(expanded)
 
@@ -361,23 +363,43 @@ async def find_episodes_by_topic_with_source(
                 _row_to_episode_ref(row) for row in guest_result.mappings()
             ]
 
-    # Transcript-index dispatch: when the topic has ≥2 discriminating tokens
-    # (after show-name removal), also pull episodes whose transcript chunks
+    # Effective tokens for the transcript path (topic-prefilter-forward-query-tokens
+    # design D2, fallback-only): when the topic alone yields <2 discriminating
+    # tokens — the agent put a single entity in `topic` and the discriminating
+    # content in `query` (e.g. topic="Leo王", query="迪拉跟 Leo王 第一次見面…") — fall
+    # back to topic ∪ query tokens so the transcript source still triggers. When
+    # the topic already has ≥2 discriminating tokens (enumeration topics like
+    # "高雄 美食"), `query` is ignored → behaviour is bit-equivalent to before.
+    # topic_index / guest paths above keep using the topic-only `expanded`.
+    transcript_tokens = expanded
+    if len(_discriminating_tokens(expanded)) < 2 and query and query.strip():
+        q_tokens = _expand_to_tokens([query])
+        combined: list[str] = []
+        seen_t: set[str] = set()
+        for tk in (*expanded, *q_tokens):
+            if tk not in seen_t:
+                seen_t.add(tk)
+                combined.append(tk)
+        transcript_tokens = combined
+    transcript_tsquery = " | ".join(transcript_tokens)
+
+    # Transcript-index dispatch: when the effective tokens have ≥2 discriminating
+    # tokens (after show-name removal), also pull episodes whose transcript chunks
     # lexically match, capped by best-chunk ts_rank. Run BEFORE the topic SQL
     # so the topic SQL stays the last `db.execute` call. flag off or <2
     # discriminating tokens → query never runs (candidate set is
     # bit-equivalent to the prior title/description behaviour).
     transcript_eps: list[EpisodeRef] = []
     if getattr(settings, "enable_transcript_topic_prefilter", True):
-        if len(_discriminating_tokens(expanded)) >= 2:
+        if len(_discriminating_tokens(transcript_tokens)) >= 2:
             ts_result = await db.execute(
                 text(_TRANSCRIPT_TOPIC_SQL),
                 {
                     "show_id": show_id,
-                    "tsquery_text": tsquery_text,
-                    # coverage arm matches each token separately; same expanded
-                    # list that built tsquery_text (D2), bound as text[].
-                    "tokens": expanded,
+                    "tsquery_text": transcript_tsquery,
+                    # coverage arm matches each token separately; same effective
+                    # list that built transcript_tsquery (D2/D4), bound as text[].
+                    "tokens": transcript_tokens,
                     "cap": getattr(settings, "transcript_prefilter_cap", 12),
                 },
             )

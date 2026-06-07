@@ -389,7 +389,7 @@ async def _search_with_topic_prefilter(
 ) -> dict:
     candidates, prefilter_source = (
         await episode_finders.find_episodes_by_topic_with_source(
-            ctx.db, ctx.show_id, [inp.topic]
+            ctx.db, ctx.show_id, [inp.topic], query=inp.query
         )
     )
     vec = await _embed_query(ctx.db, inp.query)
