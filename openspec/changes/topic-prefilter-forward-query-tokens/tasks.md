@@ -19,4 +19,4 @@
 
 ## 4. 回歸與 prod smoke
 
-- [ ] 4.1 跑既有 `backend/tests/test_chat_agent_topic_prefilter.py`、`test_episode_finders.py`、`test_episode_finders_transcript_aware.py` 確認無回歸（全綠）；改動部署後（git push 觸發 Zeabur build，等 RUNNING），用 `backend/scripts/b23_prod_smoke.sh` 對 prod 跑 b23 題 ≥4 次，記錄於 change 目錄 `smoke-results.md`：EP107 進候選 / 被引用的命中率，且至少一次 `prefilter_source=transcript_index`（確認 ②-觸發層真的打開、非 topic_index）。確認**明顯優於修前 0/6**（受 LLM 變異影響不要求 4/4，但須 >0 且 transcript 路徑有觸發）。驗證：三檔測試全綠；`smoke-results.md` 記錄命中率 + `prefilter_source` 證據，且 EP107 命中 >0/6 基線。
+- [x] 4.1 跑既有 `backend/tests/test_chat_agent_topic_prefilter.py`、`test_episode_finders.py`、`test_episode_finders_transcript_aware.py` 確認無回歸（全綠）；改動部署後（git push 觸發 Zeabur build，等 RUNNING），用 `backend/scripts/b23_prod_smoke.sh` 對 prod 跑 b23 題 ≥4 次，記錄於 change 目錄 `smoke-results.md`：EP107 進候選 / 被引用的命中率，且至少一次 `prefilter_source=transcript_index`（確認 ②-觸發層真的打開、非 topic_index）。確認**明顯優於修前 0/6**（受 LLM 變異影響不要求 4/4，但須 >0 且 transcript 路徑有觸發）。驗證：三檔測試全綠；`smoke-results.md` 記錄命中率 + `prefilter_source` 證據，且 EP107 命中 >0/6 基線。
