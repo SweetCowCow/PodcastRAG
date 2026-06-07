@@ -123,6 +123,14 @@ class Settings(BaseSettings):
     # which no sane cap rescues; that case relies on the LLM extracting action
     # tokens (verified end-to-end by the prod chat smoke).
     transcript_prefilter_cap: int = 12
+    # b22-cross-episode-topic-routing: deterministic first-turn tool_choice nudge
+    # that forces `search_with_topic_prefilter` when the chat agent receives a
+    # cross-episode topical / narrative question (high-precision detector in
+    # chat_agent/routing.py). Without it gpt-4o ignores the ToolSpec hint and
+    # picks search_across_episodes, leaving the transcript-aware candidate
+    # source dormant. Default on (bug fix); set ENABLE_TOPIC_ROUTING_NUDGE=false
+    # to revert to pure tool_choice="auto" without a code change.
+    enable_topic_routing_nudge: bool = True
     agentic_chat_max_iterations: int = 10
     agentic_chat_l0_k_turns: int = 3
     agentic_chat_l1_ttl_seconds: int = 7200

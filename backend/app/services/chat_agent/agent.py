@@ -31,8 +31,17 @@ from app.core.config import settings
 from app.schemas.query import ToolCallTrace
 from app.services.ai_step_resolver import AiStepNotConfiguredError, get_step_config
 from app.services.chat_agent.memory import build_messages, update_history_summary
+from app.services.chat_agent.routing import should_force_topic_prefilter
 from app.services.chat_agent.state import ChatSessionState, ChatSessionStateStore
 from app.services.chat_agent.tools import OPENAI_TOOLS_SPEC, ToolContext, _dispatch_tool
+
+# b22-cross-episode-topic-routing: forced tool_choice payload used on the first
+# LLM call when the deterministic detector flags a cross-episode topical
+# question. All other rounds use "auto" (see run_agent loop).
+_FORCE_TOPIC_PREFILTER_CHOICE = {
+    "type": "function",
+    "function": {"name": "search_with_topic_prefilter"},
+}
 
 # eval-framework-upgrade 2026-05-29: trace observability hooks.
 # All helpers are no-ops when EVAL_TRACING_ENABLED=false (cheap import-time
@@ -367,6 +376,23 @@ async def run_agent(
         )
     )
 
+    # b22-cross-episode-topic-routing: decide once (before the loop) whether to
+    # force the first LLM call to `search_with_topic_prefilter`. Cross-episode
+    # topical questions otherwise get tool_choice="auto" and gpt-4o picks
+    # search_across_episodes, leaving the topic-prefilter (transcript-aware)
+    # path dormant. Only the first round is forced; later rounds stay "auto".
+    #
+    # pinned-episode guard (task 5 routing probe): skip the force when the
+    # session has a live focused/pinned episode. A multi-turn follow-up like
+    # "他怎麼解釋 RAG？" (mt02) is episode-scoped by the pin even though its text
+    # reads as a cross-episode topical question; forcing cross-episode prefilter
+    # would override the pinned scope. `state` is already lazy-expired by load().
+    force_first = (
+        settings.enable_topic_routing_nudge
+        and state.focused_episode_id is None
+        and should_force_topic_prefilter(question)
+    )
+
     loop_t0 = time.perf_counter()
     for round_index in range(settings.agentic_chat_max_iterations):
         # Per-round token-budget guard. Trim oldest tool messages until
@@ -406,12 +432,17 @@ async def run_agent(
             stage_name="llm_loop",
             as_type="generation",
         ) as span_record:
+            tool_choice = (
+                _FORCE_TOPIC_PREFILTER_CHOICE
+                if force_first and round_index == 0
+                else "auto"
+            )
             try:
                 response = await client.chat.completions.create(
                     model=answer_cfg.model,
                     messages=messages,
                     tools=OPENAI_TOOLS_SPEC,
-                    tool_choice="auto",
+                    tool_choice=tool_choice,
                 )
             except openai.BadRequestError as exc:
                 kind = _classify_llm_exception(exc)
