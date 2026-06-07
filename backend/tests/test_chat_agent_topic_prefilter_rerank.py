@@ -64,7 +64,9 @@ def patched(monkeypatch):
         "voyage_captured": {},
     }
 
-    async def fake_finder(db, show_id, topics):
+    async def fake_finder(db, show_id, topics, *, query=None):
+        # query forwarded by _search_with_topic_prefilter
+        # (topic-prefilter-forward-query-tokens); accept & ignore here.
         return state["candidates"], "topic_index"
 
     async def fake_retrieve(db, *, show_id, query_embedding, question, k, episode_id_filter=None, **kw):

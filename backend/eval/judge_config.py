@@ -17,7 +17,7 @@ for ~0.07 Spearman delta, not significant). Calibration debt logged
 for R1.3 (rebuild mini-set to "judge perspective" + re-bake).
 """
 
-PRODUCTION_JUDGE_MODEL = "gpt-5-nano"
+PRODUCTION_JUDGE_MODEL = "gemini-2.5-flash-lite"
 JUDGE_PROVIDER_BASE_URL = "https://hnd1.aihub.zeabur.ai/v1"
 
 # 1M-token pricing snapshot (USD), 2026-05-05 from Zeabur AI Hub.

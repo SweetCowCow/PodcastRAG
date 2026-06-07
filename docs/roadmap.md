@@ -100,7 +100,8 @@
 
 | 代號 | 項目 | 說明 |
 |------|------|------|
-| **R1** | RAG 評測框架 | golden set + recall@K + regression。**必做**，否則 R2/R3 矇著眼改 |
+| **R1** | RAG 評測框架 | golden set + recall@K + regression。**必做**，否則 R2/R3 矇著眼改。R1.1 ✅ / R1.2 ✅ / R1.3 ⏸（指標觀察及通知機制，等 R3.x 完再做） |
+| **R1.3** ⏸ | 指標觀察及通知機制 | Langfuse trace + admin Dashboard 視覺化（Recall@5 / Faithfulness 趨勢、thumbs ratio）+ threshold alerting + qa_feedback thumbs-down 餵回 sentinel + judge calibration debt（gpt-5-nano Spearman 0.414 → 重 calibrate）+ JSONB events 表查詢加速。**等 R3.x（R3.2 / R3.3 + 衍生候選）全跑完才啟動** — 那時指標才有故事可說 |
 | **U3** | 使用量追蹤 Dashboard + 熱搜 chip | admin 看誰在燒額度，每人查詢趨勢；🆕 含 A3：QueryPage 空狀態顯示 7 日熱搜 chip 引導新使用者 |
 
 ---
@@ -157,6 +158,8 @@ R3 拆三段做（每段都跑 eval baseline 對照升幅）：
 |------|------|------|
 | **O2** | Pre-built base image | build 從 10 分→30 秒 |
 | ~~O3 → db-backup~~ ✅ | **archived 2026-05-07-db-backup（v1.3 milestone）** | 24h RPO / 30min RTO。每日 03:00 UTC pg_dump → age 加密 → Cloudflare R2 離站。月度 GHA 自動還原驗證。Manual smoke 全綠（restored 354/180826 = prod 354/180826，0% diff）。詳見 `docs/disaster-recovery.md` |
+| **F1** 🆕 | `celery-routing-and-dispatcher-fix`（~17 tasks，**R3.2 archive 後最先做**）| 修 EP20 互卡 + stale-detect 失效兩個架構性問題。內含：(a) 4 條 queue（transcribe / topic / summary / control）+ Celery message priority + task_routes，單 worker 不浪費 RAM；(b) dispatcher 把 `set status=running` defer 到 worker task entry + worker 端 5 min idempotency check。EP20 case study 根因正解 |
+| **F2** 🆕 | `task-failure-monitoring-and-circuit-breaker`（~25 tasks，依賴 F1 完）| 給所有背景任務加觀測層。內含：(a) 失敗率告警（30 min 窗口失敗 ≥3 次 → ZSend）；(b) 錯誤分類（暫時錯 retry / 永久錯 402/401/400 立刻 fail + 觸發斷路器）；(c) 斷路器（5 min 內同服務商連續 3 個永久錯 → 暫停所有用該服務商的 task）；(d) 自動每 30 min 探測恢復 + 手動按服務商 resume button。資料模型留 `task_type` 欄位方便未來細粒度恢復 |
 | **A4** 🆕 | 明亮（淺色）主題（源自競品分析） | Shared.jsx TOKEN 拆 DARK/LIGHT + ThemeContext + localStorage。優先級低，等使用者反映再做 |
 
 ---
