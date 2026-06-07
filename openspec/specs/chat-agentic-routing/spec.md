@@ -1269,3 +1269,217 @@ code:
   - docs/roadmap.md
   - src/releaseLog.jsx
 -->
+
+---
+### Requirement: Answer-step model must honor forced tool_choice with the full tool spec
+
+The model configured for the `answer` AI step (`ai_steps.answer.model`) SHALL honor OpenAI forced `tool_choice` (a specific `{"type":"function","function":{"name":...}}` selection) when called with the full chat-agent tool spec (`OPENAI_TOOLS_SPEC`, currently 14 tools). This is a precondition for the deterministic first-turn routing nudge (b22 `search_with_topic_prefilter` force) to take effect. Any change to `ai_steps.answer.model` SHALL be validated against this requirement before it is relied upon for routing, because some models (verified: gpt-4o, gpt-4.1-mini via AI Hub) silently ignore forced `tool_choice` under the full spec and fall back to free tool selection, while others (verified: gpt-4.1, gpt-5.1, gemini-2.5-flash, gemini-2.5-pro) honor it.
+
+#### Scenario: Configured answer model honors forced tool_choice
+
+- **GIVEN** `ai_steps.answer.model` is set to the selected model
+- **AND** a cross-episode topical question (b23) that the routing detector flags for force
+- **WHEN** the chat agent's first LLM call passes `tool_choice` forcing `search_with_topic_prefilter` with the full tool spec
+- **THEN** the trace's first tool call SHALL be `search_with_topic_prefilter`
+
+> Note: whether the answer ultimately cites EP107 is NOT part of this requirement.
+> The 2026-06-07 bake-off proved EP107 surfacing is bounded by the lexical
+> topic-prefilter mechanism (entity-token flooding pushes EP107 out of the
+> `ts_rank` cap), independent of the answer model — verified gpt-5.1 0/4 and
+> gemini-2.5-pro 1/4 even with correct routing. EP107 reliability is owned by the
+> `topic-prefilter-transcript-aware` capability and its follow-up (semantic
+> episode selection / entity-token stripping), not by the answer-step model.
+
+#### Scenario: Answer model that ignores forced tool_choice is rejected for routing
+
+- **GIVEN** a candidate model is evaluated for the `answer` step
+- **WHEN** it is called with the full tool spec and a forced `tool_choice` for a specific function
+- **AND** it returns a different (freely chosen) tool instead of the forced one
+- **THEN** that model SHALL NOT be selected as the `answer` step model while b22 deterministic routing is relied upon
+
+<!-- @trace
+source: answer-model-bakeoff-and-switch
+updated: 2026-06-07
+code:
+  - backend/scripts/bakeoff_out/bakeoff-20260607T115922-answers.md
+  - backend/scripts/bakeoff_out/bakeoff-20260607T112640.md
+  - backend/scripts/answer_model_bakeoff.py
+  - backend/scripts/bakeoff_out/bakeoff-20260607T115922.json
+  - skills-lock.json
+  - backend/scripts/bakeoff_out/bakeoff-20260607T112640-answers.md
+  - backend/scripts/b23_prod_smoke.sh
+  - backend/scripts/bakeoff_out/bakeoff-20260607T112640.json
+  - backend/scripts/bakeoff_out/bakeoff-20260607T115922.md
+  - backend/scripts/hyde_ab/results/calibrate-20260606T221058.json
+-->
+
+---
+### Requirement: Topic candidate selection includes transcript-chunk matches
+
+The system SHALL include transcript-chunk matches as a candidate source when `find_episodes_by_topic` / `find_episodes_by_topic_with_source` selects candidate episodes. An episode SHALL be a candidate when it matches the topic tsquery via its title, any of its description chunks, OR any of its transcript chunks. The transcript-chunk source SHALL be controlled by a default-on boolean setting `enable_transcript_topic_prefilter`; when the setting is `False`, candidate selection SHALL be bit-equivalent to the prior title-plus-description behavior. The recency-listing topic filter (`find_episodes_by_recency`) is out of scope for this requirement and retains the prior title-plus-description behavior.
+
+#### Scenario: Transcript-buried answer episode becomes a candidate
+
+- **WHEN** a topic's discriminating tokens appear in an episode's transcript chunks but not in its title or description
+- **AND** `enable_transcript_topic_prefilter` is `True`
+- **THEN** that episode SHALL be included in the candidate set returned by `find_episodes_by_topic`
+
+#### Scenario: Flag off preserves prior behavior
+
+- **WHEN** `enable_transcript_topic_prefilter` is `False`
+- **THEN** candidate selection SHALL match the prior title-plus-description-chunk behavior with no transcript-chunk source
+
+
+<!-- @trace
+source: topic-prefilter-transcript-aware
+updated: 2026-06-07
+code:
+  - backend/scripts/bakeoff_out/bakeoff-20260607T115922.md
+  - backend/app/core/config.py
+  - backend/scripts/bakeoff_out/bakeoff-20260607T112640.json
+  - backend/scripts/b22_routing_probe.py
+  - backend/scripts/b23_prod_smoke.sh
+  - backend/scripts/bakeoff_out/bakeoff-20260607T115922.json
+  - backend/app/services/chat_agent/routing.py
+  - backend/scripts/bakeoff_out/bakeoff-20260607T115922-answers.md
+  - backend/app/services/episode_finders.py
+  - backend/scripts/answer_model_bakeoff.py
+  - backend/scripts/bakeoff_out/bakeoff-20260607T112640.md
+  - skills-lock.json
+  - backend/app/services/chat_agent/agent.py
+  - backend/scripts/hyde_ab/results/calibrate-20260606T221058.json
+  - backend/scripts/bakeoff_out/bakeoff-20260607T112640-answers.md
+tests:
+  - backend/tests/test_chat_agent_topic_routing_nudge.py
+  - backend/tests/test_episode_finders_transcript_aware.py
+  - backend/tests/test_episode_finders.py
+-->
+
+---
+### Requirement: Transcript candidate source is guarded against non-discriminative over-selection
+
+The system SHALL guard the transcript-chunk candidate source so a single common token (for example a host name appearing across most episodes) cannot select the entire show. The transcript-chunk source SHALL be applied only when the effective topic tokens number at least two after the existing jieba length filter, topic stop-words, and show-name-term removal.
+
+The effective topic tokens SHALL be derived as follows so that the agent placing only a single entity in the `topic` argument (while the discriminating content sits in the `query` argument) does not silently disable the transcript source:
+
+- Let `topic_tokens` be the discriminating tokens of the `topic` argument.
+- WHEN `topic_tokens` has at least two tokens, the effective topic tokens SHALL be exactly `topic_tokens` (the `query` argument SHALL NOT influence selection, preserving prior behavior for focused topics).
+- WHEN `topic_tokens` has fewer than two tokens AND a non-empty `query` argument is provided, the effective topic tokens SHALL be the discriminating tokens of the combined `topic` and `query` text, deduplicated.
+- Otherwise the effective topic tokens SHALL be `topic_tokens`.
+
+The OR-tsquery and the coverage arm's per-token array SHALL both be built from the same effective topic tokens. The system SHALL contribute episodes from the transcript source as the union of two capped arms, deduplicated by episode id:
+
+1. a `ts_rank` arm — the top `transcript_prefilter_cap` episodes ranked by best transcript-chunk `ts_rank` over the topic OR-tsquery (this preserves single-token-relevant episodes for breadth-oriented topics); and
+2. a coverage arm — the top `transcript_prefilter_cap` episodes ranked by the count of DISTINCT topic tokens matched in their transcript chunks, with the sum of per-token best `ts_rank` as the tie-break (this surfaces narrative episodes that cover multiple topic tokens but whose single best `ts_rank` is diluted by common tokens).
+
+The combined contribution is therefore at most `2 × transcript_prefilter_cap` episodes. The guard SHALL NOT depend on a host registry, which does not exist; a host name is not necessarily present in the show title. When the transcript source is not applied (flag off, or fewer than two effective topic tokens), candidate selection SHALL be bit-equivalent to the prior title-plus-description behavior. The `query`-fallback derivation SHALL be governed by the same `enable_transcript_topic_prefilter` setting; no additional setting is introduced.
+
+#### Scenario: Single token does not trigger transcript source
+
+- **WHEN** a topic reduces to fewer than two tokens after filtering
+- **AND** no `query` argument is provided (or it also yields fewer than two combined discriminating tokens)
+- **THEN** the transcript-chunk candidate source SHALL NOT be applied
+- **AND** candidate selection SHALL match the prior title-plus-description-chunk behavior
+
+#### Scenario: Thin topic plus discriminating query triggers transcript source
+
+- **GIVEN** a `topic` argument that yields fewer than two discriminating tokens (for example a single entity name)
+- **AND** a `query` argument whose combined discriminating tokens with the topic number at least two
+- **WHEN** `enable_transcript_topic_prefilter` is `True`
+- **THEN** the transcript-chunk candidate source SHALL be applied using the combined discriminating tokens
+- **AND** the OR-tsquery and the coverage arm's per-token array SHALL both be built from those combined tokens
+
+#### Scenario: Focused topic ignores query
+
+- **GIVEN** a `topic` argument that yields at least two discriminating tokens
+- **WHEN** the transcript source is applied
+- **THEN** the effective topic tokens SHALL equal the topic's discriminating tokens
+- **AND** the `query` argument SHALL NOT change which episodes are selected
+
+#### Scenario: Transcript source contributes the union of ts_rank and coverage arms
+
+- **WHEN** more than `transcript_prefilter_cap` episodes match the topic via transcript chunks
+- **THEN** the transcript source SHALL contribute the union of (the top `transcript_prefilter_cap` episodes by best transcript-chunk `ts_rank`) and (the top `transcript_prefilter_cap` episodes by distinct-token coverage with sum-of-per-token-`ts_rank` tie-break)
+- **AND** the contributed set SHALL be deduplicated by episode id
+
+#### Scenario: Narrative GT episode surfaces without dropping single-token enumeration episodes
+
+- **GIVEN** a topic with multiple discriminating tokens where the answer episode's transcript covers most of the tokens but its single best `ts_rank` is outranked by episodes heavy in one common token
+- **WHEN** the transcript source is applied
+- **THEN** the multi-token-covering answer episode SHALL be contributed via the coverage arm
+- **AND** an episode that matches only one of the topic tokens but ranks within the top `transcript_prefilter_cap` by `ts_rank` SHALL still be contributed via the `ts_rank` arm
+
+<!-- @trace
+source: topic-prefilter-forward-query-tokens
+updated: 2026-06-07
+code:
+  - backend/scripts/bakeoff_out/bakeoff-20260607T112640.json
+  - skills-lock.json
+  - backend/scripts/hyde_ab/results/calibrate-20260606T221058.json
+  - backend/scripts/bakeoff_out/bakeoff-20260607T112640-answers.md
+  - backend/scripts/answer_model_bakeoff.py
+  - backend/scripts/bakeoff_out/bakeoff-20260607T115922.md
+  - backend/scripts/bakeoff_out/bakeoff-20260607T112640.md
+  - backend/scripts/bakeoff_out/bakeoff-20260607T115922-answers.md
+  - backend/scripts/b23_prod_smoke.sh
+  - backend/scripts/bakeoff_out/bakeoff-20260607T115922.json
+-->
+
+---
+### Requirement: Cross-episode topical questions are deterministically routed to topic-prefilter search
+
+The system SHALL apply a deterministic first-turn routing nudge so that cross-episode topical / narrative questions use `search_with_topic_prefilter` (candidate-scoping + voyage rerank) instead of relying on the LLM's free `tool_choice`, which empirically selects the un-scoped `search_across_episodes`. When the current user turn is detected as a cross-episode topical question, the system SHALL force the first agentic LLM call's `tool_choice` to `search_with_topic_prefilter`; once that tool returns, subsequent rounds SHALL revert to `tool_choice="auto"`. The nudge SHALL be controlled by a default-on boolean setting `enable_topic_routing_nudge`; when the setting is `False`, tool selection SHALL be bit-equivalent to the prior `tool_choice="auto"` behavior on every round.
+
+The detector SHALL favor precision over recall: it SHALL classify a turn as cross-episode topical only when the question is NOT scoped to a specific episode reference (no `EPnnn` / `第n集` / 「這集」/「上一集」 style reference) AND the question yields at least two discriminating topic tokens (using the existing jieba topic-term extraction with stop-word and show-name removal). Turns that do not meet both conditions SHALL NOT be force-routed and SHALL keep `tool_choice="auto"`.
+
+#### Scenario: Cross-episode topical question forces topic-prefilter on the first call
+
+- **WHEN** a user asks a cross-episode topical question with ≥2 discriminating topic tokens and no specific episode reference
+- **AND** `enable_topic_routing_nudge` is `True`
+- **THEN** the first agentic LLM call SHALL be issued with `tool_choice` forcing `search_with_topic_prefilter`
+- **AND** rounds after that tool returns SHALL use `tool_choice="auto"`
+
+#### Scenario: Episode-scoped question is not force-routed
+
+- **WHEN** a user question references a specific episode (e.g. contains `EP107` or 「這集」)
+- **THEN** the routing nudge SHALL NOT fire
+- **AND** the first agentic LLM call SHALL use `tool_choice="auto"`
+
+#### Scenario: Question with fewer than two discriminating tokens is not force-routed
+
+- **WHEN** a user question reduces to fewer than two discriminating topic tokens after filtering
+- **THEN** the routing nudge SHALL NOT fire
+- **AND** tool selection SHALL match the prior `tool_choice="auto"` behavior
+
+#### Scenario: Flag off preserves prior behavior
+
+- **WHEN** `enable_topic_routing_nudge` is `False`
+- **THEN** every agentic LLM call SHALL use `tool_choice="auto"` regardless of the detector outcome
+
+<!-- @trace
+source: b22-cross-episode-topic-routing
+updated: 2026-06-07
+code:
+  - backend/app/services/episode_finders.py
+  - backend/app/services/chat_agent/tools.py
+  - backend/app/services/chat_agent/agent.py
+  - backend/scripts/bakeoff_out/bakeoff-20260607T115922.md
+  - backend/scripts/bakeoff_out/bakeoff-20260607T115922-answers.md
+  - backend/scripts/hyde_ab/results/calibrate-20260606T221058.json
+  - docs/roadmap.md
+  - backend/eval/judge_config.py
+  - backend/scripts/bakeoff_out/bakeoff-20260607T115922.json
+  - backend/scripts/b23_prod_smoke.sh
+  - backend/app/core/config.py
+  - backend/scripts/bakeoff_out/bakeoff-20260607T112640-answers.md
+  - backend/scripts/answer_model_bakeoff.py
+  - backend/app/services/chat_agent/routing.py
+  - backend/scripts/b22_routing_probe.py
+  - backend/scripts/bakeoff_out/bakeoff-20260607T112640.md
+  - backend/scripts/bakeoff_out/bakeoff-20260607T112640.json
+  - skills-lock.json
+tests:
+  - backend/tests/test_chat_agent_topic_routing_nudge.py
+  - backend/tests/test_chat_agent_topic_prefilter_rerank.py
+  - backend/tests/test_episode_finders_transcript_aware.py
+-->

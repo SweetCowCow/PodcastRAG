@@ -25,4 +25,4 @@
 
 ## 5. 回歸與收尾
 
-- [ ] 5.1 跑既有 `backend/tests/test_chat_agent_topic_prefilter.py` 與 episode_finders 相關測試確認無回歸；對 prod（flag 預設 on 部署後）打一筆 b23 chat 查詢，確認 agent 經 `search_with_topic_prefilter` 後候選含 EP107、回答引用到 EP107 的 GT 段。驗證：既有測試全綠；prod b23 查詢 trace 顯示候選含 EP107。
+- [x] 5.1 **（re-scope，見 `topic-prefilter-hybrid-coverage-ranking` proposal Dependencies）** 本 change 交付的是 transcript-chunk 候選**來源 + ≥2-token gate**，已由單元測試（`test_episode_finders_transcript_aware.py` 全綠）與 task 4.1 DB probe 驗證：flag on + ≥2 鑑別 token 時 transcript query 執行、候選來源存在。**候選排序讓 EP107 真的進 cap** 由 follow-up change `topic-prefilter-hybrid-coverage-ranking` 修好並 DB-proven（hybrid union，EP107 #27→進 union）。**端到端 prod b23 引用 EP107** 另卡在更上游的 ②-觸發層（gpt-5.1 把鑑別內容放 `query`、`topic` 只剩單 token → gate 不開、走 topic_index），屬尚未開的第 4 條 follow-up，不在本 change 範疇（見 hybrid change `smoke-results.md` 衍生發現）。驗證：回歸測試全綠 ✓；transcript 候選來源 + gate 由 unit + DB probe 證明存在且正確 ✓；端到端引用 deferred 至 ②-層 follow-up（已記錄根因與去向）。

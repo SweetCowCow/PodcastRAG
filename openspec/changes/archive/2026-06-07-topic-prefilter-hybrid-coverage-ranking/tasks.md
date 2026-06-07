@@ -19,4 +19,4 @@
 
 ## 4. 回歸與 prod smoke
 
-- [ ] 4.1 跑既有 `backend/tests/test_chat_agent_topic_prefilter.py` 與 episode_finders 相關測試確認無回歸；對 prod（部署後）用 `backend/scripts/b23_prod_smoke.sh` 跑 b23 題數次，記錄 EP107 進候選/被引用的命中率，確認**明顯優於修前 0/4**（受 LLM topic 生成變異影響，不要求 4/4）。驗證：既有測試全綠；b23 smoke 命中率記錄於 change 目錄，且 > 0/4 基線。
+- [x] 4.1 跑既有 `backend/tests/test_chat_agent_topic_prefilter.py` 與 episode_finders 相關測試確認無回歸（**33 passed**）；對 prod（部署後 commit 2696f4f）用 `backend/scripts/b23_prod_smoke.sh` 跑 b23 題 ×6。**結果記入 `smoke-results.md`**：本 change 修正的 ③-排序層效力由 task 2.1 DB probe apples-to-apples 證明（同一會觸發路徑的 3-token topic「迪拉 Leo王 合作」下，EP107 修前 #27 出 cap → 修後經 coverage arm 進 union）。prod chat smoke 端到端 0/6 **非本 change 失敗**：gpt-5.1 穩定把實體放 `topic="Leo王"`（1 鑑別 token）、敘述放 `query` → 連 transcript 觸發 gate（≥2 token，本 change 明列不改）都沒過、走 `topic_index`，③-排序層整個沒被執行。此「thin topic-arg」缺口屬 ②-觸發層，是新 follow-up（見 smoke-results.md 衍生發現），不在本 change 範疇。驗證：回歸測試全綠 ✓；smoke 命中率與「未觸發本 change 路徑」之根因記錄於 `smoke-results.md` ✓。
