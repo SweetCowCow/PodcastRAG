@@ -211,6 +211,37 @@ async def test_transcript_query_runs_before_topic_sql(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_transcript_query_binds_tokens_param(monkeypatch):
+    """topic-prefilter-hybrid-coverage-ranking D2: the transcript query binds a
+    `tokens` param (text[] for the coverage arm's per-token matching) that is
+    the SAME expanded token list that builds `tsquery_text` (OR-joined). Asserts
+    the two are consistent without hard-coding jieba output."""
+    monkeypatch.setattr(tokenizer, "get_show_name_terms", lambda: set())
+    monkeypatch.setattr(
+        episode_finders.settings, "enable_transcript_topic_prefilter", True
+    )
+    monkeypatch.setattr(
+        episode_finders.settings, "enable_guest_dispatch", False
+    )
+    tokenizer.reset_for_tests()
+    db = _mock_db_by_sql(topic_rows=[], transcript_rows=[])
+    episode_finders._guest_name_cache.clear()
+    await episode_finders.find_episodes_by_topic_with_source(
+        db, uuid.uuid4(), ["迪拉 Leo王"]
+    )
+    ts_calls = _transcript_sql_calls(db)
+    assert len(ts_calls) == 1
+    params = ts_calls[0][0][1]
+    assert "tokens" in params
+    assert isinstance(params["tokens"], list) and params["tokens"]
+    # D2: tokens is the OR-query token list, same source as tsquery_text.
+    assert " | ".join(params["tokens"]) == params["tsquery_text"]
+    # SQL carries both arms of the hybrid union.
+    sql_text = str(ts_calls[0][0][0])
+    assert "by_rank" in sql_text and "by_coverage" in sql_text
+
+
+@pytest.mark.asyncio
 async def test_topic_and_transcript_merge_source(monkeypatch):
     """topic + transcript both contribute distinct episodes → 'merged'."""
     monkeypatch.setattr(tokenizer, "get_show_name_terms", lambda: set())

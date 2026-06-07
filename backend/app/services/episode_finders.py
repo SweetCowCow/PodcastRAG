@@ -206,18 +206,54 @@ ORDER BY published_at DESC NULLS LAST
 # silent) become candidates. Episodes are ranked by their best chunk's
 # ts_rank and capped to :cap to stop a single common token (e.g. a host name
 # spoken in most episodes) from selecting the whole show.
+# Hybrid union of two capped arms (topic-prefilter-hybrid-coverage-ranking D1):
+#   by_rank     — top :cap episodes by best transcript-chunk ts_rank over the
+#                 OR-tsquery. Preserves single-token-relevant episodes (breadth;
+#                 enumeration topics like "高雄 美食").
+#   by_coverage — top :cap episodes by COUNT(DISTINCT topic token matched),
+#                 tie-broken by SUM(per-token best ts_rank). Surfaces narrative
+#                 episodes covering many topic tokens whose single best ts_rank
+#                 is diluted by a common host/entity token flooding the OR pool
+#                 (b23 EP107). `:tokens` is the expanded token list (same source
+#                 as `:tsquery_text`), bound as text[] like `_GUEST_DISPATCH_SQL`.
+# Contribution is the dedup'd union → at most 2 × :cap episodes.
 _TRANSCRIPT_TOPIC_SQL = """
+WITH by_rank AS (
+    SELECT e.id
+    FROM episodes e
+    JOIN transcripts t ON t.episode_id = e.id
+    JOIN transcript_chunks tc ON tc.transcript_id = t.id
+    WHERE e.show_id = :show_id
+      AND tc.text_tsvector IS NOT NULL
+      AND tc.text_tsvector @@ to_tsquery('simple', :tsquery_text)
+    GROUP BY e.id, e.published_at
+    ORDER BY MAX(ts_rank(tc.text_tsvector, to_tsquery('simple', :tsquery_text))) DESC,
+             e.published_at DESC NULLS LAST
+    LIMIT :cap
+),
+cov_base AS (
+    SELECT e.id AS id, e.published_at AS pub, tok,
+           MAX(ts_rank(tc.text_tsvector, to_tsquery('simple', tok))) AS tok_rank
+    FROM episodes e
+    JOIN transcripts t ON t.episode_id = e.id
+    JOIN transcript_chunks tc ON tc.transcript_id = t.id
+    CROSS JOIN unnest(CAST(:tokens AS text[])) AS tok
+    WHERE e.show_id = :show_id
+      AND tc.text_tsvector IS NOT NULL
+      AND tc.text_tsvector @@ to_tsquery('simple', tok)
+    GROUP BY e.id, e.published_at, tok
+),
+by_coverage AS (
+    SELECT id
+    FROM cov_base
+    GROUP BY id, pub
+    ORDER BY COUNT(DISTINCT tok) DESC, SUM(tok_rank) DESC, pub DESC NULLS LAST
+    LIMIT :cap
+)
 SELECT e.id, e.title, e.published_at, e.guests, e.ai_summary
 FROM episodes e
-JOIN transcripts t ON t.episode_id = e.id
-JOIN transcript_chunks tc ON tc.transcript_id = t.id
-WHERE e.show_id = :show_id
-  AND tc.text_tsvector IS NOT NULL
-  AND tc.text_tsvector @@ to_tsquery('simple', :tsquery_text)
-GROUP BY e.id, e.title, e.published_at, e.guests, e.ai_summary
-ORDER BY MAX(ts_rank(tc.text_tsvector, to_tsquery('simple', :tsquery_text))) DESC,
-         e.published_at DESC NULLS LAST
-LIMIT :cap
+WHERE e.id IN (SELECT id FROM by_rank UNION SELECT id FROM by_coverage)
+ORDER BY e.published_at DESC NULLS LAST
 """
 
 
@@ -339,6 +375,9 @@ async def find_episodes_by_topic_with_source(
                 {
                     "show_id": show_id,
                     "tsquery_text": tsquery_text,
+                    # coverage arm matches each token separately; same expanded
+                    # list that built tsquery_text (D2), bound as text[].
+                    "tokens": expanded,
                     "cap": getattr(settings, "transcript_prefilter_cap", 12),
                 },
             )
