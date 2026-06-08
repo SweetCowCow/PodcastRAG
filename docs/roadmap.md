@@ -19,7 +19,7 @@
 
 | 序 | 項目 | code | change 名（暫名） | 前置 / 卡點 | 驗收標準 |
 |---|------|------|------------------|------------|---------|
-| **1** | Pre-built base image | EQ7 | `o2-prebuilt-base-image` | 無（**起手**） | build ~10 分 → ~30 秒；prod deploy 驗證 |
+| ~~1~~ ✅ | Pre-built base image | EQ7 | `o2-prebuilt-base-image` | — | ✅ 2026-06-08 archive（`2026-06-08-o2-prebuilt-base-image`，commits `b92fc25`/`25c10c9`/`6027556`/`9abf801`）。base-as-cache（否決 Route A 契約式）：`Dockerfile.base`→GHCR 公開 image + app `Dockerfile` `FROM` 它 + 保留 pip 自癒層 + GHA `build-base-image.yml`。新 spec `container-build-pipeline`（4 ADDED）。**prod build ~10 分→~2–2.5 分**；四服務 RUNNING、chat query 200+5 citations。回滾＝`git revert 25c10c9`（單檔） |
 | **2** | golden set 擴充（曼報＋壹加壹各 ≥30 題） | EQ5 | `golden-set-expand-manbao-yijiayi` | 無 | 各 ≥30 題人工 sentinel；**一題一題共草**（feedback_golden_set_co_draft_flow）。後面品質改動的量尺 |
 | **3** | agent 代詞 grounding | EQ4b | `agent-pronoun-grounding` | 建議 #2 先（要量尺） | pronoun 0 hallucinated 維持；judge `pronoun_attribution_check` 綠。judge 端已能量測（unblocked），改 agent 端 grounding |
 | **4** | RAG 回答 cache | EQ6 | `r4-rag-result-cache` | 無 | Redis hash key(問題+show+top_k+model)；回應附 `cache_hit` flag |
@@ -61,7 +61,7 @@
 | **EQ4** | 對話 Agent（核心） | `chat-agentic-tool-routing` + `enable-agentic-chat-default-on` + ordinal/multi-turn + grounding-v2 + severe-residual-fix | ✅ 核心完成 | — | ✅ **核心已 archive（2026-05-21 主 change，2026-05-22 default-on，prod `enable_agentic_chat=True`）**+ 後續一串強化（ordinal/multi-turn/grounding/residual 皆 archive）。原列名下三項已**拆散重排**：rag.py 拆分→**EQ4a**(序5)、代詞 grounding→**EQ4b**(序3)、citation-postgen→**併入 EQ3d**(序7)。b22/b23 routing nudge 疊在本 agent loop 上 |
 | **EQ5** | 評測 / golden set | `golden-set-expand-manbao-yijiayi`（**首要**）→ 後續 R1.3 judge re-bake-off / `eval-runner-dynamic-top-k` / q25 audit | ⬜ | 無（首要可立即動） | 曼報 + 壹加壹各 ≥30 題人工 sentinel；一題一題共草（feedback_golden_set_co_draft_flow） |
 | **EQ6** | RAG 回答 cache | `r4-rag-result-cache` | ⬜ | 無 | Redis hash key(問題+show+top_k+model)；回應附 `cache_hit` flag |
-| **EQ7** | Pre-built base image | `o2-prebuilt-base-image` | ⬜ | 無 | build 從 ~10 分降到 ~30 秒；prod deploy 驗證 |
+| **EQ7** | Pre-built base image | `o2-prebuilt-base-image` | ✅ | 無 | ✅ 2026-06-08 archive。base-as-cache（GHCR 公開 base + app `FROM` 它 + pip 自癒層 + GHA build workflow）。**prod build ~10 分→~2–2.5 分**、四服務 RUNNING、chat query 200。新 spec `container-build-pipeline` |
 | **EQ8** | 詞典系統整合（F4） | `dict-system-integration`（暫名） | ⬜ | **先 /spectra-discuss** | 核准 ASR 校正時自動加進分詞詞典；併 Parking Lot「詞典系統整合/重設計」一起想（兩套詞典職責釐清 + 後台 UI 重設計） |
 | **EQ9** | 一般同音異義字修正（F7） | `general-homophone-correction`（暫名） | ⬜ | **先 /spectra-discuss**（風險高） | 非專名通用同音（在來→再來）；過度修正風險高，須先評估方法與防誤改機制，不與 EQ2b RAGEC 混 |
 
