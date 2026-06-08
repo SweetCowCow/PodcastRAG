@@ -29,7 +29,7 @@
 
 ## 5. Prod 部署與驗收
 
-- [ ] 5.1 push 改寫後的 `Dockerfile` 到 main → Zeabur 觸發 build；記錄含 base pull 的整體 build 時間，確認 ≤ 3 分鐘（對照現況 ~10 分）
-- [ ] 5.2 確認 Zeabur 四服務 backend / worker / dispatcher / beat 皆 RUNNING（用 zeabur CLI 或 dashboard，逐一 service-id 對照 memory 部署清單）
-- [ ] 5.3 Prod smoke 抽驗行為不變：prod `GET /` 回 200；worker log 顯示訂閱四 queue（transcribe/topic/summary/control）；對任一節目跑一次 chat query 正常回應
-- [ ] 5.4 archive 前確認：若需回滾，`Dockerfile` 為單檔改動、git revert 該 commit 即回自含 apt+pip 舊 build（base image 保留不影響）
+- [x] 5.1 push 改寫後的 `Dockerfile` 到 main → Zeabur 觸發 build；記錄含 base pull 的整體 build 時間，確認 ≤ 3 分鐘（對照現況 ~10 分）
+- [x] 5.2 確認 Zeabur 四服務 backend / worker / dispatcher / beat 皆 RUNNING（用 zeabur CLI 或 dashboard，逐一 service-id 對照 memory 部署清單）
+- [x] 5.3 Prod smoke 抽驗行為不變：prod `GET /` 回 200；worker log 顯示訂閱四 queue（transcribe/topic/summary/control）；對任一節目跑一次 chat query 正常回應
+- [x] 5.4 archive 前確認：若需回滾，`Dockerfile` 為單檔改動、git revert 該 commit 即回自含 apt+pip 舊 build（base image 保留不影響）
