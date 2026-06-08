@@ -1,27 +1,20 @@
-FROM python:3.12-slim
+# Application image (EQ7 / o2-prebuilt-base-image).
+#
+# Derives from the prebuilt base image (OS packages + Python deps baked in),
+# so this build skips apt entirely. Base is built/published by
+# .github/workflows/build-base-image.yml → ghcr.io/sweetcowcow/podcastrag-base:base
+# (public; no pull auth needed).
+FROM ghcr.io/sweetcowcow/podcastrag-base:base
 
 WORKDIR /app
 
-# Cache apt package downloads across builds (BuildKit cache mounts).
-# sharing=locked avoids concurrent-build corruption on the shared cache.
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,target=/var/lib/apt,sharing=locked \
-    rm -f /etc/apt/apt.conf.d/docker-clean && \
-    apt-get update && \
-    apt-get install -y --no-install-recommends build-essential ffmpeg age \
-        ca-certificates curl gnupg lsb-release && \
-    install -d /usr/share/postgresql-common/pgdg && \
-    curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
-        -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc && \
-    echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] \
-http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
-        > /etc/apt/sources.list.d/pgdg.list && \
-    apt-get update && \
-    apt-get install -y --no-install-recommends postgresql-client-18
-
 COPY backend/requirements.txt .
 
-# Cache pip downloads across builds so repeat installs skip network fetch.
+# base-as-cache self-heal: the base already carries these deps, so this layer
+# resolves them as already-satisfied without re-downloading large wheels
+# (ctranslate2 / faster-whisper etc). If requirements.txt added a dep the base
+# does not yet have, only the delta installs here. A stale base therefore costs
+# build speed only — it never ships a prod image missing dependencies.
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install -r requirements.txt
 
