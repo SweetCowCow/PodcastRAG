@@ -55,6 +55,30 @@ const MILESTONE_LABELS = {
 
 // Entries — newest milestone first; within each milestone newest date first.
 const RELEASE_LOG = [
+  // ─── v2.2 — Faster deploys (6/8) ───
+  {
+    date: '2026-06-08', slug: 'o2-prebuilt-base-image', milestone: 'v2.2', tag: 'enhancement',
+    title: {
+      zh: '系統更新上線變快了：新版部署從約十分鐘縮到兩分多鐘',
+      en: 'Deploys Got Faster: Shipping an Update Now Takes ~2 Minutes Instead of ~10',
+    },
+    summary: {
+      zh: '每次我們修 bug 或上新功能，系統都要重新打包、重新部署才會生效。以前這個過程要約十分鐘，因為每次都把一堆笨重的元件從頭重裝一遍。這版把那些笨重元件「預先打包好、重複沿用」，更新上線縮短到約兩分半。對你而言：修正和新功能能更快出現在網站上——網站本身的操作沒有任何改變。',
+      en: 'Every time we fix a bug or ship a feature, the system has to repackage and redeploy before it goes live. That used to take about ten minutes because it reinstalled a pile of heavy components from scratch each time. This release pre-packages those heavy components once and reuses them, cutting deploys to roughly two and a half minutes. For you: fixes and new features reach the site faster — nothing about using the site itself changes.',
+    },
+    summaryBullets: {
+      zh: [
+        '新版部署時間從 ~10 分縮短到 ~2.5 分',
+        '修正與新功能能更快上線',
+        '網站操作無可見變化（純後台部署優化）',
+      ],
+      en: [
+        'Deploy time cut from ~10 min to ~2.5 min',
+        'Fixes and new features reach the site sooner',
+        'No visible change to using the site (a behind-the-scenes build optimization)',
+      ],
+    },
+  },
   // ─── v2.2 — ASR Detection over existing episodes + observable jobs (6/4) ───
   {
     date: '2026-06-04', slug: 'asr-homophone-full-backfill', milestone: 'v2.2', tag: 'feature',
