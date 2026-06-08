@@ -28,7 +28,7 @@
 | **EQ3a-f4** | b22 routing（強制路由） | `b22-cross-episode-topic-routing` | ✅ | EQ3a | ✅ 2026-06-07 archive（`2026-06-07-b22-cross-episode-topic-routing`）。deterministic nudge：跨集 narrative 題第一輪強制 `tool_choice=search_with_topic_prefilter`（flag `enable_topic_routing_nudge`）+ pinned-episode guard。prod smoke first-tool 5/5。EP107 引用半段交 EQ3a-f5 鏈補齊 |
 | **EQ3a-f5** | b23 narrative retrieval | `topic-prefilter-{transcript-aware,hybrid-coverage-ranking,forward-query-tokens}` + `answer-model-bakeoff-and-switch` | ✅ | EQ3a | ✅ 2026-06-07 四條 archive。①來源 transcript-aware（transcript-chunk 候選）②排序 hybrid-coverage（ts_rank ∪ distinct-token coverage union）③觸發 forward-query（agent topic 太薄時用 query token 開 gate）+ answer 模型切 gpt-5.1。**prod 端到端 EP107 引用 5/5（修前 0/6）**。見 `project_session_resume_2026_06_07` |
 | **EQ3b** | b20 召回 RCA spike | `chunk-level-retrieval-rca-b20-style` | ⏸ 降級 | 無 | ⏸ b20 詞彙失配根因已被 EQ3a-f1/f2 track 涵蓋（HyDE 把 @1719 rank 78→17）。原始 RCA 目的（查清 @1790/@1808 全 miss）已部分回答：屬歌曲推薦 acceptable 級 GT。除非要追剩餘 chunk-level 失配標靶，否則可略 |
-| **EQ3c** | BM25 取代 ts_rank + EP-scoped IDF | `lexical-bm25-replace-ts_rank` | ⬜ | **propose 前必跑 `retrieve_probe` 對 calibration_8 dry-run**（2026-05-28 失敗教訓） | calibration_8 dry-run 不退步才進 apply；prod chunk_recall ≥ baseline 0.482 |
+| **EQ3c** | BM25 取代 ts_rank + EP-scoped IDF | `lexical-bm25-replace-ts_rank` | ⏸ **延後**（2026-06-08）| **probe 須先重設計**：舊「混題+aggregate」會把 BM25 贏輸抵消（=05-28 死因）；改成「題型(A 稀有鑑別詞/B 口語常見詞/C narrative)×模式(關鍵字/語意/RAG對話)」分層矩陣、per-question、episode-scoped、流量比例加權判淨效果 | 2026-06-08 拍板延後：改動大、效益不明顯、IDF 假設曾翻車（注意「現在的 BM25」其實是 `ts_rank`，名不副實）。完整討論 + resume checklist：`docs/research/eq3c-bm25-discussion-2026-06-08.md`。先有 probe 定論再碰 code |
 | **EQ3d** | R2.2 prompt 優化 | `r2-2-prompt-redo` | ⬜ | EQ3a–c + R1.3 judge re-bake-off | Faithfulness ≥ 0.71；inline `[N]` 渲染 + hover↔source |
 | **EQ4** | 對話 Agent（一組） | `chat-agentic-tool-routing`（主，含拆 `rag.py`）→ `multi-turn-ordinal-carry-fix` → `agent-pronoun-grounding` → `agentic-citation-check-postgen`(v3b) | ⬜ | 主 change 先拆 `rag.py` 1330 行 | 主 change 過 eval gate；ordinal mt01 t2 不再 fail；pronoun 0 hallucinated 維持 |
 | **EQ5** | 評測 / golden set | `golden-set-expand-manbao-yijiayi`（**首要**）→ 後續 R1.3 judge re-bake-off / `eval-runner-dynamic-top-k` / q25 audit | ⬜ | 無（首要可立即動） | 曼報 + 壹加壹各 ≥30 題人工 sentinel；一題一題共草（feedback_golden_set_co_draft_flow） |
@@ -42,6 +42,7 @@
 依 Jacky 指示「剩下沒列到的往後排」。需要時再插入執行佇列：
 
 - **產品功能**：U3 用量 Dashboard + 熱搜 chip／A5 整集對話入口／C1 對話紀錄 → C2 推薦 → C3 權限分級／U2 點數計價 + 自動補回
+- **查詢模式整合 / 簡化**（2026-06-08 Jacky 提出）：三模式（索引／語意／對話）是否太多易混淆、關鍵字+語意是否該合併。注意「索引」是 2026-05-31 因「語意搜不準精確名詞」刻意拆出的，合併＝推翻該決策。三條中間路線（自動導流／合併成「搜尋＋對話」兩類／單框雙區結果）+ 利弊 + resume 待釐清項，完整記於 `docs/research/query-mode-consolidation-backlog-2026-06-08.md`。真要動前先看真實使用分布 + /spectra-discuss
 - **RAG 進階**：R3.x（topic seg 自動類別建議／`segment_categories` admin UI／業配段降權／dict 通用化）／R5 地端 embedding
 - **Ops / 體驗**：A4 淺色主題／cookie SameSite=Lax（需先廢 `*.zeabur.app` 子域）
 - **評測雜項**：q25 audit expected 對齊／rule pattern 涵蓋率月度回顧
