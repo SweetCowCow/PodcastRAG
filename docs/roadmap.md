@@ -1,6 +1,6 @@
 # PodcastRAG 路線圖
 
-> 最後更新：2026-06-08（**佇列重整**：發現 EQ4 對話 Agent 核心其實早已 archive + prod default-on（roadmap 原標 ⬜ 為 drift），核心歸入已完成、名下三項拆散重排（rag.py 拆分＝refactor、pronoun-grounding＝獨立小品質、citation-postgen 併入 R2.2）。R1.3 依賴「R3.x 全完」已滿足→解鎖進佇列。待辦改以「🎯 建議執行順序」為權威。EQ7 base image 起手。前次（06-07）b22/b23 retrieval track 完成收尾：EQ3a-f4 b22 routing ✅、EQ3a-f5 b23 narrative ✅（拆三條 + answer-model 切 gpt-5.1，皆 archive），b23 端到端 prod EP107 引用 5/5（修前 0/6）。EQ3a-f3 conditional-HyDE 負結果廢掉。）
+> 最後更新：2026-06-09（**EQ4a `rag.py` 模組拆分完成**：facade re-export 拆 6 子模組、行為零改變、新 spec `rag-service-layout`、prod smoke 200+5 citations、archive。序5 劃掉。下一動回到序2 EQ5 golden set 擴充。）｜2026-06-08（**佇列重整**：發現 EQ4 對話 Agent 核心其實早已 archive + prod default-on（roadmap 原標 ⬜ 為 drift），核心歸入已完成、名下三項拆散重排（rag.py 拆分＝refactor、pronoun-grounding＝獨立小品質、citation-postgen 併入 R2.2）。R1.3 依賴「R3.x 全完」已滿足→解鎖進佇列。待辦改以「🎯 建議執行順序」為權威。EQ7 base image 起手。前次（06-07）b22/b23 retrieval track 完成收尾：EQ3a-f4 b22 routing ✅、EQ3a-f5 b23 narrative ✅（拆三條 + answer-model 切 gpt-5.1，皆 archive），b23 端到端 prod EP107 引用 5/5（修前 0/6）。EQ3a-f3 conditional-HyDE 負結果廢掉。）
 
 本文件記錄 PodcastRAG 後續開發的優先順序與規劃。**排序真相 = 下方「🎯 執行佇列」**；Phase A–F 表是細節背景（多數 Phase A 已完成）。
 
@@ -23,7 +23,7 @@
 | **2** | golden set 擴充（曼報＋壹加壹各 ≥30 題） | EQ5 | `golden-set-expand-manbao-yijiayi` | 無 | 各 ≥30 題人工 sentinel；**一題一題共草**（feedback_golden_set_co_draft_flow）。後面品質改動的量尺 |
 | **3** | agent 代詞 grounding | EQ4b | `agent-pronoun-grounding` | 建議 #2 先（要量尺） | pronoun 0 hallucinated 維持；judge `pronoun_attribution_check` 綠。judge 端已能量測（unblocked），改 agent 端 grounding |
 | **4** | RAG 回答 cache | EQ6 | `r4-rag-result-cache` | 無 | Redis hash key(問題+show+top_k+model)；回應附 `cache_hit` flag |
-| **5** | `rag.py` 模組拆分 | EQ4a | `rag-py-module-split` | 無（建議 #7 前清乾淨） | retrieve/rerank/aggregation/prompt 分檔；行為不變、eval 不退步。現 1330 行、只抽出 `rag_rerank.py` |
+| ~~5~~ ✅ | `rag.py` 模組拆分 | EQ4a | `rag-py-module-split` | — | ✅ 2026-06-09 archive（`2026-06-09-rag-py-module-split`，commits `cf949ea`/`24886f4`）。facade re-export 路線（否決徹底清空）：1330 行 god module → 6 子模組（`rag_types`/`rag_config`/`rag_sql`/`rag_retrieval`/`rag_enrich`/`rag_generation`）+ `rag.py` 純 facade（105 行），`rag.X` 外部介面與 admin 對 `RRF_WEIGHTS` 的 in-place 改寫全不變。行為零改變、本地全測試 zero-new-failure（baseline diff）。新 spec `rag-service-layout`（4 ADDED，架構不變式）。Prod chat smoke 200 + citations 5。`_build_ts_query` 已隔離進 `rag_sql` 為 EQ3c BM25 鋪路 |
 | **6** | judge re-bake-off（R1.3 子集） | R1.3-j | `r1-3-judge-rebake`（暫名） | R3.x ✅（**已解鎖**） | judge calibration 重跑（gpt-5-nano Spearman 0.414 → 重校）+ threshold 重訂。R1.3 全套（Dashboard/alerting）其餘部分仍留 Phase B |
 | **7** | R2.2 prompt + citation 後檢 + UX | EQ3d | `r2-2-prompt-redo`（**併** `agentic-citation-check-postgen` v3b） | #2 #6 | Faithfulness ≥ 0.71；inline `[N]` 渲染 + hover↔source；**citation 後檢驗 `[N]` 真 grounding**（上次 inline 試法 backfire 過，重新設計）。注意 prompt 已近飽和（feedback_prompt_saturation） |
 | **8** | 詞典系統整合（F4） | EQ8 | `dict-system-integration`（暫名） | **先 /spectra-discuss** | 核准 ASR 校正自動進分詞詞典；兩套詞典職責釐清 + 後台 UI 重設計 |
@@ -253,7 +253,7 @@ R3 拆三段做（每段都跑 eval baseline 對照升幅）：
 - **Golden set audit q25 expected 對齊** — 4 集多撈 / 6 集漏，人工複查（屬 dataset quality）
 - **Rule pattern 涵蓋率月度回顧** — 等真實 prod query 累積後做
 - **`eval-runner-dynamic-top-k`** — enumeration items top_k 動態提到 `len(expected)`
-- **`rag-py-module-split`** — `backend/app/services/rag.py` 已 1330 行，拆成 retrieve / rerank / aggregation / prompt 等獨立 module。**併進 `chat-agentic-tool-routing` 主 change 一起做**（那 change 本就會動 rag.py 內部結構，避免做兩遍）
+- ~~**`rag-py-module-split`**~~ ✅ 2026-06-09 archive。最終採獨立 change（非併進 chat-agentic）：facade re-export 拆成 6 子模組（types/config/sql/retrieval/enrich/generation），行為零改變。詳見上方序5
 
 ---
 
