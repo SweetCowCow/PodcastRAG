@@ -22,6 +22,11 @@ def _reload_rag(monkeypatch, **env):
             monkeypatch.delenv(k, raising=False)
         else:
             monkeypatch.setenv(k, v)
+    # Env-flag parsing + the embedding-column block now live in rag_config.
+    # Reload it FIRST so the new env is re-parsed, then reload the rag facade
+    # so its re-exported names rebind to the freshly-parsed rag_config values.
+    import app.services.rag_config as rag_config_module
+    importlib.reload(rag_config_module)
     import app.services.rag as rag_module
     importlib.reload(rag_module)
     return rag_module

@@ -17,12 +17,18 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 
 def _reload_rag(monkeypatch, **env):
-    """Reload app.services.rag with given env vars set (or removed if None)."""
+    """Reload rag_config + the rag facade with given env vars set (or removed).
+
+    Env-flag parsing moved to rag_config, so reload it first to re-parse the
+    env, then reload the rag facade so its re-exported names rebind.
+    """
     for k, v in env.items():
         if v is None:
             monkeypatch.delenv(k, raising=False)
         else:
             monkeypatch.setenv(k, v)
+    import app.services.rag_config as rag_config_module
+    importlib.reload(rag_config_module)
     import app.services.rag as rag_module
     importlib.reload(rag_module)
     return rag_module
@@ -71,10 +77,10 @@ def test_description_cap_negative_falls_back_with_warning(monkeypatch, capsys):
 def test_show_name_filter_env_unset_preserves_strip(monkeypatch):
     rag = _reload_rag(monkeypatch, RAG_SHOW_NAME_FILTER=None)
     assert rag._SHOW_NAME_FILTER_ENABLED is True
-    monkeypatch.setattr(rag.tokenizer, "get_show_name_terms", lambda: {"這又沒有很屌"})
+    monkeypatch.setattr("app.services.tokenizer.get_show_name_terms", lambda: {"這又沒有很屌"})
     # tokenizer.tokenize will jieba the question; we stub it to return predictable tokens
     monkeypatch.setattr(
-        rag.tokenizer, "tokenize",
+        "app.services.tokenizer.tokenize",
         lambda q: ["節目名", "這又沒有很屌", "是", "怎麼", "來", "的"],
     )
     q = rag._build_ts_query("節目名「這又沒有很屌」是怎麼來的？")
@@ -85,9 +91,9 @@ def test_show_name_filter_env_unset_preserves_strip(monkeypatch):
 def test_show_name_filter_env_false_retains_show_name(monkeypatch):
     rag = _reload_rag(monkeypatch, RAG_SHOW_NAME_FILTER="false")
     assert rag._SHOW_NAME_FILTER_ENABLED is False
-    monkeypatch.setattr(rag.tokenizer, "get_show_name_terms", lambda: {"這又沒有很屌"})
+    monkeypatch.setattr("app.services.tokenizer.get_show_name_terms", lambda: {"這又沒有很屌"})
     monkeypatch.setattr(
-        rag.tokenizer, "tokenize",
+        "app.services.tokenizer.tokenize",
         lambda q: ["節目名", "這又沒有很屌", "是", "怎麼", "來", "的"],
     )
     q = rag._build_ts_query("節目名「這又沒有很屌」是怎麼來的？")

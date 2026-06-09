@@ -19,7 +19,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from app.services import rag, tokenizer
+from app.services import rag, rag_retrieval, tokenizer
 
 
 # ---------------------------------------------------------------------------
@@ -265,9 +265,12 @@ async def test_retrieve_hybrid_merges_three_pools_by_rrf_score(monkeypatch):
     async def fake_retrieve_titles(*args, **kwargs):
         return [title_hit]
 
-    monkeypatch.setattr(rag, "retrieve", fake_retrieve)
-    monkeypatch.setattr(rag, "retrieve_descriptions", fake_retrieve_descriptions)
-    monkeypatch.setattr(rag, "retrieve_titles", fake_retrieve_titles)
+    # retrieve_hybrid lives in rag_retrieval and calls retrieve/_descriptions/
+    # _titles within its own module namespace, so patch them there (the rag
+    # facade re-export is a separate binding that the internal calls bypass).
+    monkeypatch.setattr(rag_retrieval, "retrieve", fake_retrieve)
+    monkeypatch.setattr(rag_retrieval, "retrieve_descriptions", fake_retrieve_descriptions)
+    monkeypatch.setattr(rag_retrieval, "retrieve_titles", fake_retrieve_titles)
 
     db = AsyncMock()
     # query_embedding shape: rag._validate_query_dim is bypassed because we
