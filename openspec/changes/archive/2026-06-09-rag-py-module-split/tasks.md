@@ -46,7 +46,7 @@
 ## 8. 不變式與行為驗證
 
 - [x] 8.1 驗證 RRF_WEIGHTS 單一物件不變式：`tests/test_admin_rrf_sweep.py` 綠（sweep 後 in-place restore 可見性正確）
-- [ ] 8.2 prod chat query smoke：對 prod 用同一問題發查詢，回傳 200 且 citations 數與重構前一致（依 [[reference_prod_eval_session]] 流程，playwright-state cookie + 先 curl /me 驗 200）
+- [x] 8.2 prod chat query smoke：對 prod 用同一問題發查詢，回傳 200 且 citations 數與重構前一致（依 [[reference_prod_eval_session]] 流程，playwright-state cookie + 先 curl /me 驗 200）
 - [x] 8.3 確認 `git diff` 僅含模組搬移 + facade + 測試 patch target 變更，無任何行為/參數/SQL/prompt 改動
 
 ## 9. 追溯對應（spec 需求 ↔ design 決策 ↔ tasks）
