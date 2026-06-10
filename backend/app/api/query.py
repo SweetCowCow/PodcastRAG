@@ -211,29 +211,30 @@ async def public_search_show(
     hyde = await resolve_semantic_embedding(
         db, payload.question, base_vec, embedding_cfg
     )
-    # r4-rag-result-cache: check the shared retrieval cache so the endpoint can
-    # report cache_hit. On a miss, retrieve_hybrid recomputes and populates the
-    # same cache (which the chat agent's tools also share).
-    cache_key = rag_cache.retrieval_key(
+    # r4-rag-result-cache: cache the *enriched* /search response so a hit skips
+    # both retrieve_hybrid AND enrich_hits (enrich runs O(k) per-hit SQL and is
+    # the latency bottleneck). retrieve_hybrid still self-caches at its own key
+    # on the miss path, so the chat agent's tools share that retrieval cache.
+    search_key = rag_cache.search_response_key(
         show_id, payload.question, hyde.semantic_vec, payload.k, routed_eps, None
     )
-    cached_hits = rag_cache.get_retrieval(cache_key)
-    if cached_hits is not None:
-        hits = cached_hits
-        cache_hit = True
-    else:
-        hits = await rag.retrieve_hybrid(
-            db,
-            show_id,
-            hyde.semantic_vec,
-            payload.question,
-            k=payload.k,
-            episode_id_filter=routed_eps,
+    enriched = rag_cache.get_retrieval(search_key)
+    if enriched is not None:
+        return PublicSearchResponse(
+            results=[_to_schema_hit(h) for h in enriched], cache_hit=True
         )
-        cache_hit = False
+    hits = await rag.retrieve_hybrid(
+        db,
+        show_id,
+        hyde.semantic_vec,
+        payload.question,
+        k=payload.k,
+        episode_id_filter=routed_eps,
+    )
     await rag.enrich_hits(db, hits, payload.question)
+    rag_cache.set_retrieval(search_key, hits)
     return PublicSearchResponse(
-        results=[_to_schema_hit(h) for h in hits], cache_hit=cache_hit
+        results=[_to_schema_hit(h) for h in hits], cache_hit=False
     )
 
 

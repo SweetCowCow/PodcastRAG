@@ -229,6 +229,26 @@ def retrieval_key(
     return f"ret:{CACHE_SCHEMA_VERSION}:{show_id}:{corpus_ver}:{config_ver}:{digest}"
 
 
+def search_response_key(
+    show_id: uuid.UUID | str,
+    question: str,
+    query_embedding: list[float],
+    k: int,
+    episode_id_filter: list[uuid.UUID] | None,
+    metadata_filters: Any | None,
+) -> str:
+    """Key for the /search endpoint's *enriched* response cache.
+
+    Distinct namespace from ``retrieval_key`` so a hit can skip both
+    retrieve_hybrid AND enrich_hits (the latter is the latency bottleneck — it
+    runs O(k) per-hit SQL). The service-layer ``retrieval_key`` cache is kept
+    separately so the chat agent's tools still benefit from cached retrieval.
+    """
+    return "search:" + retrieval_key(
+        show_id, question, query_embedding, k, episode_id_filter, metadata_filters
+    )
+
+
 def get_retrieval(key: str) -> list[ChunkHit] | None:
     if not _enabled():
         return None

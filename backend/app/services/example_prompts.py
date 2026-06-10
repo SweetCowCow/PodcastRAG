@@ -306,7 +306,7 @@ async def prewarm_show_examples(db: AsyncSession, show_id) -> None:
                 vec = await asyncio.to_thread(embed_texts, [q], emb_cfg)
                 if not vec:
                     continue
-                await rag.retrieve_hybrid(
+                hits = await rag.retrieve_hybrid(
                     db,
                     show_id,
                     vec[0],
@@ -314,6 +314,13 @@ async def prewarm_show_examples(db: AsyncSession, show_id) -> None:
                     k=_PREWARM_SEMANTIC_K,
                     episode_id_filter=None,
                 )
+                # Warm the enriched /search response cache too (default config:
+                # HyDE off so query_embedding == base embedding, no routing).
+                await rag.enrich_hits(db, hits, q)
+                skey = rag_cache.search_response_key(
+                    show_id, q, vec[0], _PREWARM_SEMANTIC_K, None, None
+                )
+                rag_cache.set_retrieval(skey, hits)
         except Exception:
             logger.warning(
                 "example_prompts: semantic prewarm failed show %s",
