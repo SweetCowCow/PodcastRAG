@@ -55,6 +55,30 @@ const MILESTONE_LABELS = {
 
 // Entries — newest milestone first; within each milestone newest date first.
 const RELEASE_LOG = [
+  // ─── v2.2 — Search result memory / cache (6/10) ───
+  {
+    date: '2026-06-10', slug: 'r4-rag-result-cache', milestone: 'v2.2', tag: 'enhancement',
+    title: {
+      zh: '查過的問題會「記住」：重複或熱門查詢幾乎秒回',
+      en: 'Searches Are Now Remembered: Repeat and Popular Queries Come Back Almost Instantly',
+    },
+    summary: {
+      zh: '以前每次搜尋，系統都要從頭算一遍（把問題轉成向量、翻遍逐字稿、整理結果），所以同一個問題問第二次也一樣慢。這版加了「查詢結果記憶」：在同一個節目下，相同的搜尋第二次起會直接拿上次的結果，幾乎是秒回。最有感的是首頁那排「引導範例」問題——我們會在背景先幫每個節目把範例查好放著，你一點就出來。語意搜尋的重複查詢，從約十秒縮到半秒內，三種查詢模式（語意／關鍵字／對話）都吃得到這個加速。如果節目重新轉錄、或修正了聽錯的名字，記憶會自動失效、重新算最新的結果，不會給你舊資料。',
+      en: 'Until now, every search recomputed from scratch (turning your question into a vector, scanning the transcripts, assembling the results), so asking the same question a second time was just as slow. This release adds "search result memory": within the same show, an identical search returns last time\'s result from the second time onward — almost instantly. You\'ll feel it most on the home page\'s guided-example questions: we now warm those up for each show in the background, so they appear the moment you click. Repeat semantic searches drop from about ten seconds to under a second, and all three search modes (semantic / keyword / conversational) benefit. If a show is re-transcribed or has misheard names corrected, the memory invalidates automatically and recomputes the latest result — you never get stale data.',
+    },
+    summaryBullets: {
+      zh: [
+        '同一節目下相同搜尋第二次起幾乎秒回（語意重複查詢從 ~10 秒降到 <1 秒）',
+        '首頁「引導範例」問題會在背景預先查好，一點就出',
+        '語意／關鍵字／對話三模式都加速；節目內容更新後記憶自動失效、不給舊資料',
+      ],
+      en: [
+        'Identical searches within a show are near-instant from the second time on (repeat semantic queries: ~10s → <1s)',
+        'Home-page guided-example questions are warmed up in the background so they appear on click',
+        'All three modes (semantic / keyword / conversational) sped up; memory auto-invalidates after content updates so results stay fresh',
+      ],
+    },
+  },
   // ─── v2.2 — Faster deploys (6/8) ───
   {
     date: '2026-06-08', slug: 'o2-prebuilt-base-image', milestone: 'v2.2', tag: 'enhancement',
