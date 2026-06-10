@@ -31,4 +31,4 @@
 
 ## 7. prod 驗證
 
-- [ ] 7.1 部署後 prod smoke 驗證「Version-based invalidation」與「cache_hit surfacing」需求端到端：同一 show 相同語意查詢二次→cache_hit 由 false→true 且延遲下降；改一個 RRF 權重後相同查詢→cache_hit=false；對某 show bump corpus_ver（重轉或 ASR 回填）後該 show miss、別 show 不受影響；Redis fail-open 不致查詢失敗（手動驗證並記錄結果）。
+- [x] 7.1 部署後 prod smoke 驗證「Version-based invalidation」與「cache_hit surfacing」需求端到端：同一 show 相同語意查詢二次→cache_hit 由 false→true 且延遲下降；改一個 RRF 權重後相同查詢→cache_hit=false；對某 show bump corpus_ver（重轉或 ASR 回填）後該 show miss、別 show 不受影響；Redis fail-open 不致查詢失敗（手動驗證並記錄結果）。

@@ -488,6 +488,23 @@ The selected tuple, the full sweep table, and the prior baseline numbers SHALL b
 - **THEN** the commit changing rag.py SHALL include or reference `docs/case-studies/rrf-cross-episode-weight-sweep-2026-05-26.md`
 - **AND** that file SHALL contain the full sweep table with at least 3 candidate tuples evaluated plus the baseline row
 
+---
+### Requirement: Semantic search consults the result cache and reports cache_hit
+
+The semantic search endpoint SHALL consult the service-layer retrieval cache before computing embeddings and running hybrid retrieval, and SHALL include a `cache_hit` boolean in its response. On a cache hit the endpoint SHALL return the cached ranked chunks without recomputing. On a miss it SHALL compute normally and populate the cache. Cache failures SHALL fall back to the normal retrieval path without failing the request.
+
+#### Scenario: Cache hit returns ranked chunks without recomputation
+
+- **GIVEN** an identical semantic query was previously cached for a show with unchanged corpus and config versions
+- **WHEN** the query is sent again
+- **THEN** the response returns the same ranked chunks and `cache_hit` is true
+
+#### Scenario: Cache miss computes and reports cache_hit false
+
+- **GIVEN** no cached result exists for a semantic query
+- **WHEN** the query is sent
+- **THEN** the endpoint runs hybrid retrieval, returns ranked chunks, and `cache_hit` is false
+
 ## 相關集數清單（共 2 集）
 這個問題的搜尋結果鎖定以下集數，作為你回答的依據：
 1. EP143「從餐廳請客到自家廚房」(2026-04-29, ft. 馬世芳)
@@ -580,6 +597,21 @@ code:
 tests:
   - backend/tests/test_chat_agent_epref_carry.py
   - backend/tests/test_admin_rrf_sweep.py
+-->
+
+
+<!-- @trace
+source: r4-rag-result-cache
+updated: 2026-06-10
+code:
+  - backend/scripts/bakeoff_out/bakeoff-20260607T112640.md
+  - backend/scripts/bakeoff_out/bakeoff-20260607T115922.json
+  - backend/scripts/bakeoff_out/bakeoff-20260607T112640-answers.md
+  - backend/scripts/bakeoff_out/bakeoff-20260607T112640.json
+  - backend/scripts/bakeoff_out/bakeoff-20260607T115922-answers.md
+  - backend/scripts/hyde_ab/results/calibrate-20260606T221058.json
+  - skills-lock.json
+  - backend/scripts/bakeoff_out/bakeoff-20260607T115922.md
 -->
 
 ---
