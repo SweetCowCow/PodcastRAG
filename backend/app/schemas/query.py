@@ -196,3 +196,5 @@ class PublicSearchResponse(BaseModel):
 
     results: list[ChunkHit]
     sources_schema_version: int = SOURCES_SCHEMA_VERSION
+    # r4-rag-result-cache: True when retrieval was served from the cache.
+    cache_hit: bool = False

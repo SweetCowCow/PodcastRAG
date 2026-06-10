@@ -14,6 +14,7 @@ notably the ingest chain).
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 
@@ -242,4 +243,110 @@ async def generate_for_show(db: AsyncSession, show_id) -> dict:
         counts[mode.value] = len(questions)
 
     await db.commit()
+
+    # r4-rag-result-cache: prewarm the cache so the first click on a guided
+    # example chip is a cache hit. Fail-open — never break generation.
+    try:
+        await prewarm_show_examples(db, show_id)
+    except Exception:
+        logger.warning(
+            "example_prompts: prewarm wrapper failed show %s", show_id, exc_info=True
+        )
     return counts
+
+
+# Mirror the UI's first-request params (src/QueryPage.jsx) so prewarmed entries
+# land on the same cache keys real traffic produces: semantic k=25; keyword
+# limit=25 at offsets 0/0.
+_PREWARM_SEMANTIC_K = 25
+_PREWARM_KEYWORD_LIMIT = 25
+
+
+async def _prewarm_keyword_threshold(db: AsyncSession) -> int:
+    """The admin-tunable T2 collapse threshold the keyword endpoint uses."""
+    from app.models.app_settings import AppSettings
+    from app.services import keyword_search
+
+    row = await db.get(AppSettings, 1)
+    if row is None:
+        return keyword_search.DEFAULT_T2_COLLAPSE_THRESHOLD
+    return row.keyword_t2_collapse_threshold
+
+
+async def prewarm_show_examples(db: AsyncSession, show_id) -> None:
+    """Run each persisted example prompt once to warm the shared cache.
+
+    Semantic prompts warm the embedding + retrieval cache via the same
+    functions ``/search`` calls (in the default config — no routing, HyDE off
+    — the keys match exactly). Index prompts warm the keyword cache at the UI's
+    first-request params. Fail-open throughout: a prewarm failure only means
+    the first real click recomputes as usual.
+    """
+    from app.services import keyword_search, rag, rag_cache
+
+    rows = (
+        await db.execute(
+            select(ShowExamplePrompt.mode, ShowExamplePrompt.question).where(
+                ShowExamplePrompt.show_id == show_id
+            )
+        )
+    ).all()
+    if not rows:
+        return
+
+    semantic_qs = [q for m, q in rows if m == ExamplePromptMode.semantic]
+    index_qs = [q for m, q in rows if m == ExamplePromptMode.index]
+
+    if semantic_qs:
+        try:
+            emb_cfg = await get_step_config(db, "embedding")
+            from app.services.embedding import embed_texts
+
+            for q in semantic_qs:
+                vec = await asyncio.to_thread(embed_texts, [q], emb_cfg)
+                if not vec:
+                    continue
+                await rag.retrieve_hybrid(
+                    db,
+                    show_id,
+                    vec[0],
+                    q,
+                    k=_PREWARM_SEMANTIC_K,
+                    episode_id_filter=None,
+                )
+        except Exception:
+            logger.warning(
+                "example_prompts: semantic prewarm failed show %s",
+                show_id,
+                exc_info=True,
+            )
+
+    if index_qs:
+        try:
+            threshold = await _prewarm_keyword_threshold(db)
+            for q in index_qs:
+                try:
+                    resp = await keyword_search.run_keyword_search(
+                        db,
+                        show_id,
+                        q,
+                        offset_t1=0,
+                        offset_t2=0,
+                        limit=_PREWARM_KEYWORD_LIMIT,
+                        threshold=threshold,
+                    )
+                except (
+                    keyword_search.EmptyKeywordQueryError,
+                    keyword_search.KeywordSearchTimeoutError,
+                ):
+                    continue
+                key = rag_cache.keyword_key(
+                    show_id, q, threshold, 0, 0, _PREWARM_KEYWORD_LIMIT
+                )
+                rag_cache.set_keyword(key, resp)
+        except Exception:
+            logger.warning(
+                "example_prompts: index prewarm failed show %s",
+                show_id,
+                exc_info=True,
+            )

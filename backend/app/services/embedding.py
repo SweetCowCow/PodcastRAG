@@ -4,7 +4,7 @@ import time
 
 from openai import OpenAI, RateLimitError
 
-from app.services import api_health
+from app.services import api_health, rag_cache
 from app.services.ai_step_resolver import StepConfig
 
 logger = logging.getLogger(__name__)
@@ -42,6 +42,14 @@ def embed_texts(texts: list[str], step_config: StepConfig) -> list[list[float]]:
     if not texts:
         return []
 
+    # r4-rag-result-cache: cache single-query embeddings. The query paths
+    # (semantic /search + chat agent tool searches) all embed one string at a
+    # time; batch write-time embeds (transcription) are left uncached.
+    if len(texts) == 1:
+        cached = rag_cache.get_embedding(texts[0], step_config.model)
+        if cached is not None:
+            return [cached]
+
     client = OpenAI(base_url=step_config.base_url, api_key=step_config.api_key)
     all_vectors: list[list[float]] = []
 
@@ -49,6 +57,9 @@ def embed_texts(texts: list[str], step_config: StepConfig) -> list[list[float]]:
         batch = texts[start : start + EMBEDDING_BATCH_SIZE]
         vectors = _embed_with_retry(client, batch, step_config.model)
         all_vectors.extend(vectors)
+
+    if len(texts) == 1 and all_vectors:
+        rag_cache.set_embedding(texts[0], step_config.model, all_vectors[0])
 
     return all_vectors
 

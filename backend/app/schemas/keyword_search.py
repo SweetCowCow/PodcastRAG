@@ -80,3 +80,5 @@ class KeywordSearchResponse(BaseModel):
     t1: T1Section
     t2: T2Section
     t3: T3Section | None = None
+    # r4-rag-result-cache: True when this response was served from the cache.
+    cache_hit: bool = False

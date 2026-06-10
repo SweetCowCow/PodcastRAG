@@ -23,6 +23,7 @@ from app.services import tokenizer
 from app.services import asr_correction
 from app.services import asr_detection_backfill
 from app.services import asr_homophone
+from app.services import rag_cache
 from app.services.chunking import build_chunks
 from app.services.ai_step_resolver import get_step_config
 from app.services.embedding import embed_texts, embed_texts_dual
@@ -543,6 +544,10 @@ async def _run(episode_id: str) -> dict:
                     t.error_message = None
                     t.transcribed_at = datetime.now(timezone.utc)
                 await session.commit()
+
+            # r4-rag-result-cache: a newly transcribed episode adds chunks /
+            # embeddings to this show's corpus — invalidate its cached results.
+            rag_cache.bump_corpus_version(correction_show_id)
 
             await _mark_queue_finished(ep_uuid, QueueStatus.completed)
 

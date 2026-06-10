@@ -35,7 +35,7 @@ from app.schemas.query import (
 from app.schemas.query_entity import QueryEntities
 from openai import AsyncOpenAI, OpenAI
 
-from app.services import citation_parser, episode_finders, episode_ref, query_entity, rag
+from app.services import citation_parser, episode_finders, episode_ref, query_entity, rag, rag_cache
 from app.services.chat_agent.agent import ChatAgentResult, run_agent
 from app.services.ai_step_resolver import (
     AiStepNotConfiguredError,
@@ -211,16 +211,30 @@ async def public_search_show(
     hyde = await resolve_semantic_embedding(
         db, payload.question, base_vec, embedding_cfg
     )
-    hits = await rag.retrieve_hybrid(
-        db,
-        show_id,
-        hyde.semantic_vec,
-        payload.question,
-        k=payload.k,
-        episode_id_filter=routed_eps,
+    # r4-rag-result-cache: check the shared retrieval cache so the endpoint can
+    # report cache_hit. On a miss, retrieve_hybrid recomputes and populates the
+    # same cache (which the chat agent's tools also share).
+    cache_key = rag_cache.retrieval_key(
+        show_id, payload.question, hyde.semantic_vec, payload.k, routed_eps, None
     )
+    cached_hits = rag_cache.get_retrieval(cache_key)
+    if cached_hits is not None:
+        hits = cached_hits
+        cache_hit = True
+    else:
+        hits = await rag.retrieve_hybrid(
+            db,
+            show_id,
+            hyde.semantic_vec,
+            payload.question,
+            k=payload.k,
+            episode_id_filter=routed_eps,
+        )
+        cache_hit = False
     await rag.enrich_hits(db, hits, payload.question)
-    return PublicSearchResponse(results=[_to_schema_hit(h) for h in hits])
+    return PublicSearchResponse(
+        results=[_to_schema_hit(h) for h in hits], cache_hit=cache_hit
+    )
 
 
 def _entities_to_metadata_filters(entities: QueryEntities) -> MetadataFilters | None:

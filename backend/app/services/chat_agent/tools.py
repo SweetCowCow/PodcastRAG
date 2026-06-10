@@ -50,7 +50,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 import voyageai
 
-from app.services import episode_finders, rag, rag_rerank
+from app.services import episode_finders, rag, rag_cache, rag_rerank
 from app.services.ai_step_resolver import get_step_config
 
 from app.services.chat_agent.state import ChatSessionState, ChatSessionStateStore
@@ -347,7 +347,11 @@ async def _search_within_episode(inp: SearchWithinEpisodeInput, ctx: ToolContext
         k=inp.k,
         episode_id_filter=[effective_id],
     )
-    return {"chunks": [_chunk_to_dict(h) for h in hits], **extras}
+    return {
+        "chunks": [_chunk_to_dict(h) for h in hits],
+        "cache_hit": rag_cache.last_retrieval_cache_hit(),
+        **extras,
+    }
 
 
 async def _search_across_episodes(inp: SearchAcrossEpisodesInput, ctx: ToolContext) -> dict:
@@ -359,7 +363,10 @@ async def _search_across_episodes(inp: SearchAcrossEpisodesInput, ctx: ToolConte
         question=inp.query,
         k=inp.k,
     )
-    return {"chunks": [_chunk_to_dict(h) for h in hits]}
+    return {
+        "chunks": [_chunk_to_dict(h) for h in hits],
+        "cache_hit": rag_cache.last_retrieval_cache_hit(),
+    }
 
 
 async def _search_in_episodes(inp: SearchInEpisodesInput, ctx: ToolContext) -> dict:
@@ -374,7 +381,10 @@ async def _search_in_episodes(inp: SearchInEpisodesInput, ctx: ToolContext) -> d
         k=inp.k,
         episode_id_filter=list(inp.episode_ids),
     )
-    return {"chunks": [_chunk_to_dict(h) for h in hits]}
+    return {
+        "chunks": [_chunk_to_dict(h) for h in hits],
+        "cache_hit": rag_cache.last_retrieval_cache_hit(),
+    }
 
 
 # Voyage rerank wired in 2026-05-27 (change: retrieval-rerank-via-voyage).
@@ -424,6 +434,7 @@ async def _search_with_topic_prefilter(
             "fallback_to_full_pool": False,
             "rerank_applied": applied,
             "rerank_input_count": len(top_n_chunks),
+            "cache_hit": rag_cache.last_retrieval_cache_hit(),
         }
     # No topic match → fall back to full-show retrieval (no rerank)
     hits = await rag.retrieve_hybrid(
@@ -440,6 +451,7 @@ async def _search_with_topic_prefilter(
         "fallback_to_full_pool": True,
         "rerank_applied": False,
         "rerank_input_count": 0,
+        "cache_hit": rag_cache.last_retrieval_cache_hit(),
     }
 
 

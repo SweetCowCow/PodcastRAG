@@ -13,7 +13,7 @@ import uuid
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.services import tokenizer
+from app.services import rag_cache, tokenizer
 from app.services.rag_types import ChunkHit, MetadataFilters
 from app.services.rag_config import (
     DESCRIPTION_CAP,
@@ -319,6 +319,18 @@ async def retrieve_hybrid(
     hits (R3.3 Phase 8) join the merge weighted by `RRF_WEIGHTS["title"]`
     and are not subject to DESCRIPTION_CAP.
     """
+    # r4-rag-result-cache: service-layer cache shared by /search and the chat
+    # agent's retrieval tools. Fail-open — a cache error degrades to a normal
+    # DB retrieval. The key embeds corpus + config versions so it self-
+    # invalidates on transcription / ASR backfill / retrieval-knob changes.
+    cache_key = rag_cache.retrieval_key(
+        show_id, question, query_embedding, k, episode_id_filter, metadata_filters
+    )
+    cached = rag_cache.get_retrieval(cache_key)
+    rag_cache.note_retrieval_cache_hit(cached is not None)
+    if cached is not None:
+        return cached
+
     transcript_hits = await retrieve(
         db, show_id, query_embedding, question, k=k,
         episode_id_filter=episode_id_filter,
@@ -370,6 +382,8 @@ async def retrieve_hybrid(
     # If we have spare slots and only extras left, use them (cap waiver).
     while len(final) < k and extras:
         final.append(extras.pop(0))
+
+    rag_cache.set_retrieval(cache_key, final)
     return final
 
 

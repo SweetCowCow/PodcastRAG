@@ -228,7 +228,7 @@ async def backfill_corrections(
     from app.models.transcript import Transcript
     from app.models.transcript_chunk import TranscriptChunk
     from app.models.transcript_segment import TranscriptSegment
-    from app.services import tokenizer
+    from app.services import rag_cache, tokenizer
     from app.services.chunking import build_chunks
     from app.services.embedding import embed_texts_dual
 
@@ -268,6 +268,7 @@ async def backfill_corrections(
     for sid, rules in work_units:
         if not rules:
             continue
+        _affected_before = report.affected_chunks + report.affected_segments
         transcripts = (
             (
                 await session.execute(
@@ -396,6 +397,11 @@ async def backfill_corrections(
 
             # Commit per transcript so an interrupted run resumes from here.
             await session.commit()
+
+        # r4-rag-result-cache: invalidate this show's cached retrieval / keyword
+        # results once its corpus text/embeddings actually changed in this run.
+        if report.affected_chunks + report.affected_segments > _affected_before:
+            rag_cache.bump_corpus_version(sid)
 
     if dry_run:
         est_tokens = total_affected_chars * _EST_TOKENS_PER_CHAR * 2  # dual

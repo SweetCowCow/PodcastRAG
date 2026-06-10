@@ -172,6 +172,20 @@ class Settings(BaseSettings):
     # measurement windows.
     eval_tracing_timing_probe: bool = False
 
+    # r4-rag-result-cache: service-layer retrieval / embedding cache.
+    # `rag_cache_enabled` is the master kill-switch for the exact-match cache
+    # (embedding + retrieve_hybrid + keyword). Flip to False to bypass the
+    # cache entirely without redeploying code paths. TTL is the fallback
+    # expiry so entries cannot accumulate forever when corpus / config
+    # versions never change (default 7 days).
+    rag_cache_enabled: bool = True
+    rag_cache_ttl_seconds: int = 604800
+    # P2 semantic cache machinery — disabled by default. Flipping on requires
+    # a labelled measurement showing false-hit rate ≤5% with net hit-rate gain
+    # (enable gate documented in the change design; depends on EQ5 golden set).
+    enable_semantic_cache: bool = False
+    semantic_cache_threshold: float = 0.95
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

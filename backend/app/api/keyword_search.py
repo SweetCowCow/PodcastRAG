@@ -19,7 +19,7 @@ from app.models.show import Show
 from app.models.user import User
 from app.schemas.errors import ErrorResponse
 from app.schemas.keyword_search import KeywordSearchRequest, KeywordSearchResponse
-from app.services import keyword_search
+from app.services import keyword_search, rag_cache
 
 router = APIRouter(tags=["keyword-search"])
 
@@ -54,6 +54,25 @@ async def keyword_search_show(
 
     threshold = await _get_collapse_threshold(db)
 
+    # r4-rag-result-cache: serve identical keyword queries from cache. The key
+    # embeds the show's corpus version and the collapse threshold, so re-
+    # transcription / ASR backfill / threshold changes self-invalidate.
+    # Pagination offsets are request-time slicing the client applies on top, so
+    # the cache stores the full sectioned result keyed by query + threshold.
+    cache_key = rag_cache.keyword_key(
+        show_id,
+        payload.query,
+        threshold,
+        payload.offset_t1,
+        payload.offset_t2,
+        payload.limit,
+    )
+    cached = rag_cache.get_keyword(cache_key)
+    if cached is not None:
+        result = KeywordSearchResponse.model_validate(cached)
+        result.cache_hit = True
+        return result
+
     try:
         response = await keyword_search.run_keyword_search(
             db,
@@ -80,4 +99,7 @@ async def keyword_search_show(
             ).model_dump(),
         )
 
-    return KeywordSearchResponse.model_validate(response)
+    rag_cache.set_keyword(cache_key, response)
+    result = KeywordSearchResponse.model_validate(response)
+    result.cache_hit = False
+    return result
