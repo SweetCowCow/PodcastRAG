@@ -1,20 +1,26 @@
 """Judge model configuration for RAG eval framework.
 
-Production judge: gpt-5-nano (manually locked 2026-05-07).
+Production judge: gemini-2.5-flash-lite (evidence-selected 2026-06-11,
+change `r1-3-j-judge-harness-align`).
 
-Bake-off 2026-05-07 (GEval, 40-item mini-set, see
-docs/research/r1-judge-bakeoff-2026-05-07.md):
+Aligned bake-off 2026-06-11 — production-judge harness (judge_chat_v2 +
+chat_judge_v2.md, refusal-aware scalar) over the field-complete 40-item
+mini-set; pass threshold 0.7 set from the observed distribution. Results:
+backend/eval/results/judge-bakeoff-aligned-20260611T150450Z.json, evidence
+log: docs/case-studies/r1-3-j-judge-harness-align-2026-06-11.md.
 
-    claude-haiku-4-5      Spearman 0.487  cost $0.198 / 40 items
-    gpt-5-nano            Spearman 0.414  cost $0.012 / 40 items  ⭐ picked
-    gemini-2.5-flash-lite Spearman 0.209  cost $0.016
-    gpt-4o-mini           Spearman 0.100  cost $0.024
+    gemini-2.5-flash-lite Spearman 0.8365  $0.0186 / 40 items  PASS ⭐ picked
+    gpt-5.1               Spearman 0.8004  $0.1031 / 40 items  PASS
+    gpt-5-nano            Spearman 0.6914  $0.0304 / 40 items  fail
+    gemini-3.5-flash      Spearman 0.6222  $0.5634 / 40 items  fail
+    claude-haiku-4-5      SKIPPED (AI Hub + response_format=json_object
+                          returns empty {} for claude models)
 
-No candidate passed the 0.7 threshold — root cause is mini-set design
-(human_score uses all-knowing-reader perspective; judge only sees
-retrieved chunks). Picked gpt-5-nano for cost (16x cheaper than haiku
-for ~0.07 Spearman delta, not significant). Calibration debt logged
-for R1.3 (rebuild mini-set to "judge perspective" + re-bake).
+Selection rule: highest Spearman among threshold passers, lowest cost on
+ties — gemini-2.5-flash-lite wins on both axes. The historical 0.414 number
+(2026-05-07) measured a stand-in harness, not this judge; the old
+comment/constant drift (comment said gpt-5-nano, constant said
+gemini-2.5-flash-lite) is hereby reconciled from this re-run's evidence.
 """
 
 PRODUCTION_JUDGE_MODEL = "gemini-2.5-flash-lite"
