@@ -29,7 +29,7 @@ from app.services.ai_step_resolver import get_step_config
 from app.services.embedding import embed_texts, embed_texts_dual
 from app.services.rss_parser import RssParseError
 from app.services.storage import StorageError
-from app.services.transcription import get_provider
+from app.services.transcription import TranscriptionResult, get_provider
 from app.workers.celery_app import celery_app
 from app.workers.failure_hooks import (
     check_circuit_or_retry,
@@ -265,12 +265,21 @@ async def _is_queue_cancelled(session, ep_uuid: uuid.UUID) -> bool:
 
 
 async def _mark_queue_finished(
-    ep_uuid: uuid.UUID, status: QueueStatus, error: str | None = None
+    ep_uuid: uuid.UUID,
+    status: QueueStatus,
+    error: str | None = None,
+    *,
+    model_label: str | None = None,
 ) -> None:
     """Write back terminal state to the queue row.
 
     On successful transcription completion, chain-enqueue the AI summary task.
     Summary failures must NOT write back to the transcription queue (D2).
+
+    ``model_label``, when given, is stamped onto the row's ``whisper_model``
+    at the terminal transition — the external-import path uses it to record
+    provenance (``external:<model>``); the provider ASR path passes None so
+    the row keeps the label set at enqueue time.
     """
     engine = create_async_engine(settings.database_url, poolclass=NullPool)
     chain_summary = False
@@ -290,6 +299,8 @@ async def _mark_queue_finished(
             row.status = status
             row.finished_at = datetime.now(timezone.utc)
             row.error_message = error[:ERROR_MESSAGE_MAX_LEN] if error else None
+            if model_label is not None:
+                row.whisper_model = model_label
             # celery-routing-and-dispatcher-fix: terminal transition 也清掉
             # dispatcher 的 memo pad，未來 retry/重新 enqueue 才能再被選。
             row.dispatched_at = None
@@ -327,6 +338,228 @@ async def _lookup_show_id(episode_id: str) -> str | None:
         async with async_sessionmaker(engine, expire_on_commit=False)() as session:
             episode = await session.get(Episode, ep_uuid)
             return str(episode.show_id) if episode is not None else None
+    finally:
+        await engine.dispose()
+
+
+async def _persist_transcription_result(
+    episode_id: str,
+    result: TranscriptionResult,
+    *,
+    queue_model_label: str | None = None,
+) -> dict:
+    """external-transcript-bulk-import D1: shared post-ASR persistence.
+
+    單一共用縫——provider ASR 路徑（`_run`）與外部匯入路徑
+    （`import_external_transcript`）都走這裡：cancelled 檢查、
+    segments/chunks delete-then-write、LLM 同音字偵測（fail-open）、
+    ASR 校正字典、chunking、embedding dual-write、transcript content
+    重算、`_mark_queue_finished`（completed → 鏈 summary + topic）。
+
+    ``queue_model_label`` 只有匯入路徑會給（寫入 queue row 的
+    ``whisper_model`` 溯源標記）；ASR 路徑傳 None，行為與抽取前一致。
+    """
+    ep_uuid = uuid.UUID(episode_id)
+    engine = create_async_engine(settings.database_url, poolclass=NullPool)
+    Session = async_sessionmaker(engine, expire_on_commit=False)
+
+    try:
+        async with Session() as session:
+            episode = (
+                await session.execute(
+                    select(Episode)
+                    .options(selectinload(Episode.show))
+                    .where(Episode.id == ep_uuid)
+                )
+            ).scalar_one_or_none()
+            if episode is None:
+                logger.error(
+                    "persist_transcription_result: episode %s 不存在",
+                    episode_id,
+                )
+                return {"status": "not_found", "episode_id": episode_id}
+            show_language = episode.show.language if episode.show else None
+            correction_show_id = episode.show_id
+
+            transcript = (
+                await session.execute(
+                    select(Transcript).where(Transcript.episode_id == ep_uuid)
+                )
+            ).scalar_one_or_none()
+            if transcript is None:
+                transcript = Transcript(
+                    episode_id=ep_uuid, status=TranscriptStatus.processing
+                )
+                session.add(transcript)
+                await session.commit()
+            transcript_id = transcript.id
+
+        async with Session() as session:
+            if await _is_queue_cancelled(session, ep_uuid):
+                logger.info(
+                    "transcribe_episode: queue row for %s cancelled mid-task "
+                    "— skipping artifact writes",
+                    episode_id,
+                )
+                return {"status": "cancelled", "episode_id": episode_id}
+
+            await session.execute(
+                delete(TranscriptChunk).where(
+                    TranscriptChunk.transcript_id == transcript_id
+                )
+            )
+            await session.execute(
+                delete(TranscriptSegment).where(
+                    TranscriptSegment.transcript_id == transcript_id
+                )
+            )
+            # asr-llm-homophone-postprocess (EQ2b) — FIRST LAYER: LLM
+            # homophone detection over the whole episode. Returns word-level
+            # {wrong, correct} pairs that are (a) applied to THIS episode
+            # immediately (D2, no approval needed) and (b) persisted as
+            # pending candidates for cross-episode use after admin review.
+            # Both detection and persistence are fail-open: a failure here
+            # must never block transcription — it falls back to dictionary-
+            # only correction.
+            llm_pairs = await asr_homophone.detect_homophones(
+                session, result.text, show_id=correction_show_id
+            )
+            if llm_pairs:
+                # Persist candidates in a SEPARATE session so its commit
+                # cannot entangle (or prematurely flush) this transaction's
+                # in-flight segment/chunk deletes — the two paths are
+                # independent (D2). Fail-open: persistence failure must not
+                # block the current episode's correction.
+                try:
+                    async with Session() as cand_session:
+                        await asr_homophone.persist_candidates(
+                            cand_session,
+                            llm_pairs,
+                            show_id=correction_show_id,
+                        )
+                except Exception:
+                    logger.warning(
+                        "asr_homophone: persist_candidates failed for %s; "
+                        "current episode still corrected, candidates skipped",
+                        episode_id,
+                        exc_info=True,
+                    )
+
+            # asr-correction-dictionary (EQ2a) — SECOND LAYER: correct known
+            # ASR typos from the approved dictionary at the source — before
+            # writing segments and building chunks — so the displayed
+            # transcript AND the search index carry the fix.
+            # fail-open: a correction-load failure must not block the
+            # transcription itself; it can be backfilled later.
+            try:
+                correction_rules = await asr_correction.load_rules(
+                    session, correction_show_id
+                )
+            except Exception:
+                logger.warning(
+                    "asr_correction: load_rules failed for %s; "
+                    "transcribing without correction",
+                    episode_id,
+                    exc_info=True,
+                )
+                correction_rules = []
+
+            segment_rows: list[TranscriptSegment] = []
+            for seg in result.segments:
+                # First layer (LLM pairs) then second layer (dictionary).
+                corrected = asr_correction.apply_corrections(
+                    seg.text, llm_pairs
+                )
+                corrected = asr_correction.apply_corrections(
+                    corrected, correction_rules
+                )
+                row = TranscriptSegment(
+                    transcript_id=transcript_id,
+                    start_time=seg.start,
+                    end_time=seg.end,
+                    text=corrected,
+                    # EQ2d F1: snapshot the raw ASR text when a correction
+                    # changes it, so the episode stays reversible.
+                    original_text=(
+                        seg.text if corrected != seg.text else None
+                    ),
+                )
+                session.add(row)
+                segment_rows.append(row)
+            await session.flush()
+
+            chunk_drafts = build_chunks(segment_rows)
+            if chunk_drafts:
+                embedding_cfg = await get_step_config(session, "embedding")
+                # r3-4 dual-write: populate `embedding` (1536 legacy) and
+                # `embedding_v2` (3072 v3-large) in the same write pass so
+                # rollback via RAG_USE_EMBEDDING_V2=false still finds rows.
+                legacy_vecs, v2_vecs = await asyncio.to_thread(
+                    embed_texts_dual,
+                    [c.text for c in chunk_drafts],
+                    embedding_cfg,
+                )
+            else:
+                legacy_vecs = []
+                v2_vecs = []
+            if chunk_drafts:
+                await tokenizer.load_dictionary(session)
+            for idx, draft in enumerate(chunk_drafts):
+                tokens = tokenizer.tokenize(draft.text)
+                legacy_vec = (
+                    legacy_vecs[idx] if legacy_vecs is not None else None
+                )
+                v2_vec = v2_vecs[idx] if v2_vecs is not None else None
+                chunk = TranscriptChunk(
+                    transcript_id=transcript_id,
+                    chunk_index=idx,
+                    start_time=draft.start_time,
+                    end_time=draft.end_time,
+                    text=draft.text,
+                    embedding=legacy_vec,
+                    embedding_v2=v2_vec,
+                    segment_ids=draft.segment_ids,
+                )
+                chunk.text_tsvector = func.to_tsvector(
+                    "simple", " ".join(tokens)
+                )
+                session.add(chunk)
+
+            t = await session.get(Transcript, transcript_id)
+            if t is not None:
+                t.status = TranscriptStatus.completed
+                t.language = result.language or show_language
+                corrected_content = asr_correction.apply_corrections(
+                    asr_correction.apply_corrections(result.text, llm_pairs),
+                    correction_rules,
+                )
+                # EQ2d F1: snapshot the raw ASR full text when correction
+                # changes it, so the episode stays reversible.
+                if (
+                    corrected_content != result.text
+                    and t.original_content is None
+                ):
+                    t.original_content = result.text
+                t.content = corrected_content
+                t.error_message = None
+                t.transcribed_at = datetime.now(timezone.utc)
+            await session.commit()
+
+        # r4-rag-result-cache: a newly transcribed episode adds chunks /
+        # embeddings to this show's corpus — invalidate its cached results.
+        rag_cache.bump_corpus_version(correction_show_id)
+
+        await _mark_queue_finished(
+            ep_uuid, QueueStatus.completed, model_label=queue_model_label
+        )
+
+        return {
+            "status": "completed",
+            "episode_id": episode_id,
+            "segments": len(result.segments),
+            "chunks": len(chunk_drafts),
+        }
+
     finally:
         await engine.dispose()
 
@@ -394,169 +627,10 @@ async def _run(episode_id: str) -> dict:
             provider = get_provider(transcription_cfg)
             result = await provider.transcribe(temp_audio_path, language=show_language)
 
-            async with Session() as session:
-                if await _is_queue_cancelled(session, ep_uuid):
-                    logger.info(
-                        "transcribe_episode: queue row for %s cancelled mid-task "
-                        "— skipping artifact writes",
-                        episode_id,
-                    )
-                    return {"status": "cancelled", "episode_id": episode_id}
-
-                await session.execute(
-                    delete(TranscriptChunk).where(
-                        TranscriptChunk.transcript_id == transcript_id
-                    )
-                )
-                await session.execute(
-                    delete(TranscriptSegment).where(
-                        TranscriptSegment.transcript_id == transcript_id
-                    )
-                )
-                # asr-llm-homophone-postprocess (EQ2b) — FIRST LAYER: LLM
-                # homophone detection over the whole episode. Returns word-level
-                # {wrong, correct} pairs that are (a) applied to THIS episode
-                # immediately (D2, no approval needed) and (b) persisted as
-                # pending candidates for cross-episode use after admin review.
-                # Both detection and persistence are fail-open: a failure here
-                # must never block transcription — it falls back to dictionary-
-                # only correction.
-                llm_pairs = await asr_homophone.detect_homophones(
-                    session, result.text, show_id=correction_show_id
-                )
-                if llm_pairs:
-                    # Persist candidates in a SEPARATE session so its commit
-                    # cannot entangle (or prematurely flush) this transaction's
-                    # in-flight segment/chunk deletes — the two paths are
-                    # independent (D2). Fail-open: persistence failure must not
-                    # block the current episode's correction.
-                    try:
-                        async with Session() as cand_session:
-                            await asr_homophone.persist_candidates(
-                                cand_session,
-                                llm_pairs,
-                                show_id=correction_show_id,
-                            )
-                    except Exception:
-                        logger.warning(
-                            "asr_homophone: persist_candidates failed for %s; "
-                            "current episode still corrected, candidates skipped",
-                            episode_id,
-                            exc_info=True,
-                        )
-
-                # asr-correction-dictionary (EQ2a) — SECOND LAYER: correct known
-                # ASR typos from the approved dictionary at the source — before
-                # writing segments and building chunks — so the displayed
-                # transcript AND the search index carry the fix.
-                # fail-open: a correction-load failure must not block the
-                # transcription itself; it can be backfilled later.
-                try:
-                    correction_rules = await asr_correction.load_rules(
-                        session, correction_show_id
-                    )
-                except Exception:
-                    logger.warning(
-                        "asr_correction: load_rules failed for %s; "
-                        "transcribing without correction",
-                        episode_id,
-                        exc_info=True,
-                    )
-                    correction_rules = []
-
-                segment_rows: list[TranscriptSegment] = []
-                for seg in result.segments:
-                    # First layer (LLM pairs) then second layer (dictionary).
-                    corrected = asr_correction.apply_corrections(
-                        seg.text, llm_pairs
-                    )
-                    corrected = asr_correction.apply_corrections(
-                        corrected, correction_rules
-                    )
-                    row = TranscriptSegment(
-                        transcript_id=transcript_id,
-                        start_time=seg.start,
-                        end_time=seg.end,
-                        text=corrected,
-                        # EQ2d F1: snapshot the raw ASR text when a correction
-                        # changes it, so the episode stays reversible.
-                        original_text=(
-                            seg.text if corrected != seg.text else None
-                        ),
-                    )
-                    session.add(row)
-                    segment_rows.append(row)
-                await session.flush()
-
-                chunk_drafts = build_chunks(segment_rows)
-                if chunk_drafts:
-                    embedding_cfg = await get_step_config(session, "embedding")
-                    # r3-4 dual-write: populate `embedding` (1536 legacy) and
-                    # `embedding_v2` (3072 v3-large) in the same write pass so
-                    # rollback via RAG_USE_EMBEDDING_V2=false still finds rows.
-                    legacy_vecs, v2_vecs = await asyncio.to_thread(
-                        embed_texts_dual,
-                        [c.text for c in chunk_drafts],
-                        embedding_cfg,
-                    )
-                else:
-                    legacy_vecs = []
-                    v2_vecs = []
-                if chunk_drafts:
-                    await tokenizer.load_dictionary(session)
-                for idx, draft in enumerate(chunk_drafts):
-                    tokens = tokenizer.tokenize(draft.text)
-                    legacy_vec = (
-                        legacy_vecs[idx] if legacy_vecs is not None else None
-                    )
-                    v2_vec = v2_vecs[idx] if v2_vecs is not None else None
-                    chunk = TranscriptChunk(
-                        transcript_id=transcript_id,
-                        chunk_index=idx,
-                        start_time=draft.start_time,
-                        end_time=draft.end_time,
-                        text=draft.text,
-                        embedding=legacy_vec,
-                        embedding_v2=v2_vec,
-                        segment_ids=draft.segment_ids,
-                    )
-                    chunk.text_tsvector = func.to_tsvector(
-                        "simple", " ".join(tokens)
-                    )
-                    session.add(chunk)
-
-                t = await session.get(Transcript, transcript_id)
-                if t is not None:
-                    t.status = TranscriptStatus.completed
-                    t.language = result.language or show_language
-                    corrected_content = asr_correction.apply_corrections(
-                        asr_correction.apply_corrections(result.text, llm_pairs),
-                        correction_rules,
-                    )
-                    # EQ2d F1: snapshot the raw ASR full text when correction
-                    # changes it, so the episode stays reversible.
-                    if (
-                        corrected_content != result.text
-                        and t.original_content is None
-                    ):
-                        t.original_content = result.text
-                    t.content = corrected_content
-                    t.error_message = None
-                    t.transcribed_at = datetime.now(timezone.utc)
-                await session.commit()
-
-            # r4-rag-result-cache: a newly transcribed episode adds chunks /
-            # embeddings to this show's corpus — invalidate its cached results.
-            rag_cache.bump_corpus_version(correction_show_id)
-
-            await _mark_queue_finished(ep_uuid, QueueStatus.completed)
-
-            return {
-                "status": "completed",
-                "episode_id": episode_id,
-                "segments": len(result.segments),
-                "chunks": len(chunk_drafts),
-            }
+            # external-transcript-bulk-import D1: post-ASR persistence
+            # lives in the shared seam — identical behavior for both the
+            # provider path (here) and the external import path.
+            return await _persist_transcription_result(episode_id, result)
 
         except PERMANENT_ERRORS as exc:
             logger.exception(

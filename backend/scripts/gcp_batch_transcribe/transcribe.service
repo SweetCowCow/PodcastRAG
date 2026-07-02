@@ -1,0 +1,21 @@
+# systemd unit 範本 — provision.sh start 會把 __WORKDIR__ / __USER__ 換掉。
+# Restart=always：spot 被回收重開機、或 runner crash，都會自動續跑；
+# runner 靠 manifest.jsonl 跳過已完成集數，全部完成後自動 shutdown。
+[Unit]
+Description=PodcastRAG batch transcribe (faster-whisper large-v3-turbo)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=__USER__
+WorkingDirectory=__WORKDIR__
+ExecStart=/home/__USER__/venv/bin/python -u __WORKDIR__/runner.py \
+  --episodes __WORKDIR__/episodes.jsonl \
+  --workdir __WORKDIR__ \
+  --shutdown-when-done
+Restart=always
+RestartSec=30
+
+[Install]
+WantedBy=multi-user.target

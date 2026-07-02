@@ -25,6 +25,7 @@ from app.api.settings import router as settings_router
 from app.api.shows import router as shows_router
 from app.api.shows import rss_preview_router
 from app.api.stats import public_router as public_stats_router, router as stats_router
+from app.api.transcript_import import router as transcript_import_router
 from app.api.transcripts import router as transcripts_router
 from app.api.users import router as users_router
 from app.core.config import settings
@@ -138,6 +139,7 @@ app.include_router(rss_preview_router)
 app.include_router(schedules_router)
 app.include_router(episodes_router)
 app.include_router(transcripts_router)
+app.include_router(transcript_import_router)
 app.include_router(query_router)
 app.include_router(keyword_search_router)
 app.include_router(example_prompts_router)

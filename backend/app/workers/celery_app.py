@@ -13,6 +13,7 @@ celery_app = Celery(
     backend=settings.celery_result_backend,
     include=[
         "app.workers.tasks",
+        "app.workers.import_task",
         "app.workers.cron_tick",
         "app.workers.lifecycle",
         "app.workers.summary_task",
