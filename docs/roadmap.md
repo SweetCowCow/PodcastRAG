@@ -1,39 +1,34 @@
 # PodcastRAG 路線圖
 
-> 最後更新：2026-06-11（**序6 R1.3-j judge harness 對齊完成**：校準對齊 prod 真判官（廢 stand-in prompt＋寫死 gpt-4o）、mini-set 40 題補 `expected_behavior`/`expected_answer_summary`（23 題證據先行共審）、拒答感知 scalar、5 模型 bake-off → 新判官 **gemini-2.5-flash-lite** Spearman 0.8365（及格線 0.7 拍板、judge_config drift 依證據收斂）。archive `2026-06-11-r1-3-j-judge-harness-align`。C fallback 未觸發。haiku 因 AI Hub+response_format 回空 `{}` 跳過、fallback 列 follow-up。序6 劃掉，下一動回到序2 EQ5。）｜2026-06-10（**EQ6 RAG 回答 cache 完成**：見序4 列。）｜2026-06-09（**EQ4a `rag.py` 模組拆分完成**：facade re-export 拆 6 子模組、行為零改變、新 spec `rag-service-layout`、prod smoke 200+5 citations、archive。序5 劃掉。下一動回到序2 EQ5 golden set 擴充。）｜2026-06-08（**佇列重整**：發現 EQ4 對話 Agent 核心其實早已 archive + prod default-on（roadmap 原標 ⬜ 為 drift），核心歸入已完成、名下三項拆散重排（rag.py 拆分＝refactor、pronoun-grounding＝獨立小品質、citation-postgen 併入 R2.2）。R1.3 依賴「R3.x 全完」已滿足→解鎖進佇列。待辦改以「🎯 建議執行順序」為權威。EQ7 base image 起手。前次（06-07）b22/b23 retrieval track 完成收尾：EQ3a-f4 b22 routing ✅、EQ3a-f5 b23 narrative ✅（拆三條 + answer-model 切 gpt-5.1，皆 archive），b23 端到端 prod EP107 引用 5/5（修前 0/6）。EQ3a-f3 conditional-HyDE 負結果廢掉。）
+> 最後更新：2026-07-02（**Roadmap/Backlog 重定義 + 佇列重排**：Jacky 拍板新定義 — Roadmap＝確認執行、照序走；Backlog＝存想法、不排序。五個新想法編入（EQ11 eval-loop-automation / EQ12 mobile-rwd / EQ13 english-shows-research / EQ14 user-insight-and-landing / EQ15 loop-engineering-pilot）+ 新增 EQ16 轉錄管線韌性（B1+B2+T2 併一條）+ EQ5 重塑為 EQ5′（改用 EQ11 流水線產 golden set）+ EQ8/EQ9 降 Backlog。**EQ10 進行中 12/19**：兩節目已入 prod（塞掐 449/台通 562）、spot VM 全量轉錄跑批中（RTF 26.9x、ETA ~36h）、費用 gate 過（轉錄 ~$14 + 下游 ~$52 topic 大頭 Jacky 拍板照跑）。）
+>
+> 舊更新：2026-06-11（**序6 R1.3-j judge harness 對齊完成**：校準對齊 prod 真判官（廢 stand-in prompt＋寫死 gpt-4o）、mini-set 40 題補 `expected_behavior`/`expected_answer_summary`（23 題證據先行共審）、拒答感知 scalar、5 模型 bake-off → 新判官 **gemini-2.5-flash-lite** Spearman 0.8365（及格線 0.7 拍板、judge_config drift 依證據收斂）。archive `2026-06-11-r1-3-j-judge-harness-align`。C fallback 未觸發。haiku 因 AI Hub+response_format 回空 `{}` 跳過、fallback 列 follow-up。序6 劃掉，下一動回到序2 EQ5。）｜2026-06-10（**EQ6 RAG 回答 cache 完成**：見序4 列。）｜2026-06-09（**EQ4a `rag.py` 模組拆分完成**：facade re-export 拆 6 子模組、行為零改變、新 spec `rag-service-layout`、prod smoke 200+5 citations、archive。序5 劃掉。下一動回到序2 EQ5 golden set 擴充。）｜2026-06-08（**佇列重整**：發現 EQ4 對話 Agent 核心其實早已 archive + prod default-on（roadmap 原標 ⬜ 為 drift），核心歸入已完成、名下三項拆散重排（rag.py 拆分＝refactor、pronoun-grounding＝獨立小品質、citation-postgen 併入 R2.2）。R1.3 依賴「R3.x 全完」已滿足→解鎖進佇列。待辦改以「🎯 建議執行順序」為權威。EQ7 base image 起手。前次（06-07）b22/b23 retrieval track 完成收尾：EQ3a-f4 b22 routing ✅、EQ3a-f5 b23 narrative ✅（拆三條 + answer-model 切 gpt-5.1，皆 archive），b23 端到端 prod EP107 引用 5/5（修前 0/6）。EQ3a-f3 conditional-HyDE 負結果廢掉。）
 
 本文件記錄 PodcastRAG 後續開發的優先順序與規劃。**排序真相 = 下方「🎯 執行佇列」**；Phase A–F 表是細節背景（多數 Phase A 已完成）。
 
 ---
 
-## 🎯 執行佇列（2026-06-01 Jacky 拍板，權威排序）
+## 📍 Roadmap（2026-07-02 Jacky 拍板，權威排序）
 
-> **這是「下一動做什麼」的唯一真相來源。** 由上往下做，完成一條才動下一條（除非標註可並行）。
+> **定義（2026-07-02 重定）**：Roadmap＝**確認要執行**的項目，沒有意外照此順序做；Backlog＝有想法但不急、**先存起來不排序**。
 > 與 memory `project_pending_changes.md` 的同名段**互為鏡像**，更新時兩邊同步（feedback_roadmap_dual_write）。
 
 **狀態圖例**：⬜ 待開　🔵 進行中（active change）　✅ 完成並 archive　⏸ parked
 
-### 🎯 建議執行順序（2026-06-08 重排，**唯一排序真相**）
-
-> 由上往下做。`code` 是穩定代號（對應下方「完整狀態表」的細節列），`序` 是當前建議順序。
-
-| 序 | 項目 | code | change 名（暫名） | 前置 / 卡點 | 驗收標準 |
+| 序 | 項目 | code | change 名（暫名） | 前置 / 卡點 | 說明與驗收 |
 |---|------|------|------------------|------------|---------|
-| ~~1~~ ✅ | Pre-built base image | EQ7 | `o2-prebuilt-base-image` | — | ✅ 2026-06-08 archive（`2026-06-08-o2-prebuilt-base-image`，commits `b92fc25`/`25c10c9`/`6027556`/`9abf801`）。base-as-cache（否決 Route A 契約式）：`Dockerfile.base`→GHCR 公開 image + app `Dockerfile` `FROM` 它 + 保留 pip 自癒層 + GHA `build-base-image.yml`。新 spec `container-build-pipeline`（4 ADDED）。**prod build ~10 分→~2–2.5 分**；四服務 RUNNING、chat query 200+5 citations。回滾＝`git revert 25c10c9`（單檔） |
-| **2** | golden set 擴充（曼報＋壹加壹各 ≥30 題） | EQ5 | `golden-set-expand-manbao-yijiayi` | 無 | 各 ≥30 題人工 sentinel；**一題一題共草**（feedback_golden_set_co_draft_flow）。後面品質改動的量尺 |
-| **3** | agent 代詞 grounding | EQ4b | `agent-pronoun-grounding` | 建議 #2 先（要量尺） | pronoun 0 hallucinated 維持；judge `pronoun_attribution_check` 綠。judge 端已能量測（unblocked），改 agent 端 grounding |
-| ~~4~~ ✅ | RAG 回答 cache | EQ6 | `r4-rag-result-cache` | — | ✅ 2026-06-10 archive（`2026-06-10-r4-rag-result-cache`，commits `1cbfa73`/`7ba097d`/`a106bac`）。**service 層接縫**（包 `retrieve_hybrid`+`embed_texts`）三模式共用、對話吃檢索層、不快取最終答話。`/search` 另在 endpoint 層快取 enriched response 跳過 `enrich_hits`（prod 抓到的瓶頸）。版本失效＝corpus_ver（transcribe/ASR 回填 bump）+ config_ver（HyDE/RRF/routing hash）。P2 semantic cache 寫成 flag-off machinery（不啟用、enable gate 依賴 EQ5）。新 spec `rag-result-cache`（7 ADDED）。**prod smoke：語意 cache_hit false→true 延遲 10.15s→0.53s（−95%）、關鍵字 0.44s→0.27s**。case study `docs/case-studies/rag-result-cache-eq6-2026-06-10.md` |
-| ~~5~~ ✅ | `rag.py` 模組拆分 | EQ4a | `rag-py-module-split` | — | ✅ 2026-06-09 archive（`2026-06-09-rag-py-module-split`，commits `cf949ea`/`24886f4`）。facade re-export 路線（否決徹底清空）：1330 行 god module → 6 子模組（`rag_types`/`rag_config`/`rag_sql`/`rag_retrieval`/`rag_enrich`/`rag_generation`）+ `rag.py` 純 facade（105 行），`rag.X` 外部介面與 admin 對 `RRF_WEIGHTS` 的 in-place 改寫全不變。行為零改變、本地全測試 zero-new-failure（baseline diff）。新 spec `rag-service-layout`（4 ADDED，架構不變式）。Prod chat smoke 200 + citations 5。`_build_ts_query` 已隔離進 `rag_sql` 為 EQ3c BM25 鋪路 |
-| ~~6~~ ✅ | judge re-bake-off（R1.3 子集） | R1.3-j | `r1-3-j-judge-harness-align` | — | ✅ 2026-06-11 archive（`2026-06-11-r1-3-j-judge-harness-align`）。根因＝三套標準對撞（量錯對象/拒答標準相反/欄位餵不動）非模型爛：校準改呼叫 prod 真判官（`judge_chat_v2`）+ mini-set 補兩欄（分層推導 10/7/23、23 題 DB 證據先行共審）+ 拒答感知 scalar。bake-off：**gemini-2.5-flash-lite 0.8365 ⭐**（$0.019/40 題）> gpt-5.1 0.8004 > nano 0.6914 > 3.5-flash 0.6222；haiku 跳過（AI Hub+response_format 空 `{}`，fallback 列 follow-up）。及格線 0.7（兩模型過、首次有人達標）；同 nano 舊尺 0.414→新尺 0.69 證實尺壞。`judge_config.py` 34 天 drift 依證據收斂（常數恰巧原本就對）。rag-eval-judge spec +1 ADDED +2 MODIFIED。C fallback 未觸發。R1.3 全套（Dashboard/alerting）其餘部分仍留 Phase B |
-| **7** | R2.2 prompt + citation 後檢 + UX | EQ3d | `r2-2-prompt-redo`（**併** `agentic-citation-check-postgen` v3b） | #2 #6 | Faithfulness ≥ 0.71；inline `[N]` 渲染 + hover↔source；**citation 後檢驗 `[N]` 真 grounding**（上次 inline 試法 backfire 過，重新設計）。注意 prompt 已近飽和（feedback_prompt_saturation） |
-| **8** | 詞典系統整合（F4） | EQ8 | `dict-system-integration`（暫名） | **先 /spectra-discuss** | 核准 ASR 校正自動進分詞詞典；兩套詞典職責釐清 + 後台 UI 重設計 |
-| **9** | 一般同音異義字修正（F7） | EQ9 | `general-homophone-correction`（暫名） | **先 /spectra-discuss**（風險高） | 非專名通用同音（在來→再來）；先評估方法 + 防誤改機制，不與 EQ2b RAGEC 混 |
+| **0** 🔵 | 兩大集數節目歷史轉錄匯入 | EQ10 | `external-transcript-bulk-import`（12/19，commit `9a1a93c`） | spot VM 批次轉錄中（ETA ~36h 起 2026-07-02 10:17） | 已完成：共用縫抽取 zero-new-failure、匯入 API+16 測試、GCP 工具組、配額/費用/下游三 gate（轉錄 ~$14 + 下游 ~$52 拍板照跑）、兩節目入 prod（塞掐 449 `e71e4f2b…`/台通 562 `efee016d…`，無 schedule）。剩：4.3 全量驗收 → 試水 5 集 **Jacky 拍板 gate** → 全量匯入 → schedule → smoke → 收尾文件 |
+| **1** | Eval 動態流水線（想法3） | EQ11 | `eval-loop-automation`（暫名，**先 /spectra-discuss**） | 無 — **等批次空檔即可開** | 設計「LLM 產題 + 分級人審 + prod query 回收標注」流水線，解 golden set 手工成本（已知教訓：全自動壞題率 ≥75%，人審不可省）。產出直接重塑 EQ5′ 的做法 |
+| **2** | 手機 RWD（想法4） | EQ12 | `mobile-rwd`（暫名） | audit 隨時可跑；修正 change 排 EQ10 後 | 先 mobile emulation 全站 audit 列問題清單 → 再開修正 change。全站 inline styles 逐元件處理 |
+| **3** | 轉錄管線韌性 | EQ16 | `transcription-pipeline-resilience`（暫名） | **EQ10 archive 後**（同區域避免歸因混亂） | B1 RSS re-sync 偵測 audio_url 變動失效 storage key + B2 壞檔無限重試終止狀態 + T2 轉錄失敗回報使用者，三條併一次（2026-07-01 EP20 教訓） |
+| **4** | golden set 流水線首跑（EQ5 重塑） | EQ5′ | `golden-set-via-eval-loop`（暫名） | EQ11 討論定案 | 用 EQ11 流水線建曼報+壹加壹 golden set（若流水線不可行退回一題一題手工共草）；跑順後直接套塞掐+台通 |
+| **5** | 英文節目資訊整合研究（想法2） | EQ13 | `english-shows-research`（暫名） | research 可隨時平行跑 | 版權 deep-research（轉錄/翻譯/摘要衍生著作風險、產業慣例）+ 產品定位 discuss；可行才進 dogfood pilot（技術全復用 EQ10 工具組，痛點案例：Lenny's Podcast — 太長/全英文/主題過濾） |
+| **6** | 用戶洞察 + Landing 改版（想法1） | EQ14 | `user-insight-and-landing`（暫名） | 訪談要 Jacky 時間；準備工作隨時 | 問題：家人朋友 get 不到產品的點與用法。順序：訪談腳本 + events 數據分析（Claude 備）→ Jacky 執行 5 訪談 → 依洞察開 landing 價值主張改版 change（5/23 已改架構層，這次是傳達層） |
+| **7** | agent 代詞 grounding | EQ4b | `agent-pronoun-grounding` | EQ5′ 先（要量尺） | pronoun 0 hallucinated 維持；judge `pronoun_attribution_check` 綠 |
+| **8** | R2.2 prompt + citation 後檢 + UX | EQ3d | `r2-2-prompt-redo`（**併** `agentic-citation-check-postgen` v3b） | EQ5′ + R1.3-j✅ | Faithfulness ≥ 0.71；inline `[N]` 渲染 + hover↔source；citation 後檢驗真 grounding（上次 inline 試法 backfire 過，重新設計）。prompt 已近飽和（feedback_prompt_saturation） |
+| **9** | Loop Engineering pilot（想法5） | EQ15 | `loop-engineering-pilot`（暫名，**先 /spectra-discuss**） | 討論可提前 | 收斂「用強模型 + multi-agent loop 優化什麼」（架構債/效能/測試涵蓋）→ 小 pilot（如 multi-agent 全 backend audit 產 tech-debt 清單）驗證工作模式 |
 
-**延後 / 降級（不在主序，需要時再插入）**
-- **EQ3b** ⏸ 降級 — b20 召回 RCA spike（已被 EQ3a-f1/f2 track 涵蓋，可略，除非追剩餘 chunk-level 失配）
-- **EQ3c** ⏸ 延後（2026-06-08）— BM25 取代 ts_rank + EP-IDF（**probe 須先重設計**成「題型×模式」分層矩陣；見 `docs/research/eq3c-bm25-discussion-2026-06-08.md`）
-
-**排序邏輯**：先做加速所有後續迭代的基建快贏（#1）→ 鋪評測量尺（#2）→ 低風險小品質 win（#3）+ 獨立效能（#4）→ 動 prompt 前先 refactor（#5）→ 解鎖的評測鏈（#6 → #7）→ 需先討論的（#8 / #9）。
+**平行規則**：EQ11 discuss、EQ12 audit、EQ13 research、EQ14 準備工作四項互不衝突也不碰 prod，等批次/gate 的空檔可插著做。
 
 ---
 
@@ -65,25 +60,41 @@
 | **EQ8** | 詞典系統整合（F4） | `dict-system-integration`（暫名） | ⬜ | **先 /spectra-discuss** | 核准 ASR 校正時自動加進分詞詞典；併 Parking Lot「詞典系統整合/重設計」一起想（兩套詞典職責釐清 + 後台 UI 重設計） |
 | **EQ9** | 一般同音異義字修正（F7） | `general-homophone-correction`（暫名） | ⬜ | **先 /spectra-discuss**（風險高） | 非專名通用同音（在來→再來）；過度修正風險高，須先評估方法與防誤改機制，不與 EQ2b RAGEC 混 |
 
-### Parking Lot（未進佇列，剩下往後排）
+### 🗃️ Backlog（存想法，不排序 — 2026-07-02 重定義）
 
-依 Jacky 指示「剩下沒列到的往後排」。需要時再插入執行佇列：
+有想法但不急著做的項目，**不排優先順序**；要動時由 Jacky 升入 Roadmap。
 
-- **產品功能**：U3 用量 Dashboard + 熱搜 chip／A5 整集對話入口／C1 對話紀錄 → C2 推薦 → C3 權限分級／U2 點數計價 + 自動補回
-- **查詢模式整合 / 簡化**（2026-06-08 Jacky 提出）：三模式（索引／語意／對話）是否太多易混淆、關鍵字+語意是否該合併。注意「索引」是 2026-05-31 因「語意搜不準精確名詞」刻意拆出的，合併＝推翻該決策。三條中間路線（自動導流／合併成「搜尋＋對話」兩類／單框雙區結果）+ 利弊 + resume 待釐清項，完整記於 `docs/research/query-mode-consolidation-backlog-2026-06-08.md`。真要動前先看真實使用分布 + /spectra-discuss
-- **RAG 進階**：R3.x（topic seg 自動類別建議／`segment_categories` admin UI／業配段降權／dict 通用化）／R5 地端 embedding
-- **Ops / 體驗**：A4 淺色主題／cookie SameSite=Lax（需先廢 `*.zeabur.app` 子域）
-- **評測雜項**：q25 audit expected 對齊／rule pattern 涵蓋率月度回顧
-- **內容生態**：T2 轉錄人工回報機制（與 EQ2 ASR 校正互補但獨立）
-- **詞典系統整合 / 重設計**（2026-06-01 EQ2a 收尾發現）：現有兩套詞典職責與流程未理清 —— (1)「ASR 校正字典」改 transcript 原文（錯字→正字 literal replace + 重算 index）；(2)「分詞詞典」（tokenizer/terms）改 jieba 斷詞讓專名當整詞、影響 lexical search。兩者都管專名、user 易混淆。具體痛點：分詞詞典已收「杜宗祐/阿名/方品融」但索引搜尋仍把「杜宗祐」切成「杜宗+祐」落 T3（runtime 未 reload 或既有 chunk tsvector 用舊詞典建）；且 `POST /admin/tokenizer/reload` 卡 CSRF 403。待辦：釐清兩者用途/差異/交互（含 ASR 新正字是否自動進分詞詞典、reload 後既有 index 重建時序），重新設計後台使用流程與 UI（可能合併為單一「詞彙管理」或明確分區）。
+**產品 / 前端**
+- U3 用量 Dashboard + 熱搜 chip／A5 整集對話入口／A4 淺色主題／U2 點數計價 + 每月 quota 自動補回／全站登入 gate（Phase 2）
+- **查詢模式整合 / 簡化**（2026-06-08 Jacky 提出）：三模式是否太多易混淆。注意「索引」是 2026-05-31 刻意拆出的，合併＝推翻該決策。三條中間路線 + 利弊記於 `docs/research/query-mode-consolidation-backlog-2026-06-08.md`。真要動前先看真實使用分布 + /spectra-discuss
 
-### 追蹤規則（backlog 管理方式，2026-06-01 定）
+**檢索 / RAG**
+- **EQ3c** BM25 取代 ts_rank + EP-scoped IDF ⏸ — 前置條件：probe 重設計成「題型×模式」分層矩陣（`docs/research/eq3c-bm25-discussion-2026-06-08.md`）
+- **EQ3b** chunk-level retrieval RCA（b20-style）⏸ 已降級 — 已被 HyDE track 大致涵蓋
+- R3.x 候選：topic seg 自動類別建議／`segment_categories` admin UI／業配段降權／dict weight 通用化
+- R5 地端 embedding
 
-1. **唯一排序真相 = 上方「🎯 建議執行順序」表**（完整狀態表只作細節/歷史參考）；`docs/roadmap.md` 與 memory `project_pending_changes.md` 互為鏡像，動一邊就同步另一邊。
-2. **開工**：從建議執行順序最上方未完成項取一條 → `/spectra-propose`（或小修直接做）→ 狀態改 🔵 + 開 `TaskCreate` 做 session 內細項追蹤。
+**ASR / 詞典**
+- **EQ8** 詞典系統整合（F4）— 2026-07-02 從主序降 Backlog：等詞條累積更多才有整合價值。核准 ASR 校正自動進分詞詞典 + 兩套詞典職責釐清 + 後台 UI 重設計（詳細痛點：分詞詞典收了「杜宗祐」但索引仍切「杜宗+祐」落 T3、`POST /admin/tokenizer/reload` 卡 CSRF 403）
+- **EQ9** 一般同音異義字修正（F7）— 2026-07-02 從主序降 Backlog：風險高、無急迫性。非專名通用同音（在來→再來），要做先 /spectra-discuss 評估防誤改機制
+
+**Eval 雜項**
+- golden set q25 audit expected 對齊／`eval-runner-dynamic-top-k`／rule pattern 涵蓋率月度回顧／haiku via AI Hub `response_format` 空 `{}` fallback
+- 新節目 onboarding 收尾包（塞掐/台通 golden set + 新 ASR 詞條）— EQ5′ 流水線跑順後自然消化
+
+**基礎設施 / 安全**
+- `enable_agentic_chat` kill-switch 過期 cleanup（30 天觀察期 6/21 已過，可 propose 刪 rule-based 舊碼）
+- cookie SameSite=Lax 強化 + **Zeabur Gateway 評估**綁一起做（Gateway 把 `app.podcastrag.app/api/*` 路由 backend → 同源解 SameSite + 去 CORS；docs: zeabur.com/docs/zh-TW/deploy/networking/gateway；限制：不支援 IPv6 IP 控制）
+- C1 對話紀錄 → C2 推薦 → C3 權限分級（成本計價線）
+
+### 追蹤規則（2026-07-02 更新）
+
+1. **Roadmap＝確認執行、照序走；Backlog＝存想法、不排序**。唯一排序真相 = 上方「📍 Roadmap」表（完整狀態表只作細節/歷史參考）；`docs/roadmap.md` 與 memory `project_pending_changes.md` 互為鏡像，動一邊就同步另一邊。
+2. **開工**：從 Roadmap 最上方未完成項取一條 → `/spectra-propose`（或小修直接做）→ 狀態改 🔵。
 3. **完成**：`/spectra-archive` → 狀態改 ✅ + 記 archive 路徑/commit → 問是否補 release log（feedback_release_log_maintenance）。
-4. **插隊 / 重排**：只有 Jacky 能改佇列順序；新議題預設進 Parking Lot，除非他指定插入位置。
-5. **依賴鎖**：標了「前置」的項目前置未完成不得開工，避免歸因混亂。當前鎖：EQ4b(序3) 建議 EQ5(序2) 先；EQ3d(序7) 鎖 EQ5(序2)+R1.3-j(序6)；EQ8/EQ9 鎖 `/spectra-discuss`。
+4. **插隊 / 重排 / Backlog 升級**：只有 Jacky 能改；新議題預設進 Backlog，除非他指定插入 Roadmap 位置。
+5. **依賴鎖**：前置未完成不得開工。當前鎖：EQ16 鎖 EQ10 archive；EQ5′ 鎖 EQ11 討論定案；EQ4b/EQ3d 鎖 EQ5′。
+6. **平行例外**：EQ11 discuss / EQ12 audit / EQ13 research / EQ14 準備工作可在等待期插著做（不碰 prod、互不衝突）。
 
 ---
 
