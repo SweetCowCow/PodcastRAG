@@ -1,6 +1,8 @@
 # PodcastRAG 路線圖
 
-> 最後更新：2026-07-02（**Roadmap/Backlog 重定義 + 佇列重排**：Jacky 拍板新定義 — Roadmap＝確認執行、照序走；Backlog＝存想法、不排序。五個新想法編入（EQ11 eval-loop-automation / EQ12 mobile-rwd / EQ13 english-shows-research / EQ14 user-insight-and-landing / EQ15 loop-engineering-pilot）+ 新增 EQ16 轉錄管線韌性（B1+B2+T2 併一條）+ EQ5 重塑為 EQ5′（改用 EQ11 流水線產 golden set）+ EQ8/EQ9 降 Backlog。**EQ10 進行中 12/19**：兩節目已入 prod（塞掐 449/台通 562）、spot VM 全量轉錄跑批中（RTF 26.9x、ETA ~36h）、費用 gate 過（轉錄 ~$14 + 下游 ~$52 topic 大頭 Jacky 拍板照跑）。）
+> 最後更新：2026-07-03（**EQ11 eval-loop-automation 16/16 完成（待 archive）**：anchor-first 流水線全套落地 + 壹加壹首跑壞題率 15%（基線 75%）+ 34 題 `yi-jia-yi.json` + baseline 全消費。EQ5′ 壹加壹第一批隨之完成、下一批曼報。EQ10 批次：spot 下午大缺貨 remaining 卡 745，Jacky 拍板轉 on-demand（原地 set-scheduling，執行中）。）
+>
+> 舊更新：2026-07-02（**Roadmap/Backlog 重定義 + 佇列重排**：Jacky 拍板新定義 — Roadmap＝確認執行、照序走；Backlog＝存想法、不排序。五個新想法編入（EQ11 eval-loop-automation / EQ12 mobile-rwd / EQ13 english-shows-research / EQ14 user-insight-and-landing / EQ15 loop-engineering-pilot）+ 新增 EQ16 轉錄管線韌性（B1+B2+T2 併一條）+ EQ5 重塑為 EQ5′（改用 EQ11 流水線產 golden set）+ EQ8/EQ9 降 Backlog。**EQ10 進行中 12/19**：兩節目已入 prod（塞掐 449/台通 562）、spot VM 全量轉錄跑批中（RTF 26.9x、ETA ~36h）、費用 gate 過（轉錄 ~$14 + 下游 ~$52 topic 大頭 Jacky 拍板照跑）。）
 >
 > 舊更新：2026-06-11（**序6 R1.3-j judge harness 對齊完成**：校準對齊 prod 真判官（廢 stand-in prompt＋寫死 gpt-4o）、mini-set 40 題補 `expected_behavior`/`expected_answer_summary`（23 題證據先行共審）、拒答感知 scalar、5 模型 bake-off → 新判官 **gemini-2.5-flash-lite** Spearman 0.8365（及格線 0.7 拍板、judge_config drift 依證據收斂）。archive `2026-06-11-r1-3-j-judge-harness-align`。C fallback 未觸發。haiku 因 AI Hub+response_format 回空 `{}` 跳過、fallback 列 follow-up。序6 劃掉，下一動回到序2 EQ5。）｜2026-06-10（**EQ6 RAG 回答 cache 完成**：見序4 列。）｜2026-06-09（**EQ4a `rag.py` 模組拆分完成**：facade re-export 拆 6 子模組、行為零改變、新 spec `rag-service-layout`、prod smoke 200+5 citations、archive。序5 劃掉。下一動回到序2 EQ5 golden set 擴充。）｜2026-06-08（**佇列重整**：發現 EQ4 對話 Agent 核心其實早已 archive + prod default-on（roadmap 原標 ⬜ 為 drift），核心歸入已完成、名下三項拆散重排（rag.py 拆分＝refactor、pronoun-grounding＝獨立小品質、citation-postgen 併入 R2.2）。R1.3 依賴「R3.x 全完」已滿足→解鎖進佇列。待辦改以「🎯 建議執行順序」為權威。EQ7 base image 起手。前次（06-07）b22/b23 retrieval track 完成收尾：EQ3a-f4 b22 routing ✅、EQ3a-f5 b23 narrative ✅（拆三條 + answer-model 切 gpt-5.1，皆 archive），b23 端到端 prod EP107 引用 5/5（修前 0/6）。EQ3a-f3 conditional-HyDE 負結果廢掉。）
 
@@ -18,10 +20,10 @@
 | 序 | 項目 | code | change 名（暫名） | 前置 / 卡點 | 說明與驗收 |
 |---|------|------|------------------|------------|---------|
 | **0** 🔵 | 兩大集數節目歷史轉錄匯入 | EQ10 | `external-transcript-bulk-import`（12/19，commit `9a1a93c`） | spot VM 批次轉錄中（ETA ~36h 起 2026-07-02 10:17） | 已完成：共用縫抽取 zero-new-failure、匯入 API+16 測試、GCP 工具組、配額/費用/下游三 gate（轉錄 ~$14 + 下游 ~$52 拍板照跑）、兩節目入 prod（塞掐 449 `e71e4f2b…`/台通 562 `efee016d…`，無 schedule）。剩：4.3 全量驗收 → 試水 5 集 **Jacky 拍板 gate** → 全量匯入 → schedule → smoke → 收尾文件 |
-| **1** | Eval 動態流水線（想法3） | EQ11 | `eval-loop-automation`（暫名，**先 /spectra-discuss**） | 無 — **等批次空檔即可開** | 設計「LLM 產題 + 分級人審 + prod query 回收標注」流水線，解 golden set 手工成本（已知教訓：全自動壞題率 ≥75%，人審不可省）。產出直接重塑 EQ5′ 的做法 |
+| **1** ✅ | Eval 動態流水線（想法3） | EQ11 | `eval-loop-automation`（16/16，2026-07-03 完成，待 archive） | 無 | **完成**：show profiling（quota 矩陣 + show_facts 環節）、anchor-first 產題（gpt-5.1）、預審分級（判官 gemini-2.5-flash-lite + retrieval rank）、review log + reject 回饋圈、promote 溯源晉升、golden-set-builder skill。**壹加壹首跑：壞題率 15%（gate <40%、基線 75%）、34 題入 `yi-jia-yi.json`、baseline 34/34 可消費**。multi-turn 3 題共草待約時間。case study：`docs/case-studies/eval-loop-automation-first-run.md` |
 | **2** | 手機 RWD（想法4） | EQ12 | `mobile-rwd`（暫名） | audit 隨時可跑；修正 change 排 EQ10 後 | 先 mobile emulation 全站 audit 列問題清單 → 再開修正 change。全站 inline styles 逐元件處理 |
 | **3** | 轉錄管線韌性 | EQ16 | `transcription-pipeline-resilience`（暫名） | **EQ10 archive 後**（同區域避免歸因混亂） | B1 RSS re-sync 偵測 audio_url 變動失效 storage key + B2 壞檔無限重試終止狀態 + T2 轉錄失敗回報使用者，三條併一次（2026-07-01 EP20 教訓） |
-| **4** | golden set 流水線首跑（EQ5 重塑） | EQ5′ | `golden-set-via-eval-loop`（暫名） | EQ11 討論定案 | 用 EQ11 流水線建曼報+壹加壹 golden set（若流水線不可行退回一題一題手工共草）；跑順後直接套塞掐+台通 |
+| **4** | golden set 流水線後續批次（EQ5 重塑） | EQ5′ | `golden-set-via-eval-loop`（暫名） | EQ11 ✅（流水線已驗證可行） | **壹加壹第一批已隨 EQ11 首跑完成（34 題）**；下一批 = 曼報（invoke golden-set-builder skill 即可）；跑順後套塞掐+台通（EQ10 轉錄完才有料） |
 | **5** | 英文節目資訊整合研究（想法2） | EQ13 | `english-shows-research`（暫名） | research 可隨時平行跑 | 版權 deep-research（轉錄/翻譯/摘要衍生著作風險、產業慣例）+ 產品定位 discuss；可行才進 dogfood pilot（技術全復用 EQ10 工具組，痛點案例：Lenny's Podcast — 太長/全英文/主題過濾） |
 | **6** | 用戶洞察 + Landing 改版（想法1） | EQ14 | `user-insight-and-landing`（暫名） | 訪談要 Jacky 時間；準備工作隨時 | 問題：家人朋友 get 不到產品的點與用法。順序：訪談腳本 + events 數據分析（Claude 備）→ Jacky 執行 5 訪談 → 依洞察開 landing 價值主張改版 change（5/23 已改架構層，這次是傳達層） |
 | **7** | agent 代詞 grounding | EQ4b | `agent-pronoun-grounding` | EQ5′ 先（要量尺） | pronoun 0 hallucinated 維持；judge `pronoun_attribution_check` 綠 |
@@ -69,6 +71,7 @@
 - **查詢模式整合 / 簡化**（2026-06-08 Jacky 提出）：三模式是否太多易混淆。注意「索引」是 2026-05-31 刻意拆出的，合併＝推翻該決策。三條中間路線 + 利弊記於 `docs/research/query-mode-consolidation-backlog-2026-06-08.md`。真要動前先看真實使用分布 + /spectra-discuss
 
 **檢索 / RAG**
+- **固定環節結構化抽取**（2026-07-02 Jacky 提出）：節目重複環節的專門記錄與查詢 — 台通片尾「推歌環節」（主持人/來賓推薦 1-2 首歌）、塞掐訪談片尾固定題（最近看的書/影視作品/理財方式）。設計方向：per-show 環節 pattern 設定 → LLM 抽取 → 結構化存放（類 guests JSONB 的 metadata）→ agent 查詢面 + golden set 特化題型聯動（EQ11 流水線的 show profile 已預留 `recurring_segments` 掛鉤）。呼應 b20 歌曲推薦詞彙失配的老難題 — 結構化抽取是比檢索調優更根本的解法
 - **EQ3c** BM25 取代 ts_rank + EP-scoped IDF ⏸ — 前置條件：probe 重設計成「題型×模式」分層矩陣（`docs/research/eq3c-bm25-discussion-2026-06-08.md`）
 - **EQ3b** chunk-level retrieval RCA（b20-style）⏸ 已降級 — 已被 HyDE track 大致涵蓋
 - R3.x 候選：topic seg 自動類別建議／`segment_categories` admin UI／業配段降權／dict weight 通用化

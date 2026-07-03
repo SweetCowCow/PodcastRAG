@@ -35,7 +35,11 @@
             "guest_find",
             "show_overview",
             "topic_find",
-            "summary"
+            "summary",
+            "fact",
+            "code_switch",
+            "playlist_enum",
+            "summary_overview"
           ]
         },
         "source": {"type": "string"},

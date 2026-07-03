@@ -1,0 +1,26 @@
+{
+  "show_id": "45fc2462-17cf-42f5-98a7-68fe1a222228",
+  "slug": "this-not-that-cool",
+  "measured_at": "2026-07-03T02:32:53.222532+00:00",
+  "metrics": {
+    "total_episodes": 172,
+    "guests_coverage": 0.5756,
+    "playlist_titles": 26,
+    "summary_done_ratio": 1.0,
+    "en_char_ratio_sample": 0.0471,
+    "en_char_sample_n": 20
+  },
+  "recurring_segments": [],
+  "quotas": {
+    "fact": 10,
+    "deep_dive": 8,
+    "cross_episode": 6,
+    "summary_overview": 4,
+    "date_find": 3,
+    "negative": 4,
+    "code_switch": 2,
+    "guest_find": 3,
+    "playlist_enum": 2,
+    "multi_turn_handcraft": 2
+  }
+}

@@ -110,28 +110,55 @@ Historical context: a prior revision specified 48 items including 38 LLM-auto-ge
 ---
 ### Requirement: LLM-auto-generated items SHALL pass human review before inclusion
 
-Any candidate golden-set item produced by `backend/eval/scripts/build_golden_set.py` or any equivalent LLM-generation tool SHALL be written to a staging file (e.g., `backend/eval/datasets/_pending_review.json`) and SHALL NOT be merged into `backend/eval/datasets/{show_slug}.json` until a human reviewer has confirmed that the `question`, `expected_answer_keywords`, and each entry in `ground_truth_chunk_ids` semantically align with content in the referenced `source_episode_id` chunks. The merging tool SHALL refuse to copy any candidate from staging to the main dataset unless the candidate carries a `reviewed_by` field bearing a non-empty reviewer identifier and a `reviewed_at` ISO8601 timestamp.
+LLM-auto-generated items SHALL pass human review before inclusion in a main dataset. Review SHALL be graded: every staged item carries a `pre_review` block with a `review_grade` of `light` or `heavy`, where light items receive a quick per-item human pass and heavy items receive full per-item scrutiny (question, anchor chunk text, rubric assessment, retrieval rank). No item SHALL skip human review regardless of grade. Writing to a main dataset SHALL continue to require the `--target-main`, `--reviewed-by`, and `--reviewed-at` parameters together, and reviewed items SHALL additionally reference the review-log round that approved them.
 
-#### Scenario: Staged candidate without review SHALL NOT be merged
+#### Scenario: Staging is the only unreviewed destination
 
-- **GIVEN** a candidate item exists in `backend/eval/datasets/_pending_review.json` with no `reviewed_by` field
-- **WHEN** the merging tool runs
-- **THEN** the tool SHALL leave the candidate in staging
-- **AND** the tool SHALL emit a warning naming the unreviewed candidate id
+- **WHEN** the generation script runs without review metadata
+- **THEN** output SHALL be written only to the staging file and the main dataset SHALL remain untouched
 
-#### Scenario: Reviewed candidate is merged into main dataset
+#### Scenario: Graded review covers every item
 
-- **GIVEN** a staged candidate carrying `reviewed_by: "<reviewer>"` and `reviewed_at: "<iso8601-timestamp>"`
-- **WHEN** the merging tool runs
-- **THEN** the candidate SHALL be appended to `backend/eval/datasets/{show_slug}.json`
-- **AND** the candidate SHALL be removed from staging
-- **AND** the candidate's `id` SHALL NOT clash with any existing item id
+- **WHEN** a staged batch contains both light and heavy graded items
+- **THEN** the review workflow SHALL present every item to the human reviewer, with heavy items rendered with full anchor context
 
-#### Scenario: Pure LLM batch insert is rejected at validation
+#### Scenario: Approved item carries review provenance
 
-- **WHEN** any process attempts to write items into the main dataset whose ids match a generator-prefixed pattern (e.g., `thisno-core-*`) without corresponding `reviewed_by`/`reviewed_at` metadata anywhere in audit history
-- **THEN** the operation SHALL fail validation
-- **AND** the dataset file on disk SHALL NOT be modified
+- **WHEN** an approved item is written to the main dataset
+- **THEN** it SHALL carry reviewer id, review timestamp, and the review round it was approved in
+
+
+<!-- @trace
+source: eval-loop-automation
+updated: 2026-07-03
+code:
+  - backend/scripts/bakeoff_out/bakeoff-20260607T112640-answers.md
+  - backend/scripts/bakeoff_out/bakeoff-20260607T115922.json
+  - backend/eval/scripts/build_golden_set.py
+  - backend/eval/datasets/_review_log.jsonl
+  - backend/scripts/bakeoff_out/bakeoff-20260607T112640.json
+  - backend/scripts/bakeoff_out/bakeoff-20260607T115922-answers.md
+  - backend/scripts/gcp_batch_transcribe/episodes.jsonl
+  - skills-lock.json
+  - backend/eval/scripts/promote_reviewed.py
+  - backend/eval/scripts/show_profile.py
+  - backend/scripts/bakeoff_out/bakeoff-20260607T115922.md
+  - backend/eval/datasets/profiles/this-not-that-cool.json
+  - backend/eval/scripts/review_log.py
+  - backend/scripts/hyde_ab/results/calibrate-20260606T221058.json
+  - backend/eval/datasets/yi-jia-yi.json
+  - backend/eval/datasets/profiles/yi-jia-yi.json
+  - backend/eval/scripts/__init__.py
+  - docs/roadmap.md
+  - backend/eval/datasets/_pending_review.json
+  - backend/eval/datasets/_chat_rag_schema_v2.json
+  - backend/scripts/bakeoff_out/bakeoff-20260607T112640.md
+tests:
+  - backend/tests/test_show_profile.py
+  - backend/tests/test_review_log_promote.py
+  - backend/tests/test_golden_set_dataset.py
+  - backend/tests/test_build_golden_set_v2.py
+-->
 
 ---
 ### Requirement: chat-rag golden dataset SHALL use v2 schema with must / acceptable tiered fields

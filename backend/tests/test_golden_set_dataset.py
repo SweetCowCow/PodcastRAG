@@ -17,6 +17,7 @@ import pytest
 
 DATASETS_DIR = Path(__file__).resolve().parents[1] / "eval" / "datasets"
 SCHEMA_PATH = DATASETS_DIR / "_schema.json"
+SCHEMA_V2_PATH = DATASETS_DIR / "_chat_rag_schema_v2.json"
 
 # r3-5-disable-routing audit (2026-05-13): removed 36 LLM-auto items
 # (`thisno-core-*`) whose verified bad-question rate was ≥75%. The dataset now
@@ -42,10 +43,13 @@ def _list_dataset_files() -> list[Path]:
 @pytest.mark.parametrize("path", _list_dataset_files() or [pytest.param(None, marks=pytest.mark.skip(reason="no dataset present yet"))])
 def test_dataset_validates_against_schema(path):
     jsonschema = pytest.importorskip("jsonschema")
-    with SCHEMA_PATH.open(encoding="utf-8") as f:
-        schema = json.load(f)
     with path.open(encoding="utf-8") as f:
         data = json.load(f)
+    # v2-format datasets (chat-rag golden v2) declare schema_version "2.0";
+    # everything else is validated against the original v1 schema.
+    schema_path = SCHEMA_V2_PATH if data.get("schema_version") == "2.0" else SCHEMA_PATH
+    with schema_path.open(encoding="utf-8") as f:
+        schema = json.load(f)
     jsonschema.validate(data, schema)
 
 

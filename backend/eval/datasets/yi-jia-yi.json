@@ -2,12 +2,7 @@
   "schema_version": "2.0",
   "show_id": "4aa00590-6529-4514-b9ec-3b0160b2416b",
   "show_slug": "yi-jia-yi",
-  "created_at": "2026-07-03T03:56:23.540733+00:00",
-  "generator": {
-    "model": "gpt-5.1",
-    "round": 1,
-    "anchor_first": true
-  },
+  "created_at": "2026-07-03T09:49:14.940732+00:00",
   "items": [
     {
       "id": "yijiay-r1-fact-01",
@@ -24,16 +19,9 @@
       "ground_truth_chunk_ids_either": null,
       "ground_truth_chunk_ids_acceptable": null,
       "expected_episode_uuids_must": null,
-      "audit_status": "pending",
+      "audit_status": "approved",
       "generation_round": 1,
       "source_episode_id": "d7fef451-7d2e-493a-a82b-143df8757779",
-      "anchor_context": [
-        {
-          "chunk_id": "ep:d7fef451-7d2e-493a-a82b-143df8757779@2969.08",
-          "episode_title": "EP.31 真的不懂現在的高中生、計程車司機、還有貓",
-          "text": "但行為上的話 我覺得我已經觀察很久了 因為我測試過各種方法 那很像是那種 他只要做一件事情 好 我這次就換另外一個方式試試看 例如他叫的時候 好 我這次餵他吃東西 好 或者我這次開門 或者我這次把電視的聲音 關小一點點 就是各種方式我都排除了"
-        }
-      ],
       "pre_review": {
         "anchor_aligned": true,
         "answerability": {
@@ -43,7 +31,10 @@
         "show_id_ok": true,
         "retrieval_rank": null,
         "review_grade": "heavy"
-      }
+      },
+      "reviewed_by": "jacky",
+      "reviewed_at": "2026-07-03T09:49:14Z",
+      "review_round": 1
     },
     {
       "id": "yijiay-r1-fact-02",
@@ -66,16 +57,9 @@
       "ground_truth_chunk_ids_either": null,
       "ground_truth_chunk_ids_acceptable": null,
       "expected_episode_uuids_must": null,
-      "audit_status": "pending",
+      "audit_status": "approved",
       "generation_round": 1,
       "source_episode_id": "99118405-017d-4d97-9efa-8e40d9b6b0fd",
-      "anchor_context": [
-        {
-          "chunk_id": "ep:99118405-017d-4d97-9efa-8e40d9b6b0fd@1736.09",
-          "episode_title": "EP245 我得了A流",
-          "text": "哇 好羨慕哦 我羨慕你哦 好啦 然後我講一下 我再回頭講一下 A流這件事情 其實A流他的那個 A型流感 他初期症狀會和一般的感冒很相似 比如說他會發燒啊 咳嗽喉嚨痛"
-        }
-      ],
       "pre_review": {
         "anchor_aligned": true,
         "answerability": {
@@ -85,7 +69,10 @@
         "show_id_ok": true,
         "retrieval_rank": 1,
         "review_grade": "light"
-      }
+      },
+      "reviewed_by": "jacky",
+      "reviewed_at": "2026-07-03T09:49:14Z",
+      "review_round": 1
     },
     {
       "id": "yijiay-r1-fact-03",
@@ -102,16 +89,9 @@
       "ground_truth_chunk_ids_either": null,
       "ground_truth_chunk_ids_acceptable": null,
       "expected_episode_uuids_must": null,
-      "audit_status": "pending",
+      "audit_status": "approved",
       "generation_round": 1,
       "source_episode_id": "388afbd0-9238-4e93-b74e-4b4cdcf9b952",
-      "anchor_context": [
-        {
-          "chunk_id": "ep:388afbd0-9238-4e93-b74e-4b4cdcf9b952@2961.88",
-          "episode_title": "EP206 男生一聊起當兵真的會聊不完 ft. 歐文",
-          "text": "我後來就沒有看到他 因為興趣很快就分發啦 哦 但我覺得他很扯 超屌 那這樣大家不是還要等他 在那邊慢慢把衣服穿起來嗎 沒有沒有 然後班長就說 他接下來就全裸 然後就走 部隊繼續往前"
-        }
-      ],
       "pre_review": {
         "anchor_aligned": true,
         "answerability": {
@@ -121,7 +101,10 @@
         "show_id_ok": true,
         "retrieval_rank": 9,
         "review_grade": "light"
-      }
+      },
+      "reviewed_by": "jacky",
+      "reviewed_at": "2026-07-03T09:49:14Z",
+      "review_round": 1
     },
     {
       "id": "yijiay-r1-fact-04",
@@ -138,16 +121,9 @@
       "ground_truth_chunk_ids_either": null,
       "ground_truth_chunk_ids_acceptable": null,
       "expected_episode_uuids_must": null,
-      "audit_status": "pending",
+      "audit_status": "approved",
       "generation_round": 1,
       "source_episode_id": "0594fa92-7c0c-4145-baed-358fae9fd197",
-      "anchor_context": [
-        {
-          "chunk_id": "ep:0594fa92-7c0c-4145-baed-358fae9fd197@1062.29",
-          "episode_title": "EP.42-2 令跟馬克聊天：一粒是聽青春點點點長大的。請問下一句要接什麼",
-          "text": "這樣子 我真的覺得好失禮喔 因為你都不看人家臉 然後直接先看人家的那個吊牌 你就只能 因為我們每個進去的入場貴賓 都會有吊牌顯示說你是哪一個節目的人 這樣子 然後就 喔 原來是你喔 這樣子 對啊 但其實可能大家都熟識"
-        }
-      ],
       "pre_review": {
         "anchor_aligned": true,
         "answerability": {
@@ -157,7 +133,10 @@
         "show_id_ok": true,
         "retrieval_rank": 1,
         "review_grade": "light"
-      }
+      },
+      "reviewed_by": "jacky",
+      "reviewed_at": "2026-07-03T09:49:14Z",
+      "review_round": 1
     },
     {
       "id": "yijiay-r1-fact-05",
@@ -174,16 +153,9 @@
       "ground_truth_chunk_ids_either": null,
       "ground_truth_chunk_ids_acceptable": null,
       "expected_episode_uuids_must": null,
-      "audit_status": "pending",
+      "audit_status": "approved",
       "generation_round": 1,
       "source_episode_id": "aca5794e-d766-46ce-9bd7-995bcc4dbed4",
-      "anchor_context": [
-        {
-          "chunk_id": "ep:aca5794e-d766-46ce-9bd7-995bcc4dbed4@1622.50",
-          "episode_title": "EP211 台南連空氣都甜甜的",
-          "text": "倒砂糖 sugar嗎 對 台南有一個黃姓男子 他因為不滿他的表妹 和其他異性來往很親密 所以他就把砂糖 倒到他表妹的汽車引擎裡面 然後表妹事後發現 欸 就覺得很奇怪 就去舔舔看 一舔就覺得"
-        }
-      ],
       "pre_review": {
         "anchor_aligned": true,
         "answerability": {
@@ -193,7 +165,10 @@
         "show_id_ok": true,
         "retrieval_rank": 1,
         "review_grade": "light"
-      }
+      },
+      "reviewed_by": "jacky",
+      "reviewed_at": "2026-07-03T09:49:14Z",
+      "review_round": 1
     },
     {
       "id": "yijiay-r1-fact-06",
@@ -221,16 +196,9 @@
       "ground_truth_chunk_ids_either": null,
       "ground_truth_chunk_ids_acceptable": null,
       "expected_episode_uuids_must": null,
-      "audit_status": "pending",
+      "audit_status": "approved",
       "generation_round": 1,
       "source_episode_id": "d0547f2a-469a-45a1-93ff-66aecd6f5426",
-      "anchor_context": [
-        {
-          "chunk_id": "ep:d0547f2a-469a-45a1-93ff-66aecd6f5426@2777.78",
-          "episode_title": "EP.15 你才小啦，你世界最小",
-          "text": "他是一個PS4遊戲 他是超擬真的賽車遊戲 然後裡面都有一個摩納哥賽車場 哦 我就覺得非常的爽 因為他旁邊到處都是建築物 來到了我們的第一名 噗噗噗噗噗噗噗噗噗 第一名就是我們的房 第一名就是我們的梵蒂岡 OK 他的國土面積超小的哦"
-        }
-      ],
       "pre_review": {
         "anchor_aligned": true,
         "answerability": {
@@ -240,7 +208,10 @@
         "show_id_ok": true,
         "retrieval_rank": 2,
         "review_grade": "light"
-      }
+      },
+      "reviewed_by": "jacky",
+      "reviewed_at": "2026-07-03T09:49:14Z",
+      "review_round": 1
     },
     {
       "id": "yijiay-r1-fact-07",
@@ -261,16 +232,9 @@
       "ground_truth_chunk_ids_either": null,
       "ground_truth_chunk_ids_acceptable": null,
       "expected_episode_uuids_must": null,
-      "audit_status": "pending",
+      "audit_status": "approved",
       "generation_round": 1,
       "source_episode_id": "84d0a46c-611f-4358-a350-9d7df51479a4",
-      "anchor_context": [
-        {
-          "chunk_id": "ep:84d0a46c-611f-4358-a350-9d7df51479a4@3608.06",
-          "episode_title": "EP262 這樣的電影片名沒問題嗎？",
-          "text": "我覺得 嗯 我覺得你們三個那個適應力都很強 嗯 因為阿傑他其實是一個會 亂衝的 對 所以有時候你反而是要一直拉他 或是跟他吐槽說不是這樣啦 嗯 不能這樣啦 反而是"
-        }
-      ],
       "pre_review": {
         "anchor_aligned": true,
         "answerability": {
@@ -280,7 +244,10 @@
         "show_id_ok": true,
         "retrieval_rank": 1,
         "review_grade": "light"
-      }
+      },
+      "reviewed_by": "jacky",
+      "reviewed_at": "2026-07-03T09:49:14Z",
+      "review_round": 1
     },
     {
       "id": "yijiay-r1-fact-08",
@@ -297,16 +264,9 @@
       "ground_truth_chunk_ids_either": null,
       "ground_truth_chunk_ids_acceptable": null,
       "expected_episode_uuids_must": null,
-      "audit_status": "pending",
+      "audit_status": "approved",
       "generation_round": 1,
       "source_episode_id": "c3de6175-e6f0-4a08-86da-239f297400ab",
-      "anchor_context": [
-        {
-          "chunk_id": "ep:c3de6175-e6f0-4a08-86da-239f297400ab@2252.54",
-          "episode_title": "EP.87 好恐怖，手機是不是有裝廣告竊聽器阿？",
-          "text": "我以前就是 我之前好像有聊過啊 我就說我以前都會 幕後做很多事情 然後上台報就留給一個 就是都沒在做事 然後結果那個成果都超爛 然後就會搞砸 但我 我很害怕上台是因為 我很害怕大家的眼睛看著我 嗯"
-        }
-      ],
       "pre_review": {
         "anchor_aligned": true,
         "answerability": {
@@ -316,7 +276,10 @@
         "show_id_ok": true,
         "retrieval_rank": 1,
         "review_grade": "light"
-      }
+      },
+      "reviewed_by": "jacky",
+      "reviewed_at": "2026-07-03T09:49:14Z",
+      "review_round": 1
     },
     {
       "id": "yijiay-r1-fact-09",
@@ -342,16 +305,9 @@
       "ground_truth_chunk_ids_either": null,
       "ground_truth_chunk_ids_acceptable": null,
       "expected_episode_uuids_must": null,
-      "audit_status": "pending",
+      "audit_status": "approved",
       "generation_round": 1,
       "source_episode_id": "2d2fbbe1-5179-470a-86a7-78693f75bdad",
-      "anchor_context": [
-        {
-          "chunk_id": "ep:2d2fbbe1-5179-470a-86a7-78693f75bdad@2539.85",
-          "episode_title": "EP237 一年一度的壹加壹大預言",
-          "text": "生活最相容的一群人 你知道嗎 這是我之前曾經看過的一部小說 叫做命定之人 我記得某一部電影還是什麼的 有類似的故事 他有被Netflix拍過 但是我看過小說 他叫命定之人 一模一樣的邏輯 我沒有抄 他可能要付我版權"
-        }
-      ],
       "pre_review": {
         "anchor_aligned": true,
         "answerability": {
@@ -361,90 +317,10 @@
         "show_id_ok": true,
         "retrieval_rank": 1,
         "review_grade": "light"
-      }
-    },
-    {
-      "id": "yijiay-r1-fact-10",
-      "design_type": "fact",
-      "source": "auto-anchor-first-r1",
-      "is_multi_turn": false,
-      "question": "在標題為「令老闆在Dcard 被炎上了，但我喜歡他就好」的 EP.121 這集中，留言的聽眾 Hope 說自己在什麼時間點一定要聽主持人的聲音？",
-      "expected_behavior": "answer",
-      "expected_answer_summary": "聽眾 Hope 說自己真的很喜歡主持人，上班前都一定要聽他們的聲音。",
-      "expected_answer_aliases": {
-        "Hope": []
       },
-      "ground_truth_chunk_ids_must": [
-        "ep:7d2c8409-a43a-444c-8ddb-72ee7b885fce@2675.08"
-      ],
-      "ground_truth_chunk_ids_either": null,
-      "ground_truth_chunk_ids_acceptable": null,
-      "expected_episode_uuids_must": null,
-      "audit_status": "pending",
-      "generation_round": 1,
-      "source_episode_id": "7d2c8409-a43a-444c-8ddb-72ee7b885fce",
-      "anchor_context": [
-        {
-          "chunk_id": "ep:7d2c8409-a43a-444c-8ddb-72ee7b885fce@2675.08",
-          "episode_title": "EP.121 令老闆在Dcard 被炎上了，但我喜歡他就好",
-          "text": "就是讓大家來笑笑我吧 我覺得好有趣哦 對啊其實大家的 分享這些的初衷 都是想說讓大家知道說 哇令導白真的很好笑欸這樣 這是一些有趣的故事 但我承認我蠢啦好不好 不要這樣不要這樣 好的 下一個是Hope說 真的很喜歡你們上班前都一定要聽你們的聲音"
-        }
-      ],
-      "pre_review": {
-        "anchor_aligned": true,
-        "answerability": {
-          "must_ok": true,
-          "note": ""
-        },
-        "show_id_ok": true,
-        "retrieval_rank": null,
-        "review_grade": "heavy"
-      }
-    },
-    {
-      "id": "yijiay-r1-fact-11",
-      "design_type": "fact",
-      "source": "auto-anchor-first-r1",
-      "is_multi_turn": false,
-      "question": "在這集節目中提到「心肌尼」有提供 1加1 聽眾什麼樣的專屬購物優惠內容？",
-      "expected_behavior": "answer",
-      "expected_answer_summary": "心肌尼為 1加1 的聽眾提供專屬優惠，單件商品可以享有九二折優惠，而如果是組合商品，折扣最低可以到八五折，並且可以透過資訊欄連結進入專屬賣場使用這些優惠。",
-      "expected_answer_aliases": {
-        "心肌尼": [
-          "SynGenie",
-          "心肌尼品牌"
-        ],
-        "1加1": [
-          "一加一",
-          "1+1"
-        ]
-      },
-      "ground_truth_chunk_ids_must": [
-        "ep:7e761cfd-5e49-4d48-ad25-9766519f19ad@432.96"
-      ],
-      "ground_truth_chunk_ids_either": null,
-      "ground_truth_chunk_ids_acceptable": null,
-      "expected_episode_uuids_must": null,
-      "audit_status": "pending",
-      "generation_round": 1,
-      "source_episode_id": "7e761cfd-5e49-4d48-ad25-9766519f19ad",
-      "anchor_context": [
-        {
-          "chunk_id": "ep:7e761cfd-5e49-4d48-ad25-9766519f19ad@432.96",
-          "episode_title": "EP218 令的張震嶽鐵粉考驗【本集不適合上班收聽】",
-          "text": "呃 受到了它的酸類給溫和的保護 那 心肌尼它也有提供1加1聽眾的專屬優惠 太棒了吧 裡面有單件九二折 然後組合的話最低可以到八五折 可以去我們的資訊欄文案 那個連結點進去 就可以到我們的1加1聽眾的專屬賣場 耶 好想買喔"
-        }
-      ],
-      "pre_review": {
-        "anchor_aligned": true,
-        "answerability": {
-          "must_ok": true,
-          "note": ""
-        },
-        "show_id_ok": true,
-        "retrieval_rank": 1,
-        "review_grade": "light"
-      }
+      "reviewed_by": "jacky",
+      "reviewed_at": "2026-07-03T09:49:14Z",
+      "review_round": 1
     },
     {
       "id": "yijiay-r1-fact-12",
@@ -468,16 +344,9 @@
       "ground_truth_chunk_ids_either": null,
       "ground_truth_chunk_ids_acceptable": null,
       "expected_episode_uuids_must": null,
-      "audit_status": "pending",
+      "audit_status": "approved",
       "generation_round": 1,
       "source_episode_id": "6ba799a1-ed74-4e27-89f8-9f1eee79fb55",
-      "anchor_context": [
-        {
-          "chunk_id": "ep:6ba799a1-ed74-4e27-89f8-9f1eee79fb55@2140.12",
-          "episode_title": "EP.22 如果令老闆是ABC，絕對可以在蘋果上班，哪還會管什麼週年慶",
-          "text": "就是在鬥嘴啊 我跟你講 你兒子怎樣怎樣啊 如果他們不是因為是競爭對手 我會覺得他們其實是情侶 這是某方面蠻合得來的 也許他們是喜歡對方的人 然後勇於想表達自己 然後by the way就是在這不久之後 川普不是就是確診了 肺炎嗎 然後我那時候就想說"
-        }
-      ],
       "pre_review": {
         "anchor_aligned": true,
         "answerability": {
@@ -487,51 +356,10 @@
         "show_id_ok": true,
         "retrieval_rank": 1,
         "review_grade": "light"
-      }
-    },
-    {
-      "id": "yijiay-r1-deep_dive-01",
-      "design_type": "deep_dive",
-      "source": "auto-anchor-first-r1",
-      "is_multi_turn": false,
-      "question": "在這集標題提到「2023年就是要預言！」的節目開頭，主持人說要回顧「他們有沒有中」，從這樣的說法來看，你覺得主持人想藉由回顧這些預言來表達什麼樣的態度或觀點，尤其是對「知名預言家」和「壹加壹」各自預言準確度的看法？",
-      "expected_behavior": "answer",
-      "expected_answer_summary": "主持人以輕鬆調侃的方式說要回顧「他們有沒有中」，顯示他並不把預言當成絕對可信的神秘力量，而是更像一種可以事後檢驗、拿來比較和玩笑的東西；節目標題刻意把「知名預言家」和「壹加壹」放在一起，也是在強調他們相信自己的預測不一定比預言家差，帶有自嘲又想和預言家一較高下、驗證準確度的遊戲式態度。",
-      "expected_answer_aliases": {
-        "知名預言家": [
-          "預言家"
-        ],
-        "壹加壹": [
-          "壹加一",
-          "1+1"
-        ]
       },
-      "ground_truth_chunk_ids_must": [
-        "ep:5b3ce608-21e5-4ac6-9111-c903ec969d31@66.74"
-      ],
-      "ground_truth_chunk_ids_either": null,
-      "ground_truth_chunk_ids_acceptable": null,
-      "expected_episode_uuids_must": null,
-      "audit_status": "pending",
-      "generation_round": 1,
-      "source_episode_id": "5b3ce608-21e5-4ac6-9111-c903ec969d31",
-      "anchor_context": [
-        {
-          "chunk_id": "ep:5b3ce608-21e5-4ac6-9111-c903ec969d31@66.74",
-          "episode_title": "EP.122 是知名預言家預言神準，還是壹加壹預言準確率高？歡迎收聽 2023年就是要預言！",
-          "text": "那我們就來回顧一下他們有沒有中 好 所以我們先回顧是不是 對 你的耳機太大聲 對 你可以說啊 我想說 你看得懂啊 對我用比手畫腳可以 好 大家那個聖誕節快樂今天是"
-        }
-      ],
-      "pre_review": {
-        "anchor_aligned": true,
-        "answerability": {
-          "must_ok": true,
-          "note": ""
-        },
-        "show_id_ok": true,
-        "retrieval_rank": null,
-        "review_grade": "heavy"
-      }
+      "reviewed_by": "jacky",
+      "reviewed_at": "2026-07-03T09:49:14Z",
+      "review_round": 1
     },
     {
       "id": "yijiay-r1-deep_dive-02",
@@ -553,16 +381,9 @@
       "ground_truth_chunk_ids_either": null,
       "ground_truth_chunk_ids_acceptable": null,
       "expected_episode_uuids_must": null,
-      "audit_status": "pending",
+      "audit_status": "approved",
       "generation_round": 1,
       "source_episode_id": "8fabc085-ace8-4402-8c04-73df61d8a4da",
-      "anchor_context": [
-        {
-          "chunk_id": "ep:8fabc085-ace8-4402-8c04-73df61d8a4da@604.80",
-          "episode_title": "EP.85 熱戀期的我們 VS 交往十年的我們",
-          "text": "而且我不是屬於那種 直接主線任務的 對他是玩那種支線型 像我就是完全 全主線 我會覺得支線好浪費時間喔 可是我是要完全全破的那種 就例如我之前玩薩爾達 我是薩爾達的 他有一些神廟 我就是全部把他全破的 嗯嗯嗯"
-        }
-      ],
       "pre_review": {
         "anchor_aligned": true,
         "answerability": {
@@ -572,7 +393,10 @@
         "show_id_ok": true,
         "retrieval_rank": 6,
         "review_grade": "light"
-      }
+      },
+      "reviewed_by": "jacky",
+      "reviewed_at": "2026-07-03T09:49:14Z",
+      "review_round": 1
     },
     {
       "id": "yijiay-r1-deep_dive-03",
@@ -589,16 +413,9 @@
       "ground_truth_chunk_ids_either": null,
       "ground_truth_chunk_ids_acceptable": null,
       "expected_episode_uuids_must": null,
-      "audit_status": "pending",
+      "audit_status": "approved",
       "generation_round": 1,
       "source_episode_id": "d91f73db-6b49-41b9-8495-2f0d6301980c",
-      "anchor_context": [
-        {
-          "chunk_id": "ep:d91f73db-6b49-41b9-8495-2f0d6301980c@1299.98",
-          "episode_title": "EP143 我也是慣性說謊的人",
-          "text": "我自己很快樂 因為我一開始就沒有設定要幹嘛 所以我會覺得 體驗我爸媽 眼睜看到的東西 跟他們一起吃早中晚餐 雖然我吃了變很胖 但是會覺得 也是蠻輕鬆愜意的 這樣子 然後這個 這次的旅行"
-        }
-      ],
       "pre_review": {
         "anchor_aligned": true,
         "answerability": {
@@ -608,7 +425,10 @@
         "show_id_ok": true,
         "retrieval_rank": 1,
         "review_grade": "light"
-      }
+      },
+      "reviewed_by": "jacky",
+      "reviewed_at": "2026-07-03T09:49:14Z",
+      "review_round": 1
     },
     {
       "id": "yijiay-r1-deep_dive-04",
@@ -625,16 +445,9 @@
       "ground_truth_chunk_ids_either": null,
       "ground_truth_chunk_ids_acceptable": null,
       "expected_episode_uuids_must": null,
-      "audit_status": "pending",
+      "audit_status": "approved",
       "generation_round": 1,
       "source_episode_id": "f73c0d4a-4eba-43d1-a308-bdbcb53359d9",
-      "anchor_context": [
-        {
-          "chunk_id": "ep:f73c0d4a-4eba-43d1-a308-bdbcb53359d9@2007.71",
-          "episode_title": "EP.38 第一次吃10g要價兩千的魚子醬，感謝JOEMAN大大帶我們飛",
-          "text": "活動流程啊 然後想一些團綱遊戲啊 因為那個公司 沒有預算去請藝人 應該說沒有撥預算 請藝人要做 欸 其實我覺得請藝人 也非必要 因為我覺得大家一起 坐下來聊天吃飯 其實舒服的環境是最好的 對 但是因為你又不能讓說"
-        }
-      ],
       "pre_review": {
         "anchor_aligned": true,
         "answerability": {
@@ -644,7 +457,10 @@
         "show_id_ok": true,
         "retrieval_rank": 1,
         "review_grade": "light"
-      }
+      },
+      "reviewed_by": "jacky",
+      "reviewed_at": "2026-07-03T09:49:14Z",
+      "review_round": 1
     },
     {
       "id": "yijiay-r1-deep_dive-05",
@@ -661,16 +477,9 @@
       "ground_truth_chunk_ids_either": null,
       "ground_truth_chunk_ids_acceptable": null,
       "expected_episode_uuids_must": null,
-      "audit_status": "pending",
+      "audit_status": "approved",
       "generation_round": 1,
       "source_episode_id": "aa98b76b-bf5f-4ecf-bdce-73c7767e6300",
-      "anchor_context": [
-        {
-          "chunk_id": "ep:aa98b76b-bf5f-4ecf-bdce-73c7767e6300@3784.46",
-          "episode_title": "EP.132 冷凍可以放一輩子 / 精緻窮讚啦 / 哥哥與直銷",
-          "text": "而且日本人真的很善良欸 嗯 馬上拯救我欸 樂於助人欸 我後來就覺得她真的好漂亮哦 直接心裡的那個 心裡很漂亮 心裡的美加100分 好我們這個禮拜到這邊結束了 感謝各位聽到最後 我們下個禮拜見 掰掰"
-        }
-      ],
       "pre_review": {
         "anchor_aligned": true,
         "answerability": {
@@ -680,7 +489,10 @@
         "show_id_ok": true,
         "retrieval_rank": 1,
         "review_grade": "light"
-      }
+      },
+      "reviewed_by": "jacky",
+      "reviewed_at": "2026-07-03T09:49:14Z",
+      "review_round": 1
     },
     {
       "id": "yijiay-r1-deep_dive-06",
@@ -702,16 +514,9 @@
       "ground_truth_chunk_ids_either": null,
       "ground_truth_chunk_ids_acceptable": null,
       "expected_episode_uuids_must": null,
-      "audit_status": "pending",
+      "audit_status": "approved",
       "generation_round": 1,
       "source_episode_id": "29cdb135-ab20-4b80-8ba0-7d8950b3bd2a",
-      "anchor_context": [
-        {
-          "chunk_id": "ep:29cdb135-ab20-4b80-8ba0-7d8950b3bd2a@3834.54",
-          "episode_title": "EP203 一粒見一粒，一粒沒有輸！/ 5月的《月新不夠》",
-          "text": "什麼啦 我是想說打架或什麼 誰要跟你打架 蛤 好沒事啦 好啦沒事 下一頁 下一頁 溫小姐說呢 她想要告白 最近又回去看了以前的影片 廚藝大賽總是每看一次笑一次餒"
-        }
-      ],
       "pre_review": {
         "anchor_aligned": true,
         "answerability": {
@@ -721,7 +526,10 @@
         "show_id_ok": true,
         "retrieval_rank": 1,
         "review_grade": "light"
-      }
+      },
+      "reviewed_by": "jacky",
+      "reviewed_at": "2026-07-03T09:49:14Z",
+      "review_round": 1
     },
     {
       "id": "yijiay-r1-deep_dive-07",
@@ -738,16 +546,9 @@
       "ground_truth_chunk_ids_either": null,
       "ground_truth_chunk_ids_acceptable": null,
       "expected_episode_uuids_must": null,
-      "audit_status": "pending",
+      "audit_status": "approved",
       "generation_round": 1,
       "source_episode_id": "212e3e0c-9455-4bbe-bf8c-68e5a8a7ae3f",
-      "anchor_context": [
-        {
-          "chunk_id": "ep:212e3e0c-9455-4bbe-bf8c-68e5a8a7ae3f@2464.68",
-          "episode_title": "EP.90 男生想摸女生胸部，跟女生想打男生GG，是完全不同的意思OK?",
-          "text": "軍營是上下鋪 住下鋪的人 會對上鋪的那個板子上面寫字 也是這種什麼 什麼什麼幾梯真女友電話 這我當兵的都男生啊 超怪欸 他想要真領號啊 沒有 他是寫真女友欸 也可以啊 好啦 反正我現在才 才認清這件事情"
-        }
-      ],
       "pre_review": {
         "anchor_aligned": true,
         "answerability": {
@@ -757,7 +558,10 @@
         "show_id_ok": true,
         "retrieval_rank": 1,
         "review_grade": "light"
-      }
+      },
+      "reviewed_by": "jacky",
+      "reviewed_at": "2026-07-03T09:49:14Z",
+      "review_round": 1
     },
     {
       "id": "yijiay-r1-cross_episode-01",
@@ -785,26 +589,9 @@
       "ground_truth_chunk_ids_either": null,
       "ground_truth_chunk_ids_acceptable": null,
       "expected_episode_uuids_must": null,
-      "audit_status": "pending",
+      "audit_status": "approved",
       "generation_round": 1,
       "source_episode_id": "ec63016a-2fa5-46f8-8ccd-38bd61d24838",
-      "anchor_context": [
-        {
-          "chunk_id": "ep:ec63016a-2fa5-46f8-8ccd-38bd61d24838@97.06",
-          "episode_title": "EP.14 令小時候竟然有超能力！ 逆吸引力法則",
-          "text": "然後你以後用 你就沒辦法用正常眼光 眼光去看這個卡通了 然後我大概講一下那個故事內容 因為我後來 我很認真Google找了一下 如果你沒有興趣的話可以去Google找 多啦AV夢 我不知道現在圖還找不找得到 聽說那個作者現在被 被微博ban掉 對被微博ban掉了"
-        },
-        {
-          "chunk_id": "ep:a534b10a-9b67-45f2-9c22-09db7b56f6db@1912.36",
-          "episode_title": "EP212 致世界末日的生還者們",
-          "text": "然後他原本就是一個短篇漫畫 然後我剛剛這樣講 你好像覺得說 哦 那就是蠻可愛的啊 然後有點像哆啦A夢的感覺 對 但其實他要探討的東西非常的黑暗和沉淪 哦 他其實裡面大人像的哆啦A夢 市面上有很多 假借可愛之名"
-        },
-        {
-          "chunk_id": "ep:a534b10a-9b67-45f2-9c22-09db7b56f6db@1964.72",
-          "episode_title": "EP212 致世界末日的生還者們",
-          "text": "那主要他要講的其實就是霸凌啊 還有家庭暴力啊 還有一些不能講的東西 對 所以他其實就是披著一個可愛的外衣 然後用那種哆啦A夢式的那種故事 去帶很沉重的話題 然後他現在 喔他本身是18禁的 對 因為有一些議題真的太重 然後"
-        }
-      ],
       "pre_review": {
         "anchor_aligned": true,
         "answerability": {
@@ -814,55 +601,10 @@
         "show_id_ok": true,
         "retrieval_rank": 1,
         "review_grade": "light"
-      }
-    },
-    {
-      "id": "yijiay-r1-cross_episode-02",
-      "design_type": "cross_episode",
-      "source": "auto-anchor-first-r1",
-      "is_multi_turn": false,
-      "question": "在 EP.123「寶寶人家的肚擠在唱歌了，想吃鳥鳥蛋」中，聽眾反映戴著無線耳機在捷運上把音量開到 100 還是很吃力，後來節目組針對這個問題做了什麼音量或設備上的調整？而在 EP204「令邀請你加入黑暗料理界」裡，主持人自己又提到會如何調整他講話時常發出的『嗯』聲習慣？",
-      "expected_behavior": "answer",
-      "expected_answer_summary": "在 EP.123 中，針對聽眾反映在捷運上戴無線耳機把音量開到 100 還是聽不清楚，節目組表示這次已經有稍微調整音量設定，並請大家再試聽看看有沒有變大。到了 EP204，主持人提到自己講話時會一直『嗯嗯嗯』，他說會因為知道這件事而慢慢調整，但又不想讓這件事過度影響自己的說話方式，只要不至於太干擾就好。",
-      "expected_answer_aliases": null,
-      "ground_truth_chunk_ids_must": [
-        "ep:9de12b86-b2d2-4cee-a298-e29efb9d939c@3360.06",
-        "ep:9de12b86-b2d2-4cee-a298-e29efb9d939c@3376.06",
-        "ep:5dd861fd-7b07-4e1e-939a-6eb2cbf8fb80@3195.73"
-      ],
-      "ground_truth_chunk_ids_either": null,
-      "ground_truth_chunk_ids_acceptable": null,
-      "expected_episode_uuids_must": null,
-      "audit_status": "pending",
-      "generation_round": 1,
-      "source_episode_id": "5dd861fd-7b07-4e1e-939a-6eb2cbf8fb80",
-      "anchor_context": [
-        {
-          "chunk_id": "ep:5dd861fd-7b07-4e1e-939a-6eb2cbf8fb80@3195.73",
-          "episode_title": "EP204 令邀請你加入黑暗料理界",
-          "text": "可能一級要限制 就是不可以恩超過十次 對啊其實我覺得你們聽還好 但其實我們戴耳機 他就在旁邊恩恩恩 反正我會知道這件事情 然後我會慢慢地調整 但是就是 我也不要太因為這樣子 去影響我講話 好啦每個人習慣 至少不會到太干擾就還好啦"
-        },
-        {
-          "chunk_id": "ep:9de12b86-b2d2-4cee-a298-e29efb9d939c@3376.06",
-          "episode_title": "EP.123 寶寶人家的肚擠在唱歌了，想吃鳥鳥蛋",
-          "text": "你就聽我們的就好啦 你就要下一個再聽我們的 好啦但是他這個問題呢 其實我們今天有調整了 所以大家再幫我們試聽一下 音量有沒有 有沒有變大 我自己 因為我們這邊聽的呢 會跟你們聽的不太一樣 嗯 那反正我這次有稍微調整"
-        },
-        {
-          "chunk_id": "ep:9de12b86-b2d2-4cee-a298-e29efb9d939c@3360.06",
-          "episode_title": "EP.123 寶寶人家的肚擠在唱歌了，想吃鳥鳥蛋",
-          "text": "戴著無線耳機在捷運上 還是會覺得很吃力 因為聲音開到100 也是剛好聽到而已 希望看見我的留言可以改善 因為如果剛好結束 自動PO到別的節目的話 就是別的節目會震破他的耳膜 不是嘛 你不要聽別的節目嘛 你就聽我們的就好啦 你就要下一個再聽我們的"
-        }
-      ],
-      "pre_review": {
-        "anchor_aligned": true,
-        "answerability": {
-          "must_ok": true,
-          "note": ""
-        },
-        "show_id_ok": true,
-        "retrieval_rank": 16,
-        "review_grade": "light"
-      }
+      },
+      "reviewed_by": "jacky",
+      "reviewed_at": "2026-07-03T09:49:14Z",
+      "review_round": 1
     },
     {
       "id": "yijiay-r1-cross_episode-03",
@@ -882,26 +624,9 @@
         "ep:c213f792-e0bd-4251-a6ec-29248f59accf@3069.26"
       ],
       "expected_episode_uuids_must": null,
-      "audit_status": "pending",
+      "audit_status": "approved",
       "generation_round": 1,
       "source_episode_id": "c213f792-e0bd-4251-a6ec-29248f59accf",
-      "anchor_context": [
-        {
-          "chunk_id": "ep:c213f792-e0bd-4251-a6ec-29248f59accf@3069.26",
-          "episode_title": "EP.127 用別人用過的衛生紙擦屁股，這個男人太很了",
-          "text": "變得比較吸引人好嗎 會啊 會比較吸引人啊 其實會有一點 然後另外一個人說 喔 原來大家會把這個撕掉喔 你看 所以他是不撕派的 很多不撕派的 對 然後最後一個人是說呢"
-        },
-        {
-          "chunk_id": "ep:c0cc9eae-bf1f-45c2-874c-012120076797@698.76",
-          "episode_title": "EP238 壹加壹電台第一集 / 一月的月新不夠",
-          "text": "嗯 會有個數的辯論嘛 但是大家會覺得這東西 辯論就很像是在 爭一個輸贏 有三個人的時候比較平衡 對 因為會有分多數少數 對對對 然後或是會有中立的意見這種 所以有時候一個人被嗆 有時候另外一個人被嗆"
-        },
-        {
-          "chunk_id": "ep:212e3e0c-9455-4bbe-bf8c-68e5a8a7ae3f@227.08",
-          "episode_title": "EP.90 男生想摸女生胸部，跟女生想打男生GG，是完全不同的意思OK?",
-          "text": "嗯 我是覺得他有點碰紅碰 碰太大啦 哦 對 然後還沒有追的人是可以看啦 這有點像是說 大家都在看 所以大家來跟風一起看 才有討論的 的內容跟主題可以聊這樣子 哦哦哦"
-        }
-      ],
       "pre_review": {
         "anchor_aligned": true,
         "answerability": {
@@ -911,64 +636,10 @@
         "show_id_ok": true,
         "retrieval_rank": 1,
         "review_grade": "light"
-      }
-    },
-    {
-      "id": "yijiay-r1-cross_episode-04",
-      "design_type": "cross_episode",
-      "source": "auto-anchor-first-r1",
-      "is_multi_turn": false,
-      "question": "在 EP.28、EP.49 和 EP.130 這幾集中，歌詞裡分別提到哪些與金錢或外幣有關的內容？請說明每一集中歌詞提到的金錢相關詞彙或數字。",
-      "expected_behavior": "answer",
-      "expected_answer_summary": "在 EP.28 的歌詞中提到「stacking chips」和「six figures」，是在說存錢、賺到六位數收入；EP.49 的歌詞則明確唱到「us dollars to some pesos」，提到從美金換成披索這種外幣對換；EP.130 的歌詞裡沒有直接出現金錢或外幣字樣，只有在描述尋找和平與美好的「snow」與「divine」等意象。",
-      "expected_answer_aliases": {
-        "six figures": [
-          "六位數收入",
-          "6 figures"
-        ],
-        "us dollars to some pesos": [
-          "美金換成披索",
-          "美元換披索"
-        ]
       },
-      "ground_truth_chunk_ids_must": [
-        "ep:fd7ccecf-c6e2-4814-bb47-73c98679fd73@3597.74",
-        "ep:d92c9292-c5df-4def-9645-6a916278e0f3@3730.56",
-        "ep:75e3e9c2-419e-4f7d-b02d-a2ad4e457f7d@3533.61"
-      ],
-      "ground_truth_chunk_ids_either": null,
-      "ground_truth_chunk_ids_acceptable": null,
-      "expected_episode_uuids_must": null,
-      "audit_status": "pending",
-      "generation_round": 1,
-      "source_episode_id": "fd7ccecf-c6e2-4814-bb47-73c98679fd73",
-      "anchor_context": [
-        {
-          "chunk_id": "ep:fd7ccecf-c6e2-4814-bb47-73c98679fd73@3597.74",
-          "episode_title": "EP.28 不要再逼婚了！配音時聲音老師最常說的話是「唉...」",
-          "text": "i don't even wanna be petty but y'all know i'm a tourist right and y'all done brung the bull out so it's hard for me to calm down now here we go jip jip jealous of your situation nigga how you figure i've been stacking chips trying to make six figures trying to do the right thing keep my hand up off the trigger if you want that snow bun"
-        },
-        {
-          "chunk_id": "ep:d92c9292-c5df-4def-9645-6a916278e0f3@3730.56",
-          "episode_title": "EP.49 我覺得乖乖裡一定有住乖乖之神",
-          "text": "tell me how it feel to be the one i meet only need a week with you baby you so bad i can not speak shawty where you been at i wish i known you sooner so we hit the mat like judo but i guess it's all ok though cause we jumping on a plane us dollars to some pesos on my mind like i'm insane"
-        },
-        {
-          "chunk_id": "ep:75e3e9c2-419e-4f7d-b02d-a2ad4e457f7d@3533.61",
-          "episode_title": "壹加壹電台｜EP.130 遇到了貪小便宜之王 / 我想要舔你全身 / 男廁是我永遠的坎",
-          "text": "searching but don't know just what we hope to find i've been over seven seas hoping i can find some peace tell me where's the snow that here is so divine well i could never have been ready for been ready for this i think i should stop by letting you letting you in"
-        }
-      ],
-      "pre_review": {
-        "anchor_aligned": true,
-        "answerability": {
-          "must_ok": true,
-          "note": ""
-        },
-        "show_id_ok": true,
-        "retrieval_rank": null,
-        "review_grade": "heavy"
-      }
+      "reviewed_by": "jacky",
+      "reviewed_at": "2026-07-03T09:49:14Z",
+      "review_round": 1
     },
     {
       "id": "yijiay-r1-cross_episode-05",
@@ -987,26 +658,9 @@
       "ground_truth_chunk_ids_either": null,
       "ground_truth_chunk_ids_acceptable": null,
       "expected_episode_uuids_must": null,
-      "audit_status": "pending",
+      "audit_status": "approved",
       "generation_round": 1,
       "source_episode_id": "8c4a64bf-8818-431d-8522-759171e0fed6",
-      "anchor_context": [
-        {
-          "chunk_id": "ep:8c4a64bf-8818-431d-8522-759171e0fed6@2124.00",
-          "episode_title": "EP188 令老闆aka潘帥的驚人大爆料，誰能贏的了",
-          "text": "這不是新聞啦 這是我自己發生的事情 就其實我有掉髮的那個困擾 就是基因啦 因為就是我們家族 會有那些雄性禿 嗯 然後你不要一直看我頭髮 這看起來沒有啊 對我現在沒有 是因為其實 因為我後來就是過了一陣子"
-        },
-        {
-          "chunk_id": "ep:efd0d0a3-d111-4b26-a89f-da8df8ee33ab@1440.39",
-          "episode_title": "EP210 令的屁股毛事件大結局",
-          "text": "某一集的時候 在講說去年度 有沒有一件大事情 嗯 然後我就說我 我治療我的禿頭 嗯 然後那個治療禿頭 他還有一個新的藥 反正就是那個藥 吃了會讓你多毛症 嗯"
-        },
-        {
-          "chunk_id": "ep:7dd70bf2-f75d-499a-92ae-153ae8bbb986@3108.89",
-          "episode_title": "EP.76 每天跟不同人告白不叫單戀，那叫撒網捕魚",
-          "text": "欸 可以什麼頭髮自己長出來之後 那就沒事了 因為那是不可逆的 就是其實 我身邊周遭有非常非常多的朋友 有例如髮際線後退 或者是微禿的問題 所以其實 禿頭的人並不是只有你 對 而且我跟你 我跟你說喔"
-        }
-      ],
       "pre_review": {
         "anchor_aligned": true,
         "answerability": {
@@ -1016,7 +670,10 @@
         "show_id_ok": true,
         "retrieval_rank": 1,
         "review_grade": "light"
-      }
+      },
+      "reviewed_by": "jacky",
+      "reviewed_at": "2026-07-03T09:49:14Z",
+      "review_round": 1
     },
     {
       "id": "yijiay-r1-cross_episode-06",
@@ -1044,26 +701,9 @@
       "ground_truth_chunk_ids_either": null,
       "ground_truth_chunk_ids_acceptable": null,
       "expected_episode_uuids_must": null,
-      "audit_status": "pending",
+      "audit_status": "approved",
       "generation_round": 1,
       "source_episode_id": "f73c0d4a-4eba-43d1-a308-bdbcb53359d9",
-      "anchor_context": [
-        {
-          "chunk_id": "ep:f73c0d4a-4eba-43d1-a308-bdbcb53359d9@105.76",
-          "episode_title": "EP.38 第一次吃10g要價兩千的魚子醬，感謝JOEMAN大大帶我們飛",
-          "text": "叫做 Apple Store Yeah 有時候就是來不及反應 太快了 我就Story Story這樣子 你就是很常用Story嗎 蛤 為什麼會會自己去發一個音 不知道欸 我還再講一個好了 就是我們"
-        },
-        {
-          "chunk_id": "ep:ad07e05b-ea32-410a-8407-e1d92cbaef59@2085.42",
-          "episode_title": "EP223 吃漢被詐騙，令和一粒被盜刷",
-          "text": "對啊 這個還好 我上個月 你也有喔 等一下 大家都是笨蛋了欸 我沒有 我上個月呢 就突然間我的手機 也響了連續的通知 然後就是 也是刷那個 Apple Store的內購"
-        },
-        {
-          "chunk_id": "ep:021af0e5-f21d-4261-9e93-379451ccd1af@2257.76",
-          "episode_title": "EP174 歡迎令老闆歸國之一粒沒懷孕",
-          "text": "再說啦好不好 好啦好啦 再說再說 好啦 這如果之後 令老闆還有想到 一些蘋果發表會 其實故事很多啦 但因為我真的講不完 所以陸續 我覺得你們也可以 在Q&A問一些"
-        }
-      ],
       "pre_review": {
         "anchor_aligned": true,
         "answerability": {
@@ -1073,7 +713,10 @@
         "show_id_ok": true,
         "retrieval_rank": 2,
         "review_grade": "light"
-      }
+      },
+      "reviewed_by": "jacky",
+      "reviewed_at": "2026-07-03T09:49:14Z",
+      "review_round": 1
     },
     {
       "id": "yijiay-r1-cross_episode-07",
@@ -1093,26 +736,9 @@
         "ep:8e0a275f-39b9-4930-8989-ed474ef270bc@1890.78"
       ],
       "expected_episode_uuids_must": null,
-      "audit_status": "pending",
+      "audit_status": "approved",
       "generation_round": 1,
       "source_episode_id": "e94d665b-6fbd-47b9-92d0-d55765f8246c",
-      "anchor_context": [
-        {
-          "chunk_id": "ep:e94d665b-6fbd-47b9-92d0-d55765f8246c@1431.76",
-          "episode_title": "EP230 關於旅遊的這種形式那種形式",
-          "text": "就坐在那邊大概一兩個小時陪阿嬤 然後就是她爸媽跟她大哥 他們就可以自己去自由去逛 哇 你們真的是服務型欸 但其實對我們來說也很休息欸 因為我後來發現我們好像在日本 也是太緊湊了 然後很少會有這個機會 就坐下來 然後看看外面 不一定要滑手機"
-        },
-        {
-          "chunk_id": "ep:7cd9e6ba-2578-4464-aea9-b343a90748a7@343.16",
-          "episode_title": "EP234 美國夢好像一瞬間醒了？",
-          "text": "然後大概需要走一走就要休息這樣 然後我們剛好那天去到一個觀光區 那個觀光區就是 任何一個角度都非常漂亮 那我阿嬤就是會牽牽他 然後走到一個地方 然後坐下來 然後就休息嘛 很正常 就是老人家可能需要坐下來多看 多看看附近這樣 然後一坐下來就發現"
-        },
-        {
-          "chunk_id": "ep:8e0a275f-39b9-4930-8989-ed474ef270bc@1890.78",
-          "episode_title": "EP.118 影片裡不敢說的秘密，太神奇了捷克！ ft. 金魚腦、李掌櫃",
-          "text": "然後就是大家都不能滑手機 什麼的 也不能看電視 就是要坐在那邊聊天 可能兩三個小時 那不是一個 但是其實那個不是一個硬性的規定 而是那個氛圍 跟你跟這些人聊天 他就會自然而然的去 花了那麼長的時間 對 其實是個蠻快樂的感覺"
-        }
-      ],
       "pre_review": {
         "anchor_aligned": true,
         "answerability": {
@@ -1122,7 +748,10 @@
         "show_id_ok": true,
         "retrieval_rank": 2,
         "review_grade": "light"
-      }
+      },
+      "reviewed_by": "jacky",
+      "reviewed_at": "2026-07-03T09:49:14Z",
+      "review_round": 1
     },
     {
       "id": "yijiay-r1-summary_overview-01",
@@ -1154,26 +783,9 @@
       "expected_episode_uuids_must": [
         "3384428b-1b0d-4b60-9b68-6b0458da9f51"
       ],
-      "audit_status": "pending",
+      "audit_status": "approved",
       "generation_round": 1,
       "source_episode_id": "3384428b-1b0d-4b60-9b68-6b0458da9f51",
-      "anchor_context": [
-        {
-          "chunk_id": "ep:3384428b-1b0d-4b60-9b68-6b0458da9f51@270.30",
-          "episode_title": "EP177 卡拉赫斯 卡笛拉 吉利卡挖",
-          "text": "可是他拍直的對不對 他其實那個比例有點類似於 4比3 但是是直的 所以就是要橫不橫 要直不直 好怪喔 但我覺得應該比較適合拍直的啦 然後 他的錄影時間也很短 就大概一分鐘左右 但是他的畫質我覺得還不錯"
-        },
-        {
-          "chunk_id": "ep:3384428b-1b0d-4b60-9b68-6b0458da9f51@1549.94",
-          "episode_title": "EP177 卡拉赫斯 卡笛拉 吉利卡挖",
-          "text": "但是你倒立喝水的時候 水還是會往低處流 所以你還要想辦法 在倒立的時候 把水灌進你的嘴巴裡 你才能倒立喝 嗯 是嗎 好啦我剛剛亂講 欸那我覺得它 它我現在已經知道 這樣是對的"
-        },
-        {
-          "chunk_id": "ep:3384428b-1b0d-4b60-9b68-6b0458da9f51@2618.18",
-          "episode_title": "EP177 卡拉赫斯 卡笛拉 吉利卡挖",
-          "text": "所以想偷偷看看 希望可以被兩位看到 因為這件事困擾我很久了 我目前是一個大四的學生 就是大一到大三 都有一個穩定的 兼職工作 離家也近 對我來說算是方便 又可以小賺零錢的工作 零用錢 但是從大四開始呢"
-        }
-      ],
       "pre_review": {
         "anchor_aligned": false,
         "answerability": {
@@ -1183,7 +795,10 @@
         "show_id_ok": true,
         "retrieval_rank": 4,
         "review_grade": "heavy"
-      }
+      },
+      "reviewed_by": "jacky",
+      "reviewed_at": "2026-07-03T09:49:14Z",
+      "review_round": 1
     },
     {
       "id": "yijiay-r1-summary_overview-02",
@@ -1224,26 +839,9 @@
       "expected_episode_uuids_must": [
         "990d0c7a-fed3-4bc3-81ee-66ed162573cc"
       ],
-      "audit_status": "pending",
+      "audit_status": "approved",
       "generation_round": 1,
       "source_episode_id": "990d0c7a-fed3-4bc3-81ee-66ed162573cc",
-      "anchor_context": [
-        {
-          "chunk_id": "ep:990d0c7a-fed3-4bc3-81ee-66ed162573cc@326.68",
-          "episode_title": "EP257 如果你可以有三個願望",
-          "text": "我沒有填這個 我那一個APP是沒有的 哦 我本來想說 如果你填這個 那個司機實在太想要跟你聊天了 他知道 他知道我只好發洩出來 他是自得其樂的路線 真的 他是會看著路上 然後看著招牌"
-        },
-        {
-          "chunk_id": "ep:990d0c7a-fed3-4bc3-81ee-66ed162573cc@2125.00",
-          "episode_title": "EP257 如果你可以有三個願望",
-          "text": "那一千個願望你會許什麼 你說我從現在開始 從一到一千個願望要慢慢跟你說嗎 那我們在下集再說 然後先換別人 我想你怎麼可以這樣呢 你這個有點多哎 他可能是想說 他要放著想到的時候再取一下 慢慢想 你連這個東西都要囤 就是囤著啊"
-        },
-        {
-          "chunk_id": "ep:990d0c7a-fed3-4bc3-81ee-66ed162573cc@3803.28",
-          "episode_title": "EP257 如果你可以有三個願望",
-          "text": "就是他可能會只會看到我的 嗯那叫什麼褲子褲子跟可能大腿的一區塊 然後有一個提防的有個提防的 所以我後來就想說 如果就算廁所有針孔 他除非他放在馬桶裡面 不然他其實看不到我什麼 對你講到那個防止別人進來 這個我就會做 這我就會保護自己 因為我是怕那個尷尬時刻 我小時候有一次真的忘記關門"
-        }
-      ],
       "pre_review": {
         "anchor_aligned": false,
         "answerability": {
@@ -1253,7 +851,10 @@
         "show_id_ok": true,
         "retrieval_rank": 3,
         "review_grade": "heavy"
-      }
+      },
+      "reviewed_by": "jacky",
+      "reviewed_at": "2026-07-03T09:49:14Z",
+      "review_round": 1
     },
     {
       "id": "yijiay-r1-summary_overview-03",
@@ -1285,26 +886,9 @@
       "expected_episode_uuids_must": [
         "4530c204-3684-4200-8608-de2bac5f7542"
       ],
-      "audit_status": "pending",
+      "audit_status": "approved",
       "generation_round": 1,
       "source_episode_id": "4530c204-3684-4200-8608-de2bac5f7542",
-      "anchor_context": [
-        {
-          "chunk_id": "ep:4530c204-3684-4200-8608-de2bac5f7542@358.64",
-          "episode_title": "EP.109 一開口就叫姊的，我見一個打一個",
-          "text": "然後 我就那時候真的很詐 我想說 我真的不用想要聽一個 連叫姊姊四次的人說話 那你怎麼回他 然後請問你歸根 你問他你歸根 對請問你幾歲 就是你 請問你幾歲 嗯"
-        },
-        {
-          "chunk_id": "ep:4530c204-3684-4200-8608-de2bac5f7542@1603.82",
-          "episode_title": "EP.109 一開口就叫姊的，我見一個打一個",
-          "text": "頭上的時候就會有按摩的施力點 那些水鑽就會按摩他的頭皮 他的頭皮就會長得更好 那我應該用那種什麼磁石有沒有 磁石在 指甲上然後他就可以順便按摩 對對然後他會有電磁波的概念嘛 你放點太陽穴的時候還會有點磁場 有人有人有 留長指甲然後做美甲的人嗎 好想要知道 大概日常生活有什麼地方不方便喔"
-        },
-        {
-          "chunk_id": "ep:4530c204-3684-4200-8608-de2bac5f7542@3296.60",
-          "episode_title": "EP.109 一開口就叫姊的，我見一個打一個",
-          "text": "我會讓第三者知道說 我會知道第三者想 想什麼 我才可以去改變我自己啊 好的 下一位是說 有關於EP108的最後QA 有提到 有關急救簽署 我有問過當 我當護理師的媽媽 他說呢"
-        }
-      ],
       "pre_review": {
         "anchor_aligned": false,
         "answerability": {
@@ -1314,7 +898,10 @@
         "show_id_ok": true,
         "retrieval_rank": null,
         "review_grade": "heavy"
-      }
+      },
+      "reviewed_by": "jacky",
+      "reviewed_at": "2026-07-03T09:49:14Z",
+      "review_round": 1
     },
     {
       "id": "yijiay-r1-summary_overview-04",
@@ -1351,26 +938,9 @@
       "expected_episode_uuids_must": [
         "9bb191d0-78e7-44ae-a855-c0a39bd549e4"
       ],
-      "audit_status": "pending",
+      "audit_status": "approved",
       "generation_round": 1,
       "source_episode_id": "9bb191d0-78e7-44ae-a855-c0a39bd549e4",
-      "anchor_context": [
-        {
-          "chunk_id": "ep:9bb191d0-78e7-44ae-a855-c0a39bd549e4@377.70",
-          "episode_title": "EP261 義大利的冰咖啡是濃縮加冰塊兩顆",
-          "text": "什麼意思 你為什麼不躺 你都要睡覺了 你為什麼不躺 有時候你可能會坐著睡吧 不是誰會坐著睡啊 為什麼啦 反正就躺比不躺還涼嘛 我覺得這個slogan很不錯 超怪 我覺得他的質感 就是很像我前陣子很喜歡的那個"
-        },
-        {
-          "chunk_id": "ep:9bb191d0-78e7-44ae-a855-c0a39bd549e4@1858.45",
-          "episode_title": "EP261 義大利的冰咖啡是濃縮加冰塊兩顆",
-          "text": "對對對對對 你就是看到一些可能耶穌的圖 對對對 你可能要仔細思考一下 他是耶穌還是馬拉杜納 他還把他改成馬拉杜納 對對對 馬拉杜納很強 對 好 退休了 呃好像應該已經"
-        },
-        {
-          "chunk_id": "ep:9bb191d0-78e7-44ae-a855-c0a39bd549e4@3297.10",
-          "episode_title": "EP261 義大利的冰咖啡是濃縮加冰塊兩顆",
-          "text": "差不多粄條啦 哦 然後刀削麵的尺寸也有 對啊 就是麵皮就很多 是你們去餐廳裡面 然後他就會說 這些麵都可以選 沒有沒有 他是不同的口味 他會變成不同的麵條 我覺得他們也很講究"
-        }
-      ],
       "pre_review": {
         "anchor_aligned": false,
         "answerability": {
@@ -1380,7 +950,10 @@
         "show_id_ok": true,
         "retrieval_rank": null,
         "review_grade": "heavy"
-      }
+      },
+      "reviewed_by": "jacky",
+      "reviewed_at": "2026-07-03T09:49:14Z",
+      "review_round": 1
     },
     {
       "id": "yijiay-r1-date_find-01",
@@ -1405,16 +978,9 @@
       "expected_episode_uuids_must": [
         "1c265929-a071-467e-989e-3538dd06f247"
       ],
-      "audit_status": "pending",
+      "audit_status": "approved",
       "generation_round": 1,
       "source_episode_id": "1c265929-a071-467e-989e-3538dd06f247",
-      "anchor_context": [
-        {
-          "chunk_id": "ep:1c265929-a071-467e-989e-3538dd06f247@994.00",
-          "episode_title": "EP256 咦？原來我是股神？",
-          "text": "但結果是黑白的嗎 結果是那個清水模的嗎 應該蠻多的吧 舉例你記得 我忘了 我覺得我拍了蠻多 大家互動的那種瞬間 因為我本來就想要抓的是比較自然的 對啊 我也覺得 現在還要探討這個嗎 我們現在都是拍立得"
-        }
-      ],
       "pre_review": {
         "anchor_aligned": true,
         "answerability": {
@@ -1424,7 +990,10 @@
         "show_id_ok": true,
         "retrieval_rank": 1,
         "review_grade": "light"
-      }
+      },
+      "reviewed_by": "jacky",
+      "reviewed_at": "2026-07-03T09:49:14Z",
+      "review_round": 1
     },
     {
       "id": "yijiay-r1-date_find-02",
@@ -1449,16 +1018,9 @@
       "expected_episode_uuids_must": [
         "ced9d201-4e3f-48da-b7ff-71bf5a0dac9d"
       ],
-      "audit_status": "pending",
+      "audit_status": "approved",
       "generation_round": 1,
       "source_episode_id": "ced9d201-4e3f-48da-b7ff-71bf5a0dac9d",
-      "anchor_context": [
-        {
-          "chunk_id": "ep:ced9d201-4e3f-48da-b7ff-71bf5a0dac9d@933.92",
-          "episode_title": "EP.101 我覺得還好阿講了又不會怎樣",
-          "text": "拿走 然後說欸 你看一定看不懂地圖啦 你不要干擾我我來找路 哦 哦 哈哈哈哈 你現在是不敢講話是不是 對對我在講你是不是在講我 不是是某一天不是你 是很久之前 對然後"
-        }
-      ],
       "pre_review": {
         "anchor_aligned": true,
         "answerability": {
@@ -1468,7 +1030,10 @@
         "show_id_ok": true,
         "retrieval_rank": 14,
         "review_grade": "light"
-      }
+      },
+      "reviewed_by": "jacky",
+      "reviewed_at": "2026-07-03T09:49:14Z",
+      "review_round": 1
     },
     {
       "id": "yijiay-r1-date_find-03",
@@ -1492,16 +1057,9 @@
       "expected_episode_uuids_must": [
         "dbad4217-4632-4e6b-97a9-2850dde5550d"
       ],
-      "audit_status": "pending",
+      "audit_status": "approved",
       "generation_round": 1,
       "source_episode_id": "dbad4217-4632-4e6b-97a9-2850dde5550d",
-      "anchor_context": [
-        {
-          "chunk_id": "ep:dbad4217-4632-4e6b-97a9-2850dde5550d@2862.16",
-          "episode_title": "EP214  窗外狂風暴雨的時候",
-          "text": "這樣子所以我記得有一次 一次吧我跟我媽一起 去公司 然後就很多人 然後在那邊進進出出然後她一直在 辦公室接電話啊我就坐在 旁邊這樣哇你就在核心耶 我就在核心你的 童年記憶跟我們不太一樣耶 除此之外我好像就忘記還有什麼事 我可能把一些童年的回憶一起 剛剛大鍋炒起來那我發現應該"
-        }
-      ],
       "pre_review": {
         "anchor_aligned": true,
         "answerability": {
@@ -1511,7 +1069,10 @@
         "show_id_ok": true,
         "retrieval_rank": 6,
         "review_grade": "light"
-      }
+      },
+      "reviewed_by": "jacky",
+      "reviewed_at": "2026-07-03T09:49:14Z",
+      "review_round": 1
     },
     {
       "id": "yijiay-r1-negative-01",
@@ -1532,7 +1093,7 @@
       "ground_truth_chunk_ids_either": null,
       "ground_truth_chunk_ids_acceptable": null,
       "expected_episode_uuids_must": null,
-      "audit_status": "pending",
+      "audit_status": "approved",
       "generation_round": 1,
       "pre_review": {
         "anchor_aligned": true,
@@ -1543,7 +1104,10 @@
         "show_id_ok": true,
         "retrieval_rank": null,
         "review_grade": "heavy"
-      }
+      },
+      "reviewed_by": "jacky",
+      "reviewed_at": "2026-07-03T09:49:14Z",
+      "review_round": 1
     },
     {
       "id": "yijiay-r1-negative-02",
@@ -1563,7 +1127,7 @@
       "ground_truth_chunk_ids_either": null,
       "ground_truth_chunk_ids_acceptable": null,
       "expected_episode_uuids_must": null,
-      "audit_status": "pending",
+      "audit_status": "approved",
       "generation_round": 1,
       "pre_review": {
         "anchor_aligned": true,
@@ -1574,7 +1138,10 @@
         "show_id_ok": true,
         "retrieval_rank": null,
         "review_grade": "heavy"
-      }
+      },
+      "reviewed_by": "jacky",
+      "reviewed_at": "2026-07-03T09:49:14Z",
+      "review_round": 1
     },
     {
       "id": "yijiay-r1-negative-03",
@@ -1589,7 +1156,7 @@
       "ground_truth_chunk_ids_either": null,
       "ground_truth_chunk_ids_acceptable": null,
       "expected_episode_uuids_must": null,
-      "audit_status": "pending",
+      "audit_status": "approved",
       "generation_round": 1,
       "pre_review": {
         "anchor_aligned": true,
@@ -1600,42 +1167,10 @@
         "show_id_ok": true,
         "retrieval_rank": null,
         "review_grade": "heavy"
-      }
-    },
-    {
-      "id": "yijiay-r1-negative-04",
-      "design_type": "negative",
-      "source": "auto-anchor-first-r1",
-      "is_multi_turn": false,
-      "question": "壹加壹電台過去有聊過《青春點點點》相關主題，不過我比較好奇，你們有沒有哪一集是專門討論馬克在青春點點點離職、節目停播那段過程的細節，以及他後來為什麼會轉到其他平台發展？",
-      "expected_behavior": "refuse",
-      "expected_answer_summary": "節目並沒有專門一集詳細討論馬克從《青春點點點》離職、節目停播經過與原因，也沒有系統整理他後來轉往其他平台的發展脈絡；相關內容若有出現也只是零星提及，並非完整主題。",
-      "expected_answer_aliases": {
-        "馬克": [
-          "Mark",
-          "青春點點點馬克"
-        ],
-        "青春點點點": [
-          "青春點點點播客",
-          "青春點點點節目"
-        ]
       },
-      "ground_truth_chunk_ids_must": null,
-      "ground_truth_chunk_ids_either": null,
-      "ground_truth_chunk_ids_acceptable": null,
-      "expected_episode_uuids_must": null,
-      "audit_status": "pending",
-      "generation_round": 1,
-      "pre_review": {
-        "anchor_aligned": true,
-        "answerability": {
-          "must_ok": true,
-          "note": "negative/no-anchor: vacuous"
-        },
-        "show_id_ok": true,
-        "retrieval_rank": null,
-        "review_grade": "heavy"
-      }
+      "reviewed_by": "jacky",
+      "reviewed_at": "2026-07-03T09:49:14Z",
+      "review_round": 1
     },
     {
       "id": "yijiay-r1-code_switch-01",
@@ -1660,16 +1195,9 @@
       "ground_truth_chunk_ids_either": null,
       "ground_truth_chunk_ids_acceptable": null,
       "expected_episode_uuids_must": null,
-      "audit_status": "pending",
+      "audit_status": "approved",
       "generation_round": 1,
       "source_episode_id": "ec63016a-2fa5-46f8-8ccd-38bd61d24838",
-      "anchor_context": [
-        {
-          "chunk_id": "ep:ec63016a-2fa5-46f8-8ccd-38bd61d24838@2317.21",
-          "episode_title": "EP.14 令小時候竟然有超能力！ 逆吸引力法則",
-          "text": "你的超能力 為什麼不在威力彩上面用 你說我一定不會中 我一定不會中 然後就中了 我們現在還弄什麼Podcast 我們還拍什麼YouTube 你為什麼上次那個威力彩那麼多 高額的時候 你不去做這件事情 沒有這個能力 過小學後就已經沒辦法實現了"
-        }
-      ],
       "pre_review": {
         "anchor_aligned": true,
         "answerability": {
@@ -1679,7 +1207,10 @@
         "show_id_ok": true,
         "retrieval_rank": 1,
         "review_grade": "light"
-      }
+      },
+      "reviewed_by": "jacky",
+      "reviewed_at": "2026-07-03T09:49:14Z",
+      "review_round": 1
     },
     {
       "id": "yijiay-r1-code_switch-02",
@@ -1698,16 +1229,9 @@
       "ground_truth_chunk_ids_either": null,
       "ground_truth_chunk_ids_acceptable": null,
       "expected_episode_uuids_must": null,
-      "audit_status": "pending",
+      "audit_status": "approved",
       "generation_round": 1,
       "source_episode_id": "8e9d74f3-5efb-4cd4-9ddf-478640597328",
-      "anchor_context": [
-        {
-          "chunk_id": "ep:8e9d74f3-5efb-4cd4-9ddf-478640597328@2102.59",
-          "episode_title": "EP.72 明年的萬聖節，拜託不要再出現鬼滅之刃和魷魚遊戲了",
-          "text": "可能 比較 怕生 害羞 我也不知道 還沒有被激發出來 對 但我後來現在就已經很做自己了 對 你以為你被激發出來了 對 但是在 嗯 我們拍YouTube的前三年啊 對"
-        }
-      ],
       "pre_review": {
         "anchor_aligned": true,
         "answerability": {
@@ -1717,7 +1241,10 @@
         "show_id_ok": true,
         "retrieval_rank": 10,
         "review_grade": "light"
-      }
+      },
+      "reviewed_by": "jacky",
+      "reviewed_at": "2026-07-03T09:49:14Z",
+      "review_round": 1
     },
     {
       "id": "yijiay-r1-negative-05",
@@ -1747,7 +1274,7 @@
       "ground_truth_chunk_ids_either": null,
       "ground_truth_chunk_ids_acceptable": null,
       "expected_episode_uuids_must": null,
-      "audit_status": "pending",
+      "audit_status": "approved",
       "generation_round": 1,
       "pre_review": {
         "anchor_aligned": true,
@@ -1758,7 +1285,10 @@
         "show_id_ok": true,
         "retrieval_rank": null,
         "review_grade": "heavy"
-      }
+      },
+      "reviewed_by": "jacky",
+      "reviewed_at": "2026-07-03T09:49:14Z",
+      "review_round": 1
     }
   ]
 }

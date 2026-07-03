@@ -1,0 +1,53 @@
+{
+  "show_id": "4aa00590-6529-4514-b9ec-3b0160b2416b",
+  "slug": "yi-jia-yi",
+  "measured_at": "2026-07-03T02:32:11.129617+00:00",
+  "metrics": {
+    "total_episodes": 261,
+    "guests_coverage": 0.023,
+    "playlist_titles": 0,
+    "summary_done_ratio": 0.9464,
+    "en_char_ratio_sample": 0.0581,
+    "en_char_sample_n": 20
+  },
+  "recurring_segments": [],
+  "quotas": {
+    "fact": 12,
+    "deep_dive": 7,
+    "cross_episode": 7,
+    "summary_overview": 4,
+    "date_find": 3,
+    "negative": 4,
+    "code_switch": 2,
+    "guest_find": 0,
+    "playlist_enum": 0,
+    "multi_turn_handcraft": 3
+  },
+  "show_facts": {
+    "hosts": [
+      {
+        "name": "Lean",
+        "aliases": [
+          "令老闆"
+        ],
+        "real_name": "潘令傑"
+      },
+      {
+        "name": "Illy",
+        "aliases": [
+          "一粒"
+        ],
+        "real_name": "王依立"
+      },
+      {
+        "name": "吃漢",
+        "aliases": [],
+        "real_name": "",
+        "note": "後面的集數才加入"
+      }
+    ],
+    "notes": "贊助商/廠商名稱易被 ASR 轉錯（如「心肌尼」），出題避免依賴這類名稱",
+    "confirmed_by": "jacky",
+    "confirmed_at": "2026-07-03"
+  }
+}
