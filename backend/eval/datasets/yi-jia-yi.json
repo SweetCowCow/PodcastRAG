@@ -1289,6 +1289,140 @@
       "reviewed_by": "jacky",
       "reviewed_at": "2026-07-03T09:49:14Z",
       "review_round": 1
+    },
+    {
+      "id": "yijiay-r1-mt-01",
+      "design_type": "multi_turn",
+      "source": "handcraft-r1",
+      "is_multi_turn": true,
+      "audit_status": "approved",
+      "turns": [
+        {
+          "turn": "t1",
+          "question": "有一集講到爸爸在公園撿到錢結果被告，那件事後來怎麼收場？",
+          "expected_behavior": "answer",
+          "expected_answer_summary": "爸爸在公園撿到裝兩千元的信封帶回家，被監視器追到、以侵占遺失物被調查；出偵查庭後，因主動交回信封、積極道歉，失主透過警察傳話原諒他，最後不起訴收場。",
+          "expected_answer_aliases": null,
+          "ground_truth_chunk_ids_must": [
+            "ep:5e26a8e7-f20e-48f4-a51d-ad776c64f177@453.64",
+            "ep:5e26a8e7-f20e-48f4-a51d-ad776c64f177@584.72"
+          ],
+          "ground_truth_chunk_ids_either": null,
+          "ground_truth_chunk_ids_acceptable": [
+            "ep:5e26a8e7-f20e-48f4-a51d-ad776c64f177@571.28",
+            "ep:5e26a8e7-f20e-48f4-a51d-ad776c64f177@630.20"
+          ]
+        },
+        {
+          "turn": "t2",
+          "question": "那如果是撿到別人的錢，可以跟失主要求報酬嗎？可以要多少？",
+          "expected_behavior": "answer",
+          "expected_answer_summary": "可以。節目中提到拾得人可以向失主請求報酬，上限不能超過失物價值的十分之一，而且要自己主動開口要求。",
+          "expected_answer_aliases": null,
+          "ground_truth_chunk_ids_must": [
+            "ep:5e26a8e7-f20e-48f4-a51d-ad776c64f177@828.24"
+          ],
+          "ground_truth_chunk_ids_either": null,
+          "ground_truth_chunk_ids_acceptable": [
+            "ep:5e26a8e7-f20e-48f4-a51d-ad776c64f177@764.44",
+            "ep:5e26a8e7-f20e-48f4-a51d-ad776c64f177@1071.40"
+          ]
+        }
+      ],
+      "source_episode_id": "5e26a8e7-f20e-48f4-a51d-ad776c64f177",
+      "generation_round": 1,
+      "reviewed_by": "jacky",
+      "reviewed_at": "2026-07-04T03:14:12Z",
+      "review_round": 1
+    },
+    {
+      "id": "yijiay-r1-mt-02",
+      "design_type": "multi_turn",
+      "source": "handcraft-r1",
+      "is_multi_turn": true,
+      "audit_status": "approved",
+      "turns": [
+        {
+          "turn": "t1",
+          "question": "有一集講到他們做的影片被 YouTube 黃標，是哪支影片？後來怎麼處理？",
+          "expected_behavior": "answer",
+          "expected_answer_summary": "德國柏林的歷史紀錄片。上傳還沒曝光前 YouTube 系統審查先給黃標（代表不適合所有廣告業主、觸及會被限縮），之後 YouTube 主動人工審核這支片，是他們做節目以來第一次遇到。",
+          "expected_answer_aliases": null,
+          "ground_truth_chunk_ids_must": [
+            "ep:7aafcbd6-1c43-4407-b580-44938f0e26d3@2265.16",
+            "ep:7aafcbd6-1c43-4407-b580-44938f0e26d3@2275.60"
+          ],
+          "ground_truth_chunk_ids_either": null,
+          "ground_truth_chunk_ids_acceptable": [
+            "ep:7aafcbd6-1c43-4407-b580-44938f0e26d3@2288.99",
+            "ep:7aafcbd6-1c43-4407-b580-44938f0e26d3@1969.84"
+          ]
+        },
+        {
+          "turn": "t2",
+          "question": "那支影片的內容是在講什麼？",
+          "expected_behavior": "answer",
+          "expected_answer_summary": "講柏林的歷史 — 柏林圍牆、集中營、猶太人紀念館、恐怖地形圖等紀念場域，照歷史順序走訪拍攝；他們認為柏林只拍吃喝太可惜、太有歷史故事，才堅持做這支片。",
+          "expected_answer_aliases": null,
+          "ground_truth_chunk_ids_must": null,
+          "ground_truth_chunk_ids_either": [
+            "ep:7aafcbd6-1c43-4407-b580-44938f0e26d3@1982.84",
+            "ep:7aafcbd6-1c43-4407-b580-44938f0e26d3@2535.60"
+          ],
+          "ground_truth_chunk_ids_acceptable": [
+            "ep:7aafcbd6-1c43-4407-b580-44938f0e26d3@2013.28",
+            "ep:7aafcbd6-1c43-4407-b580-44938f0e26d3@2101.20"
+          ]
+        }
+      ],
+      "source_episode_id": "7aafcbd6-1c43-4407-b580-44938f0e26d3",
+      "generation_round": 1,
+      "reviewed_by": "jacky",
+      "reviewed_at": "2026-07-04T03:46:17Z",
+      "review_round": 1
+    },
+    {
+      "id": "yijiay-r1-mt-03",
+      "design_type": "multi_turn",
+      "source": "handcraft-r1",
+      "is_multi_turn": true,
+      "audit_status": "approved",
+      "turns": [
+        {
+          "turn": "t1",
+          "question": "有一集講到得了 A 流去看醫生，快篩跟拿藥的過程是怎樣？",
+          "expected_behavior": "answer",
+          "expected_answer_summary": "醫生說症狀很像流感，問要不要花 100 塊做快篩 — 篩中確診的話原價 1000 塊的克流感可以健保給付，當下感覺很像在賣樂透；快篩棒從鼻孔插進去很像 COVID，等 10 分鐘出現兩條藍線確診，拿了一盒 10 顆的克流感，加上退燒等其他藥混著吃。",
+          "expected_answer_aliases": null,
+          "ground_truth_chunk_ids_must": [
+            "ep:99118405-017d-4d97-9efa-8e40d9b6b0fd@693.16"
+          ],
+          "ground_truth_chunk_ids_either": null,
+          "ground_truth_chunk_ids_acceptable": [
+            "ep:99118405-017d-4d97-9efa-8e40d9b6b0fd@704.00",
+            "ep:99118405-017d-4d97-9efa-8e40d9b6b0fd@770.00",
+            "ep:99118405-017d-4d97-9efa-8e40d9b6b0fd@785.04"
+          ]
+        },
+        {
+          "turn": "t2",
+          "question": "那他們有講到自己打的流感疫苗是哪個牌子嗎？",
+          "expected_behavior": "refuse",
+          "expected_answer_summary": "節目中沒有提到疫苗品牌 — 有聊過打 COVID 疫苗比確診還痛苦的經驗與呼籲大家去打疫苗，但從頭到尾沒講過任何品牌名稱；應明確表示節目未提及，不可編造品牌。",
+          "expected_answer_aliases": null,
+          "ground_truth_chunk_ids_must": null,
+          "ground_truth_chunk_ids_either": null,
+          "ground_truth_chunk_ids_acceptable": [
+            "ep:99118405-017d-4d97-9efa-8e40d9b6b0fd@1658.81",
+            "ep:99118405-017d-4d97-9efa-8e40d9b6b0fd@1670.49"
+          ]
+        }
+      ],
+      "source_episode_id": "99118405-017d-4d97-9efa-8e40d9b6b0fd",
+      "generation_round": 1,
+      "reviewed_by": "jacky",
+      "reviewed_at": "2026-07-04T04:04:21Z",
+      "review_round": 1
     }
   ]
 }
