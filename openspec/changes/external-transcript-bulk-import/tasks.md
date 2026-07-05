@@ -19,7 +19,7 @@
 
 - [x] 4.1 配額 gate：確認 `GPUS_ALL_REGIONS` 核准（`gcloud beta quotas preferences describe`）；超過 48 小時未核准改走 Console 手動申請並回報 Jacky
 - [x] 4.2 費用 gate：開 VM 跑 1 小時樣本（兩節目各取一集的前 30 分鐘）實測 RTF 與品質 → 精算全量費用；估算 > $30 USD 先回報 Jacky 確認再續
-- [ ] 4.3 全量轉錄：兩節目 1001 集分批跑完；驗收 = manifest done 計數 = 集數、failed 清單處理完（重試或記錄豁免原因）、結果 JSON 全數回收到本機
+- [x] 4.3 全量轉錄：兩節目 1001 集分批跑完；驗收 = manifest done 計數 = 集數、failed 清單處理完（重試或記錄豁免原因）、結果 JSON 全數回收到本機
 - [x] 4.4 下游成本 gate：按 LLM 成本估算公式精算 embedding + summary + topic 全量費用與 AI Hub 月預算餘裕，回報 Jacky 確認後才開始匯入
 
 ## 5. 節目上線與試水
