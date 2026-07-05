@@ -800,6 +800,7 @@ const QueryPage = ({ lang, show, onBack, onOpenEpisode, queryMode, user, onUserC
                 showId={show.id}
                 lang={lang}
                 mode="chat"
+                hideLabel={isMobile && messages.length > 0}
                 onSelect={(q) => { setQueryText(q); setChatChipsOpen(false); setTimeout(() => handleSend(q), 0); }}
               />
             )}

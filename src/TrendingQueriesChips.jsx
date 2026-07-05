@@ -13,7 +13,9 @@
 // `mode` is one of 'index' | 'semantic' | 'chat'. Without it, only trending is
 // attempted (back-compat).
 
-const TrendingQueriesChips = ({ showId, lang, onSelect, layout, mode }) => {
+// `hideLabel`: 呼叫端已自帶區塊標題(如手機對話 dock 的「範例」收合開關)時,
+// 隱藏內建的「範例/熱搜」小標籤避免重複。
+const TrendingQueriesChips = ({ showId, lang, onSelect, layout, mode, hideLabel }) => {
   const t = lang === 'zh';
   // null = loading; otherwise { kind: 'trending'|'example', items: string[] }
   const [chips, setChips] = React.useState(null);
@@ -77,9 +79,11 @@ const TrendingQueriesChips = ({ showId, lang, onSelect, layout, mode }) => {
         flexDirection: horizontal ? 'row' : 'column',
       }}
     >
-      <span style={{ color: TOKEN.textMuted, fontSize: 11, marginRight: 4 }}>
-        {label}
-      </span>
+      {!hideLabel && (
+        <span style={{ color: TOKEN.textMuted, fontSize: 11, marginRight: 4 }}>
+          {label}
+        </span>
+      )}
       {chips.items.map((text, i) => (
         <button
           key={i}
