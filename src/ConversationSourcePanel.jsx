@@ -24,6 +24,7 @@
 
 const ConversationSourcePanel = ({ citations, lang, queryId, audioUrlFor, onPlaySegment, onJumpToTranscript }) => {
   const t = lang === 'zh';
+  const { isMobile } = useViewport();
   const list = Array.isArray(citations) ? citations : [];
   const [collapsed, setCollapsed] = React.useState({});  // episode_id → bool
   const [shownMap, setShownMap] = React.useState({});     // episode_id → number shown
@@ -58,7 +59,7 @@ const ConversationSourcePanel = ({ citations, lang, queryId, audioUrlFor, onPlay
         background: TOKEN.bg,
         border: `1px solid ${TOKEN.surfaceBorder}`,
         borderRadius: 10,
-        padding: '12px 14px',
+        padding: isMobile ? '10px 6px' : '12px 14px',
         display: 'flex',
         flexDirection: 'column',
         gap: 10,
@@ -101,7 +102,7 @@ const ConversationSourcePanel = ({ citations, lang, queryId, audioUrlFor, onPlay
                 </span>
               </button>
               {!isCollapsed && (
-                <div style={{ padding: '0 10px 10px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div style={{ padding: isMobile ? '0 6px 8px' : '0 10px 10px', display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {visible.map((c) => {
                     const segment = { ...c, audio_url: c.audio_url || (audioUrlFor ? audioUrlFor(c.episode_id) : null) };
                     return (

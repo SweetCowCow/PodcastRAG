@@ -85,6 +85,7 @@ const _sccPad = (s, side) => {
 // ─────────────────────────────────────────────────────────────────────────────
 const SegmentCitationCard = ({ segment, terms, position, relevance, lang, onPlay, onJumpToTranscript }) => {
   const t = lang === 'zh';
+  const { isMobile } = useViewport();
   const [expanded, setExpanded] = React.useState(false);
   if (!segment) return null;
 
@@ -145,7 +146,7 @@ const SegmentCitationCard = ({ segment, terms, position, relevance, lang, onPlay
         background: TOKEN.surface,
         border: `1px solid ${TOKEN.surfaceBorder}`,
         borderRadius: 10,
-        padding: '14px 16px',
+        padding: isMobile ? '12px 6px' : '14px 16px',
         display: 'flex',
         flexDirection: 'column',
         gap: 8,
@@ -211,7 +212,7 @@ const SegmentCitationCard = ({ segment, terms, position, relevance, lang, onPlay
 
       {/* Two SEPARATE actions (D3): play-in-place + jump-to-transcript */}
       {(showPlay || showJump) && (
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
           {showPlay && (
             <Btn variant="secondary" size="sm" icon="play" onClick={() => onPlay(segment)}>
               {t ? '播放此段' : 'Play'}

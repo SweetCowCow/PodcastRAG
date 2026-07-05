@@ -246,6 +246,9 @@ const QueryPage = ({ lang, show, onBack, onOpenEpisode, queryMode, user, onUserC
   const [episodes, setEpisodes] = React.useState(null);
   const [epError, setEpError] = React.useState(null);
   const [quotaModalOpen, setQuotaModalOpen] = React.useState(false);
+  // mobile-rwd: 手機上對話開始後預設收合範例 chips(可經「範例」開關重新展開;
+  // 每次送出後自動收回)。桌機恆展開,不受此 state 影響。
+  const [chatChipsOpen, setChatChipsOpen] = React.useState(false);
   const audio = (typeof useAudioPlayer === 'function') ? useAudioPlayer() : null;
   // R1.1: thumbs vote state — keyed by query_id; value is 'up' | 'down'.
   const [votes, setVotes] = React.useState({});
@@ -294,6 +297,7 @@ const QueryPage = ({ lang, show, onBack, onOpenEpisode, queryMode, user, onUserC
     const nextHistory = [...messages, { role: 'user', text: question }];
     setMessages(nextHistory);
     setQueryText('');
+    setChatChipsOpen(false);
     setSending(true);
     try {
       const history = nextHistory
@@ -756,7 +760,7 @@ const QueryPage = ({ lang, show, onBack, onOpenEpisode, queryMode, user, onUserC
         </div>
       ) : (
         <>
-          <div ref={chatEndRef} style={{ flex: 1, overflowY: 'auto', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div ref={chatEndRef} style={{ flex: 1, overflowY: 'auto', padding: isMobile ? '16px 12px' : '20px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
             {user && user.role === 'admin' && messages.some(m => m.role === 'assistant' && m.query_id) && (
               <div style={{ fontSize: 11, color: TOKEN.textMuted, fontFamily: 'monospace' }}>
                 {adminStats == null
@@ -780,13 +784,25 @@ const QueryPage = ({ lang, show, onBack, onOpenEpisode, queryMode, user, onUserC
             ))}
             {sending && <TypingIndicator />}
           </div>
-          <div style={{ padding: '14px 24px', borderTop: `1px solid ${TOKEN.surfaceBorder}`, background: TOKEN.surface, flexShrink: 0 }}>
-            <TrendingQueriesChips
-              showId={show.id}
-              lang={lang}
-              mode="chat"
-              onSelect={(q) => { setQueryText(q); setTimeout(() => handleSend(q), 0); }}
-            />
+          <div style={{ padding: isMobile ? '10px 12px' : '14px 24px', borderTop: `1px solid ${TOKEN.surfaceBorder}`, background: TOKEN.surface, flexShrink: 0 }}>
+            {isMobile && messages.length > 0 && (
+              <button
+                type="button"
+                data-testid="chat-chips-toggle"
+                onClick={() => setChatChipsOpen(v => !v)}
+                style={{ background: 'none', border: 'none', padding: '2px 0', marginBottom: chatChipsOpen ? 6 : 0, color: TOKEN.textMuted, fontSize: 11, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                <Icon name={chatChipsOpen ? 'chevronDown' : 'chevronRight'} size={11} color={TOKEN.textMuted} />
+                {t ? '範例' : 'Examples'}
+              </button>
+            )}
+            {(!isMobile || messages.length === 0 || chatChipsOpen) && (
+              <TrendingQueriesChips
+                showId={show.id}
+                lang={lang}
+                mode="chat"
+                onSelect={(q) => { setQueryText(q); setChatChipsOpen(false); setTimeout(() => handleSend(q), 0); }}
+              />
+            )}
             <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
               <Input value={queryText} onChange={e => setQueryText(e.target.value)}
                 placeholder={uiString('mode_placeholder_chat', lang)}
@@ -1052,6 +1068,7 @@ const EnumerationSection = ({ episodes, lang, onOpenEpisode, onExpandSegments, o
 
 const ChatBubble = ({ msg, lang, user, onCitationClick, onOpenEpisode, onSourceJump, onPlaySegment, onJumpToTranscript, audioUrlFor, onExpandSegments, voted, onVote }) => {
   const t = lang === 'zh';
+  const { isMobile } = useViewport();
   const isUser = msg.role === 'user';
   const citations = msg.citations || [];
   const enumerationEpisodes = msg.enumeration_episodes || null;
@@ -1098,7 +1115,7 @@ const ChatBubble = ({ msg, lang, user, onCitationClick, onOpenEpisode, onSourceJ
       <div style={{ width: 28, height: 28, borderRadius: '50%', background: isUser ? TOKEN.accentDim : TOKEN.surfaceRaised, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 11, fontWeight: 700, color: isUser ? TOKEN.accent : TOKEN.textSecondary }}>
         {isUser ? 'U' : 'AI'}
       </div>
-      <div style={{ maxWidth: '80%', background: isUser ? TOKEN.accentDim : TOKEN.surfaceRaised, border: `1px solid ${isUser ? TOKEN.accent + '33' : TOKEN.surfaceBorder}`, borderRadius: isUser ? '14px 4px 14px 14px' : '4px 14px 14px 14px', padding: '10px 14px' }}>
+      <div style={{ maxWidth: isMobile ? (isUser ? '85%' : '100%') : '80%', minWidth: 0, background: isUser ? TOKEN.accentDim : TOKEN.surfaceRaised, border: `1px solid ${isUser ? TOKEN.accent + '33' : TOKEN.surfaceBorder}`, borderRadius: isUser ? '14px 4px 14px 14px' : '4px 14px 14px 14px', padding: isMobile ? '10px 12px' : '10px 14px' }}>
         <pre style={{ margin: 0, color: TOKEN.text, fontSize: 13, lineHeight: 1.7, fontFamily: 'inherit', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{msg.text}</pre>
         {/* citation-display-unify: 列舉題（enumeration_episodes?.length > 0）走主從佈局：
             EnumerationSection 為主、chunk citations 摺疊為輔；內容題（enum 為空 / null）

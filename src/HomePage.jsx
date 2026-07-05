@@ -222,7 +222,7 @@ const HomePage = ({
         {shows && shows.length > 0 && (
           <div style={{
             display: 'grid',
-            gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fill, minmax(320px, 1fr))',
+            gridTemplateColumns: isMobile ? 'minmax(0, 1fr)' : 'repeat(auto-fill, minmax(min(320px, 100%), 1fr))',
             gap: 20,
           }}>
             {shows.map(show => (

@@ -428,7 +428,8 @@ const AdminAsrCorrectionTab = ({ lang }) => {
               ? 'LLM 在轉錄時偵測到的疑似同音錯字。核准後會跨集生效並進入校正字典；駁回則不再提醒。（候選不影響既有資料，需核准才生效。）'
               : 'Suspected homophone typos the LLM detected during transcription. Approve to activate across episodes and add to the dictionary; reject to dismiss. (Candidates do not affect existing data until approved.)'}
           </p>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
+          <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', minWidth: 420, borderCollapse: 'collapse', fontSize: 14 }}>
             <thead>
               <tr style={{ borderBottom: `1px solid ${TOKEN.surfaceBorder}`, color: TOKEN.textSecondary, textAlign: 'left' }}>
                 <th style={{ padding: '8px', fontWeight: 600 }}>{t ? '錯字 → 正字' : 'Wrong → Correct'}</th>
@@ -478,6 +479,7 @@ const AdminAsrCorrectionTab = ({ lang }) => {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 
@@ -584,7 +586,8 @@ const AdminAsrCorrectionTab = ({ lang }) => {
       ) : ruleRows.length === 0 ? (
         <div style={{ color: TOKEN.textMuted, fontSize: 13 }}>{t ? '尚無規則' : 'No rules yet'}</div>
       ) : (
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
+        <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', minWidth: 560, borderCollapse: 'collapse', fontSize: 14 }}>
           <thead>
             <tr style={{ borderBottom: `1px solid ${TOKEN.surfaceBorder}`, color: TOKEN.textSecondary, textAlign: 'left' }}>
               <th style={{ padding: '10px 8px', fontWeight: 600 }}>{t ? '錯字 → 正字' : 'Wrong → Correct'}</th>
@@ -622,6 +625,7 @@ const AdminAsrCorrectionTab = ({ lang }) => {
             ))}
           </tbody>
         </table>
+        </div>
       )}
 
       {/* ── backfill ── */}

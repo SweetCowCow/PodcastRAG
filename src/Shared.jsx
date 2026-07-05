@@ -111,6 +111,7 @@ const Btn = ({ children, onClick, variant = 'primary', size = 'md', disabled, st
     display: 'inline-flex', alignItems: 'center', gap: 6, borderRadius: 8,
     cursor: disabled ? 'not-allowed' : 'pointer', border: 'none', fontWeight: 500,
     transition: 'all 0.15s', opacity: disabled ? 0.5 : 1, fontFamily: 'inherit',
+    whiteSpace: 'nowrap',
     ...(isMobile && { minHeight: 44, minWidth: 44, justifyContent: 'center' }),
   };
   const sizes = { sm: { padding: '5px 12px', fontSize: 13 }, md: { padding: '8px 16px', fontSize: 14 }, lg: { padding: '11px 22px', fontSize: 15 } };
@@ -166,6 +167,16 @@ const TopNav = ({ lang, page, setPage, onToggleLang, onAdminClick, user, onSignI
   const { isMobile } = useViewport();
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [userMenuOpen, setUserMenuOpen] = React.useState(false);
+  // mobile-rwd: admin sub-tab bar 在手機是水平捲動;切 tab / 初次載入時把
+  // active tab 捲進可視範圍(初次 instant、之後 smooth,避免載入動畫)。
+  const adminBarRef = React.useRef(null);
+  const adminBarSmoothRef = React.useRef(false);
+  React.useEffect(() => {
+    if (!isAdmin || !isMobile || !adminBarRef.current) { adminBarSmoothRef.current = false; return; }
+    const el = adminBarRef.current.querySelector('[data-active="true"]');
+    if (el) el.scrollIntoView({ inline: 'nearest', block: 'nearest', behavior: adminBarSmoothRef.current ? 'smooth' : 'auto' });
+    adminBarSmoothRef.current = true;
+  }, [page, isAdmin, isMobile]);
 
   const mainItems = [
     { id: 'select', icon: 'podcast', label: t ? '節目選擇' : 'Shows' },
@@ -296,7 +307,7 @@ const TopNav = ({ lang, page, setPage, onToggleLang, onAdminClick, user, onSignI
 
       {/* Admin secondary bar — desktop: flex; mobile: horizontal scroll */}
       {isAdmin && (
-        <div style={{ display: 'flex', alignItems: 'stretch', padding: isMobile ? '0 8px' : '0 28px', height: isMobile ? 48 : 42, borderTop: `1px solid ${TOKEN.surfaceBorder}`, background: TOKEN.bg, gap: 2, overflowX: isMobile ? 'auto' : 'visible', flexWrap: 'nowrap', whiteSpace: 'nowrap' }}>
+        <div ref={adminBarRef} style={{ display: 'flex', alignItems: 'stretch', padding: isMobile ? '0 8px' : '0 28px', height: isMobile ? 48 : 42, borderTop: `1px solid ${TOKEN.surfaceBorder}`, background: TOKEN.bg, gap: 2, overflowX: isMobile ? 'auto' : 'visible', flexWrap: 'nowrap', whiteSpace: 'nowrap' }}>
           {adminItems.map(item => (
             <TopNavItem key={item.id} icon={item.icon} label={item.label} active={page === item.id}
               onClick={() => setPage(item.id)} secondary mobile={isMobile} />
@@ -362,7 +373,7 @@ const UserMenu = ({ user, lang, open, setOpen, onLogout, compact }) => {
 const TopNavItem = ({ icon, label, active, onClick, secondary, mobile }) => {
   const [hovered, setHovered] = React.useState(false);
   return (
-    <button onClick={onClick} onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}
+    <button onClick={onClick} data-active={active ? 'true' : 'false'} onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}
       style={{
         display: 'inline-flex', alignItems: 'center', gap: 6,
         padding: secondary ? '0 14px' : '0 16px',
