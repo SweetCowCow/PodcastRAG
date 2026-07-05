@@ -15,15 +15,15 @@
 
 ## 4. P2 — 對話頁底部固定區收合
 
-- [ ] 4.1 src/QueryPage.jsx 手機分支:對話串 messages 非空時預設收合範例 chips 區,保留「範例」開關可重新展開(展開後點 chip 行為不變);桌機不變。完成後 375×667 有對話時底部固定區高度 ≤ 25% viewport 高。驗證:emulation 量測 dock 高度 + 展開/收合/送出範例題全流程操作。
+- [x] 4.1 src/QueryPage.jsx 手機分支:對話串 messages 非空時預設收合範例 chips 區,保留「範例」開關可重新展開(展開後點 chip 行為不變);桌機不變。完成後 375×667 有對話時底部固定區高度 ≤ 25% viewport 高。驗證:emulation 量測 dock 高度 + 展開/收合/送出範例題全流程操作。
 
 ## 5. P2 — admin 表格與 tab bar
 
-- [ ] 5.1 src/AdminAsrCorrectionTab.jsx 兩個 table(規則列表、候選列表)各包 `overflowX: 'auto'` 容器並設 table `minWidth`;完成後 375px 下兩表可橫捲至最右欄、無被切死內容;1280px 桌機無多餘捲軸。驗證:emulation 橫捲到最右欄截圖。
-- [ ] 5.2 src/AdminPage.jsx tab bar:active tab 變更時 `scrollIntoView({ inline: 'nearest', behavior: 'smooth' })`、初次 mount 用 instant 定位;完成後 375px 切到「服務用量」等後段 tab 時該 tab 完整可見。驗證:emulation 依序切 3 個後段 tab 截圖確認。
+- [x] 5.1 src/AdminAsrCorrectionTab.jsx 兩個 table(規則列表、候選列表)各包 `overflowX: 'auto'` 容器並設 table `minWidth`;完成後 375px 下兩表可橫捲至最右欄、無被切死內容;1280px 桌機無多餘捲軸。驗證:emulation 橫捲到最右欄截圖。
+- [x] 5.2 src/AdminPage.jsx tab bar:active tab 變更時 `scrollIntoView({ inline: 'nearest', behavior: 'smooth' })`、初次 mount 用 instant 定位;完成後 375px 切到「服務用量」等後段 tab 時該 tab 完整可見。驗證:emulation 依序切 3 個後段 tab 截圖確認。
 
 ## 6. 全站回歸驗證與收尾
 
-- [ ] 6.1 mobile emulation 全站重掃(375×667 為主、320×568 抽驗 home):對 audit-report.md P0/P1/P2 六項逐項比對,全數符合 design.md Implementation Contract 第 1–6 點;overflow offender 掃描於 home(登入前後)、query 三 tab、對話實跑、admin 全 tab 歸零。驗證:重掃記錄 + 修後截圖存 docs/research/eq12-mobile-audit/shots-after/。
-- [ ] 6.2 桌機回歸抽掃:1280px 下 home / query(對話實跑一題)/ admin 前三 tab 無新增 offender、與修前視覺一致(Implementation Contract 第 7 點)。驗證:emulation 1280px 掃描 + 截圖。
+- [x] 6.1 mobile emulation 全站重掃(375×667 為主、320×568 抽驗 home):對 audit-report.md P0/P1/P2 六項逐項比對,全數符合 design.md Implementation Contract 第 1–6 點;overflow offender 掃描於 home(登入前後)、query 三 tab、對話實跑、admin 全 tab 歸零。驗證:重掃記錄 + 修後截圖存 docs/research/eq12-mobile-audit/shots-after/。
+- [x] 6.2 桌機回歸抽掃:1280px 下 home / query(對話實跑一題)/ admin 前三 tab 無新增 offender、與修前視覺一致(Implementation Contract 第 7 點)。驗證:emulation 1280px 掃描 + 截圖。
 - [ ] 6.3 推 prod 後真機 Safari 抽驗:home 節目卡完整可點、對話跑一題 citation 卡可讀、輸入框聚焦(iOS 鍵盤彈出)時輸入列仍可見可用。驗證:真機操作確認,結果回報記入 change 註記(依 feedback_browser_verification,失敗不得靜默標完成)。
