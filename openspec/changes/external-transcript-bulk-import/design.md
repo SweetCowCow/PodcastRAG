@@ -61,6 +61,17 @@
 3. **品質 gate**：先匯 5 集（兩節目都要有）→ Jacky 在 prod 抽看逐字稿頁/搜尋/deep-link → 拍板才全量匯入。
 4. **下游成本 gate**：全量匯入前按 LLM 成本公式精算 embedding + summary + topic 費用並回報（估 $6~12）。
 
+#### 試水品質標準（品質 gate 細則，2026-07-06 敲定）
+
+兩層驗收：
+
+1. **第一層 系統健康**（Claude 自動驗，全綠才給 Jacky 看）：5 集 transcript `status=completed`、`whisper_model=external:faster-whisper-large-v3-turbo`、每集有 chunks + embedding（非空）、summary 完成、topic 分段完成、queue 無 failed / 無卡住的 pending·running。
+2. **第二層 人工抽看**（Jacky 拍板），顆粒度採「重點抽」：5 集逐字稿各快速掃一眼（確認無亂碼／大段漏字／語言辨識錯）；deep-link + 三模式只挑 2 集（含長集）深入試。
+
+- **ASR 錯字容忍度**：「不影響理解就過」——少量人名／專詞誤字可接受，已知錯字走 T1 統一修，不擋這次上線。Blocker = 整段亂碼／大段漏字／跑出英文·簡體。
+- **對話模式驗收三件事**：①答對、②有引用、③引用點進去對得上且語意正確（防「引用有掛卻答非所問」）。
+- **選集原則**（候選池 → Jacky 挑最終 5 集）：兩節目各 ≥2 集；含 1 集 >60 分鐘長集（硬條件）；含 1 集短集；內容型態有差異（訪談 vs 閒聊）；至少 1 集需是 Jacky 聽過的集——三模式搜尋品質只有他能判斷答對沒。
+
 ## Implementation Contract
 
 - `_persist_transcription_result(episode_id: str, result: TranscriptionResult, *, queue_model_label: str) -> dict`：含 cancelled 檢查、segments/chunks delete-then-write、同音字偵測（fail-open）、ASR 校正、chunking、embedding dual-write、transcript content 重算、`_mark_queue_finished`（completed → 鏈 summary + topic）。ASR 路徑重構後行為不變（本地測試 baseline diff 驗證）。

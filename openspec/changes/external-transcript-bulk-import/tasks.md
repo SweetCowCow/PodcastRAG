@@ -25,7 +25,7 @@
 ## 5. 節目上線與試水
 
 - [x] 5.1 兩節目建入 prod：admin 建 show（塞掐 Side Chat / 台灣通勤第一品牌，RSS 為 2026-06-12 評估時確認的 feed URL）+ sync episodes；驗收 = 集數與 RSS 一致、**不建 schedule**、queue 零 row
-- [ ] 5.2 試水匯入 5 集（兩節目都要有，含一集 >60 分鐘長集）→ 確認 summary/topic 鏈式跑完 → Jacky 在 prod 抽看逐字稿頁/時間軸 deep-link/三模式搜尋品質；**Jacky 拍板通過才繼續**
+- [x] 5.2 試水匯入 5 集（兩節目都要有，含一集 >60 分鐘長集）→ 確認 summary/topic 鏈式跑完 → Jacky 在 prod 抽看逐字稿頁/時間軸 deep-link/三模式搜尋品質；**Jacky 拍板通過才繼續**
 
 ## 6. 全量匯入與驗證
 

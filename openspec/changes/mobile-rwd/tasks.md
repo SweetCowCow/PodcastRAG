@@ -26,4 +26,4 @@
 
 - [x] 6.1 mobile emulation 全站重掃(375×667 為主、320×568 抽驗 home):對 audit-report.md P0/P1/P2 六項逐項比對,全數符合 design.md Implementation Contract 第 1–6 點;overflow offender 掃描於 home(登入前後)、query 三 tab、對話實跑、admin 全 tab 歸零。驗證:重掃記錄 + 修後截圖存 docs/research/eq12-mobile-audit/shots-after/。
 - [x] 6.2 桌機回歸抽掃:1280px 下 home / query(對話實跑一題)/ admin 前三 tab 無新增 offender、與修前視覺一致(Implementation Contract 第 7 點)。驗證:emulation 1280px 掃描 + 截圖。
-- [ ] 6.3 推 prod 後真機 Safari 抽驗:home 節目卡完整可點、對話跑一題 citation 卡可讀、輸入框聚焦(iOS 鍵盤彈出)時輸入列仍可見可用。驗證:真機操作確認,結果回報記入 change 註記(依 feedback_browser_verification,失敗不得靜默標完成)。
+- [x] 6.3 推 prod 後真機 Safari 抽驗:home 節目卡完整可點、對話跑一題 citation 卡可讀、輸入框聚焦(iOS 鍵盤彈出)時輸入列仍可見可用。驗證:真機操作確認,結果回報記入 change 註記(依 feedback_browser_verification,失敗不得靜默標完成)。— 2026-07-07 Jacky 真機 Safari 抽驗完成回報通過,12/12 全數完成,待 archive + release log。
