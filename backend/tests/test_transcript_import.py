@@ -423,6 +423,27 @@ async def test_import_applies_asr_correction_rules(
             await db.commit()
 
 
+async def test_import_skips_homophone_detection(seeded_episode, monkeypatch):
+    """D6（2026-07-07）：匯入路徑跳過 EQ2b LLM 同音字偵測——成本大頭
+    （gemini-3.5-flash，全量 73%）+ 批次灌爆候選字。ASR 字典校正（第二層）
+    不受影響（由 test_import_applies_asr_correction_rules 保證）。ASR 路徑
+    維持 skip_homophone=False，行為不變。"""
+    from app.workers import tasks
+
+    _patch_import_externals(monkeypatch)
+    # detect_homophones 被 spy 換掉：匯入路徑若誤呼叫，assert_not_called 會失敗。
+    homophone_spy = AsyncMock(return_value=[])
+    monkeypatch.setattr(
+        tasks.asr_homophone, "detect_homophones", homophone_spy
+    )
+
+    result, _, _ = await _run_import_task(
+        seeded_episode["episode_id"], _payload()
+    )
+    assert result["status"] == "completed"
+    homophone_spy.assert_not_called()
+
+
 async def test_import_revives_failed_queue_row(seeded_episode, monkeypatch):
     from app.models.transcription_queue import QueueStatus, TranscriptionQueue
 

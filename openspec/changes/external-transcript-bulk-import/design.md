@@ -72,12 +72,26 @@
 - **對話模式驗收三件事**：①答對、②有引用、③引用點進去對得上且語意正確（防「引用有掛卻答非所問」）。
 - **選集原則**（候選池 → Jacky 挑最終 5 集）：兩節目各 ≥2 集；含 1 集 >60 分鐘長集（硬條件）；含 1 集短集；內容型態有差異（訪談 vs 閒聊）；至少 1 集需是 Jacky 聽過的集——三模式搜尋品質只有他能判斷答對沒。
 
+### D6：匯入路徑跳過 LLM 同音字偵測（2026-07-07，試水後實測成本拍板）
+
+全量匯入試水後,AI Hub usage 實測拆分打臉 task 4.4 的下游成本估算（$6~12）：
+- **`asr_homophone` LLM 同音字偵測（gemini-3.5-flash）佔全量下游成本 73%**（實測 $0.204/集 中約 $0.15）；summary + topic（flash-lite）僅 27%。
+- 根因：同音字偵測要 LLM 讀完整集找同音字誤植,gemini-3.5-flash 是 EQ2b `fe045a7` RAGEC pilot 拍板刻意選的貴模型；1001 集歷史批次逐集跑放大成本一個量級。
+- 副作用：每集 `persist_candidates` 會灌入大量 pending 候選字,1001 集一次匯入產生海量待審,不適合批次匯入場景。
+
+**決策**：`_persist_transcription_result` 加 keyword-only `skip_homophone: bool = False`；匯入路徑（`import_external_transcript`）傳 `True` 跳過整個 EQ2b 第一層（detect + persist_candidates），`llm_pairs=[]` 使第一層 `apply_corrections` no-op。**第二層 ASR 字典校正（EQ2a）不受影響照跑**。ASR 路徑維持 `False`,行為與抽取前完全一致（55 項 ASR/homophone 回歸測試驗證）。全量下游降到 ~$55。
+
+- 破壞 D1「匯入與 ASR 路徑行為零分歧」原則——**限縮為「segments/chunks/embedding/summary/topic/字典校正零分歧,僅 LLM 同音字偵測在匯入路徑停用」**。對歷史批次可接受。
+- 歷史集同音字修正改由 backlog「逐字稿轉錄品質系統性回掃 pipeline」（2026-07-06 提）統一批次處理——本來就規劃要做,且批次策略（抽樣 / 選高價值集 / 更省模型）比逐集 $0.15 更省。
+- 替代案「換 flash-lite 重驗品質」：否決——需重跑 EQ2b pilot 對比,且只省 2.7x（全量仍 ~$110）,不如直接跳過 + 併入系統性回掃。
+
 ## Implementation Contract
 
 - `_persist_transcription_result(episode_id: str, result: TranscriptionResult, *, queue_model_label: str) -> dict`：含 cancelled 檢查、segments/chunks delete-then-write、同音字偵測（fail-open）、ASR 校正、chunking、embedding dual-write、transcript content 重算、`_mark_queue_finished`（completed → 鏈 summary + topic）。ASR 路徑重構後行為不變（本地測試 baseline diff 驗證）。
 - `import_external_transcript(episode_id: str, payload: dict) -> dict`（Celery，control queue）：payload → `TranscriptionResult` → 確保 queue row 存在（無則建 running，有 failed/cancelled 則 revive）→ 呼叫共用函式。
 - 跑器 manifest 行格式：`{episode_id, status: done|failed, audio_seconds, elapsed_seconds, error|null}`；進度報告 = manifest 統計（done/failed/剩餘/預估完成時間）。
 - 驗收（prod）：兩節目逐字稿頁可開、時間軸 deep-link 正確、語意/索引/對話三模式可查到新節目內容、queue UI 顯示外部模型標記、開 schedule 後 cron_tick 不重抓已匯入集（觀察一個 tick 週期）。
+- `_persist_transcription_result(..., skip_homophone: bool = False)`（D6）：`True` 跳過 EQ2b LLM 同音字偵測（detect + persist_candidates），`llm_pairs=[]` 讓第一層 `apply_corrections` no-op；第二層字典校正照跑。匯入路徑傳 `True`,ASR 路徑維持 `False`。
 
 ## Risks / Trade-offs
 

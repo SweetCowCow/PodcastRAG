@@ -29,7 +29,8 @@
 
 ## 6. 全量匯入與驗證
 
-- [ ] 6.1 全量分批匯入：import_results.py 分批執行（每批後檢查 worker queue 積壓與 AI Hub 用量），匯入完成驗收 = 兩節目 transcript completed 數 = 集數、summary/topic 完成率 100%（或失敗清單處理完）
+- [ ] 6.0 【D6，2026-07-07 試水後插入】匯入路徑跳過 LLM 同音字偵測：試水匯入 162 集實測 AI Hub 燒 $31.96（$0.204/集,外推全量 ~$205,遠超 task 4.4 估的 $6~12）；usage 拆分定位大頭 = `asr_homophone`（gemini-3.5-flash）佔 73%。`_persist_transcription_result` 加 `skip_homophone`,匯入路徑傳 True；ASR 路徑不變（55 項回歸綠 + 新增 test_import_skips_homophone_detection）。部署 prod → 驗證新匯入集 AI Hub 消耗降到僅 summary+topic（~$0.055/集）。同音字修正併入 backlog 系統性回掃 pipeline
+- [ ] 6.1 全量分批匯入（D6 後）：import_results.py / full_import_orchestrator.py 分批執行（每批後檢查 worker queue 積壓與 AI Hub 用量），匯入完成驗收 = 兩節目 transcript completed 數 = 集數、summary/topic 完成率 100%（或失敗清單處理完）；全量下游成本目標 ~$55
 - [ ] 6.2 建立兩節目 schedule（enabled）：觀察一個 cron tick 週期，驗收 = `_enqueue_latest` 對已匯入集零 enqueue（queue 無新增 row）、新發布集數照常進 whisper-1 流程
 - [ ] 6.3 Prod smoke：兩節目逐字稿頁、`?t=` deep-link、語意/索引/對話三模式各一查詢回有效結果、admin queue UI 顯示 `external:` 模型標記
 

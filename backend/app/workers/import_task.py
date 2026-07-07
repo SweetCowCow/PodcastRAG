@@ -192,7 +192,8 @@ def import_external_transcript(self, episode_id: str, payload: dict) -> dict:
     try:
         return asyncio.run(
             _persist_transcription_result(
-                episode_id, result, queue_model_label=label
+                episode_id, result, queue_model_label=label,
+                skip_homophone=True,
             )
         )
     except Exception as exc:

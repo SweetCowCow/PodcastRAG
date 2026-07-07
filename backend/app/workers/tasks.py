@@ -347,6 +347,7 @@ async def _persist_transcription_result(
     result: TranscriptionResult,
     *,
     queue_model_label: str | None = None,
+    skip_homophone: bool = False,
 ) -> dict:
     """external-transcript-bulk-import D1: shared post-ASR persistence.
 
@@ -358,6 +359,12 @@ async def _persist_transcription_result(
 
     ``queue_model_label`` 只有匯入路徑會給（寫入 queue row 的
     ``whisper_model`` 溯源標記）；ASR 路徑傳 None，行為與抽取前一致。
+
+    ``skip_homophone``（D6，2026-07-07）：匯入路徑對 1001 集歷史批次傳
+    True，跳過 EQ2b LLM 同音字偵測——該步用 gemini-3.5-flash、佔全量下游
+    成本 73%（實測 ~$0.15/集），且逐集匯入會灌爆 pending 候選字。歷史批次的
+    同音字修正改由 backlog「逐字稿轉錄品質系統性回掃 pipeline」統一批次處理。
+    ASR 校正字典（第二層）不受影響照跑。ASR 路徑維持 False，行為不變。
     """
     ep_uuid = uuid.UUID(episode_id)
     engine = create_async_engine(settings.database_url, poolclass=NullPool)
@@ -421,29 +428,34 @@ async def _persist_transcription_result(
             # Both detection and persistence are fail-open: a failure here
             # must never block transcription — it falls back to dictionary-
             # only correction.
-            llm_pairs = await asr_homophone.detect_homophones(
-                session, result.text, show_id=correction_show_id
-            )
-            if llm_pairs:
-                # Persist candidates in a SEPARATE session so its commit
-                # cannot entangle (or prematurely flush) this transaction's
-                # in-flight segment/chunk deletes — the two paths are
-                # independent (D2). Fail-open: persistence failure must not
-                # block the current episode's correction.
-                try:
-                    async with Session() as cand_session:
-                        await asr_homophone.persist_candidates(
-                            cand_session,
-                            llm_pairs,
-                            show_id=correction_show_id,
+            # D6: 匯入路徑（skip_homophone=True）跳過整段——成本大頭 + 批次
+            # 灌爆候選字；歷史集同音字修正走 backlog 系統性回掃 pipeline。
+            # llm_pairs=[] 時第一層 apply_corrections no-op，第二層字典校正照跑。
+            llm_pairs: list = []
+            if not skip_homophone:
+                llm_pairs = await asr_homophone.detect_homophones(
+                    session, result.text, show_id=correction_show_id
+                )
+                if llm_pairs:
+                    # Persist candidates in a SEPARATE session so its commit
+                    # cannot entangle (or prematurely flush) this transaction's
+                    # in-flight segment/chunk deletes — the two paths are
+                    # independent (D2). Fail-open: persistence failure must not
+                    # block the current episode's correction.
+                    try:
+                        async with Session() as cand_session:
+                            await asr_homophone.persist_candidates(
+                                cand_session,
+                                llm_pairs,
+                                show_id=correction_show_id,
+                            )
+                    except Exception:
+                        logger.warning(
+                            "asr_homophone: persist_candidates failed for %s; "
+                            "current episode still corrected, candidates skipped",
+                            episode_id,
+                            exc_info=True,
                         )
-                except Exception:
-                    logger.warning(
-                        "asr_homophone: persist_candidates failed for %s; "
-                        "current episode still corrected, candidates skipped",
-                        episode_id,
-                        exc_info=True,
-                    )
 
             # asr-correction-dictionary (EQ2a) — SECOND LAYER: correct known
             # ASR typos from the approved dictionary at the source — before
