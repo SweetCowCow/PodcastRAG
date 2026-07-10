@@ -56,6 +56,30 @@ const MILESTONE_LABELS = {
 
 // Entries — newest milestone first; within each milestone newest date first.
 const RELEASE_LOG = [
+  // ─── v2.3 — Worker reliability + deep-link fixes (7/10) ───
+  {
+    date: '2026-07-10', slug: 'worker-reliability-and-deeplink-fixes', milestone: 'v2.3', tag: 'fix',
+    title: {
+      zh: '舊集數的分享連結修好了',
+      en: 'Share Links to Older Episodes Now Work',
+    },
+    summary: {
+      zh: '之前分享較舊集數的逐字稿連結（超過節目最新 50 集的範圍），打開會默默跳回首頁；現在任何一集的連結都能直接落在該集逐字稿並跳到指定時間點。查詢頁右側的「已轉錄集數」也修正為正確總數。另外我們補強了轉錄系統的底層韌性：任務異常中斷不再無限重試，會在三次後停下並在後台清楚標示原因。',
+      en: 'Sharing a transcript link to an older episode (beyond a show\'s newest 50) used to silently bounce back to the home page; now a link to any episode lands directly on its transcript at the specified timestamp. The "transcribed episodes" counter on the query page now shows the correct total. Under the hood, we also hardened the transcription system: interrupted jobs no longer retry forever — they stop after three attempts with a clear reason shown in the admin panel.',
+    },
+    summaryBullets: {
+      zh: [
+        '任何集數的分享連結都能直接開到該集逐字稿的指定時間點',
+        '查詢頁「已轉錄集數」顯示正確總數',
+        '轉錄任務異常中斷不再無限重試，三次後停下並標示原因',
+      ],
+      en: [
+        'Share links open any episode\'s transcript at the exact timestamp',
+        'The "transcribed episodes" counter now shows the correct total',
+        'Interrupted transcription jobs stop after three attempts with a clear reason',
+      ],
+    },
+  },
   // ─── v2.3 — External transcript bulk import: two new shows (7/10) ───
   {
     date: '2026-07-10', slug: 'external-transcript-bulk-import', milestone: 'v2.3', tag: 'feature',
