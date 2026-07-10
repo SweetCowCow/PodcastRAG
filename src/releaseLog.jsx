@@ -51,10 +51,59 @@ const MILESTONE_LABELS = {
   'v2.0': { zh: 'v2.0 — 查詢體驗統一：一致引用卡 + 引導範例', en: 'v2.0 — Unified Query Experience: Consistent Citations + Guided Examples' },
   'v2.1': { zh: 'v2.1 — 修正聽錯的名字，搜尋找得回來', en: 'v2.1 — Fixing Misheard Names So Search Can Find Them' },
   'v2.2': { zh: 'v2.2 — AI 自動找出聽錯的名字，你只要點核准', en: 'v2.2 — AI Auto-Finds Misheard Names; You Just Approve' },
+  'v2.3': { zh: 'v2.3 — 兩個新節目全集上線', en: 'v2.3 — Two New Shows, Full Back Catalogs' },
 };
 
 // Entries — newest milestone first; within each milestone newest date first.
 const RELEASE_LOG = [
+  // ─── v2.3 — External transcript bulk import: two new shows (7/10) ───
+  {
+    date: '2026-07-10', slug: 'external-transcript-bulk-import', milestone: 'v2.3', tag: 'feature',
+    title: {
+      zh: '兩個新節目全集上線：塞掐 Side Chat（449 集）＋ 台灣通勤第一品牌（562 集）',
+      en: 'Two New Shows, Full Back Catalogs: Side Chat (449 eps) + Commute No.1 Brand (562 eps)',
+    },
+    summary: {
+      zh: '現在你可以直接搜尋、發問這兩個節目的全部歷史集數——超過 970 小時的內容，一句話就能找到「那個來賓說過什麼」。每集都有完整逐字稿與時間軸，搜尋結果可以直接跳到該分鐘、從該處播放。之後兩節目的新集數也會每天自動加入。背後我們用了新的批次匯入方式處理這一千多集：在雲端 GPU 上以 26 倍速轉錄完 972 小時的音訊，成本只有原本作法的五分之一左右，之後要再上大節目也能照這條路走。',
+      en: 'You can now search and ask questions across the complete back catalogs of these two shows — over 970 hours of content, where one sentence is enough to find "what did that guest say". Every episode comes with a full transcript and timeline; search results jump straight to the exact minute and can play from there. New episodes of both shows will be added automatically every day. Behind the scenes, we built a new bulk-import path to handle the thousand-plus episodes: 972 hours of audio transcribed at 26× real-time speed on cloud GPUs, at roughly one-fifth the cost of our previous approach — a path we can reuse for the next big show.',
+    },
+    summaryBullets: {
+      zh: [
+        '塞掐 Side Chat 449 集＋台灣通勤第一品牌 562 集，共 1,011 集全部可搜尋、可發問',
+        '每集完整逐字稿＋時間軸，搜尋結果直接跳到該分鐘、從該處播放',
+        '兩節目新集數每天自動加入；批次匯入路徑可重複用於未來的大節目',
+      ],
+      en: [
+        'Side Chat (449 eps) + Commute No.1 Brand (562 eps): all 1,011 episodes searchable and askable',
+        'Full transcript + timeline per episode; results jump to the exact minute and play from there',
+        'New episodes auto-added daily; the bulk-import path is reusable for the next big show',
+      ],
+    },
+  },
+  // ─── v2.3 — Mobile RWD overhaul (7/7, shipped & verified on-device) ───
+  {
+    date: '2026-07-07', slug: 'mobile-rwd', milestone: 'v2.3', tag: 'ui',
+    title: {
+      zh: '手機版介面全面修整：小螢幕上不再東卡西卡',
+      en: 'Mobile Interface Overhaul: No More Broken Layouts on Small Screens',
+    },
+    summary: {
+      zh: '之前用手機打開網站，會遇到一些惱人的小毛病：首頁節目卡片撐破畫面、按鈕文字折成兩行、對話裡的引用卡被層層邊距擠得很窄、後台表格右邊被切掉看不到。這版針對手機做了一輪總整理：節目卡片乖乖排成一欄、按鈕永遠一行、引用卡變寬更好讀、表格可以左右滑動看完整內容、對話輸入區在有對話時也不再佔掉半個畫面。iPhone Safari 實機逐項驗證通過。',
+      en: 'Opening the site on a phone used to hit a bunch of small annoyances: show cards stretching past the screen, button labels wrapping onto two lines, citation cards in chat squeezed narrow by stacked margins, and admin tables cut off on the right. This release is a full mobile cleanup: show cards stack neatly in one column, buttons stay on one line, citation cards got wider and easier to read, tables scroll sideways to reveal everything, and the chat input dock no longer eats half the screen mid-conversation. Verified item by item on a real iPhone in Safari.',
+    },
+    summaryBullets: {
+      zh: [
+        '首頁節目卡、按鈕、對話引用卡、後台表格在小螢幕上全部正常顯示',
+        '對話進行中，底部輸入區自動收合範例問題，聊天內容看得更多',
+        'iPhone Safari 真機逐項驗證通過',
+      ],
+      en: [
+        'Show cards, buttons, chat citations and admin tables all render correctly on small screens',
+        'During a conversation the input dock collapses the example questions, showing more of the chat',
+        'Verified item by item on a real iPhone in Safari',
+      ],
+    },
+  },
   // ─── v2.2 — Search result memory / cache (6/10) ───
   {
     date: '2026-06-10', slug: 'r4-rag-result-cache', milestone: 'v2.2', tag: 'enhancement',
