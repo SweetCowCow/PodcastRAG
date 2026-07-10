@@ -50,6 +50,12 @@ async def sync_show_episodes(show_id: uuid.UUID, db: AsyncSession) -> dict:
             for field in ("title", "description", "audio_url", "duration_seconds", "published_at"):
                 new_value = getattr(ep, field)
                 if getattr(existing_ep, field) != new_value:
+                    # transcription-pipeline-resilience B1: worker 轉錄從
+                    # audio_storage_key(R2) 下載而非 audio_url——來源檔被
+                    # 作者重傳（EP20 教訓）時必須讓舊物件失效，下次轉錄
+                    # 才會從新 URL 重抓。只有 audio_url 變動才觸發。
+                    if field == "audio_url":
+                        existing_ep.audio_storage_key = None
                     setattr(existing_ep, field, new_value)
                     changed = True
             # R3.3: re-extract guests only when title actually changed. Admin

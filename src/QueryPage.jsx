@@ -1248,7 +1248,9 @@ const EpisodeCard = ({ ep, lang, selected, onClick }) => {
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
             <span style={{ color: TOKEN.textMuted, fontSize: 11 }}>{dateStr}</span>
             <span style={{ color: TOKEN.textMuted, fontSize: 11, display: 'flex', alignItems: 'center', gap: 2 }}><Icon name="clock" size={10} />{durStr}</span>
-            {done ? <Badge variant="success">{t ? '已轉錄' : 'Done'}</Badge> : <Badge variant="muted">{t ? '待轉錄' : 'Pending'}</Badge>}
+            {done ? <Badge variant="success">{t ? '已轉錄' : 'Done'}</Badge>
+              : ep.transcript_status === 'failed' ? <Badge variant="danger">{t ? '轉錄失敗' : 'Failed'}</Badge>
+              : <Badge variant="muted">{t ? '待轉錄' : 'Pending'}</Badge>}
           </div>
           <EpisodeBlurb episode={ep} lang={lang} style={{ marginTop: 6, fontSize: 11, WebkitLineClamp: 2 }} />
         </div>
