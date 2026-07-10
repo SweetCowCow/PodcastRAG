@@ -36,5 +36,5 @@
 
 ## 7. 收尾
 
-- [ ] 7.1 Spec sync 確認 + 文件：case study `docs/case-studies/external-transcript-bulk-import-2026-06.md`（評估歷程、實測 RTF、費用 actual vs 估計、時程 calibration 一行）；GCP VM 刪除 + 費用 actual 紀錄
+- [x] 7.1 Spec sync 確認 + 文件：case study `docs/case-studies/external-transcript-bulk-import-2026-06.md`（評估歷程、實測 RTF、費用 actual vs 估計、時程 calibration 一行）；GCP VM 刪除 + 費用 actual 紀錄
 - [x] 7.2 Release log 草稿（兩新節目上線，使用者視角）給 Jacky review 後寫入

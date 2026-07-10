@@ -1,6 +1,6 @@
 # PodcastRAG 路線圖
 
-> 最後更新：2026-07-03（**EQ11 eval-loop-automation 16/16 完成（待 archive）**：anchor-first 流水線全套落地 + 壹加壹首跑壞題率 15%（基線 75%）+ 34 題 `yi-jia-yi.json` + baseline 全消費。EQ5′ 壹加壹第一批隨之完成、下一批曼報。EQ10 批次：spot 下午大缺貨 remaining 卡 745，Jacky 拍板轉 on-demand（原地 set-scheduling，執行中）。）
+> 最後更新：2026-07-10（**EQ10 ✅20/20 archive**：1011/1011 集零失敗上線、schedule 零重複 enqueue、smoke 全過、GCP 資源五類全清；下游實測 ~$76（D6 後 $0.053/集）。**EQ12 mobile-rwd ✅ archive**（07-07 真機驗證）。Release log v2.3 兩條目上線。**新 parked change `worker-reliability-and-deeplink-fixes`**：EP326 事故挖出 4 個既有 bug（tasks.py permanent-fail NameError 無限重派、dispatcher 錯派 external row、B2 無終止態、deep-link >50 集失效），proposal/design/specs/tasks 齊備待 Jacky 討論定案 → apply。**EQ16 範圍縮為 B1+T2**（B2/B3/B4 已被新 change 接走）。）
 >
 > 舊更新：2026-07-02（**Roadmap/Backlog 重定義 + 佇列重排**：Jacky 拍板新定義 — Roadmap＝確認執行、照序走；Backlog＝存想法、不排序。五個新想法編入（EQ11 eval-loop-automation / EQ12 mobile-rwd / EQ13 english-shows-research / EQ14 user-insight-and-landing / EQ15 loop-engineering-pilot）+ 新增 EQ16 轉錄管線韌性（B1+B2+T2 併一條）+ EQ5 重塑為 EQ5′（改用 EQ11 流水線產 golden set）+ EQ8/EQ9 降 Backlog。**EQ10 進行中 12/19**：兩節目已入 prod（塞掐 449/台通 562）、spot VM 全量轉錄跑批中（RTF 26.9x、ETA ~36h）、費用 gate 過（轉錄 ~$14 + 下游 ~$52 topic 大頭 Jacky 拍板照跑）。）
 >
@@ -19,10 +19,11 @@
 
 | 序 | 項目 | code | change 名（暫名） | 前置 / 卡點 | 說明與驗收 |
 |---|------|------|------------------|------------|---------|
-| **0** 🔵 | 兩大集數節目歷史轉錄匯入 | EQ10 | `external-transcript-bulk-import`（12/19，commit `9a1a93c`） | spot VM 批次轉錄中（ETA ~36h 起 2026-07-02 10:17） | 已完成：共用縫抽取 zero-new-failure、匯入 API+16 測試、GCP 工具組、配額/費用/下游三 gate（轉錄 ~$14 + 下游 ~$52 拍板照跑）、兩節目入 prod（塞掐 449 `e71e4f2b…`/台通 562 `efee016d…`，無 schedule）。剩：4.3 全量驗收 → 試水 5 集 **Jacky 拍板 gate** → 全量匯入 → schedule → smoke → 收尾文件 |
+| **0** ✅ | 兩大集數節目歷史轉錄匯入 | EQ10 | `external-transcript-bulk-import`（**20/20，2026-07-10 archive**） | 無 | **完成**：1011/1011 集 transcript+summary 零失敗、schedule 上線（23:00 UTC daily、對已匯入集零重複 enqueue）、prod smoke 全過（三模式+deep-link+external badge）。實測 RTF 0.038（26.3x）、972h 音訊/36.9 GPU-hr；下游 ~$76（D6 後 $0.053/集）。GCP 資源全清。case study：`docs/case-studies/external-transcript-bulk-import-2026-06.md`。衍生 4 bug → `worker-reliability-and-deeplink-fixes`（parked） |
 | **1** ✅ | Eval 動態流水線（想法3） | EQ11 | `eval-loop-automation`（16/16，2026-07-03 完成，待 archive） | 無 | **完成**：show profiling（quota 矩陣 + show_facts 環節）、anchor-first 產題（gpt-5.1）、預審分級（判官 gemini-2.5-flash-lite + retrieval rank）、review log + reject 回饋圈、promote 溯源晉升、golden-set-builder skill。**壹加壹首跑：壞題率 15%（gate <40%、基線 75%）、34 題入 `yi-jia-yi.json`、baseline 34/34 可消費**。multi-turn 3 題共草待約時間。case study：`docs/case-studies/eval-loop-automation-first-run.md` |
-| **2** | 手機 RWD（想法4） | EQ12 | `mobile-rwd`（暫名） | audit 隨時可跑；修正 change 排 EQ10 後 | 先 mobile emulation 全站 audit 列問題清單 → 再開修正 change。全站 inline styles 逐元件處理 |
-| **3** | 轉錄管線韌性 | EQ16 | `transcription-pipeline-resilience`（暫名） | **EQ10 archive 後**（同區域避免歸因混亂） | B1 RSS re-sync 偵測 audio_url 變動失效 storage key + B2 壞檔無限重試終止狀態 + T2 轉錄失敗回報使用者，三條併一次（2026-07-01 EP20 教訓） |
+| **2** ✅ | 手機 RWD（想法4） | EQ12 | `mobile-rwd`（**12/12，2026-07-10 archive**） | 無 | **完成**：P0 節目卡爆寬 / P1 Btn nowrap + citation 卡減層 / P2 dock 收合 + admin 表格橫捲全修；07-07 iPhone Safari 真機逐項驗證通過；specs 同步（added 5/modified 1）；release log v2.3 條目上線 |
+| **2.5** ⏸ | worker 可靠性 + deep-link 修復 | — | `worker-reliability-and-deeplink-fixes`（**parked，0/14，artifacts 齊備**） | 等 Jacky 討論 proposal 定案 → `/spectra-apply` | EP326 事故 4 bug：D1 permanent-fail NameError 收尾修（tasks.py）、D2 failure_count 連續 3 次終止（吃掉舊 B2/B3）、D3 dispatcher 對 external: row 短路（B4）、D4/D5 單集 endpoint + deep-link 改打 + 計數修正 |
+| **3** | 轉錄管線韌性（範圍縮減） | EQ16 | `transcription-pipeline-resilience`（暫名） | EQ10 ✅ 已解鎖 | **B2/B3/B4 已移轉給 `worker-reliability-and-deeplink-fixes`**；剩 B1 RSS re-sync 偵測 audio_url 變動失效 storage key + T2 轉錄失敗回報使用者（2026-07-01 EP20 教訓） |
 | **4** | golden set 流水線後續批次（EQ5 重塑） | EQ5′ | `golden-set-via-eval-loop`（暫名） | EQ11 ✅（流水線已驗證可行） | **壹加壹第一批已隨 EQ11 首跑完成（34 題）**；下一批 = 曼報（invoke golden-set-builder skill 即可）；跑順後套塞掐+台通（EQ10 轉錄完才有料） |
 | **5** | 英文節目資訊整合研究（想法2） | EQ13 | `english-shows-research`（暫名） | research 可隨時平行跑 | 版權 deep-research（轉錄/翻譯/摘要衍生著作風險、產業慣例）+ 產品定位 discuss；可行才進 dogfood pilot（技術全復用 EQ10 工具組，痛點案例：Lenny's Podcast — 太長/全英文/主題過濾） |
 | **6** | 用戶洞察 + Landing 改版（想法1） | EQ14 | `user-insight-and-landing`（暫名） | 訪談要 Jacky 時間；準備工作隨時 | 問題：家人朋友 get 不到產品的點與用法。順序：訪談腳本 + events 數據分析（Claude 備）→ Jacky 執行 5 訪談 → 依洞察開 landing 價值主張改版 change（5/23 已改架構層，這次是傳達層） |
@@ -78,7 +79,7 @@
 - R5 地端 embedding
 
 **ASR / 詞典**
-- **逐字稿轉錄品質加強流程**（2026-07-06 Jacky 提出，試水 5 集人工抽看時觀察）：external 匯入的逐字稿品質還需加強 — 有錯字**和錯誤理解**（語意誤聽，不只專名同音）應該要修正。試水 gate 判「不影響理解就過」先放行上線，但後面要想怎麼**補上系統性的修正流程**（不只 T1 已知錯字清單）。設計時機：EQ10 全量匯入完成後。與 EQ8（詞典整合）、EQ9（通用同音修正）相鄰但範圍更廣 — 含批次回掃已入庫逐字稿的 pipeline
+- **逐字稿轉錄品質加強流程**（2026-07-06 Jacky 提出，試水 5 集人工抽看時觀察）：external 匯入的逐字稿品質還需加強 — 有錯字**和錯誤理解**（語意誤聽，不只專名同音）應該要修正。試水 gate 判「不影響理解就過」先放行上線，但後面要想怎麼**補上系統性的修正流程**（不只 T1 已知錯字清單）。設計時機：EQ10 全量匯入完成後。與 EQ8（詞典整合）、EQ9（通用同音修正）相鄰但範圍更廣 — 含批次回掃已入庫逐字稿的 pipeline。**⚠️ 2026-07-07 D6 起,external 匯入路徑已停用 LLM 同音字偵測（asr_homophone，成本 73%），所以匯入進來的 1006 集完全沒跑同音字修正 —— 這條回掃 pipeline 必須涵蓋「對已匯入集補做同音字偵測」（用批次策略：抽樣/選高價值集/更省模型，而非逐集 gemini-3.5-flash $0.15）**
 - **EQ8** 詞典系統整合（F4）— 2026-07-02 從主序降 Backlog：等詞條累積更多才有整合價值。核准 ASR 校正自動進分詞詞典 + 兩套詞典職責釐清 + 後台 UI 重設計（詳細痛點：分詞詞典收了「杜宗祐」但索引仍切「杜宗+祐」落 T3、`POST /admin/tokenizer/reload` 卡 CSRF 403）
 - **EQ9** 一般同音異義字修正（F7）— 2026-07-02 從主序降 Backlog：風險高、無急迫性。非專名通用同音（在來→再來），要做先 /spectra-discuss 評估防誤改機制
 
@@ -97,7 +98,7 @@
 2. **開工**：從 Roadmap 最上方未完成項取一條 → `/spectra-propose`（或小修直接做）→ 狀態改 🔵。
 3. **完成**：`/spectra-archive` → 狀態改 ✅ + 記 archive 路徑/commit → 問是否補 release log（feedback_release_log_maintenance）。
 4. **插隊 / 重排 / Backlog 升級**：只有 Jacky 能改；新議題預設進 Backlog，除非他指定插入 Roadmap 位置。
-5. **依賴鎖**：前置未完成不得開工。當前鎖：EQ16 鎖 EQ10 archive；EQ5′ 鎖 EQ11 討論定案；EQ4b/EQ3d 鎖 EQ5′。
+5. **依賴鎖**：前置未完成不得開工。當前鎖：EQ5′ 鎖 EQ11 討論定案；EQ4b/EQ3d 鎖 EQ5′。（EQ16 已因 EQ10 ✅ 解鎖，但建議先做 `worker-reliability-and-deeplink-fixes` 再開 EQ16 剩餘範圍）
 6. **平行例外**：EQ11 discuss / EQ12 audit / EQ13 research / EQ14 準備工作可在等待期插著做（不碰 prod、互不衝突）。
 
 ---
