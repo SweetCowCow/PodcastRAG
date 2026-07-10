@@ -37,7 +37,8 @@ BATCH_SIZE = 100
 POLL_INTERVAL = 60  # 秒
 IMPORT_BACKLOG_GATE = 10   # 批間 import backlog 須低於此值
 SUMMARY_BACKLOG_GATE = 150  # 批間 summary backlog 須低於此值
-FLOOR_USD = 61.0   # AI Hub 餘額低於此值急停（baseline 86.25 − 25 緩衝）
+FLOOR_USD = 8.0    # D6 後單集估 ~$0.028（flash-lite summary+topic，待首批實測）；
+                   # 2026-07-09 全量剩 691 集估 ~$19.3、餘額 $37.49，floor 8 當暴衝安全網
 MAX_FAILED = 30
 STALL_POLLS = 30   # 連續 N 次輪詢 backlog 無下降 → 判定卡住停下
 

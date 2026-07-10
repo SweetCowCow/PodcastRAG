@@ -646,6 +646,9 @@ const QueueTab = ({ lang }) => {
               {status}
             </Badge>
             {ignored && <Badge variant="muted">{t ? '已忽略' : 'Ignored'}</Badge>}
+            {row.whisper_model && row.whisper_model.startsWith('external:') && (
+              <Badge variant="muted">{row.whisper_model}</Badge>
+            )}
             {status === 'completed' && <SummaryBadge status={row.ai_summary_status} error={row.ai_summary_error} lang={lang} />}
             {status === 'completed' && row.ai_summary_status === 'failed' && (
               <Btn size="sm" variant="ghost" icon="refresh" onClick={() => regenerateSummary(row)}>
