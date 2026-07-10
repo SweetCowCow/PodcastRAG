@@ -39,7 +39,11 @@ pytestmark = pytest.mark.skipif(
 async def make_running_row():
     created: list[tuple[uuid.UUID, uuid.UUID, uuid.UUID]] = []
 
-    async def _make(celery_task_id: str | None) -> str:
+    async def _make(
+        celery_task_id: str | None,
+        failure_count: int = 0,
+        status: QueueStatus = QueueStatus.running,
+    ) -> str:
         async with AsyncSessionFactory() as db:
             show = Show(
                 title="Lifecycle Test",
@@ -59,10 +63,11 @@ async def make_running_row():
             row = TranscriptionQueue(
                 episode_id=episode.id,
                 show_id=show.id,
-                status=QueueStatus.running,
+                status=status,
                 position=999700 + len(created),
                 whisper_model="whisper-1",
                 celery_task_id=celery_task_id,
+                failure_count=failure_count,
             )
             db.add(row)
             await db.commit()
@@ -115,3 +120,71 @@ async def test_inspect_failure_conservative(make_running_row):
     await _revert_orphan_rows_async(set(), False)
     assert await _fetch_status(null_row_id) == QueueStatus.pending
     assert await _fetch_status(unknown_row_id) == QueueStatus.running
+
+
+# worker-reliability D2: consecutive lost-run counter terminates the loop.
+# Spec: transcription-queue → Requirement "Consecutive lost-run counter
+# terminates the revive loop".
+
+
+async def _fetch_row(row_id: str) -> TranscriptionQueue:
+    async with AsyncSessionFactory() as db:
+        return await db.get(TranscriptionQueue, uuid.UUID(row_id))
+
+
+@pytest.mark.asyncio
+async def test_first_lost_run_reverts_to_pending_and_counts(make_running_row):
+    row_id = await make_running_row(celery_task_id="ghost-task")
+    await _revert_orphan_rows_async({"live-task"}, True)
+    row = await _fetch_row(row_id)
+    assert row.status == QueueStatus.pending
+    assert row.failure_count == 1
+    assert row.error_message is None
+
+
+@pytest.mark.asyncio
+async def test_second_lost_run_still_pending(make_running_row):
+    row_id = await make_running_row(celery_task_id="ghost-task", failure_count=1)
+    await _revert_orphan_rows_async({"live-task"}, True)
+    row = await _fetch_row(row_id)
+    assert row.status == QueueStatus.pending
+    assert row.failure_count == 2
+
+
+@pytest.mark.asyncio
+async def test_third_lost_run_terminates_failed(make_running_row):
+    row_id = await make_running_row(celery_task_id="ghost-task", failure_count=2)
+    await _revert_orphan_rows_async({"live-task"}, True)
+    row = await _fetch_row(row_id)
+    assert row.status == QueueStatus.failed
+    assert row.failure_count == 3
+    assert row.error_message is not None
+    assert "停止自動重試" in row.error_message
+    assert row.finished_at is not None
+
+
+@pytest.mark.asyncio
+async def test_manual_retry_resets_failure_count(make_running_row):
+    from app.workers.dispatch import enqueue_transcription
+
+    row_id = await make_running_row(
+        celery_task_id=None, failure_count=3, status=QueueStatus.failed
+    )
+    row = await _fetch_row(row_id)
+    await enqueue_transcription(row.episode_id)
+    row = await _fetch_row(row_id)
+    assert row.status == QueueStatus.pending
+    assert row.failure_count == 0
+
+
+@pytest.mark.asyncio
+async def test_completed_resets_failure_count(make_running_row):
+    from app.models.transcription_queue import QueueStatus as QS
+    from app.workers.tasks import _mark_queue_finished
+
+    row_id = await make_running_row(celery_task_id="live-task", failure_count=2)
+    row = await _fetch_row(row_id)
+    await _mark_queue_finished(row.episode_id, QS.completed)
+    row = await _fetch_row(row_id)
+    assert row.status == QueueStatus.completed
+    assert row.failure_count == 0

@@ -99,6 +99,9 @@ async def _enqueue_in(
     existing.finished_at = None
     existing.error_message = None
     existing.celery_task_id = None
+    # worker-reliability D2: 手動 retry / 重新 enqueue = 人已介入，
+    # 連續遺失計數歸零重新起算。
+    existing.failure_count = 0
     if owns_commit:
         await session.commit()
     else:

@@ -504,9 +504,9 @@ const QueryPage = ({ lang, show, onBack, onOpenEpisode, queryMode, user, onUserC
   const showName = show.title;
   const transcribedCount = show.transcribed_count || 0;
   const showColor = deriveColor(show.id);
-  const epCount = episodes
-    ? episodes.filter(e => e.transcript_status === 'completed').length
-    : transcribedCount;
+  // worker-reliability D5: 面板列表是分頁子集（limit 200），本地 filter
+  // 計數在大節目上必然低估（曾顯示 197/565）；分子一律用後端統計。
+  const epCount = transcribedCount;
 
   // R1.1: fire-and-forget citation_click event. sendBeacon if available,
   // else fetch keepalive. Navigation always proceeds regardless.

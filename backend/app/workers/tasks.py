@@ -299,6 +299,9 @@ async def _mark_queue_finished(
             row.status = status
             row.finished_at = datetime.now(timezone.utc)
             row.error_message = error[:ERROR_MESSAGE_MAX_LEN] if error else None
+            if status == QueueStatus.completed:
+                # worker-reliability D2: 成功完成 → 連續遺失計數歸零。
+                row.failure_count = 0
             if model_label is not None:
                 row.whisper_model = model_label
             # celery-routing-and-dispatcher-fix: terminal transition 也清掉
@@ -656,13 +659,9 @@ async def _run(episode_id: str) -> dict:
                 setattr(exc, "_failure_logged", True)
             except Exception:
                 pass
-            record_task_failure(
-                task_name="app.workers.tasks.transcribe_episode",
-                args=(episode_id,),
-                exc=exc,
-                provider_id="openai",
-                retry_count=int(self.request.retries or 0),
-            )
+            # worker-reliability D1：狀態收尾先行、失敗記錄後行且 fail-open。
+            # 記錄層任何例外都不得阻斷 transcript/queue 的 failed 標記，
+            # 否則 row 卡 running → orphan-revert → 無限重派。
             message = str(exc)[:ERROR_MESSAGE_MAX_LEN]
             async with Session() as session:
                 await session.execute(
@@ -676,6 +675,21 @@ async def _run(episode_id: str) -> dict:
                     t.error_message = message
                 await session.commit()
             await _mark_queue_finished(ep_uuid, QueueStatus.failed, message)
+            try:
+                # module-level coroutine 沒有 Celery task context，
+                # retry_count 一律 0（真計數屬 on_failure hook 職責）。
+                record_task_failure(
+                    task_name="app.workers.tasks.transcribe_episode",
+                    args=(episode_id,),
+                    exc=exc,
+                    provider_id="openai",
+                    retry_count=0,
+                )
+            except Exception:
+                logger.exception(
+                    "record_task_failure raised — state already finalized, "
+                    "episode=%s", episode_id,
+                )
             return {
                 "status": "failed",
                 "episode_id": episode_id,

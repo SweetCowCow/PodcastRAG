@@ -81,6 +81,26 @@ async def _try_pop_one(session) -> str | None:
     if row is None:
         return None
 
+    # worker-reliability D3: 外部匯入集（whisper_model 為 external: 前綴）
+    # 的來源資料在站外，系統無法重跑 ASR——這種 row 會落回 pending 只有
+    # 一種情境：import task 遺失後被 orphan-revert 復活。派 ASR 是錯的
+    # （下載音檔跑 whisper、蓋掉外部逐字稿），直接標 failed 等人重新匯入。
+    if (row.whisper_model or "").startswith("external:"):
+        row.status = QueueStatus.failed
+        row.finished_at = datetime.now(timezone.utc)
+        row.error_message = (
+            "外部匯入集，系統無法重跑 ASR；請重新執行 transcript-import"
+        )
+        row.dispatched_at = None
+        await session.commit()
+        logger.warning(
+            "dispatcher: external-import row %s failed instead of dispatched "
+            "(episode %s needs re-import)",
+            row.id,
+            row.episode_id,
+        )
+        return None
+
     # 只 set dispatcher 自己的 memo pad，不動 status/started_at/celery_task_id。
     row.dispatched_at = datetime.now(timezone.utc)
     await session.commit()

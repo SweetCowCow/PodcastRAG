@@ -98,12 +98,14 @@ const App = () => {
         const shows = await showsResp.json();
         const show = shows.find(s => s.id === showId);
         if (!show) throw new Error('show not found');
-        // Fetch episodes for that show
-        const epsResp = await fetch(`${API_BASE}/shows/${showId}/episodes`);
-        if (!epsResp.ok) throw new Error(`episodes fetch ${epsResp.status}`);
-        const eps = await epsResp.json();
-        const ep = eps.find(e => e.id === episodeId);
-        if (!ep) throw new Error('episode not found');
+        // worker-reliability D4: resolve the episode via the single-episode
+        // endpoint — the paginated list (default limit 50) can never resolve
+        // episodes outside the newest page, which silently broke deep-links
+        // to older episodes.
+        const epResp = await fetch(`${API_BASE}/episodes/${episodeId}`);
+        if (!epResp.ok) throw new Error(`episode fetch ${epResp.status}`);
+        const ep = await epResp.json();
+        if (ep.show_id !== showId) throw new Error('episode not in show');
         setSelectedShow(show);
         setSelectedEpisode(ep);
         setHighlightTime(tSec);

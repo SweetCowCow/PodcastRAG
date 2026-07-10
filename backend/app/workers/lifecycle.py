@@ -33,6 +33,10 @@ INSPECT_TIMEOUT_SECONDS = 5
 
 ACTIVE_ROWS_KEY = "transcribe:worker:active_rows"
 
+# worker-reliability D2: 連續「執行遺失 → orphan-revert」達此門檻即標
+# terminal failed（容忍兩次偶發容器重啟，第三次視為系統性問題）。
+MAX_CONSECUTIVE_FAILURES = 3
+
 
 def register_active_row(row_id: str) -> None:
     """Mark a queue row as actively processed by this worker.
@@ -126,10 +130,27 @@ async def _revert_orphan_rows_async(
                         and row.celery_task_id in active_task_ids
                     ):
                         continue
-                row.status = QueueStatus.pending
+                # worker-reliability D2: 每復活一次計 1 次「遺失的執行」，
+                # 滿門檻改標 terminal failed —— 沒有這個上限，task 反覆
+                # 遺失（import task 掛掉、worker 重啟丟 task）會無限重派。
+                row.failure_count = (row.failure_count or 0) + 1
+                if row.failure_count >= MAX_CONSECUTIVE_FAILURES:
+                    row.status = QueueStatus.failed
+                    row.finished_at = datetime.now(timezone.utc)
+                    row.error_message = (
+                        f"連續 {MAX_CONSECUTIVE_FAILURES} 次未完成"
+                        "（任務遺失），已停止自動重試；可從後台手動重試"
+                    )
+                    logger.warning(
+                        "lifecycle: queue row %s terminated after %d lost runs",
+                        row.id,
+                        row.failure_count,
+                    )
+                else:
+                    row.status = QueueStatus.pending
+                    row.error_message = None
                 row.started_at = None
                 row.celery_task_id = None
-                row.error_message = None
                 row.dispatched_at = None
                 try:
                     release_global_slot(str(row.id))

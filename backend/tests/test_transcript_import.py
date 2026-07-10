@@ -474,6 +474,52 @@ async def test_import_revives_failed_queue_row(seeded_episode, monkeypatch):
     assert queue_row.error_message is None
 
 
+async def test_dispatcher_failed_external_row_reimports_ok(
+    seeded_episode, monkeypatch
+):
+    """worker-reliability D3 integration: dispatcher short-circuits a revived
+    external: row to failed, and a subsequent transcript-import revives it to
+    completed (the designed recovery path for lost import tasks)."""
+    from unittest.mock import patch as _patch
+
+    from app.models.transcription_queue import QueueStatus, TranscriptionQueue
+    from app.workers.dispatcher import _try_pop_one
+
+    async with AsyncSessionFactory() as db:
+        row = TranscriptionQueue(
+            episode_id=seeded_episode["ep_uuid"],
+            show_id=seeded_episode["show_id"],
+            status=QueueStatus.pending,
+            position=1,
+            whisper_model=EXTERNAL_LABEL,
+        )
+        db.add(row)
+        await db.commit()
+        original_row_id = row.id
+
+    with _patch(
+        "app.workers.dispatcher.get_max_concurrent", return_value=10
+    ):
+        async with AsyncSessionFactory() as db:
+            popped = await _try_pop_one(db)
+    assert popped is None
+
+    async with AsyncSessionFactory() as db:
+        failed_row = await db.get(TranscriptionQueue, original_row_id)
+        assert failed_row.status == QueueStatus.failed
+
+    _patch_import_externals(monkeypatch)
+    result, _, _ = await _run_import_task(
+        seeded_episode["episode_id"], _payload()
+    )
+    assert result["status"] == "completed"
+
+    _, _, _, queue_row = await _load_artifacts(seeded_episode["ep_uuid"])
+    assert queue_row.id == original_row_id
+    assert queue_row.status == QueueStatus.completed
+    assert queue_row.error_message is None
+
+
 async def test_reimport_replaces_artifacts(seeded_episode, monkeypatch):
     _patch_import_externals(monkeypatch)
     result, _, _ = await _run_import_task(

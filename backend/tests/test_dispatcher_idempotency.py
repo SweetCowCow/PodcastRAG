@@ -90,6 +90,7 @@ async def make_row():
         ignored: bool = False,
         celery_task_id: str | None = None,
         position: int | None = None,
+        whisper_model: str = "whisper-1",
     ) -> tuple[str, str]:
         async with AsyncSessionFactory() as db:
             show = Show(
@@ -112,7 +113,7 @@ async def make_row():
                 show_id=show.id,
                 status=status,
                 position=position if position is not None else 990000 + len(created),
-                whisper_model="whisper-1",
+                whisper_model=whisper_model,
                 celery_task_id=celery_task_id,
                 started_at=started_at,
                 dispatched_at=dispatched_at,
@@ -242,6 +243,47 @@ async def test_dispatcher_does_not_pre_mark_row_as_running(make_row):
     assert row.status == QueueStatus.pending
     assert row.started_at is None
     assert row.celery_task_id is None
+    assert row.dispatched_at is not None
+
+
+# ─── worker-reliability D3: dispatcher never dispatches ASR for
+# externally imported rows (spec: transcription-queue → Requirement
+# "Dispatcher never dispatches ASR for externally imported rows") ───
+
+
+@pytest.mark.asyncio
+async def test_external_row_failed_not_dispatched(make_row):
+    row_id, ep_id = await make_row(
+        status=QueueStatus.pending,
+        position=90,
+        whisper_model="external:faster-whisper-large-v3-turbo",
+    )
+
+    with patch("app.workers.dispatcher.get_max_concurrent", return_value=10):
+        async with AsyncSessionFactory() as db:
+            popped = await _try_pop_one(db)
+
+    assert popped is None  # 不派 task
+    row = await _get(row_id)
+    assert row.status == QueueStatus.failed
+    assert "重新執行 transcript-import" in (row.error_message or "")
+    assert row.dispatched_at is None
+    assert row.finished_at is not None
+
+
+@pytest.mark.asyncio
+async def test_normal_asr_row_still_dispatched(make_row):
+    row_id, ep_id = await make_row(
+        status=QueueStatus.pending, position=91, whisper_model="large-v3"
+    )
+
+    with patch("app.workers.dispatcher.get_max_concurrent", return_value=10):
+        async with AsyncSessionFactory() as db:
+            popped = await _try_pop_one(db)
+
+    assert popped == ep_id
+    row = await _get(row_id)
+    assert row.status == QueueStatus.pending
     assert row.dispatched_at is not None
 
 

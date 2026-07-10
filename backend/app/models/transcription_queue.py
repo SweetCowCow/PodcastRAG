@@ -61,3 +61,8 @@ class TranscriptionQueue(Base):
     dispatched_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    # worker-reliability D2: orphan-revert 每復活一次 +1，滿門檻標 terminal
+    # failed；手動 retry 與成功完成歸零。
+    failure_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
