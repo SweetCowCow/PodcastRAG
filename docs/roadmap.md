@@ -88,7 +88,7 @@
 - 新節目 onboarding 收尾包（塞掐/台通 golden set + 新 ASR 詞條）— EQ5′ 流水線跑順後自然消化
 
 **基礎設施 / 安全**
-- **worker-reliability 一週觀察（至 2026-07-17，2026-07-10 上線 `92ed3a6`）**：查 `transcription_queue.failure_count >= 1` 的 row 分佈——驗 D2 門檻 3 是否誤殺慢任務（長集處理超過 stale 門檻被 revert 也計 1 次）；EP326 類無限重派事故應歸零；有誤殺就調門檻常數 `MAX_CONSECUTIVE_FAILURES`
+- ~~worker-reliability 一週觀察（至 2026-07-17）~~ ✅ **2026-07-23 收帳通過**：觀察期內 64 筆任務完成（最近 07-22），全表 1602 筆 `failure_count` 全為 0、status 全 `completed`——無誤殺、EP326 型無限重派歸零，`MAX_CONSECUTIVE_FAILURES=3` 維持不動
 - `enable_agentic_chat` kill-switch 過期 cleanup（30 天觀察期 6/21 已過，可 propose 刪 rule-based 舊碼）
 - cookie SameSite=Lax 強化 + **Zeabur Gateway 評估**綁一起做（Gateway 把 `app.podcastrag.app/api/*` 路由 backend → 同源解 SameSite + 去 CORS；docs: zeabur.com/docs/zh-TW/deploy/networking/gateway；限制：不支援 IPv6 IP 控制）
 - C1 對話紀錄 → C2 推薦 → C3 權限分級（成本計價線）
