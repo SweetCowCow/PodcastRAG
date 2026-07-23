@@ -645,7 +645,31 @@ async def _run(episode_id: str) -> dict:
             # external-transcript-bulk-import D1: post-ASR persistence
             # lives in the shared seam — identical behavior for both the
             # provider path (here) and the external import path.
-            return await _persist_transcription_result(episode_id, result)
+            outcome = await _persist_transcription_result(episode_id, result)
+
+            # 轉錄完成後音檔即失去用途（播放走 RSS audio_url、下游任務只讀
+            # transcript 文字）——刪 R2 物件 + 清 key，避免儲存無限堆積。
+            # fail-open：清理失敗只記 log，不得動搖已完成的轉錄結果；key
+            # 比對防 sync 已換 key（audio_url 變動）時誤清新 key。
+            if outcome.get("status") == "completed" and audio_storage_key:
+                try:
+                    storage.delete_object(audio_storage_key)
+                    async with Session() as session:
+                        ep = await session.get(Episode, ep_uuid)
+                        if (
+                            ep is not None
+                            and ep.audio_storage_key == audio_storage_key
+                        ):
+                            ep.audio_storage_key = None
+                            await session.commit()
+                except Exception:
+                    logger.exception(
+                        "transcribe_episode: R2 audio cleanup failed "
+                        "episode=%s key=%s (轉錄結果不受影響)",
+                        episode_id,
+                        audio_storage_key,
+                    )
+            return outcome
 
         except PERMANENT_ERRORS as exc:
             logger.exception(

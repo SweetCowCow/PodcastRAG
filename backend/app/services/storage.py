@@ -106,6 +106,14 @@ def download_to_temp(storage_key: str) -> str:
     return tmp_path
 
 
+def delete_object(storage_key: str) -> None:
+    _require_r2_config()
+    try:
+        _client().delete_object(Bucket=settings.r2_bucket, Key=storage_key)
+    except ClientError as exc:
+        raise StorageError(f"R2 刪除失敗 (key={storage_key})：{exc}") from exc
+
+
 def get_presigned_url(storage_key: str, expires_in: int = 3600) -> str:
     _require_r2_config()
     try:
