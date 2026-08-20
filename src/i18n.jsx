@@ -17,6 +17,10 @@ const ERROR_MESSAGES = {
     zh: (p) => `無法連線至 ${p || 'LLM'}，請稍後重試`,
     en: (p) => `Cannot reach ${p || 'LLM'} — please retry later`,
   },
+  llm_model_unavailable: {
+    zh: (p) => `${p || 'LLM'} 已不提供目前設定的模型，請至後台更換模型`,
+    en: (p) => `${p || 'LLM'} no longer serves the configured model — change it in admin`,
+  },
   llm_not_configured: {
     zh: () => 'LLM 尚未在後台設定',
     en: () => 'LLM is not configured in admin',

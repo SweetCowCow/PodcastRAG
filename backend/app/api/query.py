@@ -79,6 +79,77 @@ def _is_insufficient_quota(exc: openai.RateLimitError) -> bool:
     return False
 
 
+# Substrings that identify a "this model does not exist / is not enabled on your
+# key" reply. LiteLLM (what AI Hub runs) is not consistent about status code or
+# error code here, so we match on the message body as well as the class.
+_MODEL_UNAVAILABLE_MARKERS = (
+    "model_not_found",
+    "does not exist",
+    "not found",
+    "invalid model",
+    "unknown model",
+    "unsupported model",
+    "no such model",
+    "not a valid model",
+    "llm provider not provided",
+)
+
+
+def _error_text_blob(exc: Exception) -> str:
+    """Flatten an OpenAI SDK exception (body + str) into one lowercase string."""
+    parts: list[str] = []
+    body = getattr(exc, "body", None)
+    if body is not None:
+        try:
+            parts.append(
+                _stdlib_json.dumps(body, ensure_ascii=False)
+                if isinstance(body, dict)
+                else str(body)
+            )
+        except Exception:  # body may hold non-serialisable objects
+            parts.append(str(body))
+    parts.append(str(exc))
+    return " ".join(parts).lower()
+
+
+def _is_model_unavailable(exc: Exception) -> bool:
+    """True when the provider answered but rejected the configured model name.
+
+    Prod 2026-08: `answer` was pinned to `gpt-5.1`, which AI Hub stopped
+    serving after 2026-07-22. The SDK raised NotFoundError, which had no branch
+    in `_raise_openai_http_error`, so it fell through to the bare `raise` and
+    surfaced as a generic 500 "伺服器內部錯誤" — the model name never reached
+    the operator. Chat stayed dead for four weeks because the error said
+    nothing. Keyword search was unaffected (pure Postgres, no LLM call).
+    """
+    if isinstance(exc, openai.NotFoundError):
+        return True
+    if isinstance(exc, openai.BadRequestError):
+        blob = _error_text_blob(exc)
+        # A context-window overflow is also a 400 but is a completely different
+        # operational problem; the agent layer handles it and must not be
+        # relabelled as a config error if it ever reaches here.
+        if "contextwindowexceedederror" in blob or "context_length" in blob:
+            return False
+        return any(marker in blob for marker in _MODEL_UNAVAILABLE_MARKERS)
+    return False
+
+
+# Every call site that routes through `_raise_openai_http_error` MUST catch this
+# tuple, not a hand-rolled subset. `APIStatusError` is the parent of every
+# HTTP-status error the SDK raises (400 BadRequest, 401 Authentication,
+# 404 NotFound, 429 RateLimit, 5xx InternalServer), so widening to it is what
+# lets a retired model reach the handler at all.
+#
+# Widening is safe: `_raise_openai_http_error` re-raises anything it does not
+# recognise, so previously-uncaught exceptions still propagate identically.
+_LLM_CLIENT_ERRORS = (
+    openai.APIStatusError,
+    openai.APIConnectionError,
+    openai.APITimeoutError,
+)
+
+
 def _raise_openai_http_error(exc: Exception, provider_label: str) -> None:
     """Convert an OpenAI client exception into an HTTPException with ErrorResponse detail."""
     if isinstance(exc, openai.RateLimitError):
@@ -113,6 +184,35 @@ def _raise_openai_http_error(exc: Exception, provider_label: str) -> None:
                 detail=str(exc) or "LLM unavailable",
             ).model_dump(),
         ) from exc
+    if _is_model_unavailable(exc):
+        # 502: the caller did nothing wrong and a retry will not help — the
+        # step's configured model has to be changed in admin.
+        logger.error(
+            "LLM model rejected by %s — check the ai_steps model setting: %s",
+            provider_label,
+            exc,
+        )
+        raise HTTPException(
+            status_code=502,
+            detail=ErrorResponse(
+                error_code=ErrorCode.LLM_MODEL_UNAVAILABLE,
+                provider=provider_label,
+                detail=str(exc) or "LLM model unavailable",
+            ).model_dump(),
+        ) from exc
+    # Provider-side 5xx: reached it, but it failed on its own. Retryable, so it
+    # maps to the same 503 as a connection failure.
+    if isinstance(exc, openai.APIStatusError):
+        status_code = getattr(exc, "status_code", None)
+        if isinstance(status_code, int) and 500 <= status_code < 600:
+            raise HTTPException(
+                status_code=503,
+                detail=ErrorResponse(
+                    error_code=ErrorCode.LLM_UNAVAILABLE,
+                    provider=provider_label,
+                    detail=str(exc) or "LLM unavailable",
+                ).model_dump(),
+            ) from exc
     raise exc
 
 
@@ -180,12 +280,7 @@ async def public_search_show(
         query_embedding = await asyncio.to_thread(
             embed_texts, [payload.question], embedding_cfg
         )
-    except (
-        openai.RateLimitError,
-        openai.AuthenticationError,
-        openai.APIConnectionError,
-        openai.APITimeoutError,
-    ) as exc:
+    except _LLM_CLIENT_ERRORS as exc:
         _raise_openai_http_error(exc, "OpenAI")
 
     # hyde-retrieval-landing: routing always uses the original-question
@@ -450,12 +545,7 @@ async def query_show(
             query_embedding = await asyncio.to_thread(
                 embed_texts, [payload.question], embedding_cfg
             )
-        except (
-            openai.RateLimitError,
-            openai.AuthenticationError,
-            openai.APIConnectionError,
-            openai.APITimeoutError,
-        ) as exc:
+        except _LLM_CLIENT_ERRORS as exc:
             _raise_openai_http_error(exc, "OpenAI")
         base_vec = query_embedding[0]
         routed_eps = (
@@ -485,7 +575,22 @@ async def query_show(
     # agentic loop instead of the rule-based pipeline. search-mode is unaffected.
     if settings.enable_agentic_chat:
         session_id = payload.session_id or uuid.uuid4()
-        agent_result = await run_agent(payload.question, session_id, show_id, db)
+        # The agent owns its own LLM calls, so its provider failures surfaced
+        # here completely unmapped until 2026-08 — every one of them became a
+        # bare 500. This is the live prod path (enable_agentic_chat defaults
+        # True), so it needs the same mapping as the legacy pipeline below.
+        try:
+            agent_result = await run_agent(payload.question, session_id, show_id, db)
+        except _LLM_CLIENT_ERRORS as exc:
+            # Resolving the label is best-effort: it must never mask the real
+            # provider error, so any failure here falls back to a generic label.
+            try:
+                provider_label = infer_provider_label(
+                    (await get_step_config(db, "answer")).base_url
+                )
+            except Exception:  # noqa: BLE001 — label lookup is cosmetic
+                provider_label = "LLM"
+            _raise_openai_http_error(exc, provider_label)
         return _agent_result_to_response(
             agent_result, quota_remaining, include_trace=include_trace
         )
@@ -515,12 +620,7 @@ async def query_show(
                 history,
                 payload.question,
             )
-        except (
-            openai.RateLimitError,
-            openai.AuthenticationError,
-            openai.APIConnectionError,
-            openai.APITimeoutError,
-        ) as exc:
+        except _LLM_CLIENT_ERRORS as exc:
             _raise_openai_http_error(exc, infer_provider_label(rewrite_cfg.base_url))
     else:
         rewritten = payload.question
@@ -529,12 +629,7 @@ async def query_show(
         query_embedding = await asyncio.to_thread(
             embed_texts, [rewritten], embedding_cfg
         )
-    except (
-        openai.RateLimitError,
-        openai.AuthenticationError,
-        openai.APIConnectionError,
-        openai.APITimeoutError,
-    ) as exc:
+    except _LLM_CLIENT_ERRORS as exc:
         _raise_openai_http_error(exc, "OpenAI")
 
     # R3.3 Phase 9: extract entities from the rewritten question for
@@ -599,12 +694,7 @@ async def query_show(
             _resolve_lang(lang),
             enumeration_block,
         )
-    except (
-        openai.RateLimitError,
-        openai.AuthenticationError,
-        openai.APIConnectionError,
-        openai.APITimeoutError,
-    ) as exc:
+    except _LLM_CLIENT_ERRORS as exc:
         _raise_openai_http_error(exc, infer_provider_label(answer_cfg.base_url))
 
     if used_ids:

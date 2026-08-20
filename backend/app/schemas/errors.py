@@ -8,6 +8,10 @@ class ErrorCode:
     LLM_RATE_LIMITED = "llm_rate_limited"
     LLM_AUTH_FAILED = "llm_auth_failed"
     LLM_UNAVAILABLE = "llm_unavailable"
+    # Provider reached and authenticated, but the configured model name is gone
+    # (retired / renamed / not enabled on this key). Distinct from
+    # LLM_UNAVAILABLE, which means we could not reach the provider at all.
+    LLM_MODEL_UNAVAILABLE = "llm_model_unavailable"
     LLM_NOT_CONFIGURED = "llm_not_configured"
     RSS_TIMEOUT = "rss_timeout"
     RSS_INVALID = "rss_invalid"

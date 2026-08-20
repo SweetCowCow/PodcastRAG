@@ -119,6 +119,7 @@ def test_error_code_constants_present():
         "llm_rate_limited",
         "llm_auth_failed",
         "llm_unavailable",
+        "llm_model_unavailable",
         "llm_not_configured",
         "rss_timeout",
         "rss_invalid",
@@ -378,3 +379,142 @@ async def test_embedding_retry_succeeds_endpoint_returns_200(client, show_id_for
         )
     assert res.status_code == 200
     assert call_count["n"] >= 2  # retried at least once
+
+
+# ---------- model-unavailable mapping (no DB needed — pure handler unit tests) ----------
+#
+# Regression cover for the 2026-08 prod incident: `answer` was pinned to
+# `gpt-5.1`, AI Hub stopped serving it after 2026-07-22, the SDK raised
+# NotFoundError, and `_raise_openai_http_error` had no branch for it. It fell
+# through the bare `raise` and surfaced as a generic 500, so the model name
+# never reached the operator and chat stayed dead for four weeks.
+
+
+def _make_not_found_exc(model: str = "gpt-5.1") -> openai.NotFoundError:
+    return openai.NotFoundError(
+        message=f"The model `{model}` does not exist",
+        response=_FakeResponse(404),
+        body={"error": {"message": f"The model `{model}` does not exist",
+                        "code": "model_not_found"}},
+    )
+
+
+def _make_bad_request_exc(message: str) -> openai.BadRequestError:
+    return openai.BadRequestError(
+        message=message, response=_FakeResponse(400), body={"error": {"message": message}}
+    )
+
+
+def _make_server_error_exc(status: int = 503) -> openai.APIStatusError:
+    return openai.APIStatusError(
+        message="upstream unavailable", response=_FakeResponse(status), body=None
+    )
+
+
+@pytest.mark.parametrize(
+    "make_exc",
+    [
+        _make_not_found_exc,
+        lambda: _make_bad_request_exc("Invalid model: gpt-5.1"),
+        lambda: _make_bad_request_exc("LLM Provider NOT provided for model gpt-5.1"),
+        lambda: _make_bad_request_exc("model_not_found"),
+    ],
+)
+def test_model_unavailable_maps_to_502(make_exc):
+    """A retired / renamed model MUST surface as 502 llm_model_unavailable,
+    never as an unhandled 500."""
+    from app.api.query import _raise_openai_http_error
+
+    with pytest.raises(HTTPException) as exc_info:
+        _raise_openai_http_error(make_exc(), "Zeabur AI Hub")
+
+    assert exc_info.value.status_code == 502
+    detail = exc_info.value.detail
+    assert detail["error_code"] == ErrorCode.LLM_MODEL_UNAVAILABLE
+    assert detail["provider"] == "Zeabur AI Hub"
+    # The model name must reach the operator — that was the whole failure.
+    assert detail["detail"]
+
+
+def test_context_exceeded_is_not_relabelled_as_model_unavailable():
+    """Context overflow is also a 400 but is a different operational problem;
+    it must keep falling through to the agent-level handler."""
+    from app.api.query import _raise_openai_http_error
+
+    exc = _make_bad_request_exc(
+        "ContextWindowExceededError: this model's maximum context length is 128000 tokens"
+    )
+    with pytest.raises(openai.BadRequestError):
+        _raise_openai_http_error(exc, "Zeabur AI Hub")
+
+
+@pytest.mark.parametrize("status", [500, 502, 503])
+def test_provider_5xx_maps_to_503_unavailable(status):
+    from app.api.query import _raise_openai_http_error
+
+    with pytest.raises(HTTPException) as exc_info:
+        _raise_openai_http_error(_make_server_error_exc(status), "Zeabur AI Hub")
+
+    assert exc_info.value.status_code == 503
+    assert exc_info.value.detail["error_code"] == ErrorCode.LLM_UNAVAILABLE
+
+
+def test_unknown_exception_still_reraises():
+    """Anything we do not recognise MUST keep bubbling to the global handler
+    rather than being silently mislabelled as an LLM config problem."""
+    from app.api.query import _raise_openai_http_error
+
+    sentinel = RuntimeError("something else entirely")
+    with pytest.raises(RuntimeError):
+        _raise_openai_http_error(sentinel, "OpenAI")
+
+
+def test_every_llm_call_site_catches_the_shared_tuple():
+    """Static guard: no call site may hand-roll its own exception subset.
+
+    The 2026-08 outage would have survived a handler-only fix: every one of the
+    five call sites caught a 4-tuple that excluded NotFoundError, so a correct
+    branch inside `_raise_openai_http_error` was unreachable. Any new
+    `except (...)` around an LLM call re-opens exactly that hole.
+    """
+    import inspect
+
+    from app.api import query as query_mod
+
+    source = inspect.getsource(query_mod)
+    call_sites = source.count("_raise_openai_http_error(exc,")
+    guarded = source.count("except _LLM_CLIENT_ERRORS as exc:")
+    assert call_sites > 0, "sanity: expected at least one mapped call site"
+    assert guarded == call_sites, (
+        f"{call_sites} call site(s) route through _raise_openai_http_error but "
+        f"only {guarded} catch _LLM_CLIENT_ERRORS — a hand-rolled except tuple "
+        f"silently drops NotFoundError back to an unhandled 500"
+    )
+
+
+def test_shared_tuple_covers_model_unavailable_classes():
+    """_LLM_CLIENT_ERRORS must actually admit the exception classes the handler
+    knows how to map, otherwise the branches are dead code."""
+    from app.api.query import _LLM_CLIENT_ERRORS
+
+    assert issubclass(openai.NotFoundError, _LLM_CLIENT_ERRORS)
+    assert issubclass(openai.BadRequestError, _LLM_CLIENT_ERRORS)
+    assert issubclass(openai.RateLimitError, _LLM_CLIENT_ERRORS)
+    assert issubclass(openai.AuthenticationError, _LLM_CLIENT_ERRORS)
+
+
+def test_agent_path_is_wrapped():
+    """The agentic branch is the live prod path (enable_agentic_chat defaults
+    True); an unwrapped run_agent() sends every provider failure to the global
+    500 handler, which is exactly what hid the retired model for four weeks."""
+    import inspect
+
+    from app.api import query as query_mod
+
+    source = inspect.getsource(query_mod)
+    idx = source.index("await run_agent(")
+    following = source[idx: idx + 900]
+    assert "except _LLM_CLIENT_ERRORS as exc:" in following, (
+        "run_agent() is not guarded by the shared LLM exception tuple"
+    )
+    assert "_raise_openai_http_error(exc" in following
