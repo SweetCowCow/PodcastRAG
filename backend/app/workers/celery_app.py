@@ -82,7 +82,19 @@ celery_app.conf.update(
     ),
     task_queue_max_priority=10,
     task_default_priority=5,
-    broker_transport_options={"priority_steps": [0, 3, 6, 9]},
+    # fix-backup-retention task 1.1: visibility_timeout 必須顯式設定。
+    # task_acks_late=True 表示任務跑完才 ack，而 kombu 的 Redis transport
+    # 預設 visibility_timeout=3600（kombu 5.6.2 實測）——任何跑超過 1 小時的
+    # 任務會被 broker 判定為遺失並「重新投遞」給另一個 worker，於是同一個
+    # 任務同時跑好幾份。2026-08-21 的 db_backup 實測 duration_ms=7,656,611
+    # （2h07m），當天實際起跑 3 次：三個 pg_dump 並行打 prod DB、各自上傳
+    # 7 GB 覆寫同一個 R2 key，沒跑完的兩次留下計費中的 multipart 殘件。
+    # 14400（4h）涵蓋目前耗時並留一倍餘裕；副作用是 worker 真的死亡時任務
+    # 要等 4 小時才重投，這層由 cron_tick 的 stale_marked / orphans_reverted 承接。
+    broker_transport_options={
+        "priority_steps": [0, 3, 6, 9],
+        "visibility_timeout": 14400,
+    },
     # celery-publish-routing-fix-and-f2-smoke task 3.1: 每個 beat entry
     # 顯式指定 options={"queue": "control"}。F1 設了 task_routes 但 beat
     # publish path 在某些 Celery 版本不套 routes，會走 task_default_queue

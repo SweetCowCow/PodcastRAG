@@ -21,6 +21,21 @@ def test_broker_priority_steps_for_redis():
     assert bto.get("priority_steps") == [0, 3, 6, 9]
 
 
+# fix-backup-retention task 1.2: 2026-08-21 的 db_backup 實測耗時。
+MEASURED_BACKUP_DURATION_SECONDS = 7656
+
+
+def test_broker_visibility_timeout_covers_long_tasks():
+    """acks_late=True 下，visibility_timeout 短於任務耗時 = broker 重複投遞。
+
+    kombu Redis transport 預設 3600s，比實測的備份耗時還短，導致 2026-08-22
+    發現的「每天備份跑 3 次 + multipart 殘件」。必須顯式覆寫。
+    """
+    bto = celery_app.conf.broker_transport_options or {}
+    assert bto.get("visibility_timeout") == 14400
+    assert bto["visibility_timeout"] > MEASURED_BACKUP_DURATION_SECONDS
+
+
 @pytest.mark.parametrize(
     "task_name,expected_queue",
     [

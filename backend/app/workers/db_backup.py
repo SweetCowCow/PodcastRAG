@@ -29,9 +29,16 @@ from botocore.exceptions import BotoCoreError, ClientError
 
 from app.core.config import settings
 from app.services.r2_backup_client import (
+    _EXPECTED_RULE_IDS,
+    abort_stale_multipart_uploads,
     apply_lifecycle_policy,
+    bucket_usage,
     get_r2_backup_client,
     parse_recipients,
+    read_verify_state,
+    sweep_retention,
+    verify_lifecycle_policy,
+    write_verify_state,
 )
 from app.services.zsend import ZSendError, send_email
 from app.workers.celery_app import celery_app
@@ -41,6 +48,15 @@ logger = logging.getLogger(__name__)
 SIZE_RATIO_LOW = 0.5
 SIZE_RATIO_HIGH = 2.0
 STDERR_TRUNCATE_CHARS = 2000
+
+# Absolute usage guard. The pre-existing day-over-day size ratio check is blind
+# to accumulation: keeping one extra 7 GB copy per day is a sub-1% daily
+# increase, which is how 108 objects / 472 GB built up unnoticed over 107 days.
+MAX_EXPECTED_OBJECTS = 30
+# Steady state is 23 artifacts x ~7.07 GB ~= 163 GB. 300 GB leaves headroom for
+# dump growth (it grew 47% in three months) without going numb to a real fault:
+# 300 GB is ~42 artifacts, far below the 108 this change was written for.
+MAX_EXPECTED_BYTES = 300 * 1024**3
 
 
 @celery_app.task(
@@ -78,11 +94,7 @@ async def _run() -> dict:
     bucket = settings.r2_backup_bucket
     assert bucket  # mypy: get_r2_backup_client guarantees this
 
-    # Idempotent — re-applying same rules is a no-op state-wise.
-    try:
-        apply_lifecycle_policy(client, bucket)
-    except (BotoCoreError, ClientError):
-        logger.exception("db_backup: lifecycle policy apply failed (continuing)")
+    await _apply_and_verify_lifecycle(client, bucket)
 
     started = time.monotonic()
     try:
@@ -113,28 +125,13 @@ async def _run() -> dict:
 
     duration_ms = int((time.monotonic() - started) * 1000)
 
-    # Sunday → weekly promotion (weekday() == 6 is Sunday).
-    if datetime.now(timezone.utc).weekday() == 6:
-        weekly_key = f"weekly/{today.isoformat()}.dump.age"
-        client.copy_object(
-            Bucket=bucket,
-            CopySource={"Bucket": bucket, "Key": today_key},
-            Key=weekly_key,
-        )
-        logger.info("db_backup: promoted to weekly key=%s", weekly_key)
-
-    # Day 1 → monthly promotion.
-    if datetime.now(timezone.utc).day == 1:
-        monthly_key = f"monthly/{today.isoformat()}.dump.age"
-        client.copy_object(
-            Bucket=bucket,
-            CopySource={"Bucket": bucket, "Key": today_key},
-            Key=monthly_key,
-        )
-        logger.info("db_backup: promoted to monthly key=%s", monthly_key)
+    promotion_ok = await _promote(client, bucket, today, today_key)
 
     # Size-anomaly check vs yesterday's daily artifact.
     await _check_size_anomaly(client, bucket, today, size_bytes)
+
+    swept, aborted_uploads = await _sweep_and_abort(client, bucket, today)
+    object_count, total_bytes = await _check_bucket_usage(client, bucket)
 
     logger.info(
         "db_backup: success key=%s size_bytes=%d duration_ms=%d",
@@ -147,7 +144,221 @@ async def _run() -> dict:
         "size_bytes": size_bytes,
         "duration_ms": duration_ms,
         "key": today_key,
+        "swept": swept,
+        "aborted_uploads": aborted_uploads,
+        "object_count": object_count,
+        "total_bytes": total_bytes,
+        "promotion_ok": promotion_ok,
     }
+
+
+async def _apply_and_verify_lifecycle(client, bucket: str) -> None:
+    """Apply the lifecycle policy, read it back, alert only on state change.
+
+    The R2 token is known to lack bucket-configuration permission, so this
+    verification currently fails every single day. Alerting on every failure
+    would mean a daily email nobody can action — which is precisely the
+    alert-fatigue that let the original defect survive. So the outcome is
+    persisted and only transitions (ok -> failed, failed -> ok) are mailed.
+    """
+    outcome = "ok"
+    detail = ""
+    try:
+        apply_lifecycle_policy(client, bucket)
+        matched, actual = verify_lifecycle_policy(client, bucket)
+        if not matched:
+            outcome = "failed"
+            detail = (
+                f"Expected rule IDs: {sorted(_EXPECTED_RULE_IDS)}\n"
+                f"Actual rule IDs:   {sorted(actual)}"
+            )
+    except (BotoCoreError, ClientError) as exc:
+        outcome = "failed"
+        code = ""
+        if isinstance(exc, ClientError):
+            code = exc.response.get("Error", {}).get("Code", "")
+        detail = f"{type(exc).__name__}{f' ({code})' if code else ''}: {exc}"
+        logger.warning("db_backup: lifecycle apply/verify failed: %s", detail)
+
+    try:
+        previous = read_verify_state(client, bucket)
+    except Exception:  # noqa: BLE001 — state read must never break the backup
+        logger.exception("db_backup: could not read lifecycle verify state")
+        previous = None
+
+    if outcome == previous:
+        logger.warning(
+            "db_backup: lifecycle verification still '%s' — alert suppressed", outcome
+        )
+        return
+
+    if outcome == "ok" and previous is None:
+        # First ever run, and everything is fine. "It works" is not news.
+        logger.info("db_backup: lifecycle verification ok (first recorded run)")
+        try:
+            write_verify_state(client, bucket, outcome)
+        except Exception:  # noqa: BLE001
+            logger.exception("db_backup: could not persist lifecycle verify state")
+        return
+
+    if outcome == "ok":
+        subject = "[PodcastRAG] DB backup lifecycle policy restored"
+        body = (
+            "The R2 bucket lifecycle policy now verifies successfully.\n\n"
+            f"All expected rules are present: {sorted(_EXPECTED_RULE_IDS)}"
+        )
+    else:
+        subject = "[PodcastRAG] DB backup lifecycle policy NOT applied"
+        body = (
+            "The R2 bucket lifecycle policy could not be applied or verified.\n\n"
+            f"{detail}\n\n"
+            "Retention is being enforced by the application-side sweep instead. "
+            "To restore the lifecycle layer, upgrade the R2 API token from "
+            "Object Read & Write to Admin Read & Write."
+        )
+
+    try:
+        await _alert(subject, body)
+    except Exception:  # noqa: BLE001
+        logger.exception("db_backup: lifecycle alert dispatch failed")
+
+    try:
+        write_verify_state(client, bucket, outcome)
+    except Exception:  # noqa: BLE001
+        logger.exception("db_backup: could not persist lifecycle verify state")
+
+
+async def _promote(client, bucket: str, today, today_key: str) -> bool:
+    """Copy the day's artifact into weekly/ and monthly/ when due.
+
+    Uses the managed `client.copy()` rather than `copy_object`: the dump is
+    7.07 GB and `CopyObject` caps at 5 GiB per request, which is why weekly/
+    stalled in May and monthly/ never had a single object. Failure here is
+    alert-only — the daily artifact is already safely uploaded, and raising
+    would trigger a Celery retry that re-runs the whole pg_dump.
+    """
+    now = datetime.now(timezone.utc)
+    targets: list[tuple[str, str]] = []
+    if now.weekday() == 6:  # Sunday
+        targets.append(("weekly", f"weekly/{today.isoformat()}.dump.age"))
+    if now.day == 1:
+        targets.append(("monthly", f"monthly/{today.isoformat()}.dump.age"))
+
+    ok = True
+    for tier, dest_key in targets:
+        try:
+            client.copy({"Bucket": bucket, "Key": today_key}, bucket, dest_key)
+            logger.info("db_backup: promoted to %s key=%s", tier, dest_key)
+        except (BotoCoreError, ClientError) as exc:
+            ok = False
+            logger.exception("db_backup: %s promotion failed", tier)
+            try:
+                await _alert(
+                    f"[PodcastRAG] DB backup promotion failed {today.isoformat()}",
+                    f"Promotion of {today_key} to {dest_key} failed.\n\n"
+                    f"Error: {type(exc).__name__}: {str(exc)[:STDERR_TRUNCATE_CHARS]}\n\n"
+                    f"The daily artifact itself uploaded successfully — RPO is unaffected.",
+                )
+            except Exception:  # noqa: BLE001
+                logger.exception("db_backup: promotion alert dispatch failed")
+    return ok
+
+
+async def _sweep_and_abort(client, bucket: str, today) -> tuple[dict | None, int | None]:
+    """Enforce retention in application code, then clear stale multipart uploads.
+
+    Returns (sweep result, aborted upload count); either is None if that step
+    failed. Never raises — the day's backup is already uploaded.
+    """
+    subject = f"[PodcastRAG] DB backup retention sweep failed {today.isoformat()}"
+    swept: dict | None = None
+    aborted: int | None = None
+
+    try:
+        swept = sweep_retention(client, bucket)
+    except (BotoCoreError, ClientError) as exc:
+        logger.exception("db_backup: retention sweep failed")
+        await _safe_alert(
+            subject,
+            f"The retention sweep raised before completing.\n\n"
+            f"Error: {type(exc).__name__}: {str(exc)[:STDERR_TRUNCATE_CHARS]}",
+        )
+        return None, None
+
+    if swept.get("needs_review"):
+        pending = swept.get("pending_keys", [])
+        await _safe_alert(
+            "[PodcastRAG] DB backup retention sweep needs review",
+            f"The sweep wanted to delete {len(pending)} objects, which exceeds the "
+            f"safety limit. Nothing was deleted.\n\n"
+            f"Keys that would have been deleted:\n" + "\n".join(pending),
+        )
+    elif swept.get("errors"):
+        errors = swept["errors"]
+        lines = [
+            f"  {e.get('Key')}: {e.get('Code')} {e.get('Message')}" for e in errors
+        ]
+        await _safe_alert(
+            subject,
+            f"delete_objects reported {len(errors)} per-key failure(s) without "
+            f"raising. Those objects are still in the bucket.\n\n" + "\n".join(lines),
+        )
+
+    try:
+        aborted = abort_stale_multipart_uploads(client, bucket)
+    except (BotoCoreError, ClientError) as exc:
+        logger.exception("db_backup: stale multipart cleanup failed")
+        await _safe_alert(
+            subject,
+            f"Aborting stale multipart uploads failed.\n\n"
+            f"Error: {type(exc).__name__}: {str(exc)[:STDERR_TRUNCATE_CHARS]}",
+        )
+
+    return swept, aborted
+
+
+async def _check_bucket_usage(client, bucket: str) -> tuple[int | None, int | None]:
+    """Advisory absolute-usage guard. Never raises, never fails the backup."""
+    try:
+        usage = bucket_usage(client, bucket)
+    except Exception:  # noqa: BLE001 — advisory only
+        logger.exception("db_backup: bucket usage check failed (advisory)")
+        return None, None
+
+    count = usage["object_count"]
+    total = usage["total_bytes"]
+    logger.info(
+        "db_backup: bucket usage objects=%d total_bytes=%d (%.2f GB)",
+        count,
+        total,
+        total / 1024**3,
+    )
+
+    if count <= MAX_EXPECTED_OBJECTS and total <= MAX_EXPECTED_BYTES:
+        return count, total
+
+    per_prefix = "\n".join(
+        f"  {p}: {s['count']} objects, {s['bytes'] / 1024**3:.2f} GB"
+        for p, s in usage["prefixes"].items()
+    )
+    await _safe_alert(
+        "[PodcastRAG] DB backup bucket usage alert",
+        f"Backup bucket usage is above the expected bounds — retention may not "
+        f"be working.\n\n"
+        f"Objects: {count} (expected at most {MAX_EXPECTED_OBJECTS})\n"
+        f"Total:   {total / 1024**3:.2f} GB (expected at most "
+        f"{MAX_EXPECTED_BYTES / 1024**3:.0f} GB)\n\n"
+        f"Per prefix:\n{per_prefix}",
+    )
+    return count, total
+
+
+async def _safe_alert(subject: str, body: str) -> None:
+    """_alert that never propagates a dispatch failure."""
+    try:
+        await _alert(subject, body)
+    except Exception:  # noqa: BLE001
+        logger.exception("db_backup: alert dispatch failed (%s)", subject)
 
 
 def _stream_backup_to_r2(
